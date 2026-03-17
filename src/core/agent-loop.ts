@@ -99,11 +99,20 @@ export async function runAgentLoop(
     // Append assistant message with tool_use blocks
     messages.push({ role: 'assistant', content: response.content });
 
-    // Execute all tool calls (parallel)
+    // Execute all tool calls (parallel, individually guarded)
     const results: ToolCallResult[] = await Promise.all(
       toolCalls.map(async (call) => {
-        const result = await registry.execute(call.name, call.input);
-        return { toolCallId: call.id, name: call.name, result };
+        try {
+          const result = await registry.execute(call.name, call.input);
+          return { toolCallId: call.id, name: call.name, result };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return {
+            toolCallId: call.id,
+            name: call.name,
+            result: { content: `Unexpected error in ${call.name}: ${msg}`, isError: true },
+          };
+        }
       }),
     );
 

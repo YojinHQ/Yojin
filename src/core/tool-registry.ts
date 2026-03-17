@@ -78,10 +78,7 @@ export class ToolRegistry {
     return list.map((tool) => ({
       name: tool.name,
       description: tool.description,
-      input_schema: zodToJsonSchema(tool.parameters, { target: 'openApi3' }) as Record<
-        string,
-        unknown
-      >,
+      input_schema: zodToJsonSchema(tool.parameters) as Record<string, unknown>,
     }));
   }
 }

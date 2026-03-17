@@ -236,7 +236,10 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       maxTokens?: number;
     }) {
       if (authMode === 'cli') {
-        // CLI mode: no tool support, return text-only response
+        log.warn(
+          'CLI mode: completeWithTools falls back to single-turn text completion — ' +
+            'conversation history, system prompt and tools are not forwarded.',
+        );
         const lastUser = params.messages.filter((m) => m.role === 'user').pop();
         const prompt =
           typeof lastUser?.content === 'string'

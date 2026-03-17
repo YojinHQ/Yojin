@@ -19,8 +19,9 @@ export class Gateway {
   private registry: PluginRegistry;
   private config: YojinConfig;
   private log = getLogger().sub('gateway');
-  /** Simple per-thread conversation history. */
+  /** Per-thread conversation history with LRU eviction. */
   private threadHistory = new Map<string, AgentMessage[]>();
+  private static readonly MAX_THREADS = 200;
 
   constructor(config: YojinConfig) {
     this.config = config;
@@ -107,8 +108,15 @@ export class Gateway {
         responseLength: result.text.length,
       });
 
-      // Update thread history
+      // Update thread history (LRU: delete + re-insert moves key to end)
+      this.threadHistory.delete(threadKey);
       this.threadHistory.set(threadKey, result.messages);
+
+      // Evict oldest threads when over capacity
+      if (this.threadHistory.size > Gateway.MAX_THREADS) {
+        const oldest = this.threadHistory.keys().next().value!;
+        this.threadHistory.delete(oldest);
+      }
 
       await channel.messagingAdapter.sendMessage({
         channelId: msg.channelId,
