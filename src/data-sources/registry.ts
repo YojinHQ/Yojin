@@ -116,7 +116,10 @@ export class DataSourceRegistry {
   /** Poll job status on the source that owns the job. */
   async getJobStatus(sourceId: string, jobId: string): Promise<JobStatus> {
     const source = this.sources.get(sourceId);
-    if (!source?.getJobStatus) {
+    if (!source) {
+      throw new Error(`Source "${sourceId}" not found`);
+    }
+    if (!source.getJobStatus) {
       throw new Error(`Source "${sourceId}" does not support async jobs`);
     }
     return source.getJobStatus(jobId);
@@ -125,7 +128,10 @@ export class DataSourceRegistry {
   /** Retrieve job results from the source that owns the job. */
   async getJobResult(sourceId: string, jobId: string): Promise<DataResult> {
     const source = this.sources.get(sourceId);
-    if (!source?.getJobResult) {
+    if (!source) {
+      throw new Error(`Source "${sourceId}" not found`);
+    }
+    if (!source.getJobResult) {
       throw new Error(`Source "${sourceId}" does not support async jobs`);
     }
     return source.getJobResult(jobId);
@@ -153,13 +159,19 @@ export class DataSourceRegistry {
   }
 
   /** Initialize all registered sources with their configs. */
-  async initializeAll(configs: DataSourceConfig[]): Promise<void> {
+  async initializeAll(configs: DataSourceConfig[]): Promise<string[]> {
+    const skipped: string[] = [];
+
     for (const source of this.sources.values()) {
       const config = configs.find((c) => c.id === source.id);
       if (config) {
         await source.initialize(config);
+      } else {
+        skipped.push(source.id);
       }
     }
+
+    return skipped;
   }
 
   /** Shut down all registered sources. */

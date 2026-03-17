@@ -79,12 +79,11 @@ export async function loadAgentPrompt(agentId: string, dataRoot = '.'): Promise<
   const overridePath = `${dataRoot}/data/brain/agents/${agentId}.md`;
   const defaultPath = `${dataRoot}/data/default/agents/${agentId}.default.md`;
 
-  if (existsSync(overridePath)) {
-    return readFile(overridePath, 'utf-8');
-  }
-
-  if (existsSync(defaultPath)) {
-    return readFile(defaultPath, 'utf-8');
+  try {
+    if (existsSync(overridePath)) return await readFile(overridePath, 'utf-8');
+    if (existsSync(defaultPath)) return await readFile(defaultPath, 'utf-8');
+  } catch {
+    // fall through on TOCTOU race or permission error
   }
 
   return `You are the ${agentId} agent. No specific system prompt configured.\n`;

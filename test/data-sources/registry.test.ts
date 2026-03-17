@@ -301,6 +301,20 @@ describe('DataSourceRegistry — async jobs', () => {
       'does not support async jobs',
     );
   });
+
+  it('throws distinct error when source not found in getJobStatus', async () => {
+    const registry = new DataSourceRegistry();
+    await expect(registry.getJobStatus('nonexistent', 'job-1')).rejects.toThrow(
+      'Source "nonexistent" not found',
+    );
+  });
+
+  it('throws distinct error when source not found in getJobResult', async () => {
+    const registry = new DataSourceRegistry();
+    await expect(registry.getJobResult('nonexistent', 'job-1')).rejects.toThrow(
+      'Source "nonexistent" not found',
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -372,8 +386,37 @@ describe('DataSourceRegistry — lifecycle', () => {
       },
     ];
 
-    await registry.initializeAll(configs);
+    const skipped = await registry.initializeAll(configs);
     expect(initFn).toHaveBeenCalledWith(configs[0]);
+    expect(skipped).toEqual([]);
+  });
+
+  it('returns skipped source ids when no config matches', async () => {
+    const registry = new DataSourceRegistry();
+    registry.register(mockSource({ id: 'configured' }));
+    registry.register(mockSource({ id: 'unconfigured' }));
+
+    const configs: DataSourceConfig[] = [
+      {
+        id: 'configured',
+        name: 'Configured',
+        capabilities: [{ id: 'news' }],
+        enabled: true,
+        priority: 1,
+        config: {
+          type: 'api',
+          baseUrl: 'https://example.com',
+          rateLimitPerMinute: 60,
+          authHeader: 'Authorization',
+          authPrefix: 'Bearer',
+          supportsAsync: false,
+          endpointMapping: {},
+        },
+      },
+    ];
+
+    const skipped = await registry.initializeAll(configs);
+    expect(skipped).toEqual(['unconfigured']);
   });
 
   it('shuts down all sources gracefully', async () => {
