@@ -7,7 +7,7 @@ import { BrainStore } from '../src/brain/brain.js';
 import { EmotionTracker } from '../src/brain/emotion.js';
 import { FrontalLobe } from '../src/brain/frontal-lobe.js';
 import { loadAgentPrompt, PersonaManager } from '../src/brain/persona.js';
-import { DEFAULT_EMOTION } from '../src/brain/types.js';
+import { DEFAULT_EMOTION_VALUES } from '../src/brain/types.js';
 
 let tmpDir: string;
 
@@ -154,9 +154,9 @@ describe('EmotionTracker', () => {
     const tracker = new EmotionTracker(brain, tmpDir);
 
     const emotion = await tracker.getEmotion();
-    expect(emotion.confidence).toBe(DEFAULT_EMOTION.confidence);
-    expect(emotion.riskAppetite).toBe(DEFAULT_EMOTION.riskAppetite);
-    expect(emotion.reason).toBe(DEFAULT_EMOTION.reason);
+    expect(emotion.confidence).toBe(DEFAULT_EMOTION_VALUES.confidence);
+    expect(emotion.riskAppetite).toBe(DEFAULT_EMOTION_VALUES.riskAppetite);
+    expect(emotion.reason).toBe(DEFAULT_EMOTION_VALUES.reason);
   });
 
   it('updates emotion state and auto-commits', async () => {
@@ -206,7 +206,7 @@ describe('EmotionTracker', () => {
 
     // Should not throw — falls back to defaults
     const emotion = await tracker.getEmotion();
-    expect(emotion.confidence).toBe(DEFAULT_EMOTION.confidence);
+    expect(emotion.confidence).toBe(DEFAULT_EMOTION_VALUES.confidence);
   });
 
   it('overrides reason when explicit reason parameter is passed', async () => {

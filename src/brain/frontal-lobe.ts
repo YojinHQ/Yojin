@@ -5,6 +5,7 @@
  * as Markdown at data/brain/frontal-lobe.md. Auto-commits on every update.
  */
 
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -30,7 +31,11 @@ export class FrontalLobe implements FrontalLobeInterface {
 
   async get(): Promise<string> {
     if (!existsSync(this.filePath)) return DEFAULT_CONTENT;
-    return readFile(this.filePath, 'utf-8');
+    try {
+      return await readFile(this.filePath, 'utf-8');
+    } catch {
+      return DEFAULT_CONTENT;
+    }
   }
 
   async update(content: string): Promise<BrainCommit> {
@@ -45,8 +50,9 @@ export class FrontalLobe implements FrontalLobeInterface {
         : `updated working memory (${content.length} chars)`;
 
     return this.brain.commit(diffSummary, 'frontal-lobe', {
-      content,
+      contentHash: createHash('sha256').update(content).digest('hex').slice(0, 12),
       previousLength: previous.length,
+      newLength: content.length,
     });
   }
 }

@@ -31,12 +31,16 @@ export const EmotionStateSchema = z.object({
 
 export type EmotionState = z.infer<typeof EmotionStateSchema>;
 
-export const DEFAULT_EMOTION: EmotionState = {
+/** Base defaults — callers must supply a fresh `updatedAt` via spread + override. */
+export const DEFAULT_EMOTION_VALUES = {
   confidence: 0.5,
   riskAppetite: 0.5,
   reason: 'Initial state — no market data processed yet.',
-  updatedAt: new Date().toISOString(),
-};
+} as const;
+
+export function createDefaultEmotion(): EmotionState {
+  return { ...DEFAULT_EMOTION_VALUES, updatedAt: new Date().toISOString() };
+}
 
 // ---------------------------------------------------------------------------
 // Brain interface

@@ -26,16 +26,21 @@ export class PersonaManager implements PersonaManagerInterface {
   }
 
   async getPersona(): Promise<string> {
-    // Try override first
-    if (existsSync(this.overridePath)) {
-      return readFile(this.overridePath, 'utf-8');
-    }
+    try {
+      // Try override first
+      if (existsSync(this.overridePath)) {
+        return await readFile(this.overridePath, 'utf-8');
+      }
 
-    // Auto-copy default to override on first run
-    if (existsSync(this.defaultPath)) {
-      await this.ensureOverrideDir();
-      await copyFile(this.defaultPath, this.overridePath);
-      return readFile(this.overridePath, 'utf-8');
+      // Auto-copy default to override on first run
+      if (existsSync(this.defaultPath)) {
+        const content = await readFile(this.defaultPath, 'utf-8');
+        await this.ensureOverrideDir();
+        await copyFile(this.defaultPath, this.overridePath).catch(() => undefined);
+        return content;
+      }
+    } catch {
+      // fall through to default
     }
 
     return '# No persona configured\n\nUsing default behavior.\n';
@@ -67,6 +72,10 @@ export class PersonaManager implements PersonaManagerInterface {
  * Override: data/brain/agents/{agentId}.md (gitignored)
  */
 export async function loadAgentPrompt(agentId: string, dataRoot = '.'): Promise<string> {
+  if (!/^[a-z0-9-]+$/.test(agentId)) {
+    throw new Error(`Invalid agentId: "${agentId}"`);
+  }
+
   const overridePath = `${dataRoot}/data/brain/agents/${agentId}.md`;
   const defaultPath = `${dataRoot}/data/default/agents/${agentId}.default.md`;
 

@@ -16,7 +16,7 @@ import type {
   EmotionState,
   EmotionTracker as EmotionTrackerInterface,
 } from './types.js';
-import { DEFAULT_EMOTION, EmotionStateSchema } from './types.js';
+import { createDefaultEmotion, EmotionStateSchema } from './types.js';
 
 const EMOTION_FILE = 'data/brain/emotion.json';
 
@@ -30,14 +30,14 @@ export class EmotionTracker implements EmotionTrackerInterface {
   }
 
   async getEmotion(): Promise<EmotionState> {
-    if (!existsSync(this.filePath)) return { ...DEFAULT_EMOTION };
+    if (!existsSync(this.filePath)) return createDefaultEmotion();
 
     try {
       const raw = await readFile(this.filePath, 'utf-8');
       const parsed = EmotionStateSchema.safeParse(JSON.parse(raw));
-      return parsed.success ? parsed.data : { ...DEFAULT_EMOTION };
+      return parsed.success ? parsed.data : createDefaultEmotion();
     } catch {
-      return { ...DEFAULT_EMOTION };
+      return createDefaultEmotion();
     }
   }
 

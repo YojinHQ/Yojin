@@ -16,7 +16,7 @@ const BRAIN_DIR = 'data/brain';
 const COMMITS_FILE = `${BRAIN_DIR}/commits.jsonl`;
 
 function computeHash(content: string, timestamp: string): string {
-  return createHash('sha256').update(`${content}${timestamp}`).digest('hex').slice(0, 12);
+  return createHash('sha256').update(`${content}\0${timestamp}`).digest('hex').slice(0, 12);
 }
 
 export class BrainStore implements BrainInterface {
@@ -42,7 +42,7 @@ export class BrainStore implements BrainInterface {
     await this.ensureDir();
 
     const timestamp = new Date().toISOString();
-    const hash = computeHash(JSON.stringify(snapshot) + message, timestamp);
+    const hash = computeHash(`${JSON.stringify(snapshot)}\0${message}`, timestamp);
 
     const entry: BrainCommit = { hash, message, timestamp, type, snapshot };
     BrainCommitSchema.parse(entry);
@@ -59,15 +59,19 @@ export class BrainStore implements BrainInterface {
 
     const commits: BrainCommit[] = [];
     for (const line of lines) {
-      const parsed = BrainCommitSchema.safeParse(JSON.parse(line));
-      if (parsed.success) commits.push(parsed.data);
+      try {
+        const parsed = BrainCommitSchema.safeParse(JSON.parse(line));
+        if (parsed.success) commits.push(parsed.data);
+      } catch {
+        // skip malformed lines caused by interrupted writes
+      }
     }
 
     return commits.reverse().slice(0, limit);
   }
 
   async rollback(hash: string): Promise<BrainCommit | null> {
-    const log = await this.getLog(1000);
+    const log = await this.getLog(Number.MAX_SAFE_INTEGER);
     const target = log.find((c) => c.hash === hash);
     if (!target) return null;
 
