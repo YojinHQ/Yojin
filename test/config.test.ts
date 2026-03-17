@@ -65,8 +65,10 @@ describe('loadConfig', () => {
     const config = loadConfig();
     expect(config.providers).toHaveLength(1);
     expect(config.providers[0].id).toBe('anthropic');
-    expect(config.channels).toHaveLength(1);
+    expect(config.channels).toHaveLength(2);
     expect(config.channels[0].id).toBe('slack');
+    expect(config.channels[0].enabled).toBe(false);
+    expect(config.channels[1].id).toBe('web');
   });
 
   it('resolves oauth auth mode when CLAUDE_CODE_OAUTH_TOKEN is set', () => {

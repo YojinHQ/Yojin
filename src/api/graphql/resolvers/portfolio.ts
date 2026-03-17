@@ -1,130 +1,128 @@
 /**
- * Portfolio resolvers — queries for portfolio overview and individual positions.
- *
- * Returns mock data representing a diversified retail portfolio across equities,
- * ETFs, and crypto. Will be swapped for real data sources (scraper snapshots,
- * enrichment pipeline) once wired into YojinContext.
+ * Portfolio resolvers — portfolio, positions, enrichedSnapshot, refreshPositions.
  */
 
-interface MockPosition {
-  symbol: string;
-  name: string;
-  quantity: number;
-  currentPrice: number;
-  avgCost: number;
-  marketValue: number;
-  unrealizedPnl: number;
-  unrealizedPnlPercent: number;
-  dayChange: number;
-  dayChangePercent: number;
-  weight: number;
-  assetClass: string;
-  sector: string | null;
-  platform: string;
-}
+import type {
+  PortfolioSnapshot,
+  Position,
+  EnrichedSnapshot,
+  EnrichedPosition,
+  Platform,
+} from '../types.js';
+import { pubsub } from '../pubsub.js';
 
-const mockPositions: MockPosition[] = [
+// ---------------------------------------------------------------------------
+// Stub data — replaced by real services when available
+// ---------------------------------------------------------------------------
+
+const stubPositions: Position[] = [
   {
     symbol: 'AAPL',
     name: 'Apple Inc.',
     quantity: 50,
-    currentPrice: 189.84,
-    avgCost: 162.35,
-    marketValue: 9492.0,
-    unrealizedPnl: 1374.5,
-    unrealizedPnlPercent: 16.93,
-    dayChange: 2.15,
-    dayChangePercent: 1.15,
-    weight: 0.252,
-    assetClass: 'equity',
+    costBasis: 145.0,
+    currentPrice: 178.5,
+    marketValue: 8925.0,
+    unrealizedPnl: 1675.0,
+    unrealizedPnlPercent: 23.1,
     sector: 'Technology',
-    platform: 'interactive-brokers',
+    assetClass: 'EQUITY',
+    platform: 'INTERACTIVE_BROKERS',
   },
   {
     symbol: 'MSFT',
-    name: 'Microsoft Corporation',
-    quantity: 25,
-    currentPrice: 420.72,
-    avgCost: 378.5,
-    marketValue: 10518.0,
-    unrealizedPnl: 1055.5,
-    unrealizedPnlPercent: 11.14,
-    dayChange: -1.28,
-    dayChangePercent: -0.3,
-    weight: 0.279,
-    assetClass: 'equity',
+    name: 'Microsoft Corp.',
+    quantity: 30,
+    costBasis: 310.0,
+    currentPrice: 415.2,
+    marketValue: 12456.0,
+    unrealizedPnl: 3156.0,
+    unrealizedPnlPercent: 33.94,
     sector: 'Technology',
-    platform: 'interactive-brokers',
-  },
-  {
-    symbol: 'SPY',
-    name: 'SPDR S&P 500 ETF Trust',
-    quantity: 20,
-    currentPrice: 512.45,
-    avgCost: 488.2,
-    marketValue: 10249.0,
-    unrealizedPnl: 485.0,
-    unrealizedPnlPercent: 4.97,
-    dayChange: 0.85,
-    dayChangePercent: 0.17,
-    weight: 0.272,
-    assetClass: 'etf',
-    sector: null,
-    platform: 'interactive-brokers',
+    assetClass: 'EQUITY',
+    platform: 'INTERACTIVE_BROKERS',
   },
   {
     symbol: 'BTC',
     name: 'Bitcoin',
-    quantity: 0.08,
-    currentPrice: 67450.0,
-    avgCost: 42300.0,
-    marketValue: 5396.0,
-    unrealizedPnl: 2012.0,
-    unrealizedPnlPercent: 59.46,
-    dayChange: 1250.0,
-    dayChangePercent: 1.89,
-    weight: 0.143,
-    assetClass: 'crypto',
-    sector: null,
-    platform: 'coinbase',
-  },
-  {
-    symbol: 'ETH',
-    name: 'Ethereum',
-    quantity: 1.5,
-    currentPrice: 3520.0,
-    avgCost: 2850.0,
-    marketValue: 5280.0,
-    unrealizedPnl: 1005.0,
-    unrealizedPnlPercent: 23.51,
-    dayChange: -45.0,
-    dayChangePercent: -1.26,
-    weight: 0.054,
-    assetClass: 'crypto',
-    sector: null,
-    platform: 'coinbase',
+    quantity: 0.5,
+    costBasis: 42000.0,
+    currentPrice: 67500.0,
+    marketValue: 33750.0,
+    unrealizedPnl: 12750.0,
+    unrealizedPnlPercent: 60.71,
+    sector: undefined,
+    assetClass: 'CRYPTO',
+    platform: 'COINBASE',
   },
 ];
 
-function buildPortfolio() {
-  const totalValue = mockPositions.reduce((sum, p) => sum + p.marketValue, 0);
-  const dayChange = mockPositions.reduce((sum, p) => sum + p.dayChange * p.quantity, 0);
-  const dayChangePercent = (dayChange / (totalValue - dayChange)) * 100;
+function buildSnapshot(platform?: Platform): PortfolioSnapshot {
+  const positions = platform ? stubPositions.filter((p) => p.platform === platform) : stubPositions;
+  const totalValue = positions.reduce((sum, p) => sum + p.marketValue, 0);
+  const totalCost = positions.reduce((sum, p) => sum + p.costBasis * p.quantity, 0);
+  const totalPnl = totalValue - totalCost;
 
   return {
+    id: `snap-${Date.now()}`,
+    positions,
     totalValue,
-    dayChange,
-    dayChangePercent: Math.round(dayChangePercent * 100) / 100,
-    positions: mockPositions,
-    lastUpdated: new Date().toISOString(),
+    totalCost,
+    totalPnl,
+    totalPnlPercent: totalCost > 0 ? (totalPnl / totalCost) * 100 : 0,
+    timestamp: new Date().toISOString(),
+    platform: platform ?? null,
   };
 }
 
-export const portfolioResolvers = {
-  Query: {
-    portfolio: () => buildPortfolio(),
-    positions: () => mockPositions,
-    position: (_: unknown, { symbol }: { symbol: string }) =>
-      mockPositions.find((p) => p.symbol.toLowerCase() === symbol.toLowerCase()) ?? null,
-  },
-};
+// ---------------------------------------------------------------------------
+// Query resolvers
+// ---------------------------------------------------------------------------
+
+export function portfolioQuery(): PortfolioSnapshot {
+  return buildSnapshot();
+}
+
+export function positionsQuery(): Position[] {
+  return stubPositions;
+}
+
+export function enrichedSnapshotQuery(): EnrichedSnapshot {
+  const snapshot = buildSnapshot();
+  const enriched: EnrichedPosition[] = snapshot.positions.map((p) => ({
+    ...p,
+    sentimentScore: 0.72,
+    sentimentLabel: 'Bullish',
+    analystRating: 'Buy',
+    targetPrice: p.currentPrice * 1.15,
+    peRatio: 28.5,
+    dividendYield: 0.5,
+    beta: 1.1,
+    fiftyTwoWeekHigh: p.currentPrice * 1.2,
+    fiftyTwoWeekLow: p.currentPrice * 0.7,
+  }));
+
+  return {
+    id: `enriched-${Date.now()}`,
+    positions: enriched,
+    totalValue: snapshot.totalValue,
+    totalCost: snapshot.totalCost,
+    totalPnl: snapshot.totalPnl,
+    totalPnlPercent: snapshot.totalPnlPercent,
+    timestamp: snapshot.timestamp,
+    enrichedAt: new Date().toISOString(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mutation resolvers
+// ---------------------------------------------------------------------------
+
+export function refreshPositionsMutation(
+  _parent: unknown,
+  args: { platform: Platform },
+): PortfolioSnapshot {
+  const snapshot = buildSnapshot(args.platform);
+  pubsub.publish('portfolioUpdate', snapshot);
+  return snapshot;
+}

@@ -20,6 +20,12 @@ import type {
   ProviderStreamEvent,
   ProviderModel,
 } from '../../../src/plugins/types.js';
+import type {
+  AgentLoopProvider,
+  AgentMessage,
+  ContentBlock,
+  ToolSchema,
+} from '../../../src/core/types.js';
 import {
   createProviderApiKeyAuth,
   createProviderOAuthAuth,
@@ -92,7 +98,7 @@ function callClaude(prompt: string, model: string): Promise<string> {
 // Provider
 // ---------------------------------------------------------------------------
 
-export function buildAnthropicProvider(): ProviderPlugin {
+export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
   const log = getLogger().sub('anthropic');
   let client: Anthropic;
   let authMode: AuthMode;
@@ -220,6 +226,105 @@ export function buildAnthropicProvider(): ProviderPlugin {
         outputTokens: finalMessage.usage.output_tokens,
       };
       yield { type: 'stop', stopReason: finalMessage.stop_reason ?? 'end_turn' };
+    },
+
+    async completeWithTools(params: {
+      model: string;
+      system?: string;
+      messages: AgentMessage[];
+      tools?: ToolSchema[];
+      maxTokens?: number;
+    }) {
+      if (authMode === 'cli') {
+        log.warn(
+          'CLI mode: completeWithTools falls back to single-turn text completion — ' +
+            'conversation history, system prompt and tools are not forwarded.',
+        );
+        const lastUser = params.messages.filter((m) => m.role === 'user').pop();
+        const prompt =
+          typeof lastUser?.content === 'string'
+            ? lastUser.content
+            : (lastUser?.content
+                ?.filter((b) => b.type === 'text')
+                .map((b) => (b as { text: string }).text)
+                .join('') ?? '');
+        const text = await callClaude(prompt, params.model);
+        return {
+          content: [{ type: 'text' as const, text }],
+          stopReason: 'end_turn',
+        };
+      }
+
+      // Convert AgentMessages to Anthropic API format
+      const apiMessages = params.messages.map((m) => {
+        if (typeof m.content === 'string') {
+          return { role: m.role as 'user' | 'assistant', content: m.content };
+        }
+        // Map content blocks to Anthropic format
+        const blocks = m.content.map((block) => {
+          if (block.type === 'text') {
+            return { type: 'text' as const, text: block.text };
+          }
+          if (block.type === 'tool_use') {
+            return {
+              type: 'tool_use' as const,
+              id: block.id,
+              name: block.name,
+              input: block.input as Record<string, unknown>,
+            };
+          }
+          if (block.type === 'tool_result') {
+            return {
+              type: 'tool_result' as const,
+              tool_use_id: block.tool_use_id,
+              content: block.content,
+              ...(block.is_error ? { is_error: true as const } : {}),
+            };
+          }
+          return block;
+        });
+        return { role: m.role as 'user' | 'assistant', content: blocks };
+      });
+
+      const response = await client.messages.create({
+        model: params.model,
+        max_tokens: params.maxTokens ?? 4096,
+        messages: apiMessages as Anthropic.MessageParam[],
+        ...(params.system ? { system: params.system } : {}),
+        ...(params.tools?.length
+          ? {
+              tools: params.tools.map((t) => ({
+                name: t.name,
+                description: t.description,
+                input_schema: t.input_schema as Anthropic.Tool.InputSchema,
+              })),
+            }
+          : {}),
+      });
+
+      const content: ContentBlock[] = response.content.map((block) => {
+        if (block.type === 'text') {
+          return { type: 'text' as const, text: block.text };
+        }
+        if (block.type === 'tool_use') {
+          return {
+            type: 'tool_use' as const,
+            id: block.id,
+            name: block.name,
+            input: block.input,
+          };
+        }
+        return { type: 'text' as const, text: '' };
+      });
+
+      return {
+        content,
+        stopReason: response.stop_reason ?? 'end_turn',
+        usage: {
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+        },
+      };
     },
   };
 }

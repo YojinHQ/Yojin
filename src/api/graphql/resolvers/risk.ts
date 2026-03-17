@@ -1,47 +1,36 @@
 /**
- * Risk resolvers — queries for portfolio risk analysis.
- *
- * Returns mock risk report data including exposure breakdown (sector, asset class,
- * geography), concentration scoring, and correlated pair detection. Will be replaced
- * with real risk module output once wired into YojinContext.
+ * Risk resolvers — riskReport.
  */
 
-const mockRiskReport = {
-  overallScore: 6.2,
-  exposureBreakdown: {
-    bySector: [
-      { name: 'Technology', weight: 0.531, value: 20010.0 },
-      { name: 'Broad Market', weight: 0.272, value: 10249.0 },
-      { name: 'Crypto', weight: 0.197, value: 10676.0 },
-    ],
-    byAssetClass: [
-      { name: 'Equity', weight: 0.531, value: 20010.0 },
-      { name: 'ETF', weight: 0.272, value: 10249.0 },
-      { name: 'Crypto', weight: 0.197, value: 10676.0 },
-    ],
-    byGeography: [
-      { name: 'United States', weight: 0.803, value: 30259.0 },
-      { name: 'Global / Decentralized', weight: 0.197, value: 10676.0 },
-    ],
-  },
-  concentrationScore: 7.1,
+import type { RiskReport } from '../types.js';
+
+// ---------------------------------------------------------------------------
+// Stub data
+// ---------------------------------------------------------------------------
+
+const stubRiskReport: RiskReport = {
+  id: 'risk-001',
+  portfolioValue: 55131.0,
+  sectorExposure: [
+    { sector: 'Technology', weight: 0.388, value: 21381.0 },
+    { sector: 'Crypto', weight: 0.612, value: 33750.0 },
+  ],
+  concentrationScore: 0.72,
   topConcentrations: [
-    { symbol: 'MSFT', weight: 0.279, risk: 'moderate' },
-    { symbol: 'SPY', weight: 0.272, risk: 'moderate' },
-    { symbol: 'AAPL', weight: 0.252, risk: 'moderate' },
-    { symbol: 'BTC', weight: 0.143, risk: 'low' },
-    { symbol: 'ETH', weight: 0.054, risk: 'low' },
+    { symbol: 'BTC', weight: 0.612 },
+    { symbol: 'MSFT', weight: 0.226 },
+    { symbol: 'AAPL', weight: 0.162 },
   ],
-  correlatedPairs: [
-    { symbolA: 'AAPL', symbolB: 'MSFT', correlation: 0.87 },
-    { symbolA: 'AAPL', symbolB: 'SPY', correlation: 0.92 },
-    { symbolA: 'BTC', symbolB: 'ETH', correlation: 0.81 },
-  ],
-  generatedAt: new Date().toISOString(),
+  correlationClusters: [{ symbols: ['AAPL', 'MSFT'], correlation: 0.82 }],
+  maxDrawdown: -0.18,
+  valueAtRisk: -4410.5,
+  timestamp: new Date().toISOString(),
 };
 
-export const riskResolvers = {
-  Query: {
-    riskReport: () => mockRiskReport,
-  },
-};
+// ---------------------------------------------------------------------------
+// Query resolvers
+// ---------------------------------------------------------------------------
+
+export function riskReportQuery(): RiskReport {
+  return { ...stubRiskReport, timestamp: new Date().toISOString() };
+}

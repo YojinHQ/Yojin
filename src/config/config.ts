@@ -55,11 +55,18 @@ export function loadConfig(overrides?: Partial<YojinConfig>): YojinConfig {
     channels: [
       {
         id: 'slack',
-        enabled: true,
+        enabled: !!process.env.SLACK_BOT_TOKEN,
         options: {
           botToken: process.env.SLACK_BOT_TOKEN,
           appToken: process.env.SLACK_APP_TOKEN,
           signingSecret: process.env.SLACK_SIGNING_SECRET,
+        },
+      },
+      {
+        id: 'web',
+        enabled: true,
+        options: {
+          port: process.env.YOJIN_PORT ?? '3000',
         },
       },
     ],

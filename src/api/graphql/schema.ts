@@ -1,161 +1,243 @@
 /**
- * GraphQL schema definition (SDL-first) for the Yojin API.
- *
- * Covers portfolio, enrichment, risk, alerts, agent status, and brain state.
- * Subscriptions are defined for real-time updates (portfolio, alerts, agent activity).
+ * GraphQL schema definition (SDL).
  */
 
 export const typeDefs = /* GraphQL */ `
-  type Query {
-    # Portfolio
-    portfolio: Portfolio
-    positions: [Position!]!
-    position(symbol: String!): Position
+  # ---------------------------------------------------------------------------
+  # Enums
+  # ---------------------------------------------------------------------------
 
-    # Enrichment
-    enrichedSnapshot: EnrichedSnapshot
-
-    # Risk
-    riskReport: RiskReport
-
-    # Alerts
-    alerts: [Alert!]!
-
-    # Agent status
-    agents: [AgentStatus!]!
-
-    # Brain (Strategist)
-    brainState: BrainState
+  enum AssetClass {
+    EQUITY
+    CRYPTO
+    BOND
+    COMMODITY
+    CURRENCY
+    OTHER
   }
 
-  type Subscription {
-    portfolioUpdated: Portfolio
-    alertTriggered: Alert
-    agentActivity: AgentEvent
+  enum Platform {
+    INTERACTIVE_BROKERS
+    ROBINHOOD
+    COINBASE
+    MANUAL
   }
 
-  type Portfolio {
-    totalValue: Float!
-    dayChange: Float!
-    dayChangePercent: Float!
-    positions: [Position!]!
-    lastUpdated: String!
+  enum AlertStatus {
+    ACTIVE
+    TRIGGERED
+    DISMISSED
   }
+
+  enum AlertRuleType {
+    PRICE_MOVE
+    SENTIMENT_SHIFT
+    EARNINGS_PROXIMITY
+    CONCENTRATION_DRIFT
+    CORRELATION_WARNING
+  }
+
+  enum Direction {
+    UP
+    DOWN
+    BOTH
+  }
+
+  # ---------------------------------------------------------------------------
+  # Portfolio
+  # ---------------------------------------------------------------------------
 
   type Position {
     symbol: String!
     name: String!
     quantity: Float!
+    costBasis: Float!
     currentPrice: Float!
-    avgCost: Float!
     marketValue: Float!
     unrealizedPnl: Float!
     unrealizedPnlPercent: Float!
-    dayChange: Float!
-    dayChangePercent: Float!
-    weight: Float!
-    assetClass: String!
     sector: String
-    platform: String!
+    assetClass: AssetClass!
+    platform: Platform!
   }
 
-  type EnrichedSnapshot {
-    positions: [EnrichedPosition!]!
-    generatedAt: String!
+  type PortfolioSnapshot {
+    id: ID!
+    positions: [Position!]!
+    totalValue: Float!
+    totalCost: Float!
+    totalPnl: Float!
+    totalPnlPercent: Float!
+    timestamp: String!
+    platform: Platform
   }
+
+  # ---------------------------------------------------------------------------
+  # Enriched
+  # ---------------------------------------------------------------------------
 
   type EnrichedPosition {
     symbol: String!
-    sentiment: Sentiment
-    fundamentals: Fundamentals
-  }
-
-  type Sentiment {
-    score: Float!
-    label: String!
-    source: String!
-    updatedAt: String!
-  }
-
-  type Fundamentals {
-    marketCap: Float
+    name: String!
+    quantity: Float!
+    costBasis: Float!
+    currentPrice: Float!
+    marketValue: Float!
+    unrealizedPnl: Float!
+    unrealizedPnlPercent: Float!
+    sector: String
+    assetClass: AssetClass!
+    platform: Platform!
+    sentimentScore: Float
+    sentimentLabel: String
+    analystRating: String
+    targetPrice: Float
     peRatio: Float
-    eps: Float
     dividendYield: Float
     beta: Float
     fiftyTwoWeekHigh: Float
     fiftyTwoWeekLow: Float
   }
 
-  type RiskReport {
-    overallScore: Float!
-    exposureBreakdown: ExposureBreakdown!
-    concentrationScore: Float!
-    topConcentrations: [ConcentrationEntry!]!
-    correlatedPairs: [CorrelatedPair!]!
-    generatedAt: String!
+  type EnrichedSnapshot {
+    id: ID!
+    positions: [EnrichedPosition!]!
+    totalValue: Float!
+    totalCost: Float!
+    totalPnl: Float!
+    totalPnlPercent: Float!
+    timestamp: String!
+    enrichedAt: String!
   }
 
-  type ExposureBreakdown {
-    bySector: [ExposureEntry!]!
-    byAssetClass: [ExposureEntry!]!
-    byGeography: [ExposureEntry!]!
-  }
+  # ---------------------------------------------------------------------------
+  # Risk
+  # ---------------------------------------------------------------------------
 
-  type ExposureEntry {
-    name: String!
+  type SectorWeight {
+    sector: String!
     weight: Float!
     value: Float!
   }
 
-  type ConcentrationEntry {
+  type Concentration {
     symbol: String!
     weight: Float!
-    risk: String!
   }
 
-  type CorrelatedPair {
-    symbolA: String!
-    symbolB: String!
+  type CorrelationCluster {
+    symbols: [String!]!
     correlation: Float!
   }
 
-  type Alert {
-    id: String!
-    type: String!
-    severity: String!
-    message: String!
-    symbol: String
-    triggeredAt: String!
-    acknowledged: Boolean!
-  }
-
-  type AgentStatus {
-    id: String!
-    name: String!
-    role: String!
-    status: String!
-    lastActivity: String
-    currentTask: String
-  }
-
-  type BrainState {
-    persona: String!
-    workingMemory: [String!]!
-    emotionState: EmotionState!
-    lastCommit: String
-  }
-
-  type EmotionState {
-    confidence: Float!
-    riskAppetite: Float!
-    rationale: String!
-  }
-
-  type AgentEvent {
-    agentId: String!
-    type: String!
-    message: String!
+  type RiskReport {
+    id: ID!
+    portfolioValue: Float!
+    sectorExposure: [SectorWeight!]!
+    concentrationScore: Float!
+    topConcentrations: [Concentration!]!
+    correlationClusters: [CorrelationCluster!]!
+    maxDrawdown: Float!
+    valueAtRisk: Float!
     timestamp: String!
+  }
+
+  # ---------------------------------------------------------------------------
+  # Alerts
+  # ---------------------------------------------------------------------------
+
+  type AlertRule {
+    type: AlertRuleType!
+    symbol: String
+    threshold: Float
+    direction: Direction
+  }
+
+  type Alert {
+    id: ID!
+    rule: AlertRule!
+    status: AlertStatus!
+    message: String!
+    triggeredAt: String
+    dismissedAt: String
+    createdAt: String!
+  }
+
+  # ---------------------------------------------------------------------------
+  # Market
+  # ---------------------------------------------------------------------------
+
+  type Quote {
+    symbol: String!
+    price: Float!
+    change: Float!
+    changePercent: Float!
+    volume: Float!
+    high: Float!
+    low: Float!
+    open: Float!
+    previousClose: Float!
+    timestamp: String!
+  }
+
+  type Article {
+    id: ID!
+    title: String!
+    source: String!
+    url: String!
+    publishedAt: String!
+    summary: String
+    symbols: [String!]!
+    sentiment: Float
+  }
+
+  # ---------------------------------------------------------------------------
+  # Subscriptions
+  # ---------------------------------------------------------------------------
+
+  type PriceEvent {
+    symbol: String!
+    price: Float!
+    change: Float!
+    changePercent: Float!
+    timestamp: String!
+  }
+
+  # ---------------------------------------------------------------------------
+  # Inputs
+  # ---------------------------------------------------------------------------
+
+  input AlertRuleInput {
+    type: AlertRuleType!
+    symbol: String
+    threshold: Float
+    direction: Direction
+  }
+
+  # ---------------------------------------------------------------------------
+  # Root types
+  # ---------------------------------------------------------------------------
+
+  type Query {
+    portfolio: PortfolioSnapshot
+    positions: [Position!]!
+    enrichedSnapshot: EnrichedSnapshot
+    riskReport: RiskReport
+    alerts(status: AlertStatus): [Alert!]!
+    news(symbol: String, limit: Int): [Article!]!
+    quote(symbol: String!): Quote
+    sectorExposure: [SectorWeight!]!
+  }
+
+  type Mutation {
+    refreshPositions(platform: Platform!): PortfolioSnapshot!
+    createAlert(rule: AlertRuleInput!): Alert!
+    dismissAlert(id: ID!): Alert!
+  }
+
+  type Subscription {
+    onAlert: Alert!
+    onPortfolioUpdate: PortfolioSnapshot!
+    onPriceMove(symbol: String!, threshold: Float!): PriceEvent!
   }
 `;

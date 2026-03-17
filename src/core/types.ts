@@ -1,0 +1,137 @@
+/**
+ * Core types for the Thought → Action → Observation agent loop.
+ */
+
+import type { ZodSchema } from 'zod';
+
+// ---------------------------------------------------------------------------
+// Tool definitions
+// ---------------------------------------------------------------------------
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: ZodSchema<any>;
+  execute: (params: any) => Promise<ToolResult>;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+export interface ToolResult {
+  content: string;
+  isError?: boolean;
+}
+
+export interface ToolCall {
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+export interface ToolCallResult {
+  toolCallId: string;
+  name: string;
+  result: ToolResult;
+}
+
+// ---------------------------------------------------------------------------
+// Message types (richer than ProviderMessage — supports tool use)
+// ---------------------------------------------------------------------------
+
+export interface TextBlock {
+  type: 'text';
+  text: string;
+}
+
+export interface ToolUseBlock {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+export interface ToolResultBlock {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string;
+  is_error?: boolean;
+}
+
+export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
+
+export interface AgentMessage {
+  role: 'user' | 'assistant';
+  content: string | ContentBlock[];
+}
+
+// ---------------------------------------------------------------------------
+// Agent loop events
+// ---------------------------------------------------------------------------
+
+export type AgentLoopEvent =
+  | { type: 'thought'; text: string }
+  | { type: 'action'; toolCalls: ToolCall[] }
+  | { type: 'observation'; results: ToolCallResult[] }
+  | {
+      type: 'tool_result_truncated';
+      toolName: string;
+      originalChars: number;
+      truncatedChars: number;
+    }
+  | { type: 'compaction'; messagesBefore: number; messagesAfter: number; usedLlmSummary: boolean }
+  | { type: 'done'; text: string; iterations: number }
+  | { type: 'error'; error: string; iterations: number }
+  | { type: 'max_iterations'; iterations: number };
+
+export type AgentLoopEventHandler = (event: AgentLoopEvent) => void;
+
+// ---------------------------------------------------------------------------
+// Agent loop options
+// ---------------------------------------------------------------------------
+
+export interface MemoryConfig {
+  /** Context window size in tokens (default 200_000). */
+  contextWindow?: number;
+  /** Fraction of context window that triggers compaction (0-1, default 0.9). */
+  compactionThreshold?: number;
+  /** Max fraction of context a single tool result can consume (default 0.3). */
+  maxToolResultShare?: number;
+  /** Max chars for a single tool result (default 50_000). */
+  maxToolResultChars?: number;
+  /** Number of recent turn pairs to preserve during compaction (default 3). */
+  preserveRecentTurns?: number;
+}
+
+export interface AgentLoopOptions {
+  provider: AgentLoopProvider;
+  model: string;
+  systemPrompt?: string;
+  tools?: ToolDefinition[];
+  maxIterations?: number;
+  memory?: MemoryConfig;
+  onEvent?: AgentLoopEventHandler;
+}
+
+// ---------------------------------------------------------------------------
+// Provider interface for the loop (subset of ProviderPlugin)
+// ---------------------------------------------------------------------------
+
+export interface AgentLoopProvider {
+  completeWithTools(params: {
+    model: string;
+    system?: string;
+    messages: AgentMessage[];
+    tools?: ToolSchema[];
+    maxTokens?: number;
+  }): Promise<{
+    content: ContentBlock[];
+    stopReason: string;
+    usage?: { inputTokens: number; outputTokens: number };
+  }>;
+}
+
+export interface ToolSchema {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
