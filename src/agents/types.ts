@@ -11,7 +11,7 @@ export interface AgentContext {
 }
 
 export interface ConversationTurn {
-  role: "user" | "assistant" | "system";
+  role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: number;
 }
@@ -22,9 +22,5 @@ export interface Agent {
   systemPrompt?: string;
 
   /** Process a conversation turn and return a response. */
-  process(
-    context: AgentContext,
-    history: ConversationTurn[],
-    userMessage: string,
-  ): Promise<string>;
+  process(context: AgentContext, history: ConversationTurn[], userMessage: string): Promise<string>;
 }

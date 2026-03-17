@@ -11,46 +11,46 @@
  * token is present we delegate to the CLI.
  */
 
-import { spawn } from "node:child_process";
-import Anthropic from "@anthropic-ai/sdk";
+import { spawn } from 'node:child_process';
+import Anthropic from '@anthropic-ai/sdk';
 import type {
   ProviderPlugin,
   ProviderCompletionParams,
   ProviderCompletionResult,
   ProviderStreamEvent,
   ProviderModel,
-} from "../../../src/plugins/types.js";
+} from '../../../src/plugins/types.js';
 import {
   createProviderApiKeyAuth,
   createProviderOAuthAuth,
-} from "../../../src/plugin-sdk/index.js";
-import { getLogger } from "../../../src/logging/index.js";
+} from '../../../src/plugin-sdk/index.js';
+import { getLogger } from '../../../src/logging/index.js';
 
 const ANTHROPIC_MODELS: ProviderModel[] = [
   {
-    id: "claude-opus-4-20250514",
-    name: "Claude Opus 4",
+    id: 'claude-opus-4-20250514',
+    name: 'Claude Opus 4',
     contextWindow: 200_000,
     maxOutputTokens: 32_000,
-    capabilities: ["text", "vision", "tool_use"],
+    capabilities: ['text', 'vision', 'tool_use'],
   },
   {
-    id: "claude-sonnet-4-20250514",
-    name: "Claude Sonnet 4",
+    id: 'claude-sonnet-4-20250514',
+    name: 'Claude Sonnet 4',
     contextWindow: 200_000,
     maxOutputTokens: 16_000,
-    capabilities: ["text", "vision", "tool_use"],
+    capabilities: ['text', 'vision', 'tool_use'],
   },
   {
-    id: "claude-haiku-4-20250514",
-    name: "Claude Haiku 4",
+    id: 'claude-haiku-4-20250514',
+    name: 'Claude Haiku 4',
     contextWindow: 200_000,
     maxOutputTokens: 8_000,
-    capabilities: ["text", "vision", "tool_use"],
+    capabilities: ['text', 'vision', 'tool_use'],
   },
 ];
 
-type AuthMode = "api_key" | "cli";
+type AuthMode = 'api_key' | 'cli';
 
 // ---------------------------------------------------------------------------
 // CLI mode — spawn `claude` subprocess with CLAUDE_CODE_OAUTH_TOKEN
@@ -58,25 +58,23 @@ type AuthMode = "api_key" | "cli";
 
 function callClaude(prompt: string, model: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const args = ["-p", "--model", model];
-    const child = spawn("claude", args, {
+    const args = ['-p', '--model', model];
+    const child = spawn('claude', args, {
       env: { ...process.env },
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    let stdout = "";
-    let stderr = "";
+    let stdout = '';
+    let stderr = '';
 
-    child.stdout.on("data", (chunk: Buffer) => {
+    child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString();
     });
-    child.stderr.on("data", (chunk: Buffer) => {
+    child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString();
     });
-    child.on("error", (err) =>
-      reject(new Error(`Failed to spawn claude CLI: ${err.message}`)),
-    );
-    child.on("close", (code) => {
+    child.on('error', (err) => reject(new Error(`Failed to spawn claude CLI: ${err.message}`)));
+    child.on('close', (code) => {
       if (code !== 0) {
         reject(new Error(`claude CLI exited with code ${code}: ${stderr}`));
       } else {
@@ -95,25 +93,25 @@ function callClaude(prompt: string, model: string): Promise<string> {
 // ---------------------------------------------------------------------------
 
 export function buildAnthropicProvider(): ProviderPlugin {
-  const log = getLogger().sub("anthropic");
+  const log = getLogger().sub('anthropic');
   let client: Anthropic;
   let authMode: AuthMode;
 
   return {
-    id: "anthropic",
-    label: "Anthropic",
-    description: "Claude models by Anthropic",
-    envVars: ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"],
+    id: 'anthropic',
+    label: 'Anthropic',
+    description: 'Claude models by Anthropic',
+    envVars: ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'],
     auth: [
       createProviderOAuthAuth({
-        providerId: "anthropic",
-        envVar: "CLAUDE_CODE_OAUTH_TOKEN",
-        label: "Claude Code OAuth token (uses CLI)",
+        providerId: 'anthropic',
+        envVar: 'CLAUDE_CODE_OAUTH_TOKEN',
+        label: 'Claude Code OAuth token (uses CLI)',
       }),
       createProviderApiKeyAuth({
-        providerId: "anthropic",
-        envVar: "ANTHROPIC_API_KEY",
-        label: "Anthropic API key",
+        providerId: 'anthropic',
+        envVar: 'ANTHROPIC_API_KEY',
+        label: 'Anthropic API key',
       }),
     ],
     models: ANTHROPIC_MODELS,
@@ -123,24 +121,24 @@ export function buildAnthropicProvider(): ProviderPlugin {
       const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
 
       if (oauthToken) {
-        authMode = "cli";
-        log.info("Using CLI mode (CLAUDE_CODE_OAUTH_TOKEN)");
+        authMode = 'cli';
+        log.info('Using CLI mode (CLAUDE_CODE_OAUTH_TOKEN)');
       } else if (apiKey) {
-        authMode = "api_key";
+        authMode = 'api_key';
         client = new Anthropic({ apiKey });
-        log.info("Using API key mode");
+        log.info('Using API key mode');
       } else {
-        authMode = "api_key";
+        authMode = 'api_key';
         client = new Anthropic();
-        log.warn("No credentials found, using SDK defaults");
+        log.warn('No credentials found, using SDK defaults');
       }
     },
 
     resolveModel(modelRef: string): ProviderModel | undefined {
       const aliases: Record<string, string> = {
-        opus: "claude-opus-4-20250514",
-        sonnet: "claude-sonnet-4-20250514",
-        haiku: "claude-haiku-4-20250514",
+        opus: 'claude-opus-4-20250514',
+        sonnet: 'claude-sonnet-4-20250514',
+        haiku: 'claude-haiku-4-20250514',
       };
       const resolved = aliases[modelRef] ?? modelRef;
       return ANTHROPIC_MODELS.find((m) => m.id === resolved);
@@ -148,9 +146,9 @@ export function buildAnthropicProvider(): ProviderPlugin {
 
     async complete(params: ProviderCompletionParams): Promise<ProviderCompletionResult> {
       // -- CLI mode --
-      if (authMode === "cli") {
-        const userMessage = params.messages.filter((m) => m.role === "user").pop();
-        const prompt = userMessage?.content ?? "";
+      if (authMode === 'cli') {
+        const userMessage = params.messages.filter((m) => m.role === 'user').pop();
+        const prompt = userMessage?.content ?? '';
         const content = await callClaude(prompt, params.model);
         return { content, model: params.model };
       }
@@ -160,20 +158,20 @@ export function buildAnthropicProvider(): ProviderPlugin {
         model: params.model,
         max_tokens: params.maxTokens ?? 4096,
         messages: params.messages.map((m) => ({
-          role: m.role === "system" ? "user" : m.role,
+          role: m.role === 'system' ? 'user' : m.role,
           content: m.content,
         })),
-        ...(params.messages.some((m) => m.role === "system")
-          ? { system: params.messages.find((m) => m.role === "system")!.content }
+        ...(params.messages.some((m) => m.role === 'system')
+          ? { system: params.messages.find((m) => m.role === 'system')!.content }
           : {}),
         ...(params.temperature != null ? { temperature: params.temperature } : {}),
         ...(params.stopSequences ? { stop_sequences: params.stopSequences } : {}),
       });
 
-      const textBlock = response.content.find((b) => b.type === "text");
+      const textBlock = response.content.find((b) => b.type === 'text');
 
       return {
-        content: textBlock?.text ?? "",
+        content: textBlock?.text ?? '',
         model: response.model,
         usage: {
           inputTokens: response.usage.input_tokens,
@@ -185,12 +183,12 @@ export function buildAnthropicProvider(): ProviderPlugin {
 
     async *stream(params: ProviderCompletionParams): AsyncIterable<ProviderStreamEvent> {
       // -- CLI mode: no streaming, yield full response at once --
-      if (authMode === "cli") {
-        const userMessage = params.messages.filter((m) => m.role === "user").pop();
-        const prompt = userMessage?.content ?? "";
+      if (authMode === 'cli') {
+        const userMessage = params.messages.filter((m) => m.role === 'user').pop();
+        const prompt = userMessage?.content ?? '';
         const content = await callClaude(prompt, params.model);
-        yield { type: "text_delta", text: content };
-        yield { type: "stop", stopReason: "end_turn" };
+        yield { type: 'text_delta', text: content };
+        yield { type: 'stop', stopReason: 'end_turn' };
         return;
       }
 
@@ -199,32 +197,29 @@ export function buildAnthropicProvider(): ProviderPlugin {
         model: params.model,
         max_tokens: params.maxTokens ?? 4096,
         messages: params.messages.map((m) => ({
-          role: m.role === "system" ? "user" : m.role,
+          role: m.role === 'system' ? 'user' : m.role,
           content: m.content,
         })),
-        ...(params.messages.some((m) => m.role === "system")
-          ? { system: params.messages.find((m) => m.role === "system")!.content }
+        ...(params.messages.some((m) => m.role === 'system')
+          ? { system: params.messages.find((m) => m.role === 'system')!.content }
           : {}),
         ...(params.temperature != null ? { temperature: params.temperature } : {}),
         ...(params.stopSequences ? { stop_sequences: params.stopSequences } : {}),
       });
 
       for await (const event of stream) {
-        if (
-          event.type === "content_block_delta" &&
-          event.delta.type === "text_delta"
-        ) {
-          yield { type: "text_delta", text: event.delta.text };
+        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+          yield { type: 'text_delta', text: event.delta.text };
         }
       }
 
       const finalMessage = await stream.finalMessage();
       yield {
-        type: "usage",
+        type: 'usage',
         inputTokens: finalMessage.usage.input_tokens,
         outputTokens: finalMessage.usage.output_tokens,
       };
-      yield { type: "stop", stopReason: finalMessage.stop_reason ?? "end_turn" };
+      yield { type: 'stop', stopReason: finalMessage.stop_reason ?? 'end_turn' };
     },
   };
 }

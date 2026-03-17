@@ -3,12 +3,12 @@
  */
 
 export type HookEvent =
-  | "message:incoming"
-  | "message:outgoing"
-  | "provider:before_complete"
-  | "provider:after_complete"
-  | "channel:connected"
-  | "channel:disconnected";
+  | 'message:incoming'
+  | 'message:outgoing'
+  | 'provider:before_complete'
+  | 'provider:after_complete'
+  | 'channel:connected'
+  | 'channel:disconnected';
 
 export type HookHandler = (event: HookEvent, data: unknown) => Promise<void>;
 

@@ -3,19 +3,19 @@
  * and routes messages between them.
  */
 
-import { PluginRegistry } from "../plugins/registry.js";
-import { getLogger } from "../logging/index.js";
-import type { YojinConfig } from "../config/config.js";
-import type { IncomingMessage } from "../plugins/types.js";
+import { PluginRegistry } from '../plugins/registry.js';
+import { getLogger } from '../logging/index.js';
+import type { YojinConfig } from '../config/config.js';
+import type { IncomingMessage } from '../plugins/types.js';
 
 // Built-in plugin imports
-import { anthropicPlugin } from "../../providers/anthropic/index.js";
-import { slackPlugin } from "../../channels/slack/index.js";
+import { anthropicPlugin } from '../../providers/anthropic/index.js';
+import { slackPlugin } from '../../channels/slack/index.js';
 
 export class Gateway {
   private registry: PluginRegistry;
   private config: YojinConfig;
-  private log = getLogger().sub("gateway");
+  private log = getLogger().sub('gateway');
 
   constructor(config: YojinConfig) {
     this.config = config;
@@ -24,10 +24,10 @@ export class Gateway {
 
   /** Load all built-in and discovered plugins. */
   async loadPlugins(): Promise<void> {
-    this.log.info("Loading plugins…");
+    this.log.info('Loading plugins…');
     this.registry.loadPlugin(anthropicPlugin);
     this.registry.loadPlugin(slackPlugin);
-    this.log.info("Plugins loaded");
+    this.log.info('Plugins loaded');
 
     // TODO: Discover and load additional plugins from providers/ and channels/ directories
   }
@@ -51,11 +51,8 @@ export class Gateway {
   }
 
   /** Route an incoming message to the configured LLM provider and respond. */
-  private async handleIncomingMessage(
-    msg: IncomingMessage,
-    channelId: string,
-  ): Promise<void> {
-    const providerId = this.config.defaultProvider ?? "anthropic";
+  private async handleIncomingMessage(msg: IncomingMessage, channelId: string): Promise<void> {
+    const providerId = this.config.defaultProvider ?? 'anthropic';
     const provider = this.registry.getProvider(providerId);
 
     if (!provider) {
@@ -69,7 +66,7 @@ export class Gateway {
       return;
     }
 
-    const model = this.config.defaultModel ?? provider.models[0]?.id ?? "claude-sonnet-4-20250514";
+    const model = this.config.defaultModel ?? provider.models[0]?.id ?? 'claude-sonnet-4-20250514';
 
     this.log.info(`Message from ${msg.userId} on ${channelId}`, {
       threadId: msg.threadId,
@@ -79,10 +76,10 @@ export class Gateway {
     try {
       const result = await provider.complete({
         model,
-        messages: [{ role: "user", content: msg.text }],
+        messages: [{ role: 'user', content: msg.text }],
       });
 
-      this.log.info("Completion received", {
+      this.log.info('Completion received', {
         model: result.model,
         usage: result.usage,
         contentLength: result.content.length,
@@ -99,17 +96,17 @@ export class Gateway {
       await channel.messagingAdapter.sendMessage({
         channelId: msg.channelId,
         threadId: msg.threadId,
-        text: "Sorry, something went wrong processing your message.",
+        text: 'Sorry, something went wrong processing your message.',
       });
     }
   }
 
   /** Gracefully shut down. */
   async stop(): Promise<void> {
-    this.log.info("Gateway shutting down…");
+    this.log.info('Gateway shutting down…');
     await this.registry.shutdownAll();
-    this.log.info("Gateway stopped");
-    console.log("Yojin gateway stopped");
+    this.log.info('Gateway stopped');
+    console.log('Yojin gateway stopped');
   }
 
   getRegistry(): PluginRegistry {

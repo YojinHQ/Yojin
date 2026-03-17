@@ -1,13 +1,13 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { loadConfig, YojinConfigSchema } from "../src/config/config.js";
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { loadConfig, YojinConfigSchema } from '../src/config/config.js';
 
 // Mock dotenv so loadConfig doesn't read .env files during tests
-vi.mock("dotenv", () => ({
+vi.mock('dotenv', () => ({
   config: vi.fn(),
 }));
 
-describe("YojinConfigSchema", () => {
-  it("provides defaults for empty input", () => {
+describe('YojinConfigSchema', () => {
+  it('provides defaults for empty input', () => {
     const result = YojinConfigSchema.parse({});
     expect(result.providers).toEqual([]);
     expect(result.channels).toEqual([]);
@@ -16,36 +16,36 @@ describe("YojinConfigSchema", () => {
     expect(result.defaultModel).toBeUndefined();
   });
 
-  it("validates provider config", () => {
+  it('validates provider config', () => {
     const result = YojinConfigSchema.parse({
-      providers: [{ id: "anthropic", authMode: "api_key" }],
+      providers: [{ id: 'anthropic', authMode: 'api_key' }],
     });
-    expect(result.providers[0].id).toBe("anthropic");
-    expect(result.providers[0].authMode).toBe("api_key");
+    expect(result.providers[0].id).toBe('anthropic');
+    expect(result.providers[0].authMode).toBe('api_key');
   });
 
-  it("rejects invalid authMode", () => {
+  it('rejects invalid authMode', () => {
     expect(() =>
       YojinConfigSchema.parse({
-        providers: [{ id: "test", authMode: "invalid" }],
+        providers: [{ id: 'test', authMode: 'invalid' }],
       }),
     ).toThrow();
   });
 
-  it("validates channel config with defaults", () => {
+  it('validates channel config with defaults', () => {
     const result = YojinConfigSchema.parse({
-      channels: [{ id: "slack" }],
+      channels: [{ id: 'slack' }],
     });
     expect(result.channels[0].enabled).toBe(true);
   });
 
-  it("accepts custom port", () => {
+  it('accepts custom port', () => {
     const result = YojinConfigSchema.parse({ port: 8080 });
     expect(result.port).toBe(8080);
   });
 });
 
-describe("loadConfig", () => {
+describe('loadConfig', () => {
   const savedEnv = { ...process.env };
 
   beforeEach(() => {
@@ -61,45 +61,45 @@ describe("loadConfig", () => {
     process.env = { ...savedEnv };
   });
 
-  it("returns valid config with no env vars set", () => {
+  it('returns valid config with no env vars set', () => {
     const config = loadConfig();
     expect(config.providers).toHaveLength(1);
-    expect(config.providers[0].id).toBe("anthropic");
+    expect(config.providers[0].id).toBe('anthropic');
     expect(config.channels).toHaveLength(1);
-    expect(config.channels[0].id).toBe("slack");
+    expect(config.channels[0].id).toBe('slack');
   });
 
-  it("resolves oauth auth mode when CLAUDE_CODE_OAUTH_TOKEN is set", () => {
-    process.env.CLAUDE_CODE_OAUTH_TOKEN = "sk-ant-oat01-test-token";
+  it('resolves oauth auth mode when CLAUDE_CODE_OAUTH_TOKEN is set', () => {
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = 'sk-ant-oat01-test-token';
     const config = loadConfig();
-    expect(config.providers[0].authMode).toBe("oauth");
-    expect(config.providers[0].oauthToken).toBe("sk-ant-oat01-test-token");
+    expect(config.providers[0].authMode).toBe('oauth');
+    expect(config.providers[0].oauthToken).toBe('sk-ant-oat01-test-token');
   });
 
-  it("resolves api_key auth mode when only ANTHROPIC_API_KEY is set", () => {
-    process.env.ANTHROPIC_API_KEY = "sk-ant-api03-test-key";
+  it('resolves api_key auth mode when only ANTHROPIC_API_KEY is set', () => {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-api03-test-key';
     const config = loadConfig();
-    expect(config.providers[0].authMode).toBe("api_key");
-    expect(config.providers[0].apiKey).toBe("sk-ant-api03-test-key");
+    expect(config.providers[0].authMode).toBe('api_key');
+    expect(config.providers[0].apiKey).toBe('sk-ant-api03-test-key');
   });
 
-  it("prefers oauth over api_key when both are set", () => {
-    process.env.CLAUDE_CODE_OAUTH_TOKEN = "sk-ant-oat01-token";
-    process.env.ANTHROPIC_API_KEY = "sk-ant-api03-key";
+  it('prefers oauth over api_key when both are set', () => {
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = 'sk-ant-oat01-token';
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-api03-key';
     const config = loadConfig();
-    expect(config.providers[0].authMode).toBe("oauth");
+    expect(config.providers[0].authMode).toBe('oauth');
   });
 
-  it("applies overrides", () => {
-    const config = loadConfig({ port: 9999, defaultModel: "custom-model" });
+  it('applies overrides', () => {
+    const config = loadConfig({ port: 9999, defaultModel: 'custom-model' });
     expect(config.port).toBe(9999);
-    expect(config.defaultModel).toBe("custom-model");
+    expect(config.defaultModel).toBe('custom-model');
   });
 
-  it("ignores whitespace-only tokens", () => {
-    process.env.CLAUDE_CODE_OAUTH_TOKEN = "   ";
-    process.env.ANTHROPIC_API_KEY = "sk-ant-api03-real-key";
+  it('ignores whitespace-only tokens', () => {
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = '   ';
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-api03-real-key';
     const config = loadConfig();
-    expect(config.providers[0].authMode).toBe("api_key");
+    expect(config.providers[0].authMode).toBe('api_key');
   });
 });

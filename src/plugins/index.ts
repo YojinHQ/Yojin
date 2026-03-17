@@ -1,4 +1,4 @@
-export { PluginRegistry } from "./registry.js";
+export { PluginRegistry } from './registry.js';
 export type {
   PluginKind,
   PluginManifest,
@@ -18,4 +18,4 @@ export type {
   OutgoingMessage,
   YojinPlugin,
   YojinPluginApi,
-} from "./types.js";
+} from './types.js';

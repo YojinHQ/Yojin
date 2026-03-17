@@ -9,7 +9,7 @@
  *   - Configurable via YOJIN_LOG_LEVEL env var
  */
 
-import { Logger as TsLogger, type ILogObj } from "tslog";
+import { Logger as TsLogger, type ILogObj } from 'tslog';
 import {
   mkdirSync,
   appendFileSync,
@@ -17,15 +17,15 @@ import {
   symlinkSync,
   unlinkSync,
   existsSync,
-} from "node:fs";
-import { join } from "node:path";
-import { redact } from "./redact.js";
+} from 'node:fs';
+import { join } from 'node:path';
+import { redact } from './redact.js';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" | "silent";
+export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' | 'silent';
 
 const LEVEL_MAP: Record<LogLevel, number> = {
   trace: 1,
@@ -43,7 +43,7 @@ export interface LoggerOptions {
   /** Max log file size in bytes before rotating (default: 500MB) */
   maxFileSize?: number;
   /** Console output style: "pretty" (default for TTY), "compact", "json", "hidden" */
-  consoleStyle?: "pretty" | "compact" | "json" | "hidden";
+  consoleStyle?: 'pretty' | 'compact' | 'json' | 'hidden';
 }
 
 // ---------------------------------------------------------------------------
@@ -73,21 +73,21 @@ class YojinLogger {
 
   constructor(opts: LoggerOptions = {}) {
     const envLevel = process.env.YOJIN_LOG_LEVEL?.toLowerCase() as LogLevel | undefined;
-    const minLevel = envLevel && LEVEL_MAP[envLevel] ? envLevel : (opts.minLevel ?? "debug");
-    const consoleStyle = opts.consoleStyle ?? (process.stderr.isTTY ? "pretty" : "compact");
+    const minLevel = envLevel && LEVEL_MAP[envLevel] ? envLevel : (opts.minLevel ?? 'debug');
+    const consoleStyle = opts.consoleStyle ?? (process.stderr.isTTY ? 'pretty' : 'compact');
 
-    this.logDir = opts.logDir ?? join(process.cwd(), "logs");
+    this.logDir = opts.logDir ?? join(process.cwd(), 'logs');
     this.maxFileSize = opts.maxFileSize ?? 500 * 1024 * 1024; // 500MB
 
     mkdirSync(this.logDir, { recursive: true });
 
     // Create timestamped log file
-    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
     this.logFile = join(this.logDir, `yojin-${ts}.log`);
-    writeFileSync(this.logFile, "");
+    writeFileSync(this.logFile, '');
 
     // Symlink latest.log
-    const latestLink = join(this.logDir, "latest.log");
+    const latestLink = join(this.logDir, 'latest.log');
     try {
       if (existsSync(latestLink)) unlinkSync(latestLink);
       symlinkSync(this.logFile, latestLink);
@@ -97,15 +97,15 @@ class YojinLogger {
 
     // Configure tslog
     this.tslog = new TsLogger<ILogObj>({
-      name: "yojin",
+      name: 'yojin',
       minLevel: LEVEL_MAP[minLevel],
-      type: consoleStyle === "json" ? "json" : consoleStyle === "hidden" ? "hidden" : "pretty",
+      type: consoleStyle === 'json' ? 'json' : consoleStyle === 'hidden' ? 'hidden' : 'pretty',
       prettyLogTemplate:
-        consoleStyle === "compact"
-          ? "{{logLevelName}} {{name}} "
-          : "{{hh}}:{{MM}}:{{ss}} {{logLevelName}} {{name}} ",
-      stylePrettyLogs: consoleStyle === "pretty" && process.stderr.isTTY,
-      prettyLogTimeZone: "local",
+        consoleStyle === 'compact'
+          ? '{{logLevelName}} {{name}} '
+          : '{{hh}}:{{MM}}:{{ss}} {{logLevelName}} {{name}} ',
+      stylePrettyLogs: consoleStyle === 'pretty' && process.stderr.isTTY,
+      prettyLogTimeZone: 'local',
     });
 
     // Attach file transport
@@ -119,19 +119,19 @@ class YojinLogger {
 
     const entry = {
       time: new Date().toISOString(),
-      level: (logObj as Record<string, unknown>)["_meta"]
-        ? ((logObj as Record<string, unknown>)["_meta"] as Record<string, unknown>)["logLevelName"]
-        : "INFO",
-      name: (logObj as Record<string, unknown>)["_meta"]
-        ? ((logObj as Record<string, unknown>)["_meta"] as Record<string, unknown>)["name"]
-        : "yojin",
+      level: (logObj as Record<string, unknown>)['_meta']
+        ? ((logObj as Record<string, unknown>)['_meta'] as Record<string, unknown>)['logLevelName']
+        : 'INFO',
+      name: (logObj as Record<string, unknown>)['_meta']
+        ? ((logObj as Record<string, unknown>)['_meta'] as Record<string, unknown>)['name']
+        : 'yojin',
       ...logObj,
     };
 
     // Remove _meta from file output (already extracted above)
-    delete (entry as Record<string, unknown>)["_meta"];
+    delete (entry as Record<string, unknown>)['_meta'];
 
-    const line = redact(JSON.stringify(entry)) + "\n";
+    const line = redact(JSON.stringify(entry)) + '\n';
     this.fileBytes += Buffer.byteLength(line);
     appendFileSync(this.logFile, line);
   }
@@ -147,7 +147,7 @@ class YojinLogger {
   private createSubLogger(subsystem: string): SubsystemLogger {
     const child = this.tslog.getSubLogger({ name: subsystem });
 
-    const wrap = (level: "trace" | "debug" | "info" | "warn" | "error" | "fatal") => {
+    const wrap = (level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal') => {
       return (msg: string, meta?: Record<string, unknown>) => {
         if (meta) {
           child[level](msg, meta);
@@ -158,26 +158,42 @@ class YojinLogger {
     };
 
     return {
-      trace: wrap("trace"),
-      debug: wrap("debug"),
-      info: wrap("info"),
-      warn: wrap("warn"),
-      error: wrap("error"),
-      fatal: wrap("fatal"),
+      trace: wrap('trace'),
+      debug: wrap('debug'),
+      info: wrap('info'),
+      warn: wrap('warn'),
+      error: wrap('error'),
+      fatal: wrap('fatal'),
       child: (name: string) => this.createSubLogger(`${subsystem}/${name}`),
     };
   }
 
   // Top-level convenience methods
-  trace(msg: string, meta?: Record<string, unknown>) { this.tslog.trace(msg, meta); }
-  debug(msg: string, meta?: Record<string, unknown>) { this.tslog.debug(msg, meta); }
-  info(msg: string, meta?: Record<string, unknown>) { this.tslog.info(msg, meta); }
-  warn(msg: string, meta?: Record<string, unknown>) { this.tslog.warn(msg, meta); }
-  error(msg: string, meta?: Record<string, unknown>) { this.tslog.error(msg, meta); }
-  fatal(msg: string, meta?: Record<string, unknown>) { this.tslog.fatal(msg, meta); }
+  trace(msg: string, meta?: Record<string, unknown>) {
+    this.tslog.trace(msg, meta);
+  }
+  debug(msg: string, meta?: Record<string, unknown>) {
+    this.tslog.debug(msg, meta);
+  }
+  info(msg: string, meta?: Record<string, unknown>) {
+    this.tslog.info(msg, meta);
+  }
+  warn(msg: string, meta?: Record<string, unknown>) {
+    this.tslog.warn(msg, meta);
+  }
+  error(msg: string, meta?: Record<string, unknown>) {
+    this.tslog.error(msg, meta);
+  }
+  fatal(msg: string, meta?: Record<string, unknown>) {
+    this.tslog.fatal(msg, meta);
+  }
 
-  getLogFile(): string { return this.logFile; }
-  getLogDir(): string { return this.logDir; }
+  getLogFile(): string {
+    return this.logFile;
+  }
+  getLogDir(): string {
+    return this.logDir;
+  }
 }
 
 // ---------------------------------------------------------------------------

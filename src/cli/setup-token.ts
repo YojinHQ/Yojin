@@ -7,23 +7,23 @@
  *   --method paste   Manually paste a token
  */
 
-import { createInterface } from "node:readline";
+import { createInterface } from 'node:readline';
 import {
   loginClaudeOAuth,
   runClaudeSetupToken,
   createTokenReference,
-} from "../auth/claude-oauth.js";
+} from '../auth/claude-oauth.js';
 
-type Method = "oauth" | "cli" | "paste";
+type Method = 'oauth' | 'cli' | 'paste';
 
 function parseMethod(args: string[]): Method {
-  const idx = args.indexOf("--method");
+  const idx = args.indexOf('--method');
   if (idx !== -1 && args[idx + 1]) {
     const val = args[idx + 1] as Method;
-    if (["oauth", "cli", "paste"].includes(val)) return val;
+    if (['oauth', 'cli', 'paste'].includes(val)) return val;
     console.error(`Unknown method "${val}", defaulting to "oauth"`);
   }
-  return "oauth";
+  return 'oauth';
 }
 
 function prompt(question: string): Promise<string> {
@@ -44,10 +44,10 @@ export async function setupToken(args: string[]): Promise<void> {
   let token: string;
 
   switch (method) {
-    case "oauth": {
+    case 'oauth': {
       const result = await loginClaudeOAuth({
         onAuth: async ({ url }) => {
-          console.log("Open this URL in your browser to authorize:\n");
+          console.log('Open this URL in your browser to authorize:\n');
           console.log(`  ${url}\n`);
         },
         onPrompt: async ({ message }) => {
@@ -59,8 +59,8 @@ export async function setupToken(args: string[]): Promise<void> {
       break;
     }
 
-    case "cli": {
-      console.log("Running `claude setup-token`…\n");
+    case 'cli': {
+      console.log('Running `claude setup-token`…\n');
       const result = await runClaudeSetupToken();
       token = result.token;
       if (result.authUrl) {
@@ -69,10 +69,10 @@ export async function setupToken(args: string[]): Promise<void> {
       break;
     }
 
-    case "paste": {
-      token = (await prompt("Paste your CLAUDE_CODE_OAUTH_TOKEN: ")).trim();
+    case 'paste': {
+      token = (await prompt('Paste your CLAUDE_CODE_OAUTH_TOKEN: ')).trim();
       if (!token) {
-        console.error("No token provided.");
+        console.error('No token provided.');
         process.exit(1);
       }
       break;
@@ -80,6 +80,6 @@ export async function setupToken(args: string[]): Promise<void> {
   }
 
   console.log(`\nToken acquired: ${createTokenReference(token)}`);
-  console.log("\nAdd this to your .env file:\n");
+  console.log('\nAdd this to your .env file:\n');
   console.log(`  CLAUDE_CODE_OAUTH_TOKEN=${token}\n`);
 }

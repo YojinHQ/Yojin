@@ -1,1 +1,1 @@
-export type { HookEvent, HookHandler, HookRegistry } from "./types.js";
+export type { HookEvent, HookHandler, HookRegistry } from './types.js';

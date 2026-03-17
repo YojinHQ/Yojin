@@ -2,9 +2,9 @@
  * Yojin — public API surface.
  */
 
-export { Gateway } from "./gateway/index.js";
-export { PluginRegistry } from "./plugins/index.js";
-export { loadConfig } from "./config/index.js";
+export { Gateway } from './gateway/index.js';
+export { PluginRegistry } from './plugins/index.js';
+export { loadConfig } from './config/index.js';
 
 // Re-export all plugin types
 export type {
@@ -17,9 +17,9 @@ export type {
   ProviderStreamEvent,
   IncomingMessage,
   OutgoingMessage,
-} from "./plugins/index.js";
+} from './plugins/index.js';
 
-export type { YojinConfig } from "./config/index.js";
+export type { YojinConfig } from './config/index.js';
 
 // Auth
 export {
@@ -29,5 +29,5 @@ export {
   refreshClaudeOAuthToken,
   loginClaudeOAuth,
   createTokenReference,
-} from "./auth/index.js";
-export type { ClaudeOAuthResult } from "./auth/index.js";
+} from './auth/index.js';
+export type { ClaudeOAuthResult } from './auth/index.js';
