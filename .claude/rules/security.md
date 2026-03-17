@@ -7,15 +7,15 @@ globs: ["src/trust/**/*.ts", "src/guards/**/*.ts", "src/enrichment/**/*.ts", "sr
 
 The trust layer is Yojin's core differentiator. Every component must be deterministic and non-bypassable.
 
-## Layer 1: secretctl (Credential Vault)
-- Never hardcode secrets. All credentials go through secretctl or environment variables.
-- secretctl stores credentials in an encrypted JSON file (AES-256-GCM) — never plaintext.
+## Layer 1: Credential Vault
+- Never hardcode secrets. All credentials go through the encrypted vault or environment variables.
+- The vault stores credentials in an encrypted JSON file (AES-256-GCM) — never plaintext.
 - Credentials are injected at the transport layer, never in LLM prompts.
 - The MCP server exposes credentials to AI tools without revealing raw values.
 - Never log credentials, tokens, or API keys — even at debug level.
 - Never commit `.env` files, browser session data, or `data/cache/` contents.
 
-## Layer 2: RADIUS Guards (Deterministic Pre-Execution)
+## Layer 2: Guard Pipeline (Deterministic Pre-Execution)
 - Every agent action must pass through the guard pipeline before execution.
 - Guards are pure functions — no LLM, no prompt, no interpretation.
 - Security guards (fs, command, egress, output-dlp, rate-budget, repetition) protect infrastructure.
@@ -27,7 +27,7 @@ The trust layer is Yojin's core differentiator. Every component must be determin
 - Always run `PiiRedactor.redact()` before sending data to Keelson API or any external service.
 - Redact: account IDs, exact balances (use ranges), personal identifiers (email, name).
 - OpenBB calls are local/in-process and don't need PII redaction.
-- Platform credentials never leave secretctl.
+- Platform credentials never leave the vault.
 
 ## Layer 4: Approval Gate
 - Irreversible actions (trades, new connections, config changes) require human approval.

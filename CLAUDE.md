@@ -19,8 +19,8 @@ See `plans/architecture.md` for the full architecture plan.
 - **`src/scraper/`** — Playwright browser automation for investment platforms
 - **`src/enrichment/`** — Dual-source enrichment pipeline: Keelson (sentiment) + OpenBB (fundamentals)
 - **`src/risk/`** — Risk Manager: exposure analysis, concentration scoring, correlation detection, earnings calendar
-- **`src/guards/`** — RADIUS deterministic guard pipeline: security guards (fs, command, egress, output-dlp, rate-budget, repetition) + finance guards (read-only, cooldown, whitelist) + operational postures
-- **`src/trust/`** — Trust stack: secretctl vault (encrypted JSON + MCP), PII redactor, approval gate, security audit log
+- **`src/guards/`** — Deterministic guard pipeline: security guards (fs, command, egress, output-dlp, rate-budget, repetition) + finance guards (read-only, cooldown, whitelist) + operational postures
+- **`src/trust/`** — Trust stack: encrypted credential vault (AES-256-GCM + MCP), PII redactor, approval gate, security audit log
 - **`src/alerts/`** — Alert engine: rule evaluation on enriched snapshots, morning digest builder
 - **`src/api/graphql/`** — GraphQL API for Web UI: schema, resolvers, subscriptions (graphql-yoga on Hono)
 - **`src/plugins/`** — Plugin system: ProviderPlugin + ChannelPlugin interfaces, registry (complete)
@@ -98,7 +98,7 @@ pnpm ci:all           # Full CI check across all packages
 - `AgentProfile` — Agent definition: system prompt, tool set, allowed actions, provider/model override
 - `ProviderPlugin` — LLM provider interface (complete, stream, models)
 - `ChannelPlugin` — Messaging channel interface (messaging, auth, setup adapters)
-- `Guard` — RADIUS deterministic check: `check(action) → { pass } | { pass: false, reason }`
+- `Guard` — Deterministic guard check: `check(action) → { pass } | { pass: false, reason }`
 - `SecretVault` — Encrypted credential vault (AES-256-GCM), MCP-accessible, never in prompts
 - `PiiRedactor` — Strips identifying info before external calls
 - `ApprovalGate` — Human-in-the-loop for irreversible actions
