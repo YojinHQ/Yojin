@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { YojinConfigSchema, loadConfig } from '../src/config/config.js';
+import { _resetEnvCache } from '../src/config/env.js';
 
-// Mock dotenv so loadConfig doesn't read .env files during tests
+// Mock dotenv so loadEnv doesn't read .env files during tests
 vi.mock('dotenv', () => ({
   config: vi.fn(),
 }));
@@ -50,15 +51,21 @@ describe('loadConfig', () => {
   const savedEnv = { ...process.env };
 
   beforeEach(() => {
+    _resetEnvCache();
     // Clear relevant env vars
     delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.SLACK_BOT_TOKEN;
     delete process.env.SLACK_APP_TOKEN;
     delete process.env.SLACK_SIGNING_SECRET;
+    delete process.env.YOJIN_PORT;
+    delete process.env.YOJIN_API_PORT;
+    delete process.env.YOJIN_HOST;
+    delete process.env.YOJIN_LOG_LEVEL;
   });
 
   afterEach(() => {
+    _resetEnvCache();
     process.env = { ...savedEnv };
   });
 
