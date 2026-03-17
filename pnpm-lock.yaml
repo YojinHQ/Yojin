@@ -109,8 +109,8 @@ importers:
         specifier: ^4.0.0
         version: 4.2.1
       urql:
-        specifier: ^4.0.0
-        version: 4.2.2(@urql/core@5.2.0(graphql@16.13.1))(react@19.2.4)
+        specifier: ^5.0.1
+        version: 5.0.1(@urql/core@5.2.0(graphql@16.13.1))(react@19.2.4)
     devDependencies:
       '@testing-library/react':
         specifier: ^16.0.0
@@ -2700,10 +2700,10 @@ packages:
   urlpattern-polyfill@10.1.0:
     resolution: {integrity: sha512-IGjKp/o0NL3Bso1PymYURCJxMPNAf/ILOpendP9f5B6e1rTJgdgiOvgfoT8VxCAdY+Wisb9uhGaJJf3yZ2V9nw==}
 
-  urql@4.2.2:
-    resolution: {integrity: sha512-3GgqNa6iF7bC4hY/ImJKN4REQILcSU9VKcKL8gfELZM8mM5BnLH1BsCc8kBdnVGD1LIFOs4W3O2idNHhON1r0w==}
+  urql@5.0.1:
+    resolution: {integrity: sha512-r58gYlWvCTC19QvkTaARaCLV9/bp870byH/qbLaw3S7f8i/bC6x2Szub8RVXptiMxWmqq5dyVBjUL9G+xPEuqg==}
     peerDependencies:
-      '@urql/core': ^5.0.0
+      '@urql/core': ^6.0.0
       react: '>= 16.8.0'
 
   vary@1.1.2:
@@ -5376,7 +5376,7 @@ snapshots:
 
   urlpattern-polyfill@10.1.0: {}
 
-  urql@4.2.2(@urql/core@5.2.0(graphql@16.13.1))(react@19.2.4):
+  urql@5.0.1(@urql/core@5.2.0(graphql@16.13.1))(react@19.2.4):
     dependencies:
       '@urql/core': 5.2.0(graphql@16.13.1)
       react: 19.2.4
