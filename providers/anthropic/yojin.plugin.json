@@ -1,0 +1,7 @@
+{
+  "id": "anthropic",
+  "name": "Anthropic",
+  "kind": "provider",
+  "description": "Claude models by Anthropic",
+  "version": "0.1.0"
+}

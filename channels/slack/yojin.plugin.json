@@ -1,0 +1,7 @@
+{
+  "id": "slack",
+  "name": "Slack",
+  "kind": "channel",
+  "description": "Slack workspace messaging channel",
+  "version": "0.1.0"
+}

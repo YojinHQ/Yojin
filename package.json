@@ -1,0 +1,51 @@
+{
+  "name": "yojin",
+  "version": "0.1.0",
+  "description": "Yojin is a personal AI finance agent that runs locally, connects to all your investment accounts, delivers personalized portfolio intelligence, and executes trades across accounts.",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "bin": {
+    "yojin": "./yojin.mjs"
+  },
+  "exports": {
+    ".": "./dist/src/index.js",
+    "./plugin-sdk": "./dist/src/plugin-sdk/index.js",
+    "./plugin-sdk/*": "./dist/src/plugin-sdk/*.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "node --disable-warning=DEP0040 --import tsx/esm src/entry.ts",
+    "chat": "node --disable-warning=DEP0040 --import tsx/esm src/entry.ts chat",
+    "start": "node --disable-warning=DEP0040 dist/src/entry.js",
+    "test": "vitest",
+    "test:ci": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/ providers/ channels/",
+    "lint:fix": "eslint --fix src/ providers/ channels/",
+    "clean": "rm -rf dist",
+    "ci": "pnpm typecheck && pnpm lint && pnpm test:ci"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@slack/bolt": "^4.2.0",
+    "@slack/web-api": "^7.8.0",
+    "dotenv": "^16.4.7",
+    "tslog": "^4.10.2",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@types/node": "^22.12.0",
+    "eslint": "^10.0.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.57.0",
+    "vitest": "^3.0.5"
+  },
+  "packageManager": "pnpm@10.17.1",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

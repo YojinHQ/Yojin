@@ -1,0 +1,21 @@
+export { PluginRegistry } from "./registry.js";
+export type {
+  PluginKind,
+  PluginManifest,
+  ProviderPlugin,
+  ProviderAuthMethod,
+  ProviderModel,
+  ProviderMessage,
+  ProviderCompletionParams,
+  ProviderCompletionResult,
+  ProviderStreamEvent,
+  ChannelPlugin,
+  ChannelMessagingAdapter,
+  ChannelAuthAdapter,
+  ChannelSetupAdapter,
+  ChannelCapabilities,
+  IncomingMessage,
+  OutgoingMessage,
+  YojinPlugin,
+  YojinPluginApi,
+} from "./types.js";
