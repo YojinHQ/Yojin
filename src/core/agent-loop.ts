@@ -4,9 +4,17 @@
  * 1. Send conversation + tool schemas to the LLM
  * 2. If the LLM returns tool_use blocks → execute via ToolRegistry → append results → loop
  * 3. If the LLM returns end_turn (text only, no tool calls) → return final response
+ *
+ * Memory management:
+ * - Token budget tracking detects when approaching context window limit
+ * - Tool results are truncated (head+tail) before entering history
+ * - Context compaction summarizes older messages, preserving recent turns
  */
 
 import { ToolRegistry } from './tool-registry.js';
+import { TokenBudget } from './token-budget.js';
+import { truncateToolResult } from './tool-result-truncation.js';
+import { compactMessages } from './context-compaction.js';
 import type {
   AgentLoopOptions,
   AgentLoopEvent,
@@ -29,6 +37,8 @@ export interface AgentLoopResult {
   iterations: number;
   /** Total usage across all iterations. */
   usage: { inputTokens: number; outputTokens: number };
+  /** Number of compactions performed during this run. */
+  compactions: number;
 }
 
 export async function runAgentLoop(
@@ -42,6 +52,7 @@ export async function runAgentLoop(
     systemPrompt,
     tools = [],
     maxIterations = DEFAULT_MAX_ITERATIONS,
+    memory,
     onEvent,
   } = options;
 
@@ -50,14 +61,40 @@ export async function runAgentLoop(
     registry.register(tool);
   }
 
+  const budget = new TokenBudget({
+    contextWindow: memory?.contextWindow,
+    compactionThreshold: memory?.compactionThreshold,
+    maxToolResultShare: memory?.maxToolResultShare,
+  });
+
+  const maxToolResultChars = memory?.maxToolResultChars ?? budget.maxToolResultChars();
+
   const toolSchemas = registry.toSchemas();
-  const messages: AgentMessage[] = [...history, { role: 'user', content: userMessage }];
+  let messages: AgentMessage[] = [...history, { role: 'user', content: userMessage }];
   const totalUsage = { inputTokens: 0, outputTokens: 0 };
+  let compactions = 0;
 
   let iterations = 0;
 
   while (iterations < maxIterations) {
     iterations++;
+
+    // ── Memory: check if compaction is needed ───────────────────────
+    if (budget.shouldCompact(messages, systemPrompt)) {
+      const result = await compactMessages(messages, provider, model, budget, {
+        preserveRecentTurns: memory?.preserveRecentTurns,
+      });
+      if (result.messagesAfter < result.messagesBefore) {
+        messages = result.messages;
+        compactions++;
+        emit(onEvent, {
+          type: 'compaction',
+          messagesBefore: result.messagesBefore,
+          messagesAfter: result.messagesAfter,
+          usedLlmSummary: result.usedLlmSummary,
+        });
+      }
+    }
 
     // ── Thought: ask the LLM ──────────────────────────────────────────
     const response = await provider.completeWithTools({
@@ -85,7 +122,7 @@ export async function runAgentLoop(
     if (toolUseBlocks.length === 0) {
       emit(onEvent, { type: 'done', text: thoughtText, iterations });
       messages.push({ role: 'assistant', content: response.content });
-      return { text: thoughtText, messages, iterations, usage: totalUsage };
+      return { text: thoughtText, messages, iterations, usage: totalUsage, compactions };
     }
 
     // ── Action: execute tool calls ────────────────────────────────────
@@ -116,6 +153,23 @@ export async function runAgentLoop(
       }),
     );
 
+    // ── Truncate oversized tool results ───────────────────────────────
+    for (const entry of results) {
+      const originalLength = entry.result.content.length;
+      const { content, wasTruncated } = truncateToolResult(entry.result.content, {
+        maxChars: maxToolResultChars,
+      });
+      if (wasTruncated) {
+        entry.result.content = content;
+        emit(onEvent, {
+          type: 'tool_result_truncated',
+          toolName: entry.name,
+          originalChars: originalLength,
+          truncatedChars: content.length,
+        });
+      }
+    }
+
     // ── Observation: feed results back ────────────────────────────────
     emit(onEvent, { type: 'observation', results });
 
@@ -140,6 +194,7 @@ export async function runAgentLoop(
     messages,
     iterations,
     usage: totalUsage,
+    compactions,
   };
 }
 
