@@ -6,7 +6,7 @@ If you discover a security vulnerability in Yojin, please report it responsibly.
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email **security@yojin.dev** with:
+Instead, please email **security@yojin.ai** with:
 
 - Description of the vulnerability
 - Steps to reproduce
