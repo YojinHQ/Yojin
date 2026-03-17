@@ -56,7 +56,8 @@
     "graphql-yoga": "^5.18.1",
     "hono": "^4.12.8",
     "tslog": "^4.10.2",
-    "zod": "^3.24.2"
+    "zod": "^3.24.2",
+    "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
