@@ -1,1 +1,4 @@
-pnpm run format:check && pnpm run typecheck && pnpm run lint && pnpm run test:ci
+pnpm run format:check
+pnpm run typecheck
+pnpm run lint
+pnpm run test:ci
