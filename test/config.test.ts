@@ -67,6 +67,7 @@ describe('loadConfig', () => {
     expect(config.providers[0].id).toBe('anthropic');
     expect(config.channels).toHaveLength(2);
     expect(config.channels[0].id).toBe('slack');
+    expect(config.channels[0].enabled).toBe(false);
     expect(config.channels[1].id).toBe('web');
   });
 

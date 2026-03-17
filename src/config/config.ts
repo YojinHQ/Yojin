@@ -55,7 +55,7 @@ export function loadConfig(overrides?: Partial<YojinConfig>): YojinConfig {
     channels: [
       {
         id: 'slack',
-        enabled: true,
+        enabled: !!process.env.SLACK_BOT_TOKEN,
         options: {
           botToken: process.env.SLACK_BOT_TOKEN,
           appToken: process.env.SLACK_APP_TOKEN,
