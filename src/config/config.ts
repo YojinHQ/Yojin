@@ -2,16 +2,16 @@
  * Configuration loading and validation.
  */
 
-import { z } from "zod";
-import { config as loadDotenv } from "dotenv";
+import { z } from 'zod';
+import { config as loadDotenv } from 'dotenv';
 
-export type AnthropicAuthMode = "oauth" | "api_key";
+export type AnthropicAuthMode = 'oauth' | 'api_key';
 
 const ProviderConfigSchema = z.object({
   id: z.string(),
   apiKey: z.string().optional(),
   oauthToken: z.string().optional(),
-  authMode: z.enum(["oauth", "api_key"]).optional(),
+  authMode: z.enum(['oauth', 'api_key']).optional(),
   defaultModel: z.string().optional(),
   options: z.record(z.unknown()).optional(),
 });
@@ -37,9 +37,7 @@ export type ChannelConfig = z.infer<typeof ChannelConfigSchema>;
 /**
  * Load config from environment and optional overrides.
  */
-export function loadConfig(
-  overrides?: Partial<YojinConfig>,
-): YojinConfig {
+export function loadConfig(overrides?: Partial<YojinConfig>): YojinConfig {
   loadDotenv();
 
   const anthropicAuthMode = resolveAnthropicAuthMode();
@@ -47,16 +45,16 @@ export function loadConfig(
   const raw: Partial<YojinConfig> = {
     providers: [
       {
-        id: "anthropic",
+        id: 'anthropic',
         authMode: anthropicAuthMode,
         oauthToken: process.env.CLAUDE_CODE_OAUTH_TOKEN,
         apiKey: process.env.ANTHROPIC_API_KEY,
-        defaultModel: "claude-sonnet-4-20250514",
+        defaultModel: 'claude-sonnet-4-20250514',
       },
     ],
     channels: [
       {
-        id: "slack",
+        id: 'slack',
         enabled: true,
         options: {
           botToken: process.env.SLACK_BOT_TOKEN,
@@ -77,10 +75,10 @@ export function loadConfig(
  */
 function resolveAnthropicAuthMode(): AnthropicAuthMode | undefined {
   if (process.env.CLAUDE_CODE_OAUTH_TOKEN?.trim()) {
-    return "oauth";
+    return 'oauth';
   }
   if (process.env.ANTHROPIC_API_KEY?.trim()) {
-    return "api_key";
+    return 'api_key';
   }
   return undefined;
 }

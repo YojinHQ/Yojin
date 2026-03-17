@@ -6,12 +6,7 @@
  */
 
 // Core plugin types
-export type {
-  YojinPlugin,
-  YojinPluginApi,
-  PluginKind,
-  PluginManifest,
-} from "../plugins/types.js";
+export type { YojinPlugin, YojinPluginApi, PluginKind, PluginManifest } from '../plugins/types.js';
 
 // Provider types
 export type {
@@ -22,7 +17,7 @@ export type {
   ProviderCompletionParams,
   ProviderCompletionResult,
   ProviderStreamEvent,
-} from "../plugins/types.js";
+} from '../plugins/types.js';
 
 // Channel types
 export type {
@@ -33,7 +28,7 @@ export type {
   ChannelCapabilities,
   IncomingMessage,
   OutgoingMessage,
-} from "../plugins/types.js";
+} from '../plugins/types.js';
 
 // Helpers
 
@@ -41,14 +36,14 @@ export function createProviderApiKeyAuth(opts: {
   providerId: string;
   envVar: string;
   label?: string;
-}): import("../plugins/types.js").ProviderAuthMethod {
+}): import('../plugins/types.js').ProviderAuthMethod {
   return {
     methodId: `${opts.providerId}-api-key`,
     label: opts.label ?? `${opts.providerId} API key`,
     envVar: opts.envVar,
     async validate(credentials) {
       const key = credentials[opts.envVar] ?? process.env[opts.envVar];
-      return typeof key === "string" && key.length > 0;
+      return typeof key === 'string' && key.length > 0;
     },
   };
 }
@@ -57,14 +52,14 @@ export function createProviderOAuthAuth(opts: {
   providerId: string;
   envVar: string;
   label?: string;
-}): import("../plugins/types.js").ProviderAuthMethod {
+}): import('../plugins/types.js').ProviderAuthMethod {
   return {
     methodId: `${opts.providerId}-oauth`,
     label: opts.label ?? `${opts.providerId} OAuth token`,
     envVar: opts.envVar,
     async validate(credentials) {
       const token = credentials[opts.envVar] ?? process.env[opts.envVar];
-      return typeof token === "string" && token.trim().length > 0;
+      return typeof token === 'string' && token.trim().length > 0;
     },
   };
 }

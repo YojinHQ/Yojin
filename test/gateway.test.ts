@@ -1,34 +1,32 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { PluginRegistry } from "../src/plugins/registry.js";
-import type {
-  ProviderPlugin,
-  ChannelPlugin,
-  IncomingMessage,
-} from "../src/plugins/types.js";
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { PluginRegistry } from '../src/plugins/registry.js';
+import type { ProviderPlugin, ChannelPlugin, IncomingMessage } from '../src/plugins/types.js';
 
 // We test the gateway's message routing logic without spawning the full Gateway
 // class (which imports anthropicPlugin/slackPlugin and calls getLogger at module
 // scope). Instead we directly test the routing pattern on a PluginRegistry.
 
-function makeProvider(id = "anthropic"): ProviderPlugin {
+function makeProvider(id = 'anthropic'): ProviderPlugin {
   return {
     id,
-    label: "Test Provider",
+    label: 'Test Provider',
     auth: [],
-    models: [{ id: "test-model", name: "Test Model" }],
+    models: [{ id: 'test-model', name: 'Test Model' }],
     complete: vi.fn().mockResolvedValue({
-      content: "Hello from the LLM",
-      model: "test-model",
+      content: 'Hello from the LLM',
+      model: 'test-model',
       usage: { inputTokens: 10, outputTokens: 5 },
     }),
     stream: vi.fn(),
   };
 }
 
-function makeChannel(id = "slack"): ChannelPlugin & { _handler?: (msg: IncomingMessage) => Promise<void> } {
+function makeChannel(
+  id = 'slack',
+): ChannelPlugin & { _handler?: (msg: IncomingMessage) => Promise<void> } {
   const channel: ChannelPlugin & { _handler?: (msg: IncomingMessage) => Promise<void> } = {
     id,
-    name: "Test Channel",
+    name: 'Test Channel',
     messagingAdapter: {
       sendMessage: vi.fn().mockResolvedValue(undefined),
       onMessage: vi.fn((handler) => {
@@ -47,7 +45,7 @@ function makeChannel(id = "slack"): ChannelPlugin & { _handler?: (msg: IncomingM
   return channel;
 }
 
-describe("Gateway message routing", () => {
+describe('Gateway message routing', () => {
   let registry: PluginRegistry;
   let provider: ProviderPlugin;
   let channel: ReturnType<typeof makeChannel>;
@@ -62,11 +60,11 @@ describe("Gateway message routing", () => {
     // Wire message handlers (mirrors Gateway.start logic)
     for (const ch of registry.getAllChannels()) {
       ch.messagingAdapter.onMessage(async (msg) => {
-        const p = registry.getProvider("anthropic");
+        const p = registry.getProvider('anthropic');
         if (!p) return;
         const result = await p.complete({
-          model: p.models[0]?.id ?? "test-model",
-          messages: [{ role: "user", content: msg.text }],
+          model: p.models[0]?.id ?? 'test-model',
+          messages: [{ role: 'user', content: msg.text }],
         });
         await ch.messagingAdapter.sendMessage({
           channelId: msg.channelId,
@@ -77,59 +75,57 @@ describe("Gateway message routing", () => {
     }
   });
 
-  it("routes incoming message to provider and sends response back", async () => {
+  it('routes incoming message to provider and sends response back', async () => {
     const msg: IncomingMessage = {
-      channelId: "C123",
-      threadId: "T456",
-      userId: "U789",
-      text: "Hello!",
-      timestamp: "1234567890",
+      channelId: 'C123',
+      threadId: 'T456',
+      userId: 'U789',
+      text: 'Hello!',
+      timestamp: '1234567890',
     };
 
     await channel._handler!(msg);
 
     expect(provider.complete).toHaveBeenCalledWith({
-      model: "test-model",
-      messages: [{ role: "user", content: "Hello!" }],
+      model: 'test-model',
+      messages: [{ role: 'user', content: 'Hello!' }],
     });
 
     expect(channel.messagingAdapter.sendMessage).toHaveBeenCalledWith({
-      channelId: "C123",
-      threadId: "T456",
-      text: "Hello from the LLM",
+      channelId: 'C123',
+      threadId: 'T456',
+      text: 'Hello from the LLM',
     });
   });
 
-  it("handles messages without threadId", async () => {
+  it('handles messages without threadId', async () => {
     const msg: IncomingMessage = {
-      channelId: "C123",
-      userId: "U789",
-      text: "No thread",
-      timestamp: "1234567890",
+      channelId: 'C123',
+      userId: 'U789',
+      text: 'No thread',
+      timestamp: '1234567890',
     };
 
     await channel._handler!(msg);
 
     expect(channel.messagingAdapter.sendMessage).toHaveBeenCalledWith({
-      channelId: "C123",
+      channelId: 'C123',
       threadId: undefined,
-      text: "Hello from the LLM",
+      text: 'Hello from the LLM',
     });
   });
 
-  it("handles provider errors gracefully", async () => {
-    (provider.complete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error("API down"),
-    );
+  it('handles provider errors gracefully', async () => {
+    (provider.complete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('API down'));
 
     const msg: IncomingMessage = {
-      channelId: "C123",
-      userId: "U789",
-      text: "This will fail",
-      timestamp: "1234567890",
+      channelId: 'C123',
+      userId: 'U789',
+      text: 'This will fail',
+      timestamp: '1234567890',
     };
 
     // The handler should not throw
-    await expect(channel._handler!(msg)).rejects.toThrow("API down");
+    await expect(channel._handler!(msg)).rejects.toThrow('API down');
   });
 });

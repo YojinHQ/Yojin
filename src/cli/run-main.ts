@@ -2,28 +2,28 @@
  * CLI main runner.
  */
 
-import { loadConfig } from "../config/config.js";
-import { Gateway } from "../gateway/server.js";
-import { setupToken } from "./setup-token.js";
-import { startChat } from "./chat.js";
+import { loadConfig } from '../config/config.js';
+import { Gateway } from '../gateway/server.js';
+import { setupToken } from './setup-token.js';
+import { startChat } from './chat.js';
 
 export async function runMain(args: string[]): Promise<void> {
-  const command = args[0] ?? "start";
+  const command = args[0] ?? 'start';
 
   switch (command) {
-    case "start":
+    case 'start':
       await startGateway();
       break;
-    case "chat":
+    case 'chat':
       await startChat(args.slice(1));
       break;
-    case "setup-token":
+    case 'setup-token':
       await setupToken(args.slice(1));
       break;
-    case "version":
-      console.log("yojin v0.1.0");
+    case 'version':
+      console.log('yojin v0.1.0');
       break;
-    case "help":
+    case 'help':
     default:
       printHelp();
       break;
@@ -39,8 +39,8 @@ async function startGateway(): Promise<void> {
     await gateway.stop();
     process.exit(0);
   };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 
   await gateway.start();
 }

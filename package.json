@@ -10,7 +10,7 @@
   "bugs": {
     "url": "https://github.com/YojinHQ/Yojin/issues"
   },
-  "homepage": "https://github.com/YojinHQ/Yojin#readme",
+  "homepage": "https://yojin.ai",
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -32,8 +32,18 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/ providers/ channels/",
     "lint:fix": "eslint --fix src/ providers/ channels/",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "clean": "rm -rf dist",
-    "ci": "pnpm typecheck && pnpm lint && pnpm test:ci"
+    "ci": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm test:ci",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,js,mjs}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{json,yml,yaml}": "prettier --write"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -47,6 +57,9 @@
     "@eslint/js": "^10.0.0",
     "@types/node": "^22.12.0",
     "eslint": "^10.0.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.57.0",

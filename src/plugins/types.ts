@@ -6,13 +6,13 @@
  *   - ChannelPlugin:  Messaging channels
  */
 
-import type { ZodSchema } from "zod";
+import type { ZodSchema } from 'zod';
 
 // ---------------------------------------------------------------------------
 // Common
 // ---------------------------------------------------------------------------
 
-export type PluginKind = "provider" | "channel";
+export type PluginKind = 'provider' | 'channel';
 
 export interface PluginManifest {
   id: string;
@@ -42,7 +42,7 @@ export interface ProviderModel {
 }
 
 export interface ProviderMessage {
-  role: "system" | "user" | "assistant";
+  role: 'system' | 'user' | 'assistant';
   content: string;
 }
 
@@ -66,9 +66,9 @@ export interface ProviderCompletionResult {
 }
 
 export type ProviderStreamEvent =
-  | { type: "text_delta"; text: string }
-  | { type: "stop"; stopReason: string }
-  | { type: "usage"; inputTokens: number; outputTokens: number };
+  | { type: 'text_delta'; text: string }
+  | { type: 'stop'; stopReason: string }
+  | { type: 'usage'; inputTokens: number; outputTokens: number };
 
 export interface ProviderPlugin {
   id: string;
@@ -82,9 +82,7 @@ export interface ProviderPlugin {
   complete(params: ProviderCompletionParams): Promise<ProviderCompletionResult>;
 
   /** Create a streaming completion. Returns an async iterable of events. */
-  stream(
-    params: ProviderCompletionParams,
-  ): AsyncIterable<ProviderStreamEvent>;
+  stream(params: ProviderCompletionParams): AsyncIterable<ProviderStreamEvent>;
 
   /** Resolve a model alias to a concrete model ID. */
   resolveModel?(modelRef: string): ProviderModel | undefined;

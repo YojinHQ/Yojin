@@ -39,12 +39,13 @@ refactor/<short-description> # Code restructuring
 Types: feat, fix, refactor, test, docs, chore
 ```
 
-## Pre-Push Checks
+## Git Hooks (Husky)
 
-Before every push, verify:
-```bash
-pnpm build && pnpm test && pnpm lint
-```
+Enforced automatically via `.husky/`:
+- **pre-commit**: Runs `lint-staged` → formats staged files with Prettier
+- **pre-push**: Runs `format:check`, `typecheck`, `lint`, `test:ci`
+
+These hooks are installed automatically via `pnpm install` (the `prepare` script runs `husky`).
 
 ## Never
 

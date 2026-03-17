@@ -2,7 +2,7 @@
  * Slack channel plugin implementation.
  */
 
-import { App, type SlackEventMiddlewareArgs } from "@slack/bolt";
+import { App, type SlackEventMiddlewareArgs } from '@slack/bolt';
 import type {
   ChannelPlugin,
   ChannelMessagingAdapter,
@@ -11,7 +11,7 @@ import type {
   ChannelCapabilities,
   IncomingMessage,
   OutgoingMessage,
-} from "../../../src/plugins/types.js";
+} from '../../../src/plugins/types.js';
 
 type MessageHandler = (msg: IncomingMessage) => Promise<void>;
 
@@ -43,12 +43,12 @@ export function buildSlackChannel(): ChannelPlugin {
     },
     getScopes() {
       return [
-        "app_mentions:read",
-        "channels:history",
-        "chat:write",
-        "im:history",
-        "im:read",
-        "im:write",
+        'app_mentions:read',
+        'channels:history',
+        'chat:write',
+        'im:history',
+        'im:read',
+        'im:write',
       ];
     },
   };
@@ -58,8 +58,7 @@ export function buildSlackChannel(): ChannelPlugin {
       const options = config.options as Record<string, string> | undefined;
       const botToken = options?.botToken ?? process.env.SLACK_BOT_TOKEN;
       const appToken = options?.appToken ?? process.env.SLACK_APP_TOKEN;
-      const signingSecret =
-        options?.signingSecret ?? process.env.SLACK_SIGNING_SECRET;
+      const signingSecret = options?.signingSecret ?? process.env.SLACK_SIGNING_SECRET;
 
       app = new App({
         token: botToken,
@@ -69,14 +68,14 @@ export function buildSlackChannel(): ChannelPlugin {
       });
 
       // Listen for messages and app_mention events
-      app.message(async ({ message }: SlackEventMiddlewareArgs<"message">) => {
+      app.message(async ({ message }: SlackEventMiddlewareArgs<'message'>) => {
         if (message.subtype) return; // Ignore edits, joins, etc.
 
         const incoming: IncomingMessage = {
           channelId: message.channel,
-          threadId: ("thread_ts" in message ? message.thread_ts : message.ts) as string,
-          userId: ("user" in message ? message.user : "unknown") as string,
-          text: ("text" in message ? message.text : "") as string,
+          threadId: ('thread_ts' in message ? message.thread_ts : message.ts) as string,
+          userId: ('user' in message ? message.user : 'unknown') as string,
+          text: ('text' in message ? message.text : '') as string,
           timestamp: message.ts,
           raw: message,
         };
@@ -86,11 +85,11 @@ export function buildSlackChannel(): ChannelPlugin {
         }
       });
 
-      app.event("app_mention", async ({ event }) => {
+      app.event('app_mention', async ({ event }) => {
         const incoming: IncomingMessage = {
           channelId: event.channel,
           threadId: event.thread_ts ?? event.ts,
-          userId: event.user ?? "unknown",
+          userId: event.user ?? 'unknown',
           text: event.text,
           timestamp: event.ts,
           raw: event,
@@ -102,7 +101,7 @@ export function buildSlackChannel(): ChannelPlugin {
       });
 
       await app.start();
-      console.log("Slack channel connected");
+      console.log('Slack channel connected');
     },
 
     async teardown(): Promise<void> {
@@ -121,10 +120,10 @@ export function buildSlackChannel(): ChannelPlugin {
   };
 
   return {
-    id: "slack",
-    name: "Slack",
-    description: "Slack workspace messaging",
-    aliases: ["slackbot"],
+    id: 'slack',
+    name: 'Slack',
+    description: 'Slack workspace messaging',
+    aliases: ['slackbot'],
     messagingAdapter,
     authAdapter,
     setupAdapter,
@@ -137,10 +136,10 @@ export function buildSlackChannel(): ChannelPlugin {
         enabled: boolean;
         options?: Record<string, string>;
       }>;
-      const slackConfig = channels?.find((c) => c.id === "slack");
+      const slackConfig = channels?.find((c) => c.id === 'slack');
 
       if (!slackConfig?.enabled) {
-        console.log("Slack channel is disabled, skipping setup");
+        console.log('Slack channel is disabled, skipping setup');
         return;
       }
 

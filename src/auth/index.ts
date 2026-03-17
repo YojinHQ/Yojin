@@ -6,6 +6,6 @@ export {
   runClaudeSetupToken,
   loginClaudeOAuth,
   createTokenReference,
-} from "./claude-oauth.js";
+} from './claude-oauth.js';
 
-export type { ClaudeOAuthResult } from "./claude-oauth.js";
+export type { ClaudeOAuthResult } from './claude-oauth.js';

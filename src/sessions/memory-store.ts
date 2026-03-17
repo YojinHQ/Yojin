@@ -2,8 +2,8 @@
  * In-memory session store — suitable for development.
  */
 
-import { randomUUID } from "node:crypto";
-import type { Session, SessionStore } from "./types.js";
+import { randomUUID } from 'node:crypto';
+import type { Session, SessionStore } from './types.js';
 
 export class InMemorySessionStore implements SessionStore {
   private sessions = new Map<string, Session>();
@@ -12,10 +12,7 @@ export class InMemorySessionStore implements SessionStore {
     return this.sessions.get(id);
   }
 
-  async getByThread(
-    channelId: string,
-    threadId: string,
-  ): Promise<Session | undefined> {
+  async getByThread(channelId: string, threadId: string): Promise<Session | undefined> {
     for (const session of this.sessions.values()) {
       if (session.channelId === channelId && session.threadId === threadId) {
         return session;
@@ -24,9 +21,7 @@ export class InMemorySessionStore implements SessionStore {
     return undefined;
   }
 
-  async create(
-    data: Omit<Session, "id" | "createdAt" | "updatedAt">,
-  ): Promise<Session> {
+  async create(data: Omit<Session, 'id' | 'createdAt' | 'updatedAt'>): Promise<Session> {
     const now = Date.now();
     const session: Session = {
       ...data,
