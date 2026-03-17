@@ -72,6 +72,13 @@ export type AgentLoopEvent =
   | { type: 'thought'; text: string }
   | { type: 'action'; toolCalls: ToolCall[] }
   | { type: 'observation'; results: ToolCallResult[] }
+  | {
+      type: 'tool_result_truncated';
+      toolName: string;
+      originalChars: number;
+      truncatedChars: number;
+    }
+  | { type: 'compaction'; messagesBefore: number; messagesAfter: number; usedLlmSummary: boolean }
   | { type: 'done'; text: string; iterations: number }
   | { type: 'error'; error: string; iterations: number }
   | { type: 'max_iterations'; iterations: number };
@@ -82,12 +89,26 @@ export type AgentLoopEventHandler = (event: AgentLoopEvent) => void;
 // Agent loop options
 // ---------------------------------------------------------------------------
 
+export interface MemoryConfig {
+  /** Context window size in tokens (default 200_000). */
+  contextWindow?: number;
+  /** Fraction of context window that triggers compaction (0-1, default 0.9). */
+  compactionThreshold?: number;
+  /** Max fraction of context a single tool result can consume (default 0.3). */
+  maxToolResultShare?: number;
+  /** Max chars for a single tool result (default 50_000). */
+  maxToolResultChars?: number;
+  /** Number of recent turn pairs to preserve during compaction (default 3). */
+  preserveRecentTurns?: number;
+}
+
 export interface AgentLoopOptions {
   provider: AgentLoopProvider;
   model: string;
   systemPrompt?: string;
   tools?: ToolDefinition[];
   maxIterations?: number;
+  memory?: MemoryConfig;
   onEvent?: AgentLoopEventHandler;
 }
 
