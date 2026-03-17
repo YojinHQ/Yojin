@@ -68,7 +68,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@types/node": "22.19.15",
+    "@types/node": "25.5.0",
     "eslint": "10.0.3",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-import-x": "4.16.2",
