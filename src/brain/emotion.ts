@@ -54,9 +54,6 @@ export class EmotionTracker implements EmotionTrackerInterface {
     };
 
     EmotionStateSchema.parse(updated);
-    const dir = dirname(this.filePath);
-    if (!existsSync(dir)) await mkdir(dir, { recursive: true });
-    await writeFile(this.filePath, JSON.stringify(updated, null, 2), 'utf-8');
 
     const delta = [
       previous.confidence !== updated.confidence
@@ -69,6 +66,16 @@ export class EmotionTracker implements EmotionTrackerInterface {
       .filter(Boolean)
       .join(', ');
 
-    return this.brain.commit(delta || 'emotion state refreshed', 'emotion', { previous, updated });
+    // Commit first — if this fails, the file is not yet touched
+    const commitResult = await this.brain.commit(delta || 'emotion state refreshed', 'emotion', {
+      previous,
+      updated,
+    });
+
+    const dir = dirname(this.filePath);
+    if (!existsSync(dir)) await mkdir(dir, { recursive: true });
+    await writeFile(this.filePath, JSON.stringify(updated, null, 2), 'utf-8');
+
+    return commitResult;
   }
 }

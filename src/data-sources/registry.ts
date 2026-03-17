@@ -165,6 +165,11 @@ export class DataSourceRegistry {
     for (const source of this.sources.values()) {
       const config = configs.find((c) => c.id === source.id);
       if (config) {
+        if (config.config.type !== source.type) {
+          throw new Error(
+            `Config type mismatch for "${source.id}": plugin is "${source.type}" but config is "${config.config.type}"`,
+          );
+        }
         await source.initialize(config);
       } else {
         skipped.push(source.id);

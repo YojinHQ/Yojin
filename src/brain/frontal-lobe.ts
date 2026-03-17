@@ -40,19 +40,23 @@ export class FrontalLobe implements FrontalLobeInterface {
 
   async update(content: string): Promise<BrainCommit> {
     const previous = await this.get();
-    const dir = dirname(this.filePath);
-    if (!existsSync(dir)) await mkdir(dir, { recursive: true });
-    await writeFile(this.filePath, content, 'utf-8');
 
     const diffSummary =
       previous === DEFAULT_CONTENT
         ? 'initial working memory'
         : `updated working memory (${content.length} chars)`;
 
-    return this.brain.commit(diffSummary, 'frontal-lobe', {
+    // Commit first — if this fails, the file is not yet touched
+    const commitResult = await this.brain.commit(diffSummary, 'frontal-lobe', {
       contentHash: createHash('sha256').update(content).digest('hex').slice(0, 12),
       previousLength: previous.length,
       newLength: content.length,
     });
+
+    const dir = dirname(this.filePath);
+    if (!existsSync(dir)) await mkdir(dir, { recursive: true });
+    await writeFile(this.filePath, content, 'utf-8');
+
+    return commitResult;
   }
 }

@@ -419,6 +419,34 @@ describe('DataSourceRegistry — lifecycle', () => {
     expect(skipped).toEqual(['unconfigured']);
   });
 
+  it('throws on config type mismatch', async () => {
+    const registry = new DataSourceRegistry();
+    registry.register(mockSource({ id: 'cli-plugin', type: 'cli' }));
+
+    const configs: DataSourceConfig[] = [
+      {
+        id: 'cli-plugin',
+        name: 'CLI Plugin',
+        capabilities: [{ id: 'news' }],
+        enabled: true,
+        priority: 1,
+        config: {
+          type: 'api',
+          baseUrl: 'https://example.com',
+          rateLimitPerMinute: 60,
+          authHeader: 'Authorization',
+          authPrefix: 'Bearer',
+          supportsAsync: false,
+          endpointMapping: {},
+        },
+      },
+    ];
+
+    await expect(registry.initializeAll(configs)).rejects.toThrow(
+      'Config type mismatch for "cli-plugin": plugin is "cli" but config is "api"',
+    );
+  });
+
   it('shuts down all sources gracefully', async () => {
     const registry = new DataSourceRegistry();
     const shutdownA = vi.fn().mockResolvedValue(undefined);
