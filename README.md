@@ -24,11 +24,46 @@ Four specialized AI agents collaborate through shared state:
 All state is file-driven — JSONL sessions, JSON configs, Markdown personas. No database, no containers.
 
 ```
-User → AgentRuntime → Orchestrator
-                        ├── Trader.scrape() → PortfolioSnapshot
-                        ├── Research.enrich() → EnrichedSnapshot
-                        ├── Risk.analyze() → RiskReport
-                        └── Strategist.reason() → Recommendation → Channels
+┌─────────────────────────────────────────────────────────────────┐
+│                         Your Machine                            │
+│                                                                 │
+│  ┌──────────┐    ┌──────────────┐    ┌───────────────────────┐  │
+│  │ Robinhood │    │   AgentRuntime  │    │     Channels        │  │
+│  │ Coinbase  │───▶│   Orchestrator  │───▶│  Slack / Telegram   │  │
+│  │ IBKR      │    │                 │    │  Web UI / MCP       │  │
+│  └──────────┘    └───────┬─────────┘    └───────────────────────┘  │
+│                          │                                       │
+│            ┌─────────────┼─────────────┐                        │
+│            ▼             ▼             ▼                         │
+│     ┌────────────┐ ┌──────────┐ ┌───────────┐                  │
+│     │   Trader   │ │ Research │ │   Risk    │                   │
+│     │  (scrape)  │ │ Analyst  │ │  Manager  │                   │
+│     └─────┬──────┘ └────┬─────┘ └─────┬─────┘                  │
+│           │              │             │                         │
+│           ▼              ▼             ▼                         │
+│    PortfolioSnapshot  EnrichedSnapshot  RiskReport               │
+│           │              ▲             │                         │
+│           │     ┌────────┴────────┐    │                         │
+│           │     │   Enrichment    │    │                         │
+│           └────▶│  Pipeline       │◀───┘                        │
+│                 └───┬─────────┬───┘                              │
+│                     │         │                                   │
+│              ┌──────▼──┐ ┌───▼──────┐                           │
+│              │ Keelson  │ │  OpenBB  │                           │
+│              │   API    │ │   SDK    │                           │
+│              │(sentiment│ │(in-proc) │                           │
+│              └──────────┘ └──────────┘                           │
+│                     │                                            │
+│              ┌──────▼──────────┐                                │
+│              │  Strategist     │                                 │
+│              │  (persona.md)   │──▶ Alerts + Recommendations    │
+│              │  Brain + Memory │                                 │
+│              └─────────────────┘                                │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ Trust Layer: secretctl │ RADIUS Guards │ PII │ Audit Log │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Quick Start
