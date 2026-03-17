@@ -28,6 +28,7 @@ See `plans/architecture.md` for the full architecture plan.
 - **`providers/`** — LLM provider plugins (anthropic/ exists)
 - **`channels/`** — Channel plugins (slack/ exists, telegram/, web/, discord/)
 - **`packages/keelson-client/`** — Typed GraphQL client for Keelson API
+- **`apps/web/`** — React 19 web app: Vite 6, Tailwind CSS 4, React Router 7, urql GraphQL client, Recharts
 - **`data/`** — Runtime data directory (gitignored except `data/default/`)
 
 ### Existing Code (complete, working)
@@ -38,6 +39,8 @@ See `plans/architecture.md` for the full architecture plan.
 - `src/cli/` — CLI entry points (run-main, chat REPL, setup-token)
 - `src/config/config.ts` — Zod config with env var resolution
 - `src/sessions/memory-store.ts` — In-memory sessions (evolves to JSONL)
+- `src/api/` — GraphQL API (graphql-yoga on Hono), SDL schema, resolvers with mock data, health endpoint
+- `apps/web/` — React 19 web app (Vite 6, Tailwind 4, React Router 7, urql), dark-themed dashboard with pages for portfolio, risk, agents, alerts, settings
 - `providers/anthropic/` — Claude provider (API key + OAuth subprocess)
 - `channels/slack/` — Slack via @slack/bolt
 
@@ -62,23 +65,31 @@ data/
 ## Commands
 
 ```bash
-pnpm dev              # Start with tsx (development)
-pnpm build            # Compile TypeScript
+pnpm dev              # Start backend with tsx (development)
+pnpm build            # Compile TypeScript (backend)
 pnpm start            # Run compiled output
 pnpm test             # Run tests (vitest)
 pnpm lint             # ESLint
 pnpm chat             # Interactive chat REPL
+pnpm dev:web          # Start React web app (Vite dev server)
+pnpm dev:all          # Start backend + web app in parallel
+pnpm build:web        # Build React web app
+pnpm build:all        # Build all workspace packages
+pnpm test:all         # Run tests across all packages
+pnpm ci:all           # Full CI check across all packages
 ```
 
 ## Tech Stack
 
 - **Runtime**: Node.js >= 20, ESM (`"type": "module"`)
 - **Language**: TypeScript 5.7, strict mode, NodeNext module resolution
-- **Package manager**: pnpm 10
+- **Package manager**: pnpm 10 (workspaces: `apps/*`, `packages/*`)
 - **Testing**: vitest
 - **Validation**: Zod schemas everywhere
 - **Logging**: tslog
 - **AI providers**: Anthropic SDK, Vercel AI SDK, Claude Code CLI subprocess
+- **Web UI**: React 19, Vite 6, Tailwind CSS 4, React Router 7
+- **GraphQL**: graphql-yoga on Hono, urql (client)
 - **Scraping**: Playwright
 - **Channels**: @slack/bolt (exists), grammY (Telegram), Hono (Web/SSE)
 

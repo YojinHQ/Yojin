@@ -103,6 +103,12 @@ pnpm chat
 
 # Production
 pnpm build && pnpm start
+
+# Web UI development
+pnpm dev:web
+
+# Backend + Web UI together
+pnpm dev:all
 ```
 
 ## Project Structure
@@ -110,24 +116,27 @@ pnpm build && pnpm start
 ```
 yojin/
 ├── src/
-│   ├── core/           # Agent runtime — AgentRuntime, ToolRegistry, ProviderRouter
+│   ├── core/           # Agent runtime
 │   ├── agents/         # Multi-agent profiles and orchestrator
 │   ├── brain/          # Strategist's persistent memory and persona
-│   ├── openbb/         # TypeScript-native market data SDK (in-process)
-│   ├── research/       # Equity research tools, technicals, reasoning tools
+│   ├── openbb/         # TypeScript-native market data SDK
+│   ├── research/       # Equity research tools, technicals
 │   ├── news/           # RSS collector + real-time news API
-│   ├── scraper/        # Playwright automation for investment platforms
+│   ├── scraper/        # Playwright automation
 │   ├── enrichment/     # Dual-source enrichment (Keelson + OpenBB)
-│   ├── risk/           # Portfolio risk analysis (exposure, concentration)
+│   ├── risk/           # Portfolio risk analysis
 │   ├── guards/         # Agent safety — guard pipeline
 │   ├── trust/          # Credentials, PII redaction, action boundaries
-│   ├── alerts/         # Alert engine and morning digest builder
+│   ├── alerts/         # Alert engine and morning digest
+│   ├── api/            # GraphQL API (graphql-yoga on Hono)
 │   ├── tools/          # Agent tools registered with ToolRegistry
 │   └── plugins/        # Plugin system (ProviderPlugin, ChannelPlugin)
+├── apps/
+│   └── web/            # React web app (Vite + React 19 + Tailwind 4)
 ├── providers/          # LLM providers (anthropic/)
 ├── channels/           # Messaging channels (slack/, telegram/, web/)
 ├── packages/           # Shared packages (keelson-client/)
-├── data/               # Runtime state — JSONL, configs, snapshots (gitignored)
+├── data/               # Runtime state (gitignored)
 ├── plans/              # Architecture documentation
 └── test/               # Test suites
 ```
@@ -143,6 +152,12 @@ yojin/
 | `pnpm test` | Run tests (vitest) |
 | `pnpm lint` | Lint with ESLint |
 | `pnpm clean` | Remove dist/ |
+| `pnpm dev:web` | Start React web app (Vite dev server) |
+| `pnpm dev:all` | Start backend + web app in parallel |
+| `pnpm build:web` | Build React web app |
+| `pnpm build:all` | Build all packages |
+| `pnpm test:all` | Run tests across all packages |
+| `pnpm ci:all` | Full CI check across all packages |
 
 ## Channels
 
@@ -150,7 +165,7 @@ yojin/
 |---------|--------|
 | Slack | Working (@slack/bolt) |
 | Telegram | Phase 1 (grammy) |
-| Web UI | Phase 1 (Hono + SSE) |
+| Web UI | In Progress (React 19 + GraphQL) |
 | MCP | Phase 1 (Claude Desktop / Cursor) |
 | Discord | Future |
 
@@ -173,6 +188,9 @@ Yojin is built with security as a first-class concern — your credentials, port
 - **Zod** — schema validation for all external data
 - **vitest** — testing
 - **tslog** — structured logging
+- **React 19** — Web UI with Vite 6, Tailwind CSS 4
+- **GraphQL** — graphql-yoga on Hono for API layer
+- **urql** — Lightweight GraphQL client
 - **pnpm** — package manager
 
 ## Persona
@@ -199,6 +217,7 @@ Core portfolio intelligence:
 4. MCP server for Claude Desktop
 5. Persona-driven reasoning
 6. Morning digest + intraday alerts
+7. Web UI dashboard (React + GraphQL)
 
 ## Contributing
 

@@ -21,3 +21,6 @@ Thumbs.db
 # Runtime
 *.log
 *.pid
+
+# Web app build output
+apps/web/dist/
