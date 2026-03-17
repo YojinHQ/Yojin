@@ -21,3 +21,9 @@ Thumbs.db
 # Runtime
 *.log
 *.pid
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Web app build output
+apps/web/dist/

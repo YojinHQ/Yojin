@@ -4,6 +4,7 @@
 
 import { loadConfig } from '../config/config.js';
 import { Gateway } from '../gateway/server.js';
+import { runSecretCommand } from '../trust/vault/cli.js';
 import { setupToken } from './setup-token.js';
 import { startChat } from './chat.js';
 
@@ -16,6 +17,9 @@ export async function runMain(args: string[]): Promise<void> {
       break;
     case 'chat':
       await startChat(args.slice(1));
+      break;
+    case 'secret':
+      await runSecretCommand(args.slice(1));
       break;
     case 'setup-token':
       await setupToken(args.slice(1));
@@ -55,6 +59,10 @@ Usage:
     --model <model>                    Model to use (default: claude-sonnet-4-20250514)
     --provider <id>                    Provider to use (default: anthropic)
     --system <prompt>                  System prompt
+  yojin secret set <key>             Store a secret (hidden TTY input)
+  yojin secret show <key>            Reveal a secret (TTY + confirmation)
+  yojin secret list                  List secret names (never values)
+  yojin secret delete <key>          Delete a secret
   yojin setup-token [--method M]     Acquire a Claude OAuth token
                                      Methods: oauth, cli, paste
   yojin version                      Print version

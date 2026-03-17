@@ -17,12 +17,25 @@ export default tseslint.config(
   },
   // CLI files and channel setup use console.log for user-facing output
   {
-    files: ['src/cli/**/*.ts', 'src/gateway/server.ts', 'channels/**/*.ts'],
+    files: [
+      'src/cli/**/*.ts',
+      'src/trust/vault/cli.ts',
+      'src/gateway/server.ts',
+      'channels/**/*.ts',
+    ],
     rules: {
       'no-console': 'off',
     },
   },
   {
-    ignores: ['dist/', 'node_modules/', '*.mjs', 'vitest.config.ts', 'eslint.config.js'],
+    ignores: [
+      'dist/',
+      'node_modules/',
+      '*.mjs',
+      'vitest.config.ts',
+      'eslint.config.js',
+      'apps/',
+      'packages/',
+    ],
   },
 );

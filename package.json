@@ -36,6 +36,12 @@
     "format:check": "prettier --check .",
     "clean": "rm -rf dist",
     "ci": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm test:ci",
+    "dev:web": "pnpm --filter @yojin/web dev",
+    "build:web": "pnpm --filter @yojin/web build",
+    "dev:all": "pnpm -r --parallel dev",
+    "build:all": "pnpm -r run build",
+    "test:all": "pnpm -r run test",
+    "ci:all": "pnpm -r run ci",
     "lint-staged": "lint-staged",
     "prepare": "husky"
   },

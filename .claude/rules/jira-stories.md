@@ -10,7 +10,7 @@ Every story must be vertical and fully self-contained — a dev can pick it up w
 ## Structure
 
 ### Title
-Short, action-oriented. `Build secretctl encrypted vault` not `Implement Layer 1 of Trust Stack`.
+Short, action-oriented. `Build encrypted credential vault` not `Implement Layer 1 of Trust Stack`.
 
 ### Description
 

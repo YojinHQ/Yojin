@@ -65,7 +65,7 @@ All state is file-driven — JSONL sessions, JSON configs, Markdown personas. No
 │              └─────────────────┘                                │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │ Trust Layer: secretctl │ RADIUS Guards │ PII │ Audit Log │   │
+│  │ Trust Layer: Vault │ Guard Pipeline │ PII │ Audit Log    │  │
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -103,6 +103,12 @@ pnpm chat
 
 # Production
 pnpm build && pnpm start
+
+# Web UI development
+pnpm dev:web
+
+# Backend + Web UI together
+pnpm dev:all
 ```
 
 ## Project Structure
@@ -110,25 +116,27 @@ pnpm build && pnpm start
 ```
 yojin/
 ├── src/
-│   ├── core/           # Agent runtime — AgentRuntime, ToolRegistry, ProviderRouter
+│   ├── core/           # Agent runtime
 │   ├── agents/         # Multi-agent profiles and orchestrator
 │   ├── brain/          # Strategist's persistent memory and persona
-│   ├── openbb/         # TypeScript-native market data SDK (in-process)
-│   ├── research/       # Equity research tools, technicals, reasoning tools
+│   ├── openbb/         # TypeScript-native market data SDK
+│   ├── research/       # Equity research tools, technicals
 │   ├── news/           # RSS collector + real-time news API
-│   ├── scraper/        # Playwright automation for investment platforms
+│   ├── scraper/        # Playwright automation
 │   ├── enrichment/     # Dual-source enrichment (Keelson + OpenBB)
-│   ├── risk/           # Portfolio risk analysis (exposure, concentration)
+│   ├── risk/           # Portfolio risk analysis
 │   ├── guards/         # Agent safety — guard pipeline
 │   ├── trust/          # Credentials, PII redaction, action boundaries
-│   ├── api/graphql/    # GraphQL API (graphql-yoga on Hono) — queries, mutations, subscriptions
 │   ├── alerts/         # Alert engine and morning digest builder
+│   ├── api/            # GraphQL API (graphql-yoga on Hono) — queries, mutations, subscriptions
 │   ├── tools/          # Agent tools registered with ToolRegistry
 │   └── plugins/        # Plugin system (ProviderPlugin, ChannelPlugin)
+├── apps/
+│   └── web/            # React web app (Vite + React 19 + Tailwind 4)
 ├── providers/          # LLM providers (anthropic/)
 ├── channels/           # Messaging channels (slack/, telegram/, web/)
 ├── packages/           # Shared packages (keelson-client/)
-├── data/               # Runtime state — JSONL, configs, snapshots (gitignored)
+├── data/               # Runtime state (gitignored)
 ├── plans/              # Architecture documentation
 └── test/               # Test suites
 ```
@@ -144,6 +152,14 @@ yojin/
 | `pnpm test` | Run tests (vitest) |
 | `pnpm lint` | Lint with ESLint |
 | `pnpm clean` | Remove dist/ |
+| `pnpm dev -- secret set <key>` | Store an encrypted secret |
+| `pnpm dev -- secret list` | List stored secret names |
+| `pnpm dev:web` | Start React web app (Vite dev server) |
+| `pnpm dev:all` | Start backend + web app in parallel |
+| `pnpm build:web` | Build React web app |
+| `pnpm build:all` | Build all packages |
+| `pnpm test:all` | Run tests across all packages |
+| `pnpm ci:all` | Full CI check across all packages |
 
 ## Channels
 
@@ -151,19 +167,164 @@ yojin/
 |---------|--------|
 | Slack | Working (@slack/bolt) |
 | Telegram | Phase 1 (grammy) |
-| Web UI | Working (Hono + GraphQL + SSE) |
+| Web UI | In Progress (React 19 + GraphQL) |
 | MCP | Phase 1 (Claude Desktop / Cursor) |
 | Discord | Future |
 
-## Security-First Approach
+## Trust & Security Stack
 
-Yojin is built with security as a first-class concern — your credentials, portfolio data, and personal information are protected at every layer:
+Yojin is built with security as a first-class concern. Every agent action passes through a deterministic, non-bypassable guard pipeline before execution. No LLM is ever in the security decision loop.
 
-- **Encrypted credential vault** — All API keys and platform credentials stored in an AES-256-GCM encrypted JSON file via secretctl. Credentials are injected at the transport layer and never exposed to the LLM.
-- **PII redaction** — Account IDs, exact balances, and personal identifiers are stripped before any data leaves your machine (e.g., Keelson API calls).
-- **Deterministic guard pipeline** — Every agent action passes through RADIUS guards before execution. No LLM prompt tricks can bypass filesystem, network, or command restrictions.
-- **Approval gate** — Irreversible actions (trades, new connections) require explicit human approval via your active channel.
-- **Immutable audit log** — All security events (credential access, guard decisions, PII redaction, approvals) are logged to an append-only JSONL file that is never truncated.
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Guard Pipeline                               │
+│                                                                     │
+│  Agent Action                                                       │
+│       │                                                             │
+│       ▼                                                             │
+│  ┌─────────────┐   TRIPPED?                                        │
+│  │ Kill Switch  │──── YES ──▶ DENY ALL (emergency halt)             │
+│  └──────┬──────┘                                                    │
+│         │ NO                                                        │
+│         ▼                                                           │
+│  ┌─────────────┐   WRITE TO PROTECTED FILE?                        │
+│  │Self-Defense  │──── YES ──▶ BLOCK + trip kill switch              │
+│  └──────┬──────┘                                                    │
+│         │ NO                                                        │
+│         ▼                                                           │
+│  ┌─────────────┐   TOOL DENIED / BAD INPUT?                        │
+│  │ Tool Policy  │──── YES ──▶ BLOCK                                 │
+│  └──────┬──────┘                                                    │
+│         │ OK                                                        │
+│         ▼                                                           │
+│  ┌─────────────────────────────────────────┐                        │
+│  │         Infrastructure Guards            │                       │
+│  │  ┌────────┐ ┌─────────┐ ┌────────────┐  │                       │
+│  │  │fs-guard│ │cmd-guard│ │egress-guard│  │  ◀── blocklist-based   │
+│  │  └────────┘ └─────────┘ └────────────┘  │                       │
+│  │  ┌──────────┐ ┌───────────┐ ┌────────┐  │                       │
+│  │  │output-dlp│ │rate-budget│ │repet.  │  │  ◀── pattern + rate    │
+│  │  └──────────┘ └───────────┘ └────────┘  │                       │
+│  └──────────────────┬──────────────────────┘                        │
+│                     │                                               │
+│                     ▼                                               │
+│  ┌─────────────────────────────────────────┐                        │
+│  │          Finance Guards                  │                       │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ │                       │
+│  │  │read-only │ │ cooldown │ │whitelist │ │  ◀── trading rules     │
+│  │  └──────────┘ └──────────┘ └──────────┘ │                       │
+│  └──────────────────┬──────────────────────┘                        │
+│                     │                                               │
+│                     ▼                                               │
+│               ┌───────────┐                                         │
+│               │ APPROVED? │──── needs approval ──▶ Approval Gate    │
+│               └─────┬─────┘                       (human-in-loop)   │
+│                     │                                               │
+│                     ▼                                               │
+│              ┌────────────┐                                         │
+│              │  EXECUTE   │                                         │
+│              └──────┬─────┘                                         │
+│                     │                                               │
+│                     ▼                                               │
+│              ┌────────────┐                                         │
+│              │ Output DLP │──── leaked secret? ──▶ SUPPRESS OUTPUT  │
+│              └──────┬─────┘                                         │
+│                     │                                               │
+│                     ▼                                               │
+│               Return Result                                         │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │ Audit Log: HMAC-chained JSONL — every decision logged        │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Three Operational Postures
+
+```
+┌──────────────┬──────────────┬──────────────┐
+│    LOCAL     │   STANDARD   │  UNBOUNDED   │
+│  (default)   │    (dev)     │  (research)  │
+├──────────────┼──────────────┼──────────────┤
+│ 30 calls/min │ 60 calls/min │120 calls/min │
+│   enforce    │   enforce    │   observe    │
+│  read-only   │  read/write  │  read/write  │
+│  max safety  │  balanced    │  log only    │
+└──────────────┴──────────────┴──────────────┘
+```
+
+### Credential Vault
+
+```
+┌──────────────────────────────────────────────┐
+│               Encrypted Vault                 │
+│                                               │
+│  Passphrase ──▶ PBKDF2 (600k, SHA-512)       │
+│                      │                        │
+│                 Derived Key                    │
+│                      │                        │
+│              ┌───────┴───────┐                │
+│              │  AES-256-GCM  │                │
+│              │  per-entry IV  │                │
+│              └───────┬───────┘                │
+│                      │                        │
+│  ┌───────────────────┼───────────────────┐    │
+│  │  KEY_A: ████████  │  KEY_B: ████████  │    │
+│  │  KEY_C: ████████  │  KEY_D: ████████  │    │
+│  └───────────────────┴───────────────────┘    │
+│                                               │
+│  Canary: verifies passphrase on unlock        │
+│  Key names: plaintext (enables list w/o key)  │
+│  MCP server: injects creds at transport layer │
+│  Raw values: NEVER in LLM prompts             │
+└──────────────────────────────────────────────┘
+```
+
+### PII Redaction Pipeline
+
+```
+Raw Snapshot                    Redacted Snapshot
+┌─────────────────┐            ┌─────────────────┐
+│ accountId: 1234 │  ────▶     │ accountId:      │
+│                 │  SHA-256   │  <ACCT-a1b2c3d4> │
+│ balance: 75000  │  ────▶     │ balance:        │
+│                 │  range     │  $50k-$100k      │
+│ email:          │  ────▶     │ email:          │
+│  john@test.com  │  strip     │  <EMAIL-REDACT> │
+│ ownerName:      │  ────▶     │ ownerName:      │
+│  John Doe       │  strip     │  <NAME-REDACT>  │
+│ symbol: AAPL    │  ────▶     │ symbol: AAPL    │
+│                 │  preserve  │                 │
+│ price: 150.25   │  ────▶     │ price: 150.25   │
+│                 │  preserve  │                 │
+└─────────────────┘            └─────────────────┘
+     Original NEVER mutated         Logged to audit
+```
+
+### HMAC-Chained Audit Log
+
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│ Event 0  │───▶│ Event 1  │───▶│ Event 2  │───▶│ Event 3  │
+│          │    │          │    │          │    │          │
+│ prevHash:│    │ prevHash:│    │ prevHash:│    │ prevHash:│
+│  000...  │    │  hash(0) │    │  hash(1) │    │  hash(2) │
+│ hash:    │    │ hash:    │    │ hash:    │    │ hash:    │
+│  HMAC(0) │    │  HMAC(1) │    │  HMAC(2) │    │  HMAC(3) │
+└──────────┘    └──────────┘    └──────────┘    └──────────┘
+
+Tamper with any event ──▶ chain breaks ──▶ verifyChain() detects it
+Delete an event        ──▶ prevHash gap  ──▶ verifyChain() detects it
+```
+
+### Security Highlights
+
+- **Encrypted credential vault** — AES-256-GCM with PBKDF2 key derivation. Credentials injected at the transport layer, never exposed to the LLM.
+- **12 deterministic guards** — Kill switch, self-defense, tool policy, fs, command, egress, output-dlp, rate-budget, repetition, read-only, cooldown, symbol-whitelist.
+- **PII redaction** — Account IDs hashed, balances converted to ranges, emails/names stripped before any external API call.
+- **Human approval gate** — Irreversible actions (trades, new connections) require explicit approval via your active channel.
+- **HMAC-chained audit log** — Tamper-evident append-only JSONL. Every security event logged, chain integrity verifiable.
+- **Pipeline freeze** — Guard pipeline locked after initialization. No runtime modification possible.
 - **Local-first** — Your data stays on your machine. No cloud database, no containers, no third-party data storage.
 
 ## Tech Stack
@@ -175,6 +336,9 @@ Yojin is built with security as a first-class concern — your credentials, port
 - **Zod** — schema validation for all external data
 - **vitest** — testing
 - **tslog** — structured logging
+- **React 19** — Web UI with Vite 6, Tailwind CSS 4
+- **GraphQL** — graphql-yoga on Hono for API layer
+- **urql** — Lightweight GraphQL client
 - **pnpm** — package manager
 
 ## Persona
@@ -201,6 +365,7 @@ Core portfolio intelligence:
 4. MCP server for Claude Desktop
 5. Persona-driven reasoning
 6. Morning digest + intraday alerts
+7. Web UI dashboard (React + GraphQL)
 
 ## Contributing
 

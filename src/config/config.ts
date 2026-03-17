@@ -3,7 +3,9 @@
  */
 
 import { z } from 'zod';
-import { config as loadDotenv } from 'dotenv';
+
+import type { Env } from './env.js';
+import { loadEnv } from './env.js';
 
 export type AnthropicAuthMode = 'oauth' | 'api_key';
 
@@ -35,38 +37,38 @@ export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 export type ChannelConfig = z.infer<typeof ChannelConfigSchema>;
 
 /**
- * Load config from environment and optional overrides.
+ * Load config from validated environment and optional overrides.
  */
 export function loadConfig(overrides?: Partial<YojinConfig>): YojinConfig {
-  loadDotenv();
+  const env = loadEnv();
 
-  const anthropicAuthMode = resolveAnthropicAuthMode();
+  const anthropicAuthMode = resolveAnthropicAuthMode(env);
 
   const raw: Partial<YojinConfig> = {
     providers: [
       {
         id: 'anthropic',
         authMode: anthropicAuthMode,
-        oauthToken: process.env.CLAUDE_CODE_OAUTH_TOKEN,
-        apiKey: process.env.ANTHROPIC_API_KEY,
+        oauthToken: env.CLAUDE_CODE_OAUTH_TOKEN,
+        apiKey: env.ANTHROPIC_API_KEY,
         defaultModel: 'claude-sonnet-4-20250514',
       },
     ],
     channels: [
       {
         id: 'slack',
-        enabled: !!process.env.SLACK_BOT_TOKEN,
+        enabled: !!env.SLACK_BOT_TOKEN,
         options: {
-          botToken: process.env.SLACK_BOT_TOKEN,
-          appToken: process.env.SLACK_APP_TOKEN,
-          signingSecret: process.env.SLACK_SIGNING_SECRET,
+          botToken: env.SLACK_BOT_TOKEN,
+          appToken: env.SLACK_APP_TOKEN,
+          signingSecret: env.SLACK_SIGNING_SECRET,
         },
       },
       {
         id: 'web',
         enabled: true,
         options: {
-          port: process.env.YOJIN_PORT ?? '3000',
+          port: env.YOJIN_PORT ?? 3000,
         },
       },
     ],
@@ -77,14 +79,14 @@ export function loadConfig(overrides?: Partial<YojinConfig>): YojinConfig {
 }
 
 /**
- * Determine Anthropic auth mode from available environment variables.
+ * Determine Anthropic auth mode from validated environment.
  * Priority: CLAUDE_CODE_OAUTH_TOKEN > ANTHROPIC_API_KEY
  */
-function resolveAnthropicAuthMode(): AnthropicAuthMode | undefined {
-  if (process.env.CLAUDE_CODE_OAUTH_TOKEN?.trim()) {
+function resolveAnthropicAuthMode(env: Env): AnthropicAuthMode | undefined {
+  if (env.CLAUDE_CODE_OAUTH_TOKEN) {
     return 'oauth';
   }
-  if (process.env.ANTHROPIC_API_KEY?.trim()) {
+  if (env.ANTHROPIC_API_KEY) {
     return 'api_key';
   }
   return undefined;
