@@ -25,8 +25,8 @@ We will acknowledge receipt within 48 hours and aim to provide a fix within 7 da
 
 Yojin is built with security as a core architectural concern:
 
-- **Encrypted credential vault** — AES-256-GCM encrypted storage via secretctl
-- **Deterministic guard pipeline** — RADIUS guards enforce boundaries before every agent action
+- **Encrypted credential vault** — AES-256-GCM encrypted storage with PBKDF2 key derivation
+- **Deterministic guard pipeline** — Guards enforce boundaries before every agent action
 - **PII redaction** — Personal data stripped before any external API call
 - **Approval gate** — Irreversible actions require human confirmation
 - **Immutable audit log** — Append-only security event log, never truncated

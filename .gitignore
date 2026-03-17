@@ -31,3 +31,6 @@ docs/superpowers/
 
 # Web app build output
 apps/web/dist/
+
+# Plans
+plans/

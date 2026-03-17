@@ -26,7 +26,7 @@ globs: ["src/**/*.ts", "providers/**/*.ts", "channels/**/*.ts", "packages/**/*.t
 ## Module Boundaries
 - `src/guards/` is generic agent safety — knows nothing about finance. Only enforces boundaries (read-only, rate-limit, cooldown, whitelist).
 - `src/risk/` is finance-only analysis — produces RiskReport, never blocks actions.
-- `src/trust/` handles credentials (secretctl), action boundaries (RADIUS), PII redaction, and approval flows.
+- `src/trust/` handles credentials (encrypted vault), action boundaries (guard pipeline), PII redaction, and approval flows.
 - `src/enrichment/` orchestrates dual-source enrichment (Keelson + OpenBB) — always PII-redact before Keelson calls.
 
 ## Plugin System
