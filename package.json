@@ -52,7 +52,8 @@
     "@slack/web-api": "^7.8.0",
     "dotenv": "^16.4.7",
     "tslog": "^4.10.2",
-    "zod": "^3.24.2"
+    "zod": "^3.24.2",
+    "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
