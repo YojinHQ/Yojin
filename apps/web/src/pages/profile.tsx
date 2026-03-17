@@ -1,3 +1,5 @@
+import { cn } from '../lib/utils';
+
 export default function Profile() {
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
@@ -56,7 +58,7 @@ function PlatformRow({ name, status }: { name: string; status: 'connected' | 'di
   return (
     <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
       <span className="text-sm text-text-primary">{name}</span>
-      <span className={`text-xs font-medium ${connected ? 'text-success' : 'text-text-muted'}`}>
+      <span className={cn('text-xs font-medium', connected ? 'text-success' : 'text-text-muted')}>
         {connected ? 'Connected' : 'Not connected'}
       </span>
     </div>

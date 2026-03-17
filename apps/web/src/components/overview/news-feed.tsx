@@ -1,3 +1,5 @@
+import { cn } from '../../lib/utils';
+
 interface NewsItem {
   source: string;
   time: string;
@@ -57,9 +59,10 @@ export default function NewsFeed() {
           </div>
           <p className="mt-1.5 text-sm leading-snug text-text-primary">{item.title}</p>
           <span
-            className={`mt-2 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-              tagColors[item.tag] ?? 'bg-bg-tertiary text-text-muted'
-            }`}
+            className={cn(
+              'mt-2 inline-block rounded-full px-2 py-0.5 text-xs font-medium',
+              tagColors[item.tag] ?? 'bg-bg-tertiary text-text-muted',
+            )}
           >
             {item.tag}
           </span>

@@ -1,3 +1,5 @@
+import { cn } from '../../lib/utils';
+
 interface Alert {
   type: 'action' | 'alert' | 'insight';
   label: string;
@@ -56,10 +58,10 @@ export default function IntelAlerts() {
         <div key={i} className="rounded-lg bg-bg-tertiary p-4">
           <div className="mb-2 flex items-center gap-2">
             <span
-              className={`inline-block h-2 w-2 rounded-full ${urgencyIndicator[alert.urgency]}`}
+              className={cn('inline-block h-2 w-2 rounded-full', urgencyIndicator[alert.urgency])}
             />
             <span
-              className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeStyles[alert.type]}`}
+              className={cn('rounded-full px-2 py-0.5 text-xs font-medium', badgeStyles[alert.type])}
             >
               {alert.label}
             </span>

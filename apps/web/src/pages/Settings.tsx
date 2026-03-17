@@ -1,5 +1,6 @@
 import { useTheme } from '../lib/theme';
 import type { ThemeChoice } from '../lib/theme';
+import { cn } from '../lib/utils';
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
@@ -136,11 +137,12 @@ function ThemePicker({
           <button
             key={opt.value}
             onClick={() => onChange(opt.value)}
-            className={`flex flex-col items-center gap-2 rounded-xl border px-6 py-4 transition-colors ${
+            className={cn(
+              'flex flex-col items-center gap-2 rounded-xl border px-6 py-4 transition-colors',
               active
                 ? 'border-accent-primary bg-accent-glow text-accent-primary'
-                : 'border-border bg-bg-secondary text-text-muted hover:border-border-light hover:text-text-secondary'
-            }`}
+                : 'border-border bg-bg-secondary text-text-muted hover:border-border-light hover:text-text-secondary',
+            )}
           >
             {opt.icon}
             <span className="text-xs font-medium">{opt.label}</span>

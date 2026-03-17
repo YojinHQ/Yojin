@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { cn } from '../../lib/utils';
 import {
   AreaChart,
   Area,
@@ -51,11 +52,12 @@ export default function PortfolioChart() {
             <button
               key={range}
               onClick={() => setActiveRange(range)}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              className={cn(
+                'rounded-md px-3 py-1 text-xs font-medium transition-colors',
                 activeRange === range
                   ? 'bg-accent-primary text-white'
-                  : 'text-text-muted hover:text-text-secondary'
-              }`}
+                  : 'text-text-muted hover:text-text-secondary',
+              )}
             >
               {range}
             </button>

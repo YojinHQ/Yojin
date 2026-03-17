@@ -1,4 +1,5 @@
 import { Link } from 'react-router';
+import { cn } from '../../lib/utils';
 
 interface Position {
   symbol: string;
@@ -44,9 +45,10 @@ export default function PositionsPreview() {
               <td className="px-6 py-3 text-sm text-text-secondary">{pos.name}</td>
               <td className="px-6 py-3 text-right text-sm text-text-primary">{pos.value}</td>
               <td
-                className={`px-6 py-3 text-right text-sm ${
-                  pos.positive ? 'text-success' : 'text-error'
-                }`}
+                className={cn(
+                  'px-6 py-3 text-right text-sm',
+                  pos.positive ? 'text-success' : 'text-error',
+                )}
               >
                 {pos.change}
               </td>

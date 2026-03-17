@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useTheme } from '../../lib/theme';
 import type { ThemeChoice } from '../../lib/theme';
+import { cn } from '../../lib/utils';
 
 export default function UserMenu() {
   const [open, setOpen] = useState(false);
@@ -104,7 +105,10 @@ export default function UserMenu() {
               <div className="flex rounded-lg bg-bg-tertiary p-0.5">
                 <button
                   onClick={() => handleTheme('light')}
-                  className={`rounded-md p-1.5 transition-colors ${theme === 'light' ? 'bg-bg-hover text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}
+                  className={cn(
+                    'rounded-md p-1.5 transition-colors',
+                    theme === 'light' ? 'bg-bg-hover text-text-primary' : 'text-text-muted hover:text-text-secondary',
+                  )}
                   title="Light"
                 >
                   <svg
@@ -123,7 +127,10 @@ export default function UserMenu() {
                 </button>
                 <button
                   onClick={() => handleTheme('system')}
-                  className={`rounded-md p-1.5 transition-colors ${theme === 'system' ? 'bg-bg-hover text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}
+                  className={cn(
+                    'rounded-md p-1.5 transition-colors',
+                    theme === 'system' ? 'bg-bg-hover text-text-primary' : 'text-text-muted hover:text-text-secondary',
+                  )}
                   title="System"
                 >
                   <svg
@@ -142,7 +149,10 @@ export default function UserMenu() {
                 </button>
                 <button
                   onClick={() => handleTheme('dark')}
-                  className={`rounded-md p-1.5 transition-colors ${theme === 'dark' ? 'bg-bg-hover text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}
+                  className={cn(
+                    'rounded-md p-1.5 transition-colors',
+                    theme === 'dark' ? 'bg-bg-hover text-text-primary' : 'text-text-muted hover:text-text-secondary',
+                  )}
                   title="Dark"
                 >
                   <svg
@@ -198,7 +208,7 @@ export default function UserMenu() {
           <div className="text-xs text-text-muted">@dean</div>
         </div>
         <svg
-          className={`w-4 h-4 text-text-muted transition-transform ${open ? 'rotate-180' : ''}`}
+          className={cn('w-4 h-4 text-text-muted transition-transform', open && 'rotate-180')}
           fill="none"
           viewBox="0 0 24 24"
           strokeWidth={2}

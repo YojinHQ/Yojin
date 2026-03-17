@@ -1,3 +1,5 @@
+import { cn } from '../../lib/utils';
+
 type FilterStatus = 'all' | 'holding' | 'watching' | 'pending' | 'sold';
 
 interface FilterTabsProps {
@@ -15,11 +17,12 @@ export default function FilterTabs({ activeFilter, onChange, counts }: FilterTab
         <button
           key={filter}
           onClick={() => onChange(filter)}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+          className={cn(
+            'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
             activeFilter === filter
               ? 'border border-border bg-bg-card text-text-primary'
-              : 'border border-transparent text-text-muted hover:text-text-secondary'
-          }`}
+              : 'border border-transparent text-text-muted hover:text-text-secondary',
+          )}
         >
           {filter.charAt(0).toUpperCase() + filter.slice(1)} ({counts[filter]})
         </button>

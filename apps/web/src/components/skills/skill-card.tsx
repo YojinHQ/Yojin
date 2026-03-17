@@ -1,4 +1,5 @@
 import type { Skill, SkillCategory } from './types.js';
+import { cn } from '../../lib/utils';
 
 const categoryColors: Record<SkillCategory, string> = {
   RISK: 'bg-error/10 text-error',
@@ -12,7 +13,7 @@ export default function SkillCard({ skill }: { skill: Skill }) {
     <div className="bg-bg-card border border-border rounded-xl p-5 hover:border-border-light transition-colors">
       <div className="flex items-center justify-between">
         <span
-          className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${categoryColors[skill.category]}`}
+          className={cn('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium', categoryColors[skill.category])}
         >
           {skill.category}
         </span>

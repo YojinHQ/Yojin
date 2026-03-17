@@ -1,4 +1,5 @@
 import { useLocation, useSearchParams } from 'react-router';
+import { cn } from '../../lib/utils';
 
 const pathToTitle: Record<string, string> = {
   '/': 'Overview',
@@ -33,21 +34,23 @@ export default function Header() {
           <div className="flex gap-1 rounded-lg bg-bg-tertiary p-1">
             <button
               onClick={() => setSearchParams({})}
-              className={`rounded-md px-3 py-1 text-sm transition-colors ${
+              className={cn(
+                'rounded-md px-3 py-1 text-sm transition-colors',
                 skillsView === 'active'
                   ? 'bg-bg-hover text-text-primary'
-                  : 'text-text-muted hover:text-text-secondary'
-              }`}
+                  : 'text-text-muted hover:text-text-secondary',
+              )}
             >
               Active
             </button>
             <button
               onClick={() => setSearchParams({ view: 'builder' })}
-              className={`rounded-md px-3 py-1 text-sm transition-colors ${
+              className={cn(
+                'rounded-md px-3 py-1 text-sm transition-colors',
                 skillsView === 'builder'
                   ? 'bg-bg-hover text-text-primary'
-                  : 'text-text-muted hover:text-text-secondary'
-              }`}
+                  : 'text-text-muted hover:text-text-secondary',
+              )}
             >
               Builder
             </button>

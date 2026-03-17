@@ -1,3 +1,5 @@
+import { cn } from '../../lib/utils';
+
 interface RightPanelProps {
   title?: string;
   tabs?: { label: string; active: boolean; onClick: () => void }[];
@@ -16,11 +18,12 @@ export default function RightPanel({ title, tabs, children }: RightPanelProps) {
                 <button
                   key={tab.label}
                   onClick={tab.onClick}
-                  className={`rounded-md px-3 py-1 text-sm transition-colors ${
+                  className={cn(
+                    'rounded-md px-3 py-1 text-sm transition-colors',
                     tab.active
                       ? 'bg-bg-hover text-text-primary'
-                      : 'text-text-muted hover:text-text-secondary'
-                  }`}
+                      : 'text-text-muted hover:text-text-secondary',
+                  )}
                 >
                   {tab.label}
                 </button>

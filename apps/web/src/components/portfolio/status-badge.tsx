@@ -1,3 +1,5 @@
+import { cn } from '../../lib/utils';
+
 type PositionStatus = 'holding' | 'watching' | 'pending' | 'sold';
 
 const statusStyles: Record<PositionStatus, string> = {
@@ -10,7 +12,7 @@ const statusStyles: Record<PositionStatus, string> = {
 export default function StatusBadge({ status }: { status: PositionStatus }) {
   return (
     <span
-      className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[status]}`}
+      className={cn('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium', statusStyles[status])}
     >
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
