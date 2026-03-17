@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTheme } from '../lib/theme';
 import type { ThemeChoice } from '../lib/theme';
 import { cn } from '../lib/utils';
@@ -162,6 +163,7 @@ function ToggleRow({
   description: string;
   defaultOn?: boolean;
 }) {
+  const [checked, setChecked] = useState(defaultOn);
   return (
     <div className="flex items-center justify-between">
       <div>
@@ -169,7 +171,12 @@ function ToggleRow({
         <p className="text-xs text-text-muted">{description}</p>
       </div>
       <label className="relative inline-flex cursor-pointer items-center">
-        <input type="checkbox" defaultChecked={defaultOn} className="peer sr-only" />
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => setChecked(e.target.checked)}
+          className="peer sr-only"
+        />
         <div className="h-5 w-9 rounded-full bg-bg-tertiary peer-checked:bg-accent-primary peer-focus:ring-2 peer-focus:ring-accent-primary/20 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-text-primary after:transition-all peer-checked:after:translate-x-full" />
       </label>
     </div>

@@ -107,7 +107,9 @@ export default function UserMenu() {
                   onClick={() => handleTheme('light')}
                   className={cn(
                     'rounded-md p-1.5 transition-colors',
-                    theme === 'light' ? 'bg-bg-hover text-text-primary' : 'text-text-muted hover:text-text-secondary',
+                    theme === 'light'
+                      ? 'bg-bg-hover text-text-primary'
+                      : 'text-text-muted hover:text-text-secondary',
                   )}
                   title="Light"
                 >
@@ -129,7 +131,9 @@ export default function UserMenu() {
                   onClick={() => handleTheme('system')}
                   className={cn(
                     'rounded-md p-1.5 transition-colors',
-                    theme === 'system' ? 'bg-bg-hover text-text-primary' : 'text-text-muted hover:text-text-secondary',
+                    theme === 'system'
+                      ? 'bg-bg-hover text-text-primary'
+                      : 'text-text-muted hover:text-text-secondary',
                   )}
                   title="System"
                 >
@@ -151,7 +155,9 @@ export default function UserMenu() {
                   onClick={() => handleTheme('dark')}
                   className={cn(
                     'rounded-md p-1.5 transition-colors',
-                    theme === 'dark' ? 'bg-bg-hover text-text-primary' : 'text-text-muted hover:text-text-secondary',
+                    theme === 'dark'
+                      ? 'bg-bg-hover text-text-primary'
+                      : 'text-text-muted hover:text-text-secondary',
                   )}
                   title="Dark"
                 >
@@ -175,7 +181,12 @@ export default function UserMenu() {
 
           {/* Divider + Log out */}
           <div className="border-t border-border p-2">
-            <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-accent-primary hover:bg-bg-hover transition-colors">
+            <button
+              onClick={() => {
+                /* TODO: call signOut() */
+              }}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-accent-primary hover:bg-bg-hover transition-colors"
+            >
               <svg
                 className="w-5 h-5"
                 fill="none"

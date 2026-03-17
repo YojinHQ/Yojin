@@ -31,12 +31,19 @@ function getMockResponse(userMessage: string): string {
 export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const handleSend = useCallback((content: string) => {
     const userMessage: Message = {
@@ -46,7 +53,8 @@ export default function Chat() {
     };
     setMessages((prev) => [...prev, userMessage]);
 
-    setTimeout(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',

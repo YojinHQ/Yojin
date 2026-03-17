@@ -73,26 +73,26 @@ export default function PortfolioChart() {
                 <stop offset="100%" stopColor="#FF5A5E" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid stroke="#3d3d3d" strokeDasharray="3 3" vertical={false} />
+            <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="date"
-              tick={{ fill: '#888', fontSize: 12 }}
-              axisLine={{ stroke: '#3d3d3d' }}
+              tick={{ fill: 'var(--color-text-muted)', fontSize: 12 }}
+              axisLine={{ stroke: 'var(--color-border)' }}
               tickLine={false}
             />
             <YAxis
-              tick={{ fill: '#888', fontSize: 12 }}
-              axisLine={{ stroke: '#3d3d3d' }}
+              tick={{ fill: 'var(--color-text-muted)', fontSize: 12 }}
+              axisLine={{ stroke: 'var(--color-border)' }}
               tickLine={false}
               domain={['dataMin - 2000', 'dataMax + 2000']}
               tickFormatter={(val: number) => `$${(val / 1000).toFixed(0)}k`}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: '#1a1a1a',
-                border: '1px solid #3d3d3d',
+                backgroundColor: 'var(--color-bg-card)',
+                border: '1px solid var(--color-border)',
                 borderRadius: '8px',
-                color: '#e5e5e5',
+                color: 'var(--color-text-primary)',
               }}
               formatter={(value: number) => [
                 `$${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,

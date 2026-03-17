@@ -1,9 +1,20 @@
+import { useEffect } from 'react';
+
 interface BrowseSkillsModalProps {
   open: boolean;
   onClose: () => void;
 }
 
 export default function BrowseSkillsModal({ open, onClose }: BrowseSkillsModalProps) {
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const templates = [
@@ -42,7 +53,12 @@ export default function BrowseSkillsModal({ open, onClose }: BrowseSkillsModalPr
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-bg-secondary border border-border rounded-2xl p-6 w-full max-w-2xl max-h-[80vh] overflow-auto">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Browse Skills"
+        className="relative bg-bg-secondary border border-border rounded-2xl p-6 w-full max-w-2xl max-h-[80vh] overflow-auto"
+      >
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-headline text-xl text-text-primary">Browse Skills</h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary">

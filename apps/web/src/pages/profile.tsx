@@ -47,8 +47,8 @@ export default function Profile() {
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs text-text-muted mb-1">{label}</dt>
-      <dd className="text-sm text-text-primary">{value}</dd>
+      <p className="text-xs text-text-muted mb-1">{label}</p>
+      <p className="text-sm text-text-primary">{value}</p>
     </div>
   );
 }
