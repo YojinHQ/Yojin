@@ -1,5 +1,5 @@
 /**
- * Vault CLI — yojin secret set/get/list/delete
+ * Vault CLI — yojin secret set/show/list/delete
  *
  * SECURITY: Secret values never reach stdout or any capturable output.
  * - `set` uses hidden TTY input (no echo) and refuses non-TTY stdin
