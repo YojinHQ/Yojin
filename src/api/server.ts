@@ -12,6 +12,7 @@
  */
 
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 
 import { mountGraphQL } from './graphql/server.js';
@@ -24,6 +25,14 @@ const log = createSubsystemLogger('api');
 // ---------------------------------------------------------------------------
 
 const app = new Hono();
+
+// CORS — allow the web app origin in dev; configurable via env for production
+app.use(
+  '/graphql',
+  cors({
+    origin: process.env.YOJIN_CORS_ORIGIN ?? 'http://localhost:5173',
+  }),
+);
 
 // Health check
 app.get('/api/health', (c) =>
