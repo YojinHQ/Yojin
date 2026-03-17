@@ -256,7 +256,7 @@ yojin/
 │   │   └── position-analyzer.ts   # Portfolio metrics (concentration, risk, exposure)
 │   │
 │   ├── trust/                     # 4-Layer Trust Stack (Core Differentiator)
-│   │   ├── secretctl/             # Layer 1: Credential Vault
+│   │   ├── vault/                 # Layer 1: Credential Vault
 │   │   │   ├── vault.ts           # Encrypted storage (AES-256-GCM)
 │   │   │   ├── mcp-server.ts      # MCP server for AI-safe credential access
 │   │   │   ├── cli.ts             # CLI: yojin secret set/get/list/delete
@@ -273,7 +273,7 @@ yojin/
 │   │       ├── audit-log.ts       # Immutable append-only JSONL writer
 │   │       └── types.ts           # AuditEvent types
 │   │
-│   ├── guards/                    # Layer 2: RADIUS — Deterministic Guard Pipeline
+│   ├── guards/                    # Layer 2: Deterministic Guard Pipeline
 │   │   ├── types.ts               # Guard interface, GuardResult, ProposedAction
 │   │   ├── guard-runner.ts        # Pipeline executor (blocks on first failure)
 │   │   ├── posture.ts             # Operational postures (Local/Standard/Unbounded)
@@ -508,15 +508,15 @@ Most AI trading agents give the LLM unrestricted access to credentials, filesyst
 ### The 4-Layer Trust Stack
 
 ```
-Layer 1: secretctl        — Credentials never touch the LLM
-Layer 2: RADIUS Guards    — Agent can't act outside boundaries
+Layer 1: Credential Vault — Credentials never touch the LLM
+Layer 2: Guard Pipeline   — Agent can't act outside boundaries
 Layer 3: PII Redactor     — Your identity never leaves your laptop
 Layer 4: Approval Gate    — You confirm before anything irreversible
 ```
 
 Every layer runs **before** the agent acts. A regex match on `rm -rf` is true or false. The agent can't talk its way past it.
 
-### Layer 1: secretctl — Credential Vault
+### Layer 1: Credential Vault
 
 Encrypted local credential vault with MCP-native access. The agent can USE credentials without SEEING them.
 
@@ -527,14 +527,14 @@ Encrypted local credential vault with MCP-native access. The agent can USE crede
 - Audit log of every credential access
 
 ```
-src/trust/secretctl/
+src/trust/vault/
 ├── vault.ts          # Encrypted storage (AES-256-GCM)
 ├── mcp-server.ts     # MCP server for AI-safe credential access
 ├── cli.ts            # CLI commands for secret management
 └── types.ts          # SecretRef, VaultConfig
 ```
 
-### Layer 2: RADIUS — Deterministic Pre-Execution Guards
+### Layer 2: Guard Pipeline — Deterministic Pre-Execution Guards
 
 Every agent action passes through a pipeline of deterministic guards. Guards are pure functions — no LLM, no prompt, no interpretation. They either pass or block.
 
@@ -579,7 +579,7 @@ src/guards/
 │   ├── rate-budget.ts    # Cap tool calls per time window (prevent runaway)
 │   └── repetition-guard.ts # Block identical repeated tool calls
 ├── finance/              # Domain-specific
-│   ├── read-only.ts      # Block writes when RADIUS is in read-only mode
+│   ├── read-only.ts      # Block writes when posture is in read-only mode
 │   ├── cooldown.ts       # Min time between same-type actions on same instrument
 │   └── symbol-whitelist.ts # Only approved instruments can be acted on
 └── registry.ts           # Guard registration + config
@@ -604,7 +604,7 @@ Strips identifying information before any data leaves the laptop. Runs automatic
 | Account IDs, account names | Before Keelson API calls |
 | Exact balances (replaced with ranges) | Before any external API |
 | Personal identifiers (email, name) | Before any external API |
-| Platform credentials | Never leave secretctl |
+| Platform credentials | Never leave the vault |
 
 OpenBB calls are local/in-process — no redaction needed. Keelson calls always pass through the redactor.
 
@@ -744,7 +744,7 @@ Keelson handles what OpenBB can't (social sentiment, prediction market context).
           (sentiment, social,                 (fundamentals, price,
            composed signals)                   technicals, earnings)
           ↑ credentials via                   ↑ local/in-process
-            secretctl (never                    no redaction needed
+            vault (never                        no redaction needed
             in prompts)
                   ↓                                  ↓
                   └────────────────┬────────────────┘
@@ -765,7 +765,7 @@ Keelson handles what OpenBB can't (social sentiment, prediction market context).
               ↓                         ProviderRouter
               ↓                         (Claude/GPT/Gemini)
               ↓                              ↓
-              ↓                    ┌── RADIUS GUARDS ──┐
+              ↓                    ┌── GUARD PIPELINE ──┐
               ↓                    │ security guards    │ ← fs, command, egress, DLP
               ↓                    │ finance guards     │ ← read-only, cooldown, whitelist
               ↓                    │ audit every check  │ → data/audit/security.jsonl
@@ -791,7 +791,7 @@ Autonomous Research Flow:
     calculateIndicator('RSI(CLOSE("NVDA","1d"),14)') → RSI 78 (overbought)
     → Brain commits: "NVDA: high risk — earnings + insider selling + overbought"
     → Alert: "Reduce NVDA exposure"
-      → RADIUS guards: PASS (read-only, no trade action)
+      → Guard pipeline: PASS (read-only, no trade action)
       → ChannelRouter → all active channels
 ```
 
@@ -836,7 +836,7 @@ interface RiskManager {
   getEarningsProximity(): Promise<Array<{ symbol: string; daysUntilEarnings: number }>>
 }
 
-// Trust Stack — secretctl (Layer 1)
+// Trust Stack — Credential Vault (Layer 1)
 interface SecretVault {
   set(key: string, value: string): Promise<void>
   get(key: string): Promise<string>           // only at transport layer, never in prompts
@@ -901,7 +901,7 @@ interface YojinContext {
   enrichmentPipeline: EnrichmentPipeline
   alertEngine: AlertEngine
   // Trust & Security (core differentiator)
-  guardRunner: GuardRunner         // RADIUS guard pipeline
+  guardRunner: GuardRunner         // Deterministic guard pipeline
   secretVault: SecretVault         // Encrypted credential vault
   piiRedactor: PiiRedactor         // PII stripping for external calls
   approvalGate: ApprovalGate       // Human-in-the-loop for irreversible actions
@@ -969,7 +969,7 @@ Resolvers are thin — they call into the same services the agents use (enrichme
 | Component | Module |
 |-----------|--------|
 | Core Runtime | `src/core/` (AgentRuntime, ToolRegistry, sessions, events) |
-| Trust & Security | `src/trust/` + `src/guards/` (secretctl, RADIUS, PII, approval, audit) |
+| Trust & Security | `src/trust/` + `src/guards/` (encrypted vault, guard pipeline, PII, approval, audit) |
 | Strategist + Brain | `src/brain/` + `src/agents/` |
 | Channels | `channels/` (Telegram, Web) |
 | GraphQL API | `src/api/graphql/` (schema, resolvers, subscriptions) |
@@ -999,7 +999,7 @@ Dima provides → Dean calls:
 Per validator recommendation (scored 8/10). Polymarket only, no brokerage integrations.
 
 ### Deliverables
-1. **Trust & Security Layer** — secretctl vault (encrypted JSON + MCP), RADIUS guard pipeline (security + finance guards, operational postures), PII redactor, approval gate, security audit log
+1. **Trust & Security Layer** — encrypted credential vault (AES-256-GCM + MCP), deterministic guard pipeline (security + finance guards, operational postures), PII redactor, approval gate, security audit log
 2. Strategist layer (AgentRuntime + ProviderRouter + Brain + default persona)
 3. ToolRegistry — unified tool registry
 4. OpenBB data layer (market data SDK — price feeds and macro context)
@@ -1021,7 +1021,7 @@ Per validator recommendation (scored 8/10). Polymarket only, no brokerage integr
 - **2f**: IBKR (options intelligence)
 - **2g**: Web dashboard (React, portfolio visualization)
 - **2h**: Advanced intelligence (correlation analysis, position recommendations)
-- **2i**: Trade execution (RADIUS write mode, full guard pipeline)
+- **2i**: Trade execution (write mode, full guard pipeline)
 - **2j**: Discord channel plugin
 
 ---
@@ -1037,8 +1037,8 @@ Per validator recommendation (scored 8/10). Polymarket only, no brokerage integr
 6. **Config system**: Zod schemas, hot-reload, openbb.json, guard config
 
 ### Step 2: Trust & Security Layer (Core Differentiator)
-7. **secretctl**: Encrypted JSON vault, MCP server for AI-safe credential access, CLI
-8. **RADIUS guard pipeline**: Guard runner, operational postures (Local/Standard/Unbounded)
+7. **Credential vault**: Encrypted JSON vault, MCP server for AI-safe credential access, CLI
+8. **Guard pipeline**: Guard runner, operational postures (Local/Standard/Unbounded)
 9. **Security guards**: fs-guard, command-guard, egress-guard, output-dlp, rate-budget, repetition-guard
 10. **Finance guards**: read-only, cooldown, symbol-whitelist
 11. **PII redactor**: Redaction engine, patterns, tests
@@ -1083,8 +1083,8 @@ Per validator recommendation (scored 8/10). Polymarket only, no brokerage integr
 
 1. `pnpm install && pnpm build` — compiles cleanly
 2. `pnpm test` — unit tests for enrichment pipeline, alert rules, PII redactor, analysis kit, guards
-3. **secretctl**: `yojin secret set TEST_KEY` → stored encrypted, `yojin secret list` → shows key names only, audit log records access
-4. **RADIUS guards**: attempt `rm -rf /` via agent → command-guard blocks, audit log records block event
+3. **Credential vault**: `yojin secret set TEST_KEY` → stored encrypted, `yojin secret list` → shows key names only, audit log records access
+4. **Guard pipeline**: attempt `rm -rf /` via agent → command-guard blocks, audit log records block event
 5. **PII redactor**: feed snapshot with account IDs → verify IDs stripped before Keelson call, audit log records redaction
 6. **Approval gate**: agent proposes trade → approval request sent to Telegram → user denies → action blocked + logged
 7. **Security audit**: verify `data/audit/security.jsonl` has entries for guard.pass, guard.block, secret.access, pii.redact

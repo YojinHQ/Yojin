@@ -36,6 +36,6 @@ Reviewer — ensure all code changes align with the architecture plan in `plans/
 - Direct agent-to-agent calls (should go through orchestrator)
 - Finance logic in guards (belongs in risk manager)
 - Database or ORM usage (file-driven only)
-- Hardcoded credentials (use secretctl)
+- Hardcoded credentials (use the encrypted vault)
 - `any` types without justification
 - Service locator or global state (use YojinContext)

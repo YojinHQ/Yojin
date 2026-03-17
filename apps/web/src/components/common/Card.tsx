@@ -1,3 +1,5 @@
+import { cn } from '../../lib/utils';
+
 interface CardProps {
   title?: string;
   children: React.ReactNode;
@@ -6,8 +8,8 @@ interface CardProps {
 
 export default function Card({ title, children, className = '' }: CardProps) {
   return (
-    <div className={`rounded-xl border border-slate-800 bg-slate-900 p-5 ${className}`}>
-      {title && <h3 className="mb-4 text-sm font-medium text-slate-400">{title}</h3>}
+    <div className={cn('rounded-xl border border-border bg-bg-card p-5', className)}>
+      {title && <h3 className="mb-4 text-sm font-medium text-text-secondary">{title}</h3>}
       {children}
     </div>
   );
