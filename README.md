@@ -121,6 +121,7 @@ yojin/
 │   ├── risk/           # Portfolio risk analysis (exposure, concentration)
 │   ├── guards/         # Agent safety — guard pipeline
 │   ├── trust/          # Credentials, PII redaction, action boundaries
+│   ├── api/graphql/    # GraphQL API (graphql-yoga on Hono) — queries, mutations, subscriptions
 │   ├── alerts/         # Alert engine and morning digest builder
 │   ├── tools/          # Agent tools registered with ToolRegistry
 │   └── plugins/        # Plugin system (ProviderPlugin, ChannelPlugin)
@@ -150,7 +151,7 @@ yojin/
 |---------|--------|
 | Slack | Working (@slack/bolt) |
 | Telegram | Phase 1 (grammy) |
-| Web UI | Phase 1 (Hono + SSE) |
+| Web UI | Working (Hono + GraphQL + SSE) |
 | MCP | Phase 1 (Claude Desktop / Cursor) |
 | Discord | Future |
 
@@ -169,6 +170,7 @@ Yojin is built with security as a first-class concern — your credentials, port
 
 - **TypeScript** — strict mode, ESM, Node.js 20+
 - **Anthropic SDK** — Claude as the default AI provider
+- **Hono + graphql-yoga** — Web server and GraphQL API with subscriptions
 - **Playwright** — browser automation for scraping investment platforms
 - **Zod** — schema validation for all external data
 - **vitest** — testing
