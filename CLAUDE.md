@@ -6,8 +6,6 @@ Personal Bloomberg for retail investors. Multi-agent AI system that scrapes inve
 
 Multi-agent, file-driven architecture. Four specialized agents (Research Analyst, Strategist, Risk Manager, Trader) collaborate through shared state. No database — all state is JSONL files and JSON configs in `data/`.
 
-See `plans/architecture.md` for the full architecture plan.
-
 ### Key Modules
 
 - **`src/core/`** — Agent runtime: AgentRuntime, ToolRegistry, ProviderRouter, session store, event log, ChannelRouter

@@ -21,3 +21,7 @@ Thumbs.db
 # Runtime
 *.log
 *.pid
+
+# Internal docs — architecture plans, specs, design docs
+plans/
+docs/superpowers/

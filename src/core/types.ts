@@ -4,6 +4,12 @@
 
 import type { ZodSchema } from 'zod';
 
+import type { EventLog } from './event-log.js';
+import type { ToolRegistry } from './tool-registry.js';
+import type { YojinConfig } from '../config/config.js';
+import type { ChannelRouter } from '../plugins/channel-router.js';
+import type { SessionStore } from '../sessions/types.js';
+
 // ---------------------------------------------------------------------------
 // Tool definitions
 // ---------------------------------------------------------------------------
@@ -134,4 +140,16 @@ export interface ToolSchema {
   name: string;
   description: string;
   input_schema: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// Composition root context
+// ---------------------------------------------------------------------------
+
+export interface YojinContext {
+  config: YojinConfig;
+  toolRegistry: ToolRegistry;
+  sessionStore: SessionStore;
+  eventLog: EventLog;
+  channelRouter: ChannelRouter;
 }
