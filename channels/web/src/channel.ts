@@ -160,8 +160,12 @@ export function buildWebChannel(): ChannelPlugin {
         });
       });
 
-      server = serve({ fetch: app.fetch, port }, () => {
-        console.log(`Web channel listening on http://localhost:${port}`);
+      // Bind to localhost only — this agent runs locally, not exposed to the network.
+      // In Docker, set YOJIN_HOST=0.0.0.0 to allow container port mapping.
+      const hostname = String(options?.hostname ?? process.env.YOJIN_HOST ?? '127.0.0.1');
+
+      server = serve({ fetch: app.fetch, port, hostname }, () => {
+        console.log(`Web channel listening on http://${hostname}:${port}`);
         console.log(`GraphQL playground: http://localhost:${port}/graphql`);
       });
     },
