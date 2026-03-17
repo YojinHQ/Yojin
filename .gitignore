@@ -27,3 +27,6 @@ Thumbs.db
 
 # Web app build output
 apps/web/dist/
+
+# Plans
+plans/
