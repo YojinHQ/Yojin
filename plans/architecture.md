@@ -520,7 +520,7 @@ Every layer runs **before** the agent acts. A regex match on `rm -rf` is true or
 
 Encrypted local credential vault with MCP-native access. The agent can USE credentials without SEEING them.
 
-- Single encrypted SQLite database stored locally — no cloud, no network
+- Single encrypted JSON file stored locally — no cloud, no network, no database
 - MCP server integration — AI tools query secrets via protocol, never raw values
 - CLI for management: `yojin secret set ANTHROPIC_API_KEY`, `yojin secret list`
 - Credentials injected into API calls at the transport layer, never in prompts
@@ -999,7 +999,7 @@ Dima provides → Dean calls:
 Per validator recommendation (scored 8/10). Polymarket only, no brokerage integrations.
 
 ### Deliverables
-1. **Trust & Security Layer** — secretctl vault (encrypted SQLite + MCP), RADIUS guard pipeline (security + finance guards, operational postures), PII redactor, approval gate, security audit log
+1. **Trust & Security Layer** — secretctl vault (encrypted JSON + MCP), RADIUS guard pipeline (security + finance guards, operational postures), PII redactor, approval gate, security audit log
 2. Strategist layer (AgentRuntime + ProviderRouter + Brain + default persona)
 3. ToolRegistry — unified tool registry
 4. OpenBB data layer (market data SDK — price feeds and macro context)
@@ -1037,7 +1037,7 @@ Per validator recommendation (scored 8/10). Polymarket only, no brokerage integr
 6. **Config system**: Zod schemas, hot-reload, openbb.json, guard config
 
 ### Step 2: Trust & Security Layer (Core Differentiator)
-7. **secretctl**: Encrypted SQLite vault, MCP server for AI-safe credential access, CLI
+7. **secretctl**: Encrypted JSON vault, MCP server for AI-safe credential access, CLI
 8. **RADIUS guard pipeline**: Guard runner, operational postures (Local/Standard/Unbounded)
 9. **Security guards**: fs-guard, command-guard, egress-guard, output-dlp, rate-budget, repetition-guard
 10. **Finance guards**: read-only, cooldown, symbol-whitelist

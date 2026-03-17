@@ -20,7 +20,7 @@ See `plans/architecture.md` for the full architecture plan.
 - **`src/enrichment/`** — Dual-source enrichment pipeline: Keelson (sentiment) + OpenBB (fundamentals)
 - **`src/risk/`** — Risk Manager: exposure analysis, concentration scoring, correlation detection, earnings calendar
 - **`src/guards/`** — RADIUS deterministic guard pipeline: security guards (fs, command, egress, output-dlp, rate-budget, repetition) + finance guards (read-only, cooldown, whitelist) + operational postures
-- **`src/trust/`** — Trust stack: secretctl vault (encrypted SQLite + MCP), PII redactor, approval gate, security audit log
+- **`src/trust/`** — Trust stack: secretctl vault (encrypted JSON + MCP), PII redactor, approval gate, security audit log
 - **`src/alerts/`** — Alert engine: rule evaluation on enriched snapshots, morning digest builder
 - **`src/api/graphql/`** — GraphQL API for Web UI: schema, resolvers, subscriptions (graphql-yoga on Hono)
 - **`src/plugins/`** — Plugin system: ProviderPlugin + ChannelPlugin interfaces, registry (complete)

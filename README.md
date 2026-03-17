@@ -1,11 +1,11 @@
 # Yojin
 
-Personal Bloomberg for retail investors. An AI finance agent that runs locally on your laptop, connects to your investment accounts, and delivers personalized portfolio intelligence.
+A free, open-source AI agent that runs on your machine, connects to every platform and delivers personalized portfolio intelligence.
 
 ## What It Does
 
-- **Scrapes your portfolios** — Playwright automation logs into Polymarket, Robinhood, Coinbase, and more to extract your live positions
-- **Enriches with intelligence** — Dual-source enrichment via Keelson API (social sentiment, prediction market context) and OpenBB SDK (fundamentals, price data, technicals)
+- **Scrapes your portfolios** — Playwright automation logs into Robinhood, Coinbase, IBKR, and more to extract your live positions
+- **Enriches with intelligence** — Dual-source enrichment via Keelson API (social sentiment, news signals) and OpenBB SDK (fundamentals, price data, technicals)
 - **Analyzes risk** — Sector exposure, concentration scoring, correlated position detection, earnings calendar overlay
 - **Delivers alerts** — Morning digests, intraday alerts for price moves, sentiment shifts, earnings proximity, and concentration drift
 - **Talks to you** — Multi-channel delivery via Slack, Telegram, Web UI, or Claude Desktop (MCP)
@@ -115,6 +115,17 @@ yojin/
 | MCP | Phase 1 (Claude Desktop / Cursor) |
 | Discord | Future |
 
+## Security-First Approach
+
+Yojin is built with security as a first-class concern — your credentials, portfolio data, and personal information are protected at every layer:
+
+- **Encrypted credential vault** — All API keys and platform credentials stored in an AES-256-GCM encrypted JSON file via secretctl. Credentials are injected at the transport layer and never exposed to the LLM.
+- **PII redaction** — Account IDs, exact balances, and personal identifiers are stripped before any data leaves your machine (e.g., Keelson API calls).
+- **Deterministic guard pipeline** — Every agent action passes through RADIUS guards before execution. No LLM prompt tricks can bypass filesystem, network, or command restrictions.
+- **Approval gate** — Irreversible actions (trades, new connections) require explicit human approval via your active channel.
+- **Immutable audit log** — All security events (credential access, guard decisions, PII redaction, approvals) are logged to an append-only JSONL file that is never truncated.
+- **Local-first** — Your data stays on your machine. No cloud database, no containers, no third-party data storage.
+
 ## Tech Stack
 
 - **TypeScript** — strict mode, ESM, Node.js 20+
@@ -134,16 +145,16 @@ Yojin's behavior is driven by a Markdown persona file. Edit `data/brain/persona.
 
 I focus on risk-adjusted returns and concentration risk.
 When any single position exceeds 25% of portfolio, I flag it immediately.
-I never recommend more than 10% of portfolio in prediction markets.
+I never recommend more than 10% of portfolio in speculative positions.
 ```
 
 No code changes needed — the agent adapts on the next request.
 
 ## Phase 1 MVP
 
-Prediction market intelligence (Polymarket only):
+Core portfolio intelligence:
 
-1. Polymarket position scraping
+1. Platform position scraping (Robinhood, Coinbase, IBKR)
 2. Keelson + OpenBB enrichment
 3. Multi-channel alerts (Slack, Telegram, Web)
 4. MCP server for Claude Desktop

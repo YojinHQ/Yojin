@@ -9,7 +9,7 @@ The trust layer is Yojin's core differentiator. Every component must be determin
 
 ## Layer 1: secretctl (Credential Vault)
 - Never hardcode secrets. All credentials go through secretctl or environment variables.
-- secretctl stores credentials in encrypted SQLite (AES-256-GCM) — never plaintext.
+- secretctl stores credentials in an encrypted JSON file (AES-256-GCM) — never plaintext.
 - Credentials are injected at the transport layer, never in LLM prompts.
 - The MCP server exposes credentials to AI tools without revealing raw values.
 - Never log credentials, tokens, or API keys — even at debug level.
