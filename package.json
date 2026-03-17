@@ -28,6 +28,7 @@
     "chat": "node --disable-warning=DEP0040 --import tsx/esm src/entry.ts chat",
     "start": "node --disable-warning=DEP0040 dist/src/entry.js",
     "test": "vitest run",
+    "test:ci": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/ providers/ channels/ test/",
