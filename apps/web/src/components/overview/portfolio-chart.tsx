@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import {
   AreaChart,
@@ -13,12 +13,21 @@ import {
 const timeRanges = ['1D', '1W', '1M', '3M', '1Y', 'ALL'] as const;
 type TimeRange = (typeof timeRanges)[number];
 
-function generateMockData() {
+const RANGE_DAYS: Record<TimeRange, number> = {
+  '1D': 1,
+  '1W': 7,
+  '1M': 30,
+  '3M': 90,
+  '1Y': 365,
+  ALL: 730,
+};
+
+function generateMockData(days: number) {
   const data: { date: string; value: number }[] = [];
   let value = 106000;
   const now = new Date();
 
-  for (let i = 29; i >= 0; i--) {
+  for (let i = days - 1; i >= 0; i--) {
     const date = new Date(now);
     date.setDate(date.getDate() - i);
     const label = date.toLocaleDateString('en-US', {
@@ -38,10 +47,9 @@ function generateMockData() {
   return data;
 }
 
-const chartData = generateMockData();
-
 export default function PortfolioChart() {
   const [activeRange, setActiveRange] = useState<TimeRange>('1M');
+  const chartData = useMemo(() => generateMockData(RANGE_DAYS[activeRange]), [activeRange]);
 
   return (
     <div className="rounded-xl border border-border bg-bg-card p-6">

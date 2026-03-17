@@ -33,10 +33,10 @@ export default function AllocationChart() {
               </Pie>
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#1a1a1a',
-                  border: '1px solid #3d3d3d',
+                  backgroundColor: 'var(--color-bg-card)',
+                  border: '1px solid var(--color-border)',
                   borderRadius: '8px',
-                  color: '#e5e5e5',
+                  color: 'var(--color-text-primary)',
                 }}
                 formatter={(value: number) => [`${value}%`, 'Allocation']}
               />

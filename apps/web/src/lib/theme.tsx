@@ -52,7 +52,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   // Apply on mount
   useEffect(() => {
-    applyTheme(resolve(theme));
+    const stored = localStorage.getItem(STORAGE_KEY);
+    const initial: ThemeChoice =
+      stored === 'light' || stored === 'system' || stored === 'dark' ? stored : 'dark';
+    applyTheme(resolve(initial));
   }, []);
 
   // Listen for OS theme changes when set to 'system'

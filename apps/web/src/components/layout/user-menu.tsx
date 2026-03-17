@@ -10,7 +10,7 @@ export default function UserMenu() {
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  // Close on outside click
+  // Close on outside click or Escape key
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
@@ -18,8 +18,15 @@ export default function UserMenu() {
         setOpen(false);
       }
     }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
     document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [open]);
 
   function goTo(path: string) {
