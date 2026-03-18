@@ -6,8 +6,7 @@ import ChatMessage from '../components/chat/chat-message';
 import { useChatContext } from '../lib/chat-context';
 
 export default function Chat() {
-  const { messages, streamingContent, isLoading, isThinking, activeTools, piiProtected, piiTypes, sendMessage } =
-    useChatContext();
+  const { messages, streamingContent, isLoading, isThinking, activeTools, sendMessage } = useChatContext();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,15 +40,7 @@ export default function Chat() {
           ))}
 
           {/* Streaming response */}
-          {streamingContent && (
-            <ChatMessage
-              id="streaming"
-              role="assistant"
-              content={streamingContent}
-              piiProtected={piiProtected}
-              piiTypes={piiTypes}
-            />
-          )}
+          {streamingContent && <ChatMessage id="streaming" role="assistant" content={streamingContent} />}
 
           {/* Thinking indicator */}
           {isLoading && !streamingContent && (
