@@ -59,6 +59,7 @@ export interface YojinServices {
   vault?: EncryptedVault;
   pluginRegistry: PluginRegistry;
   dataSourceRegistry: DataSourceRegistry;
+  personaManager: PersonaManager;
 }
 
 // ---------------------------------------------------------------------------
@@ -252,6 +253,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     vault,
     pluginRegistry,
     dataSourceRegistry,
+    personaManager: persona,
   };
 }
 

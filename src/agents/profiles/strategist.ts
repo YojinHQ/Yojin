@@ -13,6 +13,7 @@ export function createStrategistProfile(): AgentProfile {
       'brain_get_emotion',
       'brain_update_emotion',
       'brain_get_persona',
+      'brain_set_persona',
       'brain_get_log',
       'brain_rollback',
       // Portfolio reasoning (Strategist-only)

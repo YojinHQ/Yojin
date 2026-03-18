@@ -9,6 +9,7 @@ import { createInterface } from 'node:readline';
 
 import { anthropicPlugin } from '../../providers/anthropic/index.js';
 import { buildContext } from '../composition.js';
+import { runOnboarding } from './onboarding.js';
 import { runAgentLoop } from '../core/agent-loop.js';
 import type { AgentLoopProvider, AgentMessage, ToolDefinition } from '../core/types.js';
 import { getLogger } from '../logging/index.js';
@@ -137,6 +138,16 @@ export async function startChat(args: string[]): Promise<void> {
     console.error(`${c.red}error:${c.reset} Provider "${providerId}" does not support tool use`);
     await pluginRegistry.shutdownAll();
     process.exit(1);
+  }
+
+  // First-run onboarding: generate a personalized persona
+  if (services.personaManager.isFirstRun() && process.stdin.isTTY && !args.includes('--skip-onboarding')) {
+    try {
+      await runOnboarding(services.personaManager, loopProvider, model);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn(`Onboarding failed: ${msg} — using default persona`);
+    }
   }
 
   // Resolve tools: if --agent specified, scope to that agent's tool set

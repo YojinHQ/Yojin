@@ -19,13 +19,13 @@ describe('buildContext', () => {
     expect(services.vault).toBeUndefined();
   });
 
-  it('registers 17 tools (with vault-locked stubs)', async () => {
+  it('registers 18 tools (with vault-locked stubs)', async () => {
     const services = await buildContext({ skipVault: true });
     const schemas = services.toolRegistry.toSchemas();
 
-    // 2 starter + 4 credential stubs + 7 brain + 1 security audit
-    // + 1 error analysis + 1 api health + 1 portfolio reasoning = 17
-    expect(schemas.length).toBe(17);
+    // 2 starter + 4 credential stubs + 8 brain + 1 security audit
+    // + 1 error analysis + 1 api health + 1 portfolio reasoning = 18
+    expect(schemas.length).toBe(18);
 
     const names = schemas.map((s) => s.name).sort();
     expect(names).toContain('get_current_time');
@@ -39,6 +39,7 @@ describe('buildContext', () => {
     expect(names).toContain('brain_get_emotion');
     expect(names).toContain('brain_update_emotion');
     expect(names).toContain('brain_get_persona');
+    expect(names).toContain('brain_set_persona');
     expect(names).toContain('brain_get_log');
     expect(names).toContain('brain_rollback');
     expect(names).toContain('security_audit_check');

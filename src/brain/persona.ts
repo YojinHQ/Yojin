@@ -25,6 +25,10 @@ export class PersonaManager implements PersonaManagerInterface {
     this.overridePath = `${dataRoot}/${OVERRIDE_PERSONA_PATH}`;
   }
 
+  isFirstRun(): boolean {
+    return !existsSync(this.overridePath);
+  }
+
   async getPersona(): Promise<string> {
     try {
       // Try override first
