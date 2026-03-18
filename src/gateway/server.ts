@@ -10,9 +10,15 @@ import type { YojinConfig } from '../config/config.js';
 import { runAgentLoop } from '../core/agent-loop.js';
 import { starterTools } from '../core/starter-tools.js';
 import type { AgentLoopProvider, AgentMessage } from '../core/types.js';
+import { GuardRunner } from '../guards/guard-runner.js';
+import { POSTURE_CONFIGS } from '../guards/posture.js';
+import { createDefaultGuards } from '../guards/registry.js';
+import type { OutputDlpGuard } from '../guards/security/output-dlp.js';
+import type { PostureName } from '../guards/types.js';
 import { getLogger } from '../logging/index.js';
 import { PluginRegistry } from '../plugins/registry.js';
 import type { IncomingMessage } from '../plugins/types.js';
+import { FileAuditLog } from '../trust/audit/audit-log.js';
 
 export class Gateway {
   private registry: PluginRegistry;
@@ -22,9 +28,22 @@ export class Gateway {
   private threadHistory = new Map<string, AgentMessage[]>();
   private static readonly MAX_THREADS = 200;
 
+  private guardRunner: GuardRunner;
+  private outputDlp: OutputDlpGuard;
+  private auditLog: FileAuditLog;
+
   constructor(config: YojinConfig) {
     this.config = config;
     this.registry = new PluginRegistry();
+
+    // Construct guard pipeline — frozen after creation
+    this.auditLog = new FileAuditLog();
+    const postureName: PostureName = ((config as Record<string, unknown>).guardPosture as PostureName) ?? 'local';
+    const posture = POSTURE_CONFIGS[postureName];
+    const { guards, outputDlp } = createDefaultGuards(posture);
+    this.guardRunner = new GuardRunner(guards, { auditLog: this.auditLog, posture: postureName });
+    this.guardRunner.freeze();
+    this.outputDlp = outputDlp;
   }
 
   /** Load all built-in and discovered plugins. */
@@ -92,6 +111,8 @@ export class Gateway {
         provider: loopProvider,
         model,
         tools: starterTools,
+        guardRunner: this.guardRunner,
+        outputDlp: this.outputDlp,
         onEvent: (event) => {
           if (event.type === 'action') {
             this.log.info('Tool calls', {

@@ -22,9 +22,11 @@ import type {
   TextBlock,
   ToolCall,
   ToolCallResult,
+  ToolExecutor,
   ToolResultBlock,
   ToolUseBlock,
 } from './types.js';
+import { GuardedToolRegistry } from '../trust/guarded-tool-registry.js';
 
 const DEFAULT_MAX_ITERATIONS = 20;
 
@@ -54,12 +56,26 @@ export async function runAgentLoop(
     maxIterations = DEFAULT_MAX_ITERATIONS,
     memory,
     onEvent,
+    guardRunner,
+    outputDlp,
+    approvalGate,
+    agentId,
   } = options;
 
   const registry = new ToolRegistry();
   for (const tool of tools) {
     registry.register(tool);
   }
+
+  // Fail fast if outputDlp or approvalGate provided without guardRunner
+  if ((outputDlp || approvalGate) && !guardRunner) {
+    throw new Error('outputDlp and approvalGate require guardRunner to be provided');
+  }
+
+  // Wrap with guard pipeline when guardRunner is provided
+  const executor: ToolExecutor = guardRunner
+    ? new GuardedToolRegistry({ registry, guardRunner, outputDlp, approvalGate })
+    : registry;
 
   const budget = new TokenBudget({
     contextWindow: memory?.contextWindow,
@@ -140,7 +156,7 @@ export async function runAgentLoop(
     const results: ToolCallResult[] = await Promise.all(
       toolCalls.map(async (call) => {
         try {
-          const result = await registry.execute(call.name, call.input);
+          const result = await executor.execute(call.name, call.input, { agentId });
           return { toolCallId: call.id, name: call.name, result };
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);

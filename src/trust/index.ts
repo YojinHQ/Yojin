@@ -21,7 +21,8 @@ export type { ApprovalGateConfig, ApprovalResult, ApprovalRequest } from './appr
 
 // Guarded tool registry
 export { GuardedToolRegistry } from './guarded-tool-registry.js';
-export type { GuardedToolRegistryOptions, ToolCallContext } from './guarded-tool-registry.js';
+export type { GuardedToolRegistryOptions } from './guarded-tool-registry.js';
+export type { ToolCallContext, ToolExecutor } from '../core/types.js';
 
 // Configuration
 export { TrustConfigSchema } from './config.js';

@@ -12,7 +12,7 @@
  */
 
 import type { ToolRegistry } from '../core/tool-registry.js';
-import type { ToolResult } from '../core/types.js';
+import type { ToolCallContext, ToolExecutor, ToolResult } from '../core/types.js';
 import type { GuardRunner } from '../guards/guard-runner.js';
 import type { ProposedAction } from '../guards/types.js';
 import type { ApprovalGate } from './approval/approval-gate.js';
@@ -25,12 +25,7 @@ export interface GuardedToolRegistryOptions {
   outputDlp?: OutputDlpGuard;
 }
 
-export interface ToolCallContext {
-  agentId?: string;
-  sessionId?: string;
-}
-
-export class GuardedToolRegistry {
+export class GuardedToolRegistry implements ToolExecutor {
   private readonly registry: ToolRegistry;
   private readonly guardRunner: GuardRunner;
   private readonly approvalGate?: ApprovalGate;

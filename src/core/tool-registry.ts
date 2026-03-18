@@ -7,9 +7,9 @@
 
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
-import type { ToolDefinition, ToolResult, ToolSchema } from './types.js';
+import type { ToolDefinition, ToolExecutor, ToolResult, ToolSchema } from './types.js';
 
-export class ToolRegistry {
+export class ToolRegistry implements ToolExecutor {
   private tools = new Map<string, ToolDefinition>();
 
   /** Register a tool. Throws if a tool with the same name already exists. */
@@ -51,7 +51,7 @@ export class ToolRegistry {
   }
 
   /** Execute a tool by name. Returns error result for unknown tools. */
-  async execute(name: string, input: unknown): Promise<ToolResult> {
+  async execute(name: string, input: unknown, _context?: unknown): Promise<ToolResult> {
     const tool = this.tools.get(name);
     if (!tool) {
       return { content: `Unknown tool: ${name}`, isError: true };

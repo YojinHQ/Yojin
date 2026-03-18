@@ -7,8 +7,11 @@ import type { ZodSchema } from 'zod';
 import type { EventLog } from './event-log.js';
 import type { ToolRegistry } from './tool-registry.js';
 import type { YojinConfig } from '../config/config.js';
+import type { GuardRunner } from '../guards/guard-runner.js';
+import type { OutputDlpGuard } from '../guards/security/output-dlp.js';
 import type { ChannelRouter } from '../plugins/channel-router.js';
 import type { SessionStore } from '../sessions/types.js';
+import type { ApprovalGate } from '../trust/approval/approval-gate.js';
 
 // ---------------------------------------------------------------------------
 // Tool definitions
@@ -26,6 +29,20 @@ export interface ToolDefinition {
 export interface ToolResult {
   content: string;
   isError?: boolean;
+}
+
+/** Context passed to tool execution for audit logging. */
+export interface ToolCallContext {
+  agentId?: string;
+  sessionId?: string;
+}
+
+/**
+ * Minimal interface for executing tools — satisfied by both
+ * ToolRegistry (plain) and GuardedToolRegistry (guarded).
+ */
+export interface ToolExecutor {
+  execute(name: string, input: unknown, context?: ToolCallContext): Promise<ToolResult>;
 }
 
 export interface ToolCall {
@@ -116,6 +133,14 @@ export interface AgentLoopOptions {
   maxIterations?: number;
   memory?: MemoryConfig;
   onEvent?: AgentLoopEventHandler;
+  /** Guard pipeline for pre-execution checks. When provided, all tool calls go through GuardedToolRegistry. */
+  guardRunner?: GuardRunner;
+  /** Output DLP guard for post-execution scanning. Only used when guardRunner is also provided. */
+  outputDlp?: OutputDlpGuard;
+  /** Approval gate for irreversible actions. Only used when guardRunner is also provided. */
+  approvalGate?: ApprovalGate;
+  /** Agent identity — included in guard audit logs. */
+  agentId?: string;
 }
 
 // ---------------------------------------------------------------------------
