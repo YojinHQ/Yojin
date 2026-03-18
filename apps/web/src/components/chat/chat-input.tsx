@@ -55,6 +55,9 @@ export default function ChatInput({
         name: file.name,
       });
     };
+    reader.onerror = () => {
+      alert('Failed to read the image file. Please try again.');
+    };
     reader.readAsDataURL(file);
 
     // Reset input so the same file can be re-selected
@@ -84,6 +87,9 @@ export default function ChatInput({
         preview: dataUrl,
         name: file.name,
       });
+    };
+    reader.onerror = () => {
+      alert('Failed to read the image file. Please try again.');
     };
     reader.readAsDataURL(file);
   };

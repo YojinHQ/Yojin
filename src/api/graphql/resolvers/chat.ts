@@ -47,11 +47,15 @@ export function sendMessageMutation(
       // Emit thinking state immediately
       pubsub.publish(`chat:${threadId}`, { type: 'THINKING', threadId } satisfies ChatEvent);
 
-      // Validate image type if provided
-      const validatedImageType =
-        imageBase64 && imageMediaType && VALID_IMAGE_TYPES.has(imageMediaType)
-          ? (imageMediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp')
-          : undefined;
+      // Validate image type — reject early if base64 is provided with bad/missing type
+      if (imageBase64 && (!imageMediaType || !VALID_IMAGE_TYPES.has(imageMediaType))) {
+        throw new Error(
+          `Unsupported image type: ${imageMediaType ?? 'none'}. Accepted: image/jpeg, image/png, image/gif, image/webp`,
+        );
+      }
+      const validatedImageType = imageBase64
+        ? (imageMediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp')
+        : undefined;
 
       // runtime is guaranteed non-null — checked above before the void IIFE
       await (runtime as AgentRuntime).handleMessage({
