@@ -35,3 +35,8 @@ storybook-static/
 
 # Plans
 plans/
+
+# Runtime data (data/default/ and data/config/ are git-tracked)
+data/*
+!data/default/
+!data/config/
