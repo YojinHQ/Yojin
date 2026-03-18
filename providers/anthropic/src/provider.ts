@@ -140,6 +140,83 @@ function cleanInputSchema(schema: Record<string, unknown>): Record<string, unkno
   return rest;
 }
 
+/** Build Anthropic API messages from AgentMessages, applying optional name remapping. */
+function buildApiMessages(messages: AgentMessage[], remapName: (n: string) => string): Anthropic.MessageParam[] {
+  return messages.map((m) => {
+    if (typeof m.content === 'string') {
+      return { role: m.role as 'user' | 'assistant', content: m.content };
+    }
+    const blocks = m.content.map((block) => {
+      if (block.type === 'text') {
+        return { type: 'text' as const, text: block.text };
+      }
+      if (block.type === 'tool_use') {
+        return {
+          type: 'tool_use' as const,
+          id: block.id,
+          name: remapName(block.name),
+          input: block.input as Record<string, unknown>,
+        };
+      }
+      if (block.type === 'tool_result') {
+        return {
+          type: 'tool_result' as const,
+          tool_use_id: block.tool_use_id,
+          content: block.content,
+          ...(block.is_error ? { is_error: true as const } : {}),
+        };
+      }
+      return block;
+    });
+    return { role: m.role as 'user' | 'assistant', content: blocks };
+  }) as Anthropic.MessageParam[];
+}
+
+/** Build the system parameter, prepending the OAuth prefix when needed. */
+function buildSystemParam(
+  system: string | undefined,
+  useOAuth: boolean,
+): string | Anthropic.TextBlockParam[] | undefined {
+  if (useOAuth) {
+    return [
+      { type: 'text' as const, text: OAUTH_SYSTEM_PREFIX.trim() },
+      ...(system ? [{ type: 'text' as const, text: system }] : []),
+    ];
+  }
+  return system;
+}
+
+/** Map Anthropic response content blocks back to our ContentBlock type. */
+function mapResponseContent(blocks: Anthropic.ContentBlock[], unremapName: (n: string) => string): ContentBlock[] {
+  return blocks.map((block) => {
+    if (block.type === 'text') {
+      return { type: 'text' as const, text: block.text };
+    }
+    if (block.type === 'tool_use') {
+      return {
+        type: 'tool_use' as const,
+        id: block.id,
+        name: unremapName(block.name),
+        input: block.input,
+      };
+    }
+    return { type: 'text' as const, text: '' };
+  });
+}
+
+/** Build Anthropic tool definitions with optional name remapping. */
+function buildToolDefs(
+  tools: ToolSchema[] | undefined,
+  remapName: (n: string) => string,
+): Anthropic.Tool[] | undefined {
+  if (!tools?.length) return undefined;
+  return tools.map((t) => ({
+    name: remapName(t.name),
+    description: t.description,
+    input_schema: cleanInputSchema(t.input_schema as Record<string, unknown>) as Anthropic.Tool.InputSchema,
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // CLI mode — spawn `claude` subprocess with CLAUDE_CODE_OAUTH_TOKEN
 // ---------------------------------------------------------------------------
@@ -381,85 +458,23 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       }
 
       const useOAuth = authMode === 'oauth';
-
-      // OAuth: remap tool names to mcp__yojin__<name> format
       const remapName = useOAuth ? toOAuthToolName : (n: string) => n;
       const unremapName = useOAuth ? fromOAuthToolName : (n: string) => n;
 
-      // Convert AgentMessages to Anthropic API format
-      const apiMessages = params.messages.map((m) => {
-        if (typeof m.content === 'string') {
-          return { role: m.role as 'user' | 'assistant', content: m.content };
-        }
-        // Map content blocks to Anthropic format
-        const blocks = m.content.map((block) => {
-          if (block.type === 'text') {
-            return { type: 'text' as const, text: block.text };
-          }
-          if (block.type === 'tool_use') {
-            return {
-              type: 'tool_use' as const,
-              id: block.id,
-              name: remapName(block.name),
-              input: block.input as Record<string, unknown>,
-            };
-          }
-          if (block.type === 'tool_result') {
-            return {
-              type: 'tool_result' as const,
-              tool_use_id: block.tool_use_id,
-              content: block.content,
-              ...(block.is_error ? { is_error: true as const } : {}),
-            };
-          }
-          return block;
-        });
-        return { role: m.role as 'user' | 'assistant', content: blocks };
-      });
-
-      // OAuth mode: system prompt must be an array of content blocks
-      // and must include the Claude Code identity prefix
-      const systemParam = useOAuth
-        ? [
-            { type: 'text' as const, text: OAUTH_SYSTEM_PREFIX.trim() },
-            ...(params.system ? [{ type: 'text' as const, text: params.system }] : []),
-          ]
-        : params.system;
+      const apiMessages = buildApiMessages(params.messages, remapName);
+      const systemParam = buildSystemParam(params.system, useOAuth);
+      const toolDefs = buildToolDefs(params.tools, remapName);
 
       const response = await client.messages.create({
         model: params.model,
         max_tokens: params.maxTokens ?? 4096,
-        messages: apiMessages as Anthropic.MessageParam[],
+        messages: apiMessages,
         ...(systemParam ? { system: systemParam } : {}),
-        ...(params.tools?.length
-          ? {
-              tools: params.tools.map((t) => ({
-                name: remapName(t.name),
-                description: t.description,
-                input_schema: cleanInputSchema(t.input_schema as Record<string, unknown>) as Anthropic.Tool.InputSchema,
-              })),
-            }
-          : {}),
-      });
-
-      // Unmap tool names back to original in response
-      const content: ContentBlock[] = response.content.map((block) => {
-        if (block.type === 'text') {
-          return { type: 'text' as const, text: block.text };
-        }
-        if (block.type === 'tool_use') {
-          return {
-            type: 'tool_use' as const,
-            id: block.id,
-            name: unremapName(block.name),
-            input: block.input,
-          };
-        }
-        return { type: 'text' as const, text: '' };
+        ...(toolDefs ? { tools: toolDefs } : {}),
       });
 
       return {
-        content,
+        content: mapResponseContent(response.content, unremapName),
         stopReason: response.stop_reason ?? 'end_turn',
         usage: {
           inputTokens: response.usage.input_tokens,
@@ -485,82 +500,26 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       const remapName = useOAuth ? toOAuthToolName : (n: string) => n;
       const unremapName = useOAuth ? fromOAuthToolName : (n: string) => n;
 
-      const apiMessages = params.messages.map((m) => {
-        if (typeof m.content === 'string') {
-          return { role: m.role as 'user' | 'assistant', content: m.content };
-        }
-        const blocks = m.content.map((block) => {
-          if (block.type === 'text') {
-            return { type: 'text' as const, text: block.text };
-          }
-          if (block.type === 'tool_use') {
-            return {
-              type: 'tool_use' as const,
-              id: block.id,
-              name: remapName(block.name),
-              input: block.input as Record<string, unknown>,
-            };
-          }
-          if (block.type === 'tool_result') {
-            return {
-              type: 'tool_result' as const,
-              tool_use_id: block.tool_use_id,
-              content: block.content,
-              ...(block.is_error ? { is_error: true as const } : {}),
-            };
-          }
-          return block;
-        });
-        return { role: m.role as 'user' | 'assistant', content: blocks };
-      });
-
-      const systemParam = useOAuth
-        ? [
-            { type: 'text' as const, text: OAUTH_SYSTEM_PREFIX.trim() },
-            ...(params.system ? [{ type: 'text' as const, text: params.system }] : []),
-          ]
-        : params.system;
+      const apiMessages = buildApiMessages(params.messages, remapName);
+      const systemParam = buildSystemParam(params.system, useOAuth);
+      const toolDefs = buildToolDefs(params.tools, remapName);
 
       const stream = client.messages.stream({
         model: params.model,
         max_tokens: params.maxTokens ?? 4096,
-        messages: apiMessages as Anthropic.MessageParam[],
+        messages: apiMessages,
         ...(systemParam ? { system: systemParam } : {}),
-        ...(params.tools?.length
-          ? {
-              tools: params.tools.map((t) => ({
-                name: remapName(t.name),
-                description: t.description,
-                input_schema: cleanInputSchema(t.input_schema as Record<string, unknown>) as Anthropic.Tool.InputSchema,
-              })),
-            }
-          : {}),
+        ...(toolDefs ? { tools: toolDefs } : {}),
       });
 
-      // Emit text deltas as they arrive
       stream.on('text', (text) => {
         params.onTextDelta?.(text);
       });
 
       const finalMessage = await stream.finalMessage();
 
-      const content: ContentBlock[] = finalMessage.content.map((block) => {
-        if (block.type === 'text') {
-          return { type: 'text' as const, text: block.text };
-        }
-        if (block.type === 'tool_use') {
-          return {
-            type: 'tool_use' as const,
-            id: block.id,
-            name: unremapName(block.name),
-            input: block.input,
-          };
-        }
-        return { type: 'text' as const, text: '' };
-      });
-
       return {
-        content,
+        content: mapResponseContent(finalMessage.content, unremapName),
         stopReason: finalMessage.stop_reason ?? 'end_turn',
         usage: {
           inputTokens: finalMessage.usage.input_tokens,

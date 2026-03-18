@@ -305,13 +305,17 @@ export async function startChat(args: string[]): Promise<void> {
     });
   };
 
-  rl.on('close', () => {
-    // Restore terminal title
+  const shutdown = async (): Promise<void> => {
     process.stdout.write('\x1b]0;\x07');
     log.info('Chat session ended', { turns: history.length });
     console.log(`\n${c.dim}bye!${c.reset}`);
+    await pluginRegistry.shutdownAll();
     process.exit(0);
-  });
+  };
+
+  rl.on('close', () => void shutdown());
+  process.on('SIGINT', () => void shutdown());
+  process.on('SIGTERM', () => void shutdown());
 
   ask();
 }
