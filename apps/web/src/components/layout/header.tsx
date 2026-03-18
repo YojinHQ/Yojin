@@ -26,8 +26,8 @@ export default function Header() {
   const skillsView = searchParams.get('view') === 'builder' ? 'builder' : 'active';
 
   return (
-    <header className="flex items-center justify-between border-b border-border bg-bg-secondary px-6 py-4">
-      <h1 className="font-headline text-xl text-text-primary">{title}</h1>
+    <header className="flex items-center justify-between border-b border-border bg-bg-secondary px-4 py-2">
+      <h1 className="font-headline text-base text-text-primary">{title}</h1>
 
       <div className="flex items-center gap-4">
         {isSkills && (

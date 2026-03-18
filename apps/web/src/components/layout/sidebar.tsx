@@ -13,7 +13,7 @@ const navItems: NavItem[] = [
     label: 'Overview',
     path: '/',
     icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -26,7 +26,7 @@ const navItems: NavItem[] = [
     label: 'Chat',
     path: '/chat',
     icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -39,7 +39,7 @@ const navItems: NavItem[] = [
     label: 'Portfolio',
     path: '/portfolio',
     icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -52,7 +52,7 @@ const navItems: NavItem[] = [
     label: 'Skills',
     path: '/skills',
     icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -68,13 +68,13 @@ export default function Sidebar() {
   const logoSrc = resolved === 'dark' ? '/yojin_logo_white.png' : '/yojin_logo.png';
 
   return (
-    <aside className="flex w-[260px] flex-shrink-0 flex-col border-r border-border bg-bg-secondary">
+    <aside className="flex w-[200px] flex-shrink-0 flex-col border-r border-border bg-bg-secondary">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5">
+      <div className="flex items-center gap-3 px-4 py-4">
         <img
           src={logoSrc}
           alt="Yojin"
-          className="h-7"
+          className="h-6"
           onError={(e) => {
             e.currentTarget.style.display = 'none';
             const fallback = e.currentTarget.nextElementSibling;
@@ -87,14 +87,14 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-2">
         {navItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             end={item.path === '/'}
             className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
                 isActive
                   ? 'border-l-2 border-accent-primary bg-accent-glow text-accent-secondary'
                   : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'

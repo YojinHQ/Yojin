@@ -18,14 +18,12 @@ const stats: StatCard[] = [
 
 export default function PortfolioValueStrip() {
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+    <div className="grid flex-shrink-0 grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
       {stats.map((stat) => (
-        <div key={stat.label} className="rounded-xl border border-border bg-bg-card p-4">
-          <p className="text-xs uppercase tracking-wider text-text-muted">{stat.label}</p>
-          <p className="mt-2 text-xl font-semibold text-text-primary">{stat.value}</p>
-          {stat.change && (
-            <p className={cn('mt-1 text-sm', stat.positive ? 'text-success' : 'text-error')}>{stat.change}</p>
-          )}
+        <div key={stat.label} className="rounded-lg border border-border bg-bg-card px-3 py-2">
+          <p className="text-[10px] uppercase tracking-wider text-text-muted">{stat.label}</p>
+          <p className="mt-0.5 text-base font-semibold text-text-primary">{stat.value}</p>
+          {stat.change && <p className={cn('text-xs', stat.positive ? 'text-success' : 'text-error')}>{stat.change}</p>}
         </div>
       ))}
     </div>

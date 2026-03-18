@@ -43,6 +43,8 @@
     "build:all": "pnpm -r run build",
     "test:all": "pnpm -r run test",
     "ci:all": "pnpm -r run ci",
+    "storybook": "pnpm --filter @yojin/web storybook",
+    "build-storybook": "pnpm --filter @yojin/web build-storybook",
     "lint-staged": "lint-staged",
     "prepare": "husky"
   },
@@ -72,6 +74,7 @@
     "eslint": "10.0.3",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-import-x": "4.16.2",
+    "eslint-plugin-storybook": "10.2.19",
     "husky": "9.1.7",
     "lint-staged": "16.4.0",
     "prettier": "3.8.1",

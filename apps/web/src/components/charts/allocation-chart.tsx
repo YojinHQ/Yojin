@@ -12,18 +12,18 @@ const allocationData = [
 
 export default function AllocationChart() {
   return (
-    <div className="rounded-xl border border-border bg-bg-card p-6">
-      <h3 className="mb-4 font-headline text-lg text-text-primary">Asset Allocation</h3>
-      <div className="flex items-center gap-8">
-        <div className="h-56 w-56 flex-shrink-0">
+    <div className="flex w-[280px] min-h-0 flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-bg-card p-3">
+      <h3 className="mb-1 flex-shrink-0 text-sm font-medium text-text-primary">Allocation</h3>
+      <div className="flex min-h-0 flex-1 items-center gap-3">
+        <div className="aspect-square min-h-0 flex-1">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={allocationData}
                 cx="50%"
                 cy="50%"
-                innerRadius={55}
-                outerRadius={85}
+                innerRadius={40}
+                outerRadius={65}
                 paddingAngle={2}
                 dataKey="value"
               >
@@ -43,12 +43,12 @@ export default function AllocationChart() {
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-shrink-0 flex-col gap-1">
           {allocationData.map((entry) => (
-            <div key={entry.name} className="flex items-center gap-3">
-              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: entry.color }} />
-              <span className="text-sm text-text-secondary">{entry.name}</span>
-              <span className="ml-auto text-sm font-medium text-text-primary">{entry.value}%</span>
+            <div key={entry.name} className="flex items-center gap-1.5">
+              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
+              <span className="text-[11px] text-text-secondary">{entry.name}</span>
+              <span className="ml-auto text-[11px] font-medium text-text-primary">{entry.value}%</span>
             </div>
           ))}
         </div>

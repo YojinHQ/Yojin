@@ -44,16 +44,16 @@ export default function PortfolioChart() {
   const chartData = useMemo(() => generateMockData(RANGE_DAYS[activeRange]), [activeRange]);
 
   return (
-    <div className="rounded-xl border border-border bg-bg-card p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h3 className="font-headline text-lg text-text-primary">Portfolio Performance</h3>
-        <div className="flex gap-1">
+    <div className="flex min-h-[120px] flex-[3] flex-col rounded-lg border border-border bg-bg-card px-3 pt-2 pb-1">
+      <div className="mb-1.5 flex flex-shrink-0 items-center justify-between">
+        <h3 className="text-sm font-medium text-text-primary">Portfolio Performance</h3>
+        <div className="flex gap-0.5">
           {timeRanges.map((range) => (
             <button
               key={range}
               onClick={() => setActiveRange(range)}
               className={cn(
-                'rounded-md px-3 py-1 text-xs font-medium transition-colors',
+                'rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
                 activeRange === range ? 'bg-accent-primary text-white' : 'text-text-muted hover:text-text-secondary',
               )}
             >
@@ -62,7 +62,7 @@ export default function PortfolioChart() {
           ))}
         </div>
       </div>
-      <div className="h-[300px]">
+      <div className="min-h-0 flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData}>
             <defs>
@@ -74,14 +74,15 @@ export default function PortfolioChart() {
             <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="date"
-              tick={{ fill: 'var(--color-text-muted)', fontSize: 12 }}
+              tick={{ fill: 'var(--color-text-muted)', fontSize: 10 }}
               axisLine={{ stroke: 'var(--color-border)' }}
               tickLine={false}
             />
             <YAxis
-              tick={{ fill: 'var(--color-text-muted)', fontSize: 12 }}
+              tick={{ fill: 'var(--color-text-muted)', fontSize: 10 }}
               axisLine={{ stroke: 'var(--color-border)' }}
               tickLine={false}
+              width={45}
               domain={['dataMin - 2000', 'dataMax + 2000']}
               tickFormatter={(val: number) => `$${(val / 1000).toFixed(0)}k`}
             />

@@ -6,6 +6,7 @@ import { cn } from '../../lib/utils';
 
 export default function UserMenu() {
   const [open, setOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -16,10 +17,14 @@ export default function UserMenu() {
     function handleClick(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setOpen(false);
+        setThemeOpen(false);
       }
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        setOpen(false);
+        setThemeOpen(false);
+      }
     }
     document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKeyDown);
@@ -32,6 +37,7 @@ export default function UserMenu() {
   function goTo(path: string) {
     navigate(path);
     setOpen(false);
+    setThemeOpen(false);
   }
 
   function handleTheme(t: ThemeChoice) {
@@ -39,17 +45,23 @@ export default function UserMenu() {
   }
 
   return (
-    <div ref={menuRef} className="relative border-t border-border p-3">
+    <div ref={menuRef} className="relative border-t border-border p-2">
       {/* Popover menu */}
       {open && (
-        <div className="absolute bottom-full left-3 right-3 mb-2 rounded-xl border border-border bg-bg-secondary shadow-lg shadow-black/30">
-          <div className="p-2">
+        <div className="absolute bottom-full left-2 right-2 mb-2 rounded-xl border border-border bg-bg-secondary shadow-lg shadow-black/30">
+          <div className="p-1.5">
             {/* Profile */}
             <button
               onClick={() => goTo('/profile')}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <svg
+                className="w-4 h-4 flex-shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -62,9 +74,15 @@ export default function UserMenu() {
             {/* Settings */}
             <button
               onClick={() => goTo('/settings')}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <svg
+                className="w-4 h-4 flex-shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -75,80 +93,102 @@ export default function UserMenu() {
               Settings
             </button>
 
-            {/* Theme */}
-            <div className="flex items-center justify-between rounded-lg px-3 py-2.5">
-              <div className="flex items-center gap-3 text-sm text-text-secondary">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            {/* Theme — hover submenu */}
+            <div className="relative" onMouseEnter={() => setThemeOpen(true)} onMouseLeave={() => setThemeOpen(false)}>
+              <button
+                className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+                onClick={() => setThemeOpen(!themeOpen)}
+              >
+                <svg
+                  className="w-4 h-4 flex-shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                >
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"
                   />
                 </svg>
-                Theme
-              </div>
-              <div className="flex rounded-lg bg-bg-tertiary p-0.5">
-                <button
-                  onClick={() => handleTheme('light')}
-                  className={cn(
-                    'rounded-md p-1.5 transition-colors',
-                    theme === 'light' ? 'bg-bg-hover text-text-primary' : 'text-text-muted hover:text-text-secondary',
-                  )}
-                  title="Light"
+                <span className="flex-1 text-left">Theme</span>
+                <svg
+                  className="w-3.5 h-3.5 text-text-muted"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"
-                    />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => handleTheme('system')}
-                  className={cn(
-                    'rounded-md p-1.5 transition-colors',
-                    theme === 'system' ? 'bg-bg-hover text-text-primary' : 'text-text-muted hover:text-text-secondary',
-                  )}
-                  title="System"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25Z"
-                    />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => handleTheme('dark')}
-                  className={cn(
-                    'rounded-md p-1.5 transition-colors',
-                    theme === 'dark' ? 'bg-bg-hover text-text-primary' : 'text-text-muted hover:text-text-secondary',
-                  )}
-                  title="Dark"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"
-                    />
-                  </svg>
-                </button>
-              </div>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                </svg>
+              </button>
+
+              {/* Submenu */}
+              {themeOpen && (
+                <div className="absolute bottom-0 left-full w-36 rounded-xl border border-border bg-bg-secondary p-1.5 shadow-lg shadow-black/30">
+                  {[
+                    {
+                      value: 'light' as const,
+                      label: 'Light',
+                      icon: 'M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z',
+                    },
+                    {
+                      value: 'system' as const,
+                      label: 'System',
+                      icon: 'M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25Z',
+                    },
+                    {
+                      value: 'dark' as const,
+                      label: 'Dark',
+                      icon: 'M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z',
+                    },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => {
+                        handleTheme(opt.value);
+                        setThemeOpen(false);
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors',
+                        theme === opt.value
+                          ? 'text-text-primary bg-bg-hover'
+                          : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary',
+                      )}
+                    >
+                      <svg
+                        className="w-4 h-4 flex-shrink-0"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={1.5}
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d={opt.icon} />
+                      </svg>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Divider + Log out */}
-          <div className="border-t border-border p-2">
+          <div className="border-t border-border p-1.5">
             <button
               onClick={() => {
                 /* TODO: call signOut() */
               }}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-accent-primary hover:bg-bg-hover transition-colors"
+              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-accent-primary hover:bg-bg-hover transition-colors"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <svg
+                className="w-4 h-4 flex-shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -164,14 +204,14 @@ export default function UserMenu() {
       {/* Trigger: user avatar row */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-3 rounded-lg bg-bg-tertiary px-3 py-2.5 hover:bg-bg-hover transition-colors"
+        className="flex w-full items-center gap-2.5 rounded-lg bg-accent-primary/5 px-2.5 py-2 hover:bg-accent-primary/10 transition-colors"
       >
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent-primary/20 text-sm font-medium text-accent-primary">
+        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent-primary/15 text-xs font-medium text-accent-primary">
           DS
         </div>
-        <div className="flex-1 text-left">
-          <div className="text-sm font-medium text-text-primary">Dean</div>
-          <div className="text-xs text-text-muted">@dean</div>
+        <div className="min-w-0 flex-1 text-left">
+          <div className="truncate text-sm font-medium text-text-primary">Dean</div>
+          <div className="truncate text-xs text-text-muted">@dean</div>
         </div>
         <svg
           className={cn('w-4 h-4 text-text-muted transition-transform', open && 'rotate-180')}

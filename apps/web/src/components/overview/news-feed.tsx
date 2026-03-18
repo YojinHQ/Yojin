@@ -52,15 +52,15 @@ export default function NewsFeed() {
   return (
     <div className="divide-y divide-border">
       {newsItems.map((item, i) => (
-        <div key={i} className="px-5 py-4 hover:bg-bg-hover transition-colors cursor-pointer">
-          <div className="flex items-center justify-between text-xs text-text-muted">
+        <div key={i} className="px-3 py-2.5 hover:bg-bg-hover transition-colors cursor-pointer">
+          <div className="flex items-center justify-between text-[10px] text-text-muted">
             <span className="font-medium">{item.source}</span>
             <span>{item.time}</span>
           </div>
-          <p className="mt-1.5 text-sm leading-snug text-text-primary">{item.title}</p>
+          <p className="mt-1 text-xs leading-snug text-text-primary">{item.title}</p>
           <span
             className={cn(
-              'mt-2 inline-block rounded-full px-2 py-0.5 text-xs font-medium',
+              'mt-1 inline-block rounded-full px-1.5 py-px text-[10px] font-medium',
               tagColors[item.tag] ?? 'bg-bg-tertiary text-text-muted',
             )}
           >

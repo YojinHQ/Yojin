@@ -31,6 +31,7 @@ docs/superpowers/
 
 # Web app build output
 apps/web/dist/
+storybook-static/
 
 # Plans
 plans/

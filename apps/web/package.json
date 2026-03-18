@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "test": "vitest",
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@tailwindcss/vite": "4.2.1",
@@ -25,11 +27,17 @@
     "urql": "5.0.1"
   },
   "devDependencies": {
+    "@storybook/blocks": "^8.6.14",
+    "@storybook/react": "^10.2.19",
+    "@storybook/react-vite": "^10.2.19",
+    "@storybook/test": "^8.6.15",
     "@testing-library/react": "16.3.2",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.2.0",
+    "eslint-plugin-storybook": "10.2.19",
     "jsdom": "29.0.0",
+    "storybook": "^10.2.19",
     "typescript": "5.9.3",
     "vite": "7.3.1",
     "vitest": "3.2.4"
