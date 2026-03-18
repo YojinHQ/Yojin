@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { tooltipStyle } from '../../lib/mock-chart-data';
 
 const ASSET_CLASSES = [
   { key: 'equities', label: 'Equities', color: '#FF5A5E' },
@@ -53,14 +54,6 @@ function generateAllocationData(): AllocationPoint[] {
 
   return data;
 }
-
-const tooltipStyle = {
-  backgroundColor: 'var(--color-bg-card)',
-  border: '1px solid var(--color-border)',
-  borderRadius: '8px',
-  color: 'var(--color-text-primary)',
-  fontSize: '11px',
-};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Recharts Formatter type is overly strict
 const formatTooltip: any = (value: number) => [`${(value * 100).toFixed(1)}%`];

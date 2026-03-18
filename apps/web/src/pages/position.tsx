@@ -1,6 +1,16 @@
 import { useParams, Link } from 'react-router';
 import Card from '../components/common/card';
 
+function PlaceholderCard({ title, description }: { title: string; description: string }) {
+  return (
+    <Card title={title}>
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-sm text-text-muted">{description}</p>
+      </div>
+    </Card>
+  );
+}
+
 export default function Position() {
   const { symbol } = useParams<{ symbol: string }>();
 
@@ -35,29 +45,16 @@ export default function Position() {
 
       {/* Detail sections */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card title="Price Chart">
-          <div className="flex h-64 items-center justify-center">
-            <p className="text-sm text-text-muted">Price chart will be rendered here.</p>
-          </div>
-        </Card>
-
-        <Card title="Fundamentals">
-          <div className="flex h-64 items-center justify-center">
-            <p className="text-sm text-text-muted">Fundamental data from OpenBB SDK will appear here.</p>
-          </div>
-        </Card>
-
-        <Card title="Technical Indicators">
-          <div className="flex h-64 items-center justify-center">
-            <p className="text-sm text-text-muted">SMA, RSI, BBANDS, and other technicals will be shown here.</p>
-          </div>
-        </Card>
-
-        <Card title="News & Sentiment">
-          <div className="flex h-64 items-center justify-center">
-            <p className="text-sm text-text-muted">Latest news and Keelson sentiment data will appear here.</p>
-          </div>
-        </Card>
+        <PlaceholderCard title="Price Chart" description="Price chart will be rendered here." />
+        <PlaceholderCard title="Fundamentals" description="Fundamental data from OpenBB SDK will appear here." />
+        <PlaceholderCard
+          title="Technical Indicators"
+          description="SMA, RSI, BBANDS, and other technicals will be shown here."
+        />
+        <PlaceholderCard
+          title="News & Sentiment"
+          description="Latest news and Keelson sentiment data will appear here."
+        />
       </div>
     </div>
   );

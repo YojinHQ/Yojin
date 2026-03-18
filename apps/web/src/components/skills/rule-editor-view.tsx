@@ -1,13 +1,6 @@
 export default function RuleEditorView() {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="font-headline text-lg text-text-primary">Skill Builder</h2>
-        <button className="bg-accent-primary hover:bg-accent-secondary text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-          Save Skill
-        </button>
-      </div>
-
       {/* Canvas area */}
       <div className="bg-bg-card border border-border rounded-xl p-8 min-h-[500px] flex items-center justify-center">
         <div className="flex items-center gap-6">

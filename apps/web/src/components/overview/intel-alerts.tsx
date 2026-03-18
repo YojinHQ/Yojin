@@ -42,7 +42,7 @@ const alerts: Alert[] = [
 const badgeStyles: Record<Alert['type'], string> = {
   action: 'bg-accent-primary/15 text-accent-primary',
   alert: 'bg-warning/15 text-warning',
-  insight: 'bg-info/15 text-info',
+  insight: 'bg-success/15 text-success',
 };
 
 const urgencyIndicator: Record<Alert['urgency'], string> = {

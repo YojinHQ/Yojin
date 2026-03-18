@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { timeRanges, RANGE_DAYS, generateMockData } from '../../lib/mock-chart-data';
+import { timeRanges, RANGE_DAYS, generateMockData, tooltipStyle, formatValue } from '../../lib/mock-chart-data';
 import type { TimeRange } from '../../lib/mock-chart-data';
 
 export default function PortfolioChart() {
@@ -51,18 +51,7 @@ export default function PortfolioChart() {
               domain={['dataMin - 2000', 'dataMax + 2000']}
               tickFormatter={(val: number) => `$${(val / 1000).toFixed(0)}k`}
             />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'var(--color-bg-card)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '8px',
-                color: 'var(--color-text-primary)',
-              }}
-              formatter={(value) => [
-                `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-                'Value',
-              ]}
-            />
+            <Tooltip contentStyle={tooltipStyle} formatter={formatValue} />
             <Area type="monotone" dataKey="value" stroke="#FF5A5E" strokeWidth={2} fill="url(#portfolioGradient)" />
           </AreaChart>
         </ResponsiveContainer>

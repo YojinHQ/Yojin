@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { cn } from '../../lib/utils';
 
 interface ModalProps {
   open: boolean;
@@ -6,9 +7,11 @@ interface ModalProps {
   title?: string;
   children: React.ReactNode;
   maxWidth?: string;
+  /** Override the dialog container classes (merged via cn) */
+  className?: string;
 }
 
-export default function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }: ModalProps) {
+export default function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg', className }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
@@ -22,12 +25,16 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'max-
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`relative w-full ${maxWidth} max-h-[80vh] overflow-auto rounded-2xl border border-border bg-bg-secondary p-6`}
+        className={cn(
+          'relative w-full max-h-[80vh] overflow-auto rounded-2xl border border-border bg-bg-secondary p-6',
+          maxWidth,
+          className,
+        )}
       >
         {title && (
           <div className="mb-6 flex items-center justify-between">

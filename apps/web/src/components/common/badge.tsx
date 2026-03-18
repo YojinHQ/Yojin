@@ -1,6 +1,6 @@
 import { cn } from '../../lib/utils';
 
-type BadgeVariant = 'success' | 'warning' | 'error' | 'info';
+type BadgeVariant = 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
 interface BadgeProps {
   variant: BadgeVariant;
@@ -13,7 +13,10 @@ const variantStyles: Record<BadgeVariant, string> = {
   warning: 'bg-warning/10 text-warning ring-warning/20',
   error: 'bg-error/10 text-error ring-error/20',
   info: 'bg-info/10 text-info ring-info/20',
+  neutral: 'bg-text-muted/10 text-text-muted ring-text-muted/20',
 };
+
+export type { BadgeVariant };
 
 export default function Badge({ variant, children, className = '' }: BadgeProps) {
   return (
