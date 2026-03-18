@@ -67,6 +67,11 @@ export async function runAgentLoop(
     registry.register(tool);
   }
 
+  // Fail fast if outputDlp or approvalGate provided without guardRunner
+  if ((outputDlp || approvalGate) && !guardRunner) {
+    throw new Error('outputDlp and approvalGate require guardRunner to be provided');
+  }
+
   // Wrap with guard pipeline when guardRunner is provided
   const executor: ToolExecutor = guardRunner
     ? new GuardedToolRegistry({ registry, guardRunner, outputDlp, approvalGate })
@@ -151,7 +156,7 @@ export async function runAgentLoop(
     const results: ToolCallResult[] = await Promise.all(
       toolCalls.map(async (call) => {
         try {
-          const result = await executor.execute(call.name, call.input, agentId ? { agentId } : undefined);
+          const result = await executor.execute(call.name, call.input, { agentId });
           return { toolCallId: call.id, name: call.name, result };
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);

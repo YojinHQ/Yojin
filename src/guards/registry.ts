@@ -42,6 +42,8 @@ export interface GuardRegistryResult {
   guards: Guard[];
   /** Reference to the kill switch for programmatic trip/reset. */
   killSwitch: KillSwitch;
+  /** Reference to the output DLP guard for post-execution scanning. */
+  outputDlp: OutputDlpGuard;
 }
 
 /**
@@ -50,6 +52,8 @@ export interface GuardRegistryResult {
  */
 export function createDefaultGuards(posture: PostureConfig, options?: GuardRegistryOptions): GuardRegistryResult {
   const killSwitch = new KillSwitch(options?.killSwitch);
+
+  const outputDlp = new OutputDlpGuard();
 
   const guards: Guard[] = [
     // 1. Emergency halt — always first
@@ -71,7 +75,7 @@ export function createDefaultGuards(posture: PostureConfig, options?: GuardRegis
     new FsGuard(),
     new CommandGuard(),
     new EgressGuard({ allowedDomains: options?.egressAllowedDomains }),
-    new OutputDlpGuard(),
+    outputDlp,
     new RateBudgetGuard({ maxCallsPerMinute: posture.rateLimit }),
     new RepetitionGuard(),
     // 5. Finance guards
@@ -80,5 +84,5 @@ export function createDefaultGuards(posture: PostureConfig, options?: GuardRegis
     new SymbolWhitelistGuard({ symbols: options?.symbolWhitelist }),
   ];
 
-  return { guards, killSwitch };
+  return { guards, killSwitch, outputDlp };
 }
