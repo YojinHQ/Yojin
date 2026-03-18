@@ -1,6 +1,4 @@
 export type {
-  Agent,
-  AgentContext,
   AgentProfile,
   AgentRole,
   AgentStepResult,

@@ -38,7 +38,7 @@ describe('ProviderRouter', () => {
   it('respects per-agent profile override', () => {
     const alt = mockBackend('alt-backend');
     router.registerBackend(alt);
-    const resolved = router.resolve(undefined, { provider: 'alt-backend', model: 'custom-model' });
+    const resolved = router.resolve({ provider: 'alt-backend', model: 'custom-model' });
     expect(resolved.provider.id).toBe('alt-backend');
     expect(resolved.model).toBe('custom-model');
   });
@@ -147,14 +147,11 @@ describe('ProviderRouter config loading', () => {
     const router = new ProviderRouter({ configPath: path.join(tmpDir, 'missing.json') });
     const config = await router.loadConfig();
     expect(config.defaultProvider).toBe('anthropic');
-    expect(config.defaultModel).toBe('claude-sonnet-4-20250514');
+    expect(config.defaultModel).toBe('claude-opus-4-6');
   });
 
   it('startConfigRefresh periodically reloads config', async () => {
-    await writeFile(
-      configFile,
-      JSON.stringify({ defaultProvider: 'anthropic', defaultModel: 'claude-sonnet-4-20250514' }),
-    );
+    await writeFile(configFile, JSON.stringify({ defaultProvider: 'anthropic', defaultModel: 'claude-opus-4-6' }));
 
     const router = new ProviderRouter({ configPath: configFile });
     await router.loadConfig();
@@ -183,10 +180,7 @@ describe('ProviderRouter config loading', () => {
   });
 
   it('config refresh survives file errors gracefully', async () => {
-    await writeFile(
-      configFile,
-      JSON.stringify({ defaultProvider: 'anthropic', defaultModel: 'claude-sonnet-4-20250514' }),
-    );
+    await writeFile(configFile, JSON.stringify({ defaultProvider: 'anthropic', defaultModel: 'claude-opus-4-6' }));
 
     const router = new ProviderRouter({ configPath: configFile });
     await router.loadConfig();

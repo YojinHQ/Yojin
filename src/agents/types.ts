@@ -3,25 +3,6 @@ import { z } from 'zod';
 import type { AgentMessage } from '../core/types.js';
 
 // ---------------------------------------------------------------------------
-// Conversation types
-// ---------------------------------------------------------------------------
-
-export interface AgentContext {
-  providerId: string;
-  model: string;
-  channelId: string;
-  threadId?: string;
-  userId: string;
-}
-
-export interface Agent {
-  id: string;
-  name: string;
-  systemPrompt?: string;
-  process(context: AgentContext, history: AgentMessage[], userMessage: string): Promise<string>;
-}
-
-// ---------------------------------------------------------------------------
 // Agent profile — serializable config for agent identity and tool scoping
 // ---------------------------------------------------------------------------
 
@@ -45,7 +26,7 @@ export const AgentProfileSchema = z.object({
   capabilities: z.array(z.string()),
   /** Optional LLM provider override (e.g. 'anthropic'). */
   provider: z.string().optional(),
-  /** Optional model override (e.g. 'claude-sonnet-4-20250514'). */
+  /** Optional model override (e.g. 'claude-opus-4-6'). */
   model: z.string().optional(),
 });
 

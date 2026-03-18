@@ -15,6 +15,7 @@ import { spawn } from 'node:child_process';
 
 import Anthropic from '@anthropic-ai/sdk';
 
+import { toAnthropicMessages } from '../../../src/ai-providers/anthropic-messages.js';
 import type { AgentLoopProvider, AgentMessage, ContentBlock, ToolSchema } from '../../../src/core/types.js';
 import { getLogger } from '../../../src/logging/index.js';
 import { createProviderApiKeyAuth, createProviderOAuthAuth } from '../../../src/plugin-sdk/index.js';
@@ -28,22 +29,22 @@ import type {
 
 const ANTHROPIC_MODELS: ProviderModel[] = [
   {
-    id: 'claude-opus-4-20250514',
-    name: 'Claude Opus 4',
+    id: 'claude-opus-4-6',
+    name: 'Claude Opus 4.6',
     contextWindow: 200_000,
     maxOutputTokens: 32_000,
     capabilities: ['text', 'vision', 'tool_use'],
   },
   {
-    id: 'claude-sonnet-4-20250514',
-    name: 'Claude Sonnet 4',
+    id: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6',
     contextWindow: 200_000,
     maxOutputTokens: 16_000,
     capabilities: ['text', 'vision', 'tool_use'],
   },
   {
-    id: 'claude-haiku-4-20250514',
-    name: 'Claude Haiku 4',
+    id: 'claude-haiku-4-5-20251001',
+    name: 'Claude Haiku 4.5',
     contextWindow: 200_000,
     maxOutputTokens: 8_000,
     capabilities: ['text', 'vision', 'tool_use'],
@@ -136,9 +137,9 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
 
     resolveModel(modelRef: string): ProviderModel | undefined {
       const aliases: Record<string, string> = {
-        opus: 'claude-opus-4-20250514',
-        sonnet: 'claude-sonnet-4-20250514',
-        haiku: 'claude-haiku-4-20250514',
+        opus: 'claude-opus-4-6',
+        sonnet: 'claude-sonnet-4-6',
+        haiku: 'claude-haiku-4-5-20251001',
       };
       const resolved = aliases[modelRef] ?? modelRef;
       return ANTHROPIC_MODELS.find((m) => m.id === resolved);
@@ -249,41 +250,10 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
         };
       }
 
-      // Convert AgentMessages to Anthropic API format
-      const apiMessages = params.messages.map((m) => {
-        if (typeof m.content === 'string') {
-          return { role: m.role as 'user' | 'assistant', content: m.content };
-        }
-        // Map content blocks to Anthropic format
-        const blocks = m.content.map((block) => {
-          if (block.type === 'text') {
-            return { type: 'text' as const, text: block.text };
-          }
-          if (block.type === 'tool_use') {
-            return {
-              type: 'tool_use' as const,
-              id: block.id,
-              name: block.name,
-              input: block.input as Record<string, unknown>,
-            };
-          }
-          if (block.type === 'tool_result') {
-            return {
-              type: 'tool_result' as const,
-              tool_use_id: block.tool_use_id,
-              content: block.content,
-              ...(block.is_error ? { is_error: true as const } : {}),
-            };
-          }
-          return block;
-        });
-        return { role: m.role as 'user' | 'assistant', content: blocks };
-      });
-
       const response = await client.messages.create({
         model: params.model,
         max_tokens: params.maxTokens ?? 4096,
-        messages: apiMessages as Anthropic.MessageParam[],
+        messages: toAnthropicMessages(params.messages),
         ...(params.system ? { system: params.system } : {}),
         ...(params.tools?.length
           ? {

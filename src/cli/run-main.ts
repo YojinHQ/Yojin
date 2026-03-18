@@ -75,6 +75,7 @@ async function startGateway(): Promise<void> {
     sessionStore: new JsonlSessionStore(`${dataRoot}/data/sessions`),
     eventLog: new EventLog(`${dataRoot}/data/event-log`),
     provider: providerRouter,
+    dataRoot,
   });
 
   const gateway = new Gateway(config, agentRuntime);
@@ -97,7 +98,7 @@ yojin — Multi-LLM, multi-channel AI agent platform
 Usage:
   yojin start                        Start the gateway server (default)
   yojin chat [options]               Interactive terminal chat
-    --model <model>                    Model to use (default: claude-sonnet-4-20250514)
+    --model <model>                    Model to use (default: claude-opus-4-6)
     --provider <id>                    Provider to use (default: anthropic)
     --system <prompt>                  System prompt
   yojin secret set <key>             Store a secret (hidden TTY input)

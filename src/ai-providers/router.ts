@@ -32,10 +32,7 @@ export class ProviderRouter {
     this.pendingOverrides = overrides;
   }
 
-  resolve(
-    _agentId?: string,
-    overrides?: { provider?: string; model?: string },
-  ): { provider: AIProvider; model: string } {
+  resolve(overrides?: { provider?: string; model?: string }): { provider: AIProvider; model: string } {
     const config = this.getConfig();
     const providerId = overrides?.provider ?? config.defaultProvider;
     const model = overrides?.model ?? config.defaultModel;
@@ -60,7 +57,7 @@ export class ProviderRouter {
     const overrides = this.pendingOverrides;
     this.pendingOverrides = undefined;
 
-    const { provider, model } = this.resolve(undefined, overrides);
+    const { provider, model } = this.resolve(overrides);
     const config = this.getConfig();
 
     try {
@@ -126,6 +123,8 @@ export class ProviderRouter {
         msg.includes('network') ||
         msg.includes('econnrefused') ||
         msg.includes('timeout') ||
+        msg.includes('429') ||
+        msg.includes('rate limit') ||
         msg.includes('500') ||
         msg.includes('502') ||
         msg.includes('503') ||

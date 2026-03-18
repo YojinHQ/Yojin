@@ -7,12 +7,20 @@ export function createRiskManagerProfile(): AgentProfile {
     role: 'risk-manager',
     description: 'Portfolio risk analysis — exposure, concentration, correlation, earnings proximity.',
     tools: [
-      'analyzeExposure',
-      'getConcentrationScore',
-      'detectCorrelations',
-      'getEarningsCalendar',
-      'getDrawdown',
-      'generateRiskReport',
+      // Risk tools
+      'analyze_exposure',
+      'score_concentration',
+      'detect_correlations',
+      'check_earnings_calendar',
+      'track_drawdown',
+      // Security audit
+      'security_audit_check',
+      // Diagnostics
+      'diagnose_data_error',
+      'check_api_health',
+      // Utility
+      'get_current_time',
+      'calculate',
     ],
     allowedActions: ['tool_call'],
     capabilities: ['exposure-analysis', 'concentration', 'correlation', 'earnings', 'drawdown'],

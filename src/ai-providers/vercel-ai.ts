@@ -8,7 +8,7 @@ export class VercelAIProvider implements AIProvider {
   readonly name = 'Vercel AI SDK';
 
   models(): string[] {
-    return ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-haiku-4-5-20251001', 'gpt-4o', 'gpt-4o-mini'];
+    return ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'gpt-4o', 'gpt-4o-mini'];
   }
 
   async isAvailable(): Promise<boolean> {
@@ -29,10 +29,56 @@ export class VercelAIProvider implements AIProvider {
     const { generateText, jsonSchema } = await import('ai');
     const modelInstance = await this.resolveModel(params.model);
 
-    const messages = params.messages.map((m) => ({
-      role: m.role as 'user' | 'assistant',
-      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-    }));
+    // Build a lookup map from tool call ID → tool name, needed for tool-result parts.
+    const toolCallNames = new Map<string, string>();
+    for (const m of params.messages) {
+      if (Array.isArray(m.content)) {
+        for (const block of m.content) {
+          if (block.type === 'tool_use') {
+            toolCallNames.set(block.id, block.name);
+          }
+        }
+      }
+    }
+
+    type AssistantPart =
+      | { type: 'text'; text: string }
+      | { type: 'tool-call'; toolCallId: string; toolName: string; args: unknown };
+    type UserPart =
+      | { type: 'text'; text: string }
+      | { type: 'tool-result'; toolCallId: string; toolName: string; result: string; isError: boolean | undefined };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const messages: any[] = params.messages.map((m) => {
+      if (typeof m.content === 'string') {
+        return { role: m.role, content: m.content };
+      }
+
+      if (m.role === 'assistant') {
+        const parts: AssistantPart[] = [];
+        for (const block of m.content) {
+          if (block.type === 'text') parts.push({ type: 'text', text: block.text });
+          else if (block.type === 'tool_use')
+            parts.push({ type: 'tool-call', toolCallId: block.id, toolName: block.name, args: block.input });
+        }
+        return { role: 'assistant', content: parts };
+      }
+
+      // user message — may contain text or tool_result blocks
+      const parts: UserPart[] = [];
+      for (const block of m.content) {
+        if (block.type === 'text') parts.push({ type: 'text', text: block.text });
+        else if (block.type === 'tool_result')
+          parts.push({
+            type: 'tool-result',
+            toolCallId: block.tool_use_id,
+            toolName: toolCallNames.get(block.tool_use_id) ?? 'unknown',
+            result: block.content,
+            isError: block.is_error,
+          });
+      }
+      return { role: 'user', content: parts };
+    });
 
     const tools: ToolSet = {};
     for (const t of params.tools ?? []) {

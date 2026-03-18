@@ -13,7 +13,7 @@ function sessionData(overrides: Record<string, unknown> = {}) {
     channelId: 'slack',
     userId: 'user1',
     providerId: 'anthropic',
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-opus-4-6',
     ...overrides,
   };
 }

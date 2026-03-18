@@ -7,16 +7,21 @@ export function createStrategistProfile(): AgentProfile {
     role: 'strategist',
     description: 'Decision-maker — synthesizes research, risk, and persona into recommendations.',
     tools: [
-      'getFrontalLobe',
-      'updateFrontalLobe',
-      'getEmotion',
-      'updateEmotion',
-      'getPersona',
-      'getEnrichedSnapshot',
-      'getResearchSummary',
-      'getRiskReport',
-      'getSectorExposure',
-      'getConcentration',
+      // Brain tools (Strategist-only)
+      'brain_get_memory',
+      'brain_update_memory',
+      'brain_get_emotion',
+      'brain_update_emotion',
+      'brain_get_persona',
+      'brain_get_log',
+      'brain_rollback',
+      // Portfolio reasoning (Strategist-only)
+      'portfolio_reasoning',
+      // Security audit
+      'security_audit_check',
+      // Utility
+      'get_current_time',
+      'calculate',
     ],
     allowedActions: ['tool_call'],
     capabilities: ['reasoning', 'memory', 'emotion', 'persona', 'recommendations'],

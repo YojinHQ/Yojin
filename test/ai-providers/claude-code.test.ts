@@ -6,13 +6,13 @@ describe('ClaudeCodeProvider', () => {
   it('has correct id and name', () => {
     const provider = new ClaudeCodeProvider();
     expect(provider.id).toBe('claude-code');
-    expect(provider.name).toBe('Claude Code CLI');
+    expect(provider.name).toBe('Claude Code');
   });
 
   it('lists claude models', () => {
     const provider = new ClaudeCodeProvider();
     expect(provider.models().length).toBeGreaterThan(0);
-    expect(provider.models()).toContain('claude-sonnet-4-20250514');
+    expect(provider.models()).toContain('claude-opus-4-6');
   });
 
   it('isAvailable checks for claude CLI', async () => {

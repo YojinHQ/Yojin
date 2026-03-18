@@ -30,7 +30,7 @@ export class Orchestrator {
 
     for (const stage of workflow.stages) {
       if (Array.isArray(stage)) {
-        const results = await Promise.all(stage.map((step) => this.executeStep(step, outputs, trigger)));
+        const results = await Promise.all(stage.map((step) => this.executeStep(step, outputs, trigger, true)));
         for (const result of results) {
           outputs.set(result.agentId, result);
         }
@@ -52,20 +52,15 @@ export class Orchestrator {
     step: WorkflowStep,
     previousOutputs: Map<string, AgentStepResult>,
     trigger: { message?: string; sessionKey?: string },
+    parallel = false,
   ): Promise<AgentStepResult> {
     const message = step.buildMessage(previousOutputs, trigger.message);
-
-    const contextParts: string[] = [];
-    for (const [agentId, result] of previousOutputs) {
-      contextParts.push(`### ${agentId} output\n\n${result.text}`);
-    }
-    const context = contextParts.length > 0 ? contextParts.join('\n\n') : undefined;
 
     return this.runtime.run({
       agentId: step.agentId,
       message,
-      sessionKey: trigger.sessionKey,
-      context,
+      // Parallel steps must not share a session — concurrent appends would interleave writes.
+      sessionKey: parallel ? undefined : trigger.sessionKey,
     });
   }
 }

@@ -48,7 +48,7 @@ async function main() {
   if (oauthToken) console.log('OAuth token prefix:', oauthToken.slice(0, 15) + '...');
   if (apiKey) console.log('API key prefix:', apiKey.slice(0, 10) + '...');
 
-  const model = 'claude-sonnet-4-20250514';
+  const model = 'claude-opus-4-6';
 
   if (authMode === 'cli') {
     console.log('Testing via Claude CLI subprocess...');

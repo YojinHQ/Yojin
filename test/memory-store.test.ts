@@ -9,7 +9,7 @@ function sessionData(overrides: Record<string, unknown> = {}) {
     threadId: 'thread-1',
     userId: 'user-1',
     providerId: 'anthropic',
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-opus-4-6',
     ...overrides,
   };
 }

@@ -23,6 +23,8 @@ import type { SessionStore } from '../sessions/types.js';
 import type { ApprovalGate } from '../trust/approval/approval-gate.js';
 import { GuardedToolRegistry } from '../trust/guarded-tool-registry.js';
 
+const DEFAULT_MODEL = 'claude-opus-4-6';
+
 const logger = createSubsystemLogger('agent-runtime');
 
 export interface AgentRuntimeOptions {
@@ -34,6 +36,7 @@ export interface AgentRuntimeOptions {
   provider: AgentLoopProvider;
   approvalGate?: ApprovalGate;
   outputDlp?: OutputDlpGuard;
+  dataRoot?: string;
   brain?: {
     persona: PersonaManager;
     frontalLobe: FrontalLobe;
@@ -44,24 +47,27 @@ export interface AgentRuntimeOptions {
 export class AgentRuntime {
   private readonly agentRegistry: AgentRegistry;
   private readonly toolRegistry: ToolRegistry;
-  private readonly guardRunner: GuardRunner;
   private readonly sessionStore: SessionStore;
   private readonly eventLog: EventLog;
   private readonly provider: AgentLoopProvider;
-  private readonly approvalGate?: ApprovalGate;
-  private readonly outputDlp?: OutputDlpGuard;
+  private readonly guardedRegistry: GuardedToolRegistry;
+  private readonly dataRoot: string;
   private readonly brain?: AgentRuntimeOptions['brain'];
 
   constructor(options: AgentRuntimeOptions) {
     this.agentRegistry = options.agentRegistry;
     this.toolRegistry = options.toolRegistry;
-    this.guardRunner = options.guardRunner;
     this.sessionStore = options.sessionStore;
     this.eventLog = options.eventLog;
     this.provider = options.provider;
-    this.approvalGate = options.approvalGate;
-    this.outputDlp = options.outputDlp;
+    this.dataRoot = options.dataRoot ?? '.';
     this.brain = options.brain;
+    this.guardedRegistry = new GuardedToolRegistry({
+      registry: options.toolRegistry,
+      guardRunner: options.guardRunner,
+      approvalGate: options.approvalGate,
+      outputDlp: options.outputDlp,
+    });
   }
 
   async run(params: {
@@ -84,19 +90,38 @@ export class AgentRuntime {
       ? (await this.sessionStore.getHistory(params.sessionKey)).map((e) => e.message)
       : [];
 
-    const result = await runAgentLoop(params.message, history, {
-      provider: this.provider,
-      model: profile.model ?? 'claude-sonnet-4-20250514',
-      systemPrompt,
-      tools: guardedTools,
-      onEvent: params.onEvent,
+    await this.eventLog.append({
+      type: 'agent.run.start',
+      data: { agentId: params.agentId, sessionKey: params.sessionKey ?? null },
     });
+
+    let result;
+    try {
+      result = await runAgentLoop(params.message, history, {
+        provider: this.provider,
+        model: profile.model ?? DEFAULT_MODEL,
+        systemPrompt,
+        tools: guardedTools,
+        onEvent: params.onEvent,
+      });
+    } catch (err) {
+      await this.eventLog.append({
+        type: 'agent.run.error',
+        data: { agentId: params.agentId, error: String(err) },
+      });
+      throw err;
+    }
 
     if (params.sessionKey) {
       for (const msg of result.messages.slice(history.length)) {
         await this.sessionStore.append(params.sessionKey, msg);
       }
     }
+
+    await this.eventLog.append({
+      type: 'agent.run.complete',
+      data: { agentId: params.agentId, iterations: result.iterations, usage: result.usage },
+    });
 
     logger.info(`Agent ${params.agentId} completed`, {
       iterations: result.iterations,
@@ -121,6 +146,9 @@ export class AgentRuntime {
   }): Promise<string> {
     const agentId: string = 'strategist';
 
+    const profile = this.agentRegistry.get(agentId);
+    const model = profile?.model ?? DEFAULT_MODEL;
+
     let sessionKey: string | undefined;
     if (params.threadId) {
       const existing = await this.sessionStore.getByThread(params.channelId, params.threadId);
@@ -132,7 +160,7 @@ export class AgentRuntime {
           threadId: params.threadId,
           userId: params.userId,
           providerId: 'default',
-          model: 'claude-sonnet-4-20250514',
+          model,
         });
         sessionKey = session.id;
       }
@@ -143,23 +171,16 @@ export class AgentRuntime {
   }
 
   private wrapToolsWithGuards(tools: ToolDefinition[], agentId: string): ToolDefinition[] {
-    const guardedRegistry = new GuardedToolRegistry({
-      registry: this.toolRegistry,
-      guardRunner: this.guardRunner,
-      approvalGate: this.approvalGate,
-      outputDlp: this.outputDlp,
-    });
-
     return tools.map((tool) => ({
       ...tool,
       execute: async (params: unknown) => {
-        return guardedRegistry.execute(tool.name, params, { agentId });
+        return this.guardedRegistry.execute(tool.name, params, { agentId });
       },
     }));
   }
 
   private async assembleSystemPrompt(profile: AgentProfile, additionalContext?: string): Promise<string> {
-    const loaded = await this.agentRegistry.loadProfile(profile.id);
+    const loaded = await this.agentRegistry.loadProfile(profile.id, this.dataRoot);
     let prompt = loaded.systemPrompt;
 
     if (profile.id === 'strategist' && this.brain) {

@@ -53,7 +53,7 @@ export function loadConfig(overrides?: Partial<YojinConfig>): YojinConfig {
         authMode: anthropicAuthMode,
         oauthToken: env.CLAUDE_CODE_OAUTH_TOKEN,
         apiKey: env.ANTHROPIC_API_KEY,
-        defaultModel: 'claude-sonnet-4-20250514',
+        defaultModel: 'claude-opus-4-6',
       },
     ],
     channels: [
@@ -161,7 +161,7 @@ export type OpenBBConfig = z.infer<typeof OpenBBConfigSchema>;
 
 export const AIProviderConfigSchema = z.object({
   defaultProvider: z.string().default('anthropic'),
-  defaultModel: z.string().default('claude-sonnet-4-20250514'),
+  defaultModel: z.string().default('claude-opus-4-6'),
   fallbackProvider: z.string().optional(),
   fallbackModel: z.string().optional(),
 });
