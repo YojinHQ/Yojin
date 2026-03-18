@@ -10,78 +10,44 @@ export default function Settings() {
     <div className="flex-1 overflow-auto p-6 space-y-6">
       {/* Appearance */}
       <div className="rounded-xl border border-border bg-bg-card p-6 space-y-5">
-        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">
-          Appearance
-        </h3>
+        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">Appearance</h3>
         <ThemePicker current={theme} onChange={setTheme} />
       </div>
 
       {/* Notifications */}
       <div className="rounded-xl border border-border bg-bg-card p-6 space-y-5">
-        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">
-          Notifications
-        </h3>
+        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">Notifications</h3>
         <div className="space-y-4">
-          <ToggleRow
-            label="Morning digest"
-            description="Daily portfolio summary at 8 AM"
-            defaultOn
-          />
-          <ToggleRow
-            label="Price alerts"
-            description="Notify when positions hit target price"
-            defaultOn
-          />
-          <ToggleRow
-            label="Risk warnings"
-            description="Alert on concentration or exposure changes"
-            defaultOn
-          />
+          <ToggleRow label="Morning digest" description="Daily portfolio summary at 8 AM" defaultOn />
+          <ToggleRow label="Price alerts" description="Notify when positions hit target price" defaultOn />
+          <ToggleRow label="Risk warnings" description="Alert on concentration or exposure changes" defaultOn />
           <ToggleRow label="Agent activity" description="Notify when agents complete tasks" />
         </div>
       </div>
 
       {/* Data & Privacy */}
       <div className="rounded-xl border border-border bg-bg-card p-6 space-y-5">
-        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">
-          Data & Privacy
-        </h3>
+        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">Data & Privacy</h3>
         <div className="space-y-4">
           <ToggleRow
             label="PII redaction"
             description="Strip personal identifiers before external API calls"
             defaultOn
           />
-          <ToggleRow
-            label="Audit logging"
-            description="Log all security events to audit trail"
-            defaultOn
-          />
+          <ToggleRow label="Audit logging" description="Log all security events to audit trail" defaultOn />
         </div>
       </div>
     </div>
   );
 }
 
-function ThemePicker({
-  current,
-  onChange,
-}: {
-  current: ThemeChoice;
-  onChange: (t: ThemeChoice) => void;
-}) {
+function ThemePicker({ current, onChange }: { current: ThemeChoice; onChange: (t: ThemeChoice) => void }) {
   const options: { value: ThemeChoice; label: string; icon: React.ReactNode }[] = [
     {
       value: 'light',
       label: 'Light',
       icon: (
-        <svg
-          className="w-5 h-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={1.5}
-          stroke="currentColor"
-        >
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -94,13 +60,7 @@ function ThemePicker({
       value: 'system',
       label: 'System',
       icon: (
-        <svg
-          className="w-5 h-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={1.5}
-          stroke="currentColor"
-        >
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -113,13 +73,7 @@ function ThemePicker({
       value: 'dark',
       label: 'Dark',
       icon: (
-        <svg
-          className="w-5 h-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={1.5}
-          stroke="currentColor"
-        >
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"

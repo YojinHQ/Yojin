@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { SelfDefenseGuard } from '../../../src/guards/security/self-defense.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { KillSwitch } from '../../../src/guards/security/kill-switch.js';
+import { SelfDefenseGuard } from '../../../src/guards/security/self-defense.js';
 import type { ProposedAction } from '../../../src/guards/types.js';
 
 describe('SelfDefenseGuard', () => {

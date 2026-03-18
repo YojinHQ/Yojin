@@ -1,6 +1,7 @@
-import { config } from 'dotenv';
 import { spawn } from 'node:child_process';
+
 import Anthropic from '@anthropic-ai/sdk';
+import { config } from 'dotenv';
 
 config();
 

@@ -13,16 +13,14 @@
 
 import { z } from 'zod';
 
-import type { ToolDefinition, ToolResult } from '../../core/types.js';
 import type { SecretVault } from './types.js';
+import type { ToolDefinition, ToolResult } from '../../core/types.js';
 
 const StoreCredentialParams = z.object({
   /** Vault key name (e.g. 'KEELSON_API_KEY', 'OPENBB_FMP_KEY'). */
   key: z.string().min(1).describe('The name to store the credential under'),
   /** Human-readable description shown in the TTY prompt. */
-  description: z
-    .string()
-    .describe('Description shown to the user (e.g. "Keelson API key for portfolio enrichment")'),
+  description: z.string().describe('Description shown to the user (e.g. "Keelson API key for portfolio enrichment")'),
 });
 
 const CheckCredentialParams = z.object({
@@ -151,15 +149,12 @@ export function createSecretTools(options: SecureInputOptions): ToolDefinition[]
 
   const checkCredential: ToolDefinition = {
     name: 'check_credential',
-    description:
-      'Check if a named credential exists in the vault. Returns true/false, never the value.',
+    description: 'Check if a named credential exists in the vault. Returns true/false, never the value.',
     parameters: CheckCredentialParams,
     async execute(params: z.infer<typeof CheckCredentialParams>): Promise<ToolResult> {
       const exists = await vault.has(params.key);
       return {
-        content: exists
-          ? `Credential "${params.key}" exists.`
-          : `Credential "${params.key}" not found.`,
+        content: exists ? `Credential "${params.key}" exists.` : `Credential "${params.key}" not found.`,
       };
     },
   };

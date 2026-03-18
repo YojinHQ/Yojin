@@ -7,21 +7,17 @@
 import { createSchema, createYoga } from 'graphql-yoga';
 import type { Hono } from 'hono';
 
-import { typeDefs } from './schema.js';
+import { alertsQuery, createAlertMutation, dismissAlertMutation } from './resolvers/alerts.js';
+import { onAlertSubscription, onPortfolioUpdateSubscription, onPriceMoveSubscription } from './resolvers/live.js';
+import { newsQuery, quoteQuery, sectorExposureQuery } from './resolvers/market.js';
 import {
+  enrichedSnapshotQuery,
   portfolioQuery,
   positionsQuery,
-  enrichedSnapshotQuery,
   refreshPositionsMutation,
 } from './resolvers/portfolio.js';
-import { quoteQuery, newsQuery, sectorExposureQuery } from './resolvers/market.js';
 import { riskReportQuery } from './resolvers/risk.js';
-import { alertsQuery, createAlertMutation, dismissAlertMutation } from './resolvers/alerts.js';
-import {
-  onAlertSubscription,
-  onPortfolioUpdateSubscription,
-  onPriceMoveSubscription,
-} from './resolvers/live.js';
+import { typeDefs } from './schema.js';
 
 const schema = createSchema({
   typeDefs,

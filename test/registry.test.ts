@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { PluginRegistry } from '../src/plugins/registry.js';
-import type { ProviderPlugin, ChannelPlugin, YojinPlugin } from '../src/plugins/types.js';
+import type { ChannelPlugin, ProviderPlugin, YojinPlugin } from '../src/plugins/types.js';
 
 function makeProvider(id = 'test-provider'): ProviderPlugin {
   return {
@@ -49,9 +50,7 @@ describe('PluginRegistry', () => {
     it('throws on duplicate provider id', () => {
       const registry = new PluginRegistry();
       registry.addProvider(makeProvider('dup'));
-      expect(() => registry.addProvider(makeProvider('dup'))).toThrow(
-        'Provider "dup" is already registered',
-      );
+      expect(() => registry.addProvider(makeProvider('dup'))).toThrow('Provider "dup" is already registered');
     });
 
     it('getAllProviders returns all registered providers', () => {
@@ -78,9 +77,7 @@ describe('PluginRegistry', () => {
     it('throws on duplicate channel id', () => {
       const registry = new PluginRegistry();
       registry.addChannel(makeChannel('dup'));
-      expect(() => registry.addChannel(makeChannel('dup'))).toThrow(
-        'Channel "dup" is already registered',
-      );
+      expect(() => registry.addChannel(makeChannel('dup'))).toThrow('Channel "dup" is already registered');
     });
 
     it('getAllChannels returns all registered channels', () => {

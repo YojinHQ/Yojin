@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { FileAuditLog } from '../../../src/trust/audit/audit-log.js';
-import { DefaultPiiRedactor } from '../../../src/trust/pii/redactor.js';
 import { balanceToRange, hashAccountId } from '../../../src/trust/pii/patterns.js';
+import { DefaultPiiRedactor } from '../../../src/trust/pii/redactor.js';
 
 describe('balanceToRange', () => {
   it('maps values to correct ranges', () => {

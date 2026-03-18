@@ -40,4 +40,4 @@ Short, action-oriented. `Build encrypted credential vault` not `Implement Layer 
 - **Speak like a dev** — no PM jargon. "You'll need to..." not "The system shall...". Reference actual file paths, function names, types.
 - **Why before How** — always start with why this matters, then explain how to build it.
 - **Story points** — use the team's scale. Include estimate in the story.
-- **Labels** — tag with owner (dean/dima) and domain (data-pipeline/runtime/security/api).
+- **Labels** — tag with owner and domain (data-pipeline/runtime/security/api).

@@ -9,21 +9,21 @@
  * 5. Finance guards (read-only, cooldown, whitelist)
  */
 
-import type { Guard, PostureConfig } from './types.js';
-import { KillSwitch } from './security/kill-switch.js';
-import type { KillSwitchOptions } from './security/kill-switch.js';
-import { SelfDefenseGuard } from './security/self-defense.js';
-import { ToolPolicyGuard } from './security/tool-policy.js';
-import type { ToolPolicy } from './security/tool-policy.js';
-import { FsGuard } from './security/fs-guard.js';
+import { CooldownGuard } from './finance/cooldown.js';
+import { ReadOnlyGuard } from './finance/read-only.js';
+import { SymbolWhitelistGuard } from './finance/symbol-whitelist.js';
 import { CommandGuard } from './security/command-guard.js';
 import { EgressGuard } from './security/egress-guard.js';
+import { FsGuard } from './security/fs-guard.js';
+import { KillSwitch } from './security/kill-switch.js';
+import type { KillSwitchOptions } from './security/kill-switch.js';
 import { OutputDlpGuard } from './security/output-dlp.js';
 import { RateBudgetGuard } from './security/rate-budget.js';
 import { RepetitionGuard } from './security/repetition-guard.js';
-import { ReadOnlyGuard } from './finance/read-only.js';
-import { CooldownGuard } from './finance/cooldown.js';
-import { SymbolWhitelistGuard } from './finance/symbol-whitelist.js';
+import { SelfDefenseGuard } from './security/self-defense.js';
+import { ToolPolicyGuard } from './security/tool-policy.js';
+import type { ToolPolicy } from './security/tool-policy.js';
+import type { Guard, PostureConfig } from './types.js';
 
 export interface GuardRegistryOptions {
   egressAllowedDomains?: string[];
@@ -48,10 +48,7 @@ export interface GuardRegistryResult {
  * Create the default guard pipeline for a given posture.
  * Returns guards in execution order plus a reference to the kill switch.
  */
-export function createDefaultGuards(
-  posture: PostureConfig,
-  options?: GuardRegistryOptions,
-): GuardRegistryResult {
+export function createDefaultGuards(posture: PostureConfig, options?: GuardRegistryOptions): GuardRegistryResult {
   const killSwitch = new KillSwitch(options?.killSwitch);
 
   const guards: Guard[] = [

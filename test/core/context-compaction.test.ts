@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { compactMessages } from '../../src/core/context-compaction.js';
 import { TokenBudget } from '../../src/core/token-budget.js';
 import type { AgentLoopProvider, AgentMessage } from '../../src/core/types.js';

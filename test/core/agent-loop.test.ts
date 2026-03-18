@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+
 import { runAgentLoop } from '../../src/core/agent-loop.js';
 import type {
-  AgentLoopProvider,
   AgentLoopEvent,
+  AgentLoopProvider,
   AgentMessage,
   ContentBlock,
   ToolDefinition,
@@ -176,9 +177,7 @@ describe('runAgentLoop', () => {
     // Verify the tool_result with error was passed back
     const toolResultMsg = result.messages.find(
       (m) =>
-        m.role === 'user' &&
-        Array.isArray(m.content) &&
-        m.content.some((b) => b.type === 'tool_result' && b.is_error),
+        m.role === 'user' && Array.isArray(m.content) && m.content.some((b) => b.type === 'tool_result' && b.is_error),
     );
     expect(toolResultMsg).toBeDefined();
   });

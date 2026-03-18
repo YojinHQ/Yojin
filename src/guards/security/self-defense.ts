@@ -8,7 +8,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import type { Guard, GuardResult, ProposedAction } from '../types.js';
@@ -48,10 +48,7 @@ export class SelfDefenseGuard implements Guard {
     // Block writes/deletes targeting protected files
     if (action.path) {
       const normalized = resolve(action.path);
-      const isWrite =
-        action.type === 'file_write' ||
-        action.type === 'file_delete' ||
-        action.type === 'file_modify';
+      const isWrite = action.type === 'file_write' || action.type === 'file_delete' || action.type === 'file_modify';
 
       if (isWrite) {
         for (const protectedPath of this.protectedPaths) {

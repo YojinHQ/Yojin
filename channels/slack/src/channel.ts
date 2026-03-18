@@ -3,12 +3,13 @@
  */
 
 import { App, type SlackEventMiddlewareArgs } from '@slack/bolt';
+
 import type {
-  ChannelPlugin,
-  ChannelMessagingAdapter,
   ChannelAuthAdapter,
-  ChannelSetupAdapter,
   ChannelCapabilities,
+  ChannelMessagingAdapter,
+  ChannelPlugin,
+  ChannelSetupAdapter,
   IncomingMessage,
   OutgoingMessage,
 } from '../../../src/plugins/types.js';
@@ -42,14 +43,7 @@ export function buildSlackChannel(): ChannelPlugin {
       }
     },
     getScopes() {
-      return [
-        'app_mentions:read',
-        'channels:history',
-        'chat:write',
-        'im:history',
-        'im:read',
-        'im:write',
-      ];
+      return ['app_mentions:read', 'channels:history', 'chat:write', 'im:history', 'im:read', 'im:write'];
     },
   };
 

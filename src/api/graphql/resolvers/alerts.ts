@@ -2,8 +2,8 @@
  * Alert resolvers — alerts, createAlert, dismissAlert.
  */
 
-import type { Alert, AlertRuleInput, AlertStatus } from '../types.js';
 import { pubsub } from '../pubsub.js';
+import type { Alert, AlertRuleInput, AlertStatus } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // In-memory store (replaced by JSONL persistence when available)

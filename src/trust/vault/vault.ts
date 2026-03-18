@@ -6,14 +6,14 @@
  * Master key derived from passphrase via PBKDF2 (600k iterations).
  */
 
-import { randomBytes, pbkdf2, createCipheriv, createDecipheriv } from 'node:crypto';
-import { promisify } from 'node:util';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { createCipheriv, createDecipheriv, pbkdf2, randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { promisify } from 'node:util';
 
-import type { AuditLog } from '../audit/types.js';
 import type { SecretVault, VaultFile } from './types.js';
 import { VaultFileSchema } from './types.js';
+import type { AuditLog } from '../audit/types.js';
 
 const pbkdf2Async = promisify(pbkdf2);
 
@@ -76,19 +76,19 @@ export class EncryptedVault implements SecretVault {
   }
 
   async set(key: string, value: string): Promise<void> {
-    this.ensureUnlocked();
+    const { key: derivedKey, data } = this.ensureUnlocked();
 
     const iv = randomBytes(IV_LENGTH);
-    const cipher = createCipheriv(ALGORITHM, this.derivedKey!, iv);
+    const cipher = createCipheriv(ALGORITHM, derivedKey, iv);
 
     let encrypted = cipher.update(value, 'utf8', 'base64');
     encrypted += cipher.final('base64');
     const tag = cipher.getAuthTag();
 
     const now = new Date().toISOString();
-    const existing = this.vaultData!.entries[key];
+    const existing = data.entries[key];
 
-    this.vaultData!.entries[key] = {
+    data.entries[key] = {
       value: encrypted,
       iv: iv.toString('base64'),
       tag: tag.toString('base64'),
@@ -101,14 +101,14 @@ export class EncryptedVault implements SecretVault {
   }
 
   async get(key: string): Promise<string> {
-    this.ensureUnlocked();
+    const { key: derivedKey, data } = this.ensureUnlocked();
 
-    const entry = this.vaultData!.entries[key];
+    const entry = data.entries[key];
     if (!entry) {
       throw new Error(`Secret not found: ${key}`);
     }
 
-    const decipher = createDecipheriv(ALGORITHM, this.derivedKey!, Buffer.from(entry.iv, 'base64'));
+    const decipher = createDecipheriv(ALGORITHM, derivedKey, Buffer.from(entry.iv, 'base64'));
     decipher.setAuthTag(Buffer.from(entry.tag, 'base64'));
 
     let decrypted = decipher.update(entry.value, 'base64', 'utf8');
@@ -119,42 +119,46 @@ export class EncryptedVault implements SecretVault {
   }
 
   async has(key: string): Promise<boolean> {
-    this.ensureUnlocked();
-    return key in this.vaultData!.entries;
+    const { data } = this.ensureUnlocked();
+    return key in data.entries;
   }
 
   async list(): Promise<string[]> {
-    this.ensureUnlocked();
+    const { data } = this.ensureUnlocked();
     this.logAccess('*', 'list');
-    return Object.keys(this.vaultData!.entries);
+    return Object.keys(data.entries);
   }
 
   async delete(key: string): Promise<void> {
-    this.ensureUnlocked();
+    const { data } = this.ensureUnlocked();
 
-    if (!(key in this.vaultData!.entries)) {
+    if (!(key in data.entries)) {
       throw new Error(`Secret not found: ${key}`);
     }
 
-    delete this.vaultData!.entries[key];
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+    delete data.entries[key];
     this.save();
     this.logAccess(key, 'delete');
   }
 
-  private ensureUnlocked(): void {
+  private ensureUnlocked(): { key: Buffer; data: VaultFile } {
     if (!this.derivedKey || !this.vaultData) {
       throw new Error('Vault is locked. Call unlock(passphrase) first.');
     }
+    return { key: this.derivedKey, data: this.vaultData };
   }
 
+  /** Write canary value — only called from unlock() after key is derived. */
   private writeCanary(): void {
+    const { key: derivedKey, data } = this.ensureUnlocked();
     const iv = randomBytes(IV_LENGTH);
-    const cipher = createCipheriv(ALGORITHM, this.derivedKey!, iv);
+    const cipher = createCipheriv(ALGORITHM, derivedKey, iv);
     let encrypted = cipher.update(CANARY_PLAINTEXT, 'utf8', 'base64');
     encrypted += cipher.final('base64');
     const tag = cipher.getAuthTag();
 
-    this.vaultData!.canary = {
+    data.canary = {
       value: encrypted,
       iv: iv.toString('base64'),
       tag: tag.toString('base64'),

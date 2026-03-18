@@ -43,25 +43,19 @@ export default function Position() {
 
         <Card title="Fundamentals">
           <div className="flex h-64 items-center justify-center">
-            <p className="text-sm text-text-muted">
-              Fundamental data from OpenBB SDK will appear here.
-            </p>
+            <p className="text-sm text-text-muted">Fundamental data from OpenBB SDK will appear here.</p>
           </div>
         </Card>
 
         <Card title="Technical Indicators">
           <div className="flex h-64 items-center justify-center">
-            <p className="text-sm text-text-muted">
-              SMA, RSI, BBANDS, and other technicals will be shown here.
-            </p>
+            <p className="text-sm text-text-muted">SMA, RSI, BBANDS, and other technicals will be shown here.</p>
           </div>
         </Card>
 
         <Card title="News & Sentiment">
           <div className="flex h-64 items-center justify-center">
-            <p className="text-sm text-text-muted">
-              Latest news and Keelson sentiment data will appear here.
-            </p>
+            <p className="text-sm text-text-muted">Latest news and Keelson sentiment data will appear here.</p>
           </div>
         </Card>
       </div>

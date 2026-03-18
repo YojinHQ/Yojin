@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { OutputDlpGuard } from '../../../src/guards/security/output-dlp.js';
 import type { ProposedAction } from '../../../src/guards/types.js';
@@ -58,9 +58,7 @@ describe('OutputDlpGuard', () => {
   });
 
   it('detects AWS secret keys in key-value context', () => {
-    expect(
-      guard.check(action('aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY')).pass,
-    ).toBe(false);
+    expect(guard.check(action('aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY')).pass).toBe(false);
   });
 
   it('does not false-positive on generic base64 strings', () => {

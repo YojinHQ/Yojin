@@ -4,20 +4,21 @@
  * Serves the GraphQL API, chat endpoints, and SSE streaming over Hono.
  */
 
+import { type ServerType, serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { serve, type ServerType } from '@hono/node-server';
 import { streamSSE } from 'hono/streaming';
+
+import { mountGraphQL } from '../../../src/api/graphql/server.js';
 import type {
-  ChannelPlugin,
-  ChannelMessagingAdapter,
   ChannelAuthAdapter,
-  ChannelSetupAdapter,
   ChannelCapabilities,
+  ChannelMessagingAdapter,
+  ChannelPlugin,
+  ChannelSetupAdapter,
   IncomingMessage,
   OutgoingMessage,
 } from '../../../src/plugins/types.js';
-import { mountGraphQL } from '../../../src/api/graphql/server.js';
 
 type MessageHandler = (msg: IncomingMessage) => Promise<void>;
 
@@ -173,7 +174,7 @@ export function buildWebChannel(): ChannelPlugin {
     async teardown(): Promise<void> {
       if (server) {
         await new Promise<void>((resolve, reject) => {
-          server!.close((err) => (err ? reject(err) : resolve()));
+          server?.close((err) => (err ? reject(err) : resolve()));
         });
         server = undefined;
       }

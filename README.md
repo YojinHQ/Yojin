@@ -18,16 +18,16 @@ A free, open-source AI agent that runs on your machine, connects to every platfo
 
 Four specialized AI agents collaborate through shared state:
 
-| Agent | Role |
-|-------|------|
-| **Research Analyst** | Gathers market data via OpenBB SDK, enriches positions, searches news |
-| **Strategist** | Reads persona + data + risk reports, produces recommendations and alerts |
-| **Risk Manager** | Analyzes portfolio exposure, concentration, correlation, drawdown |
-| **Trader** | Scrapes platforms, tracks positions, executes trades (Phase 2) |
+| Agent                | Role                                                                     |
+|----------------------|--------------------------------------------------------------------------|
+| **Research Analyst** | Gathers market data via OpenBB SDK, enriches positions, searches news    |
+| **Strategist**       | Reads persona + data + risk reports, produces recommendations and alerts |
+| **Risk Manager**     | Analyzes portfolio exposure, concentration, correlation, drawdown        |
+| **Trader**           | Scrapes platforms, tracks positions, executes trades (Phase 2)           |
 
 All state is file-driven — JSONL sessions, JSON configs, Markdown personas. No database, no containers.
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Your Machine                            │
 │                                                                 │
@@ -113,7 +113,7 @@ pnpm dev:all
 
 ## Project Structure
 
-```
+```text
 yojin/
 ├── src/
 │   ├── core/           # Agent runtime
@@ -136,8 +136,7 @@ yojin/
 ├── providers/          # LLM providers (anthropic/)
 ├── channels/           # Messaging channels (slack/, telegram/, web/)
 ├── packages/           # Shared packages (keelson-client/)
-├── data/               # Runtime state (gitignored)
-├── plans/              # Architecture documentation
+├── data/               # Runtime state — JSONL, configs, snapshots (gitignored)
 └── test/               # Test suites
 ```
 
@@ -167,7 +166,7 @@ yojin/
 |---------|--------|
 | Slack | Working (@slack/bolt) |
 | Telegram | Phase 1 (grammy) |
-| Web UI | In Progress (React 19 + GraphQL) |
+| Web UI | Working (Hono + GraphQL + SSE) |
 | MCP | Phase 1 (Claude Desktop / Cursor) |
 | Discord | Future |
 

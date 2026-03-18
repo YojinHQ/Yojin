@@ -9,8 +9,8 @@
  *
  */
 
-import type { AuditLog, AuditEventInput } from '../audit/types.js';
 import type { SecretVault } from './types.js';
+import type { AuditEventInput, AuditLog } from '../audit/types.js';
 
 // Re-export DLP patterns so the proxy can scrub responses
 const CREDENTIAL_PATTERNS: RegExp[] = [
@@ -64,11 +64,7 @@ export class SecretProxy {
    * 1. The exact credential value used in this request
    * 2. Any known credential patterns (AWS keys, JWTs, etc.)
    */
-  async authenticatedFetch(
-    key: string,
-    url: string,
-    options: ProxyRequestOptions = {},
-  ): Promise<ProxyResponse> {
+  async authenticatedFetch(key: string, url: string, options: ProxyRequestOptions = {}): Promise<ProxyResponse> {
     const {
       method = 'GET',
       headers = {},

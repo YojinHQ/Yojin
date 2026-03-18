@@ -7,9 +7,9 @@
 
 import { createHash } from 'node:crypto';
 
-import type { AuditLog } from '../audit/types.js';
-import type { PiiRedactor, RedactionMetadata, RedactionRule } from './types.js';
 import { DEFAULT_PII_RULES, balanceToRange } from './patterns.js';
+import type { PiiRedactor, RedactionMetadata, RedactionRule } from './types.js';
+import type { AuditLog } from '../audit/types.js';
 
 export interface PiiRedactorOptions {
   auditLog: AuditLog;

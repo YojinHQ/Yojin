@@ -1,9 +1,6 @@
 export default function MorningBriefing() {
   return (
-    <div
-      className="rounded-2xl p-6 text-white"
-      style={{ background: 'linear-gradient(135deg, #FF5A5E, #B30004)' }}
-    >
+    <div className="rounded-2xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #FF5A5E, #B30004)' }}>
       <div className="mb-4 flex items-center gap-2">
         <img src="/yojin_icon_white.png" alt="" className="h-6 w-6" />
         <span className="text-sm font-medium opacity-90">Yojin Morning Briefing</span>

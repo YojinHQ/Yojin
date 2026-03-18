@@ -10,9 +10,4 @@ export type {
   FrontalLobe as FrontalLobeInterface,
   PersonaManager as PersonaManagerInterface,
 } from './types.js';
-export {
-  BrainCommitSchema,
-  createDefaultEmotion,
-  DEFAULT_EMOTION_VALUES,
-  EmotionStateSchema,
-} from './types.js';
+export { BrainCommitSchema, createDefaultEmotion, DEFAULT_EMOTION_VALUES, EmotionStateSchema } from './types.js';

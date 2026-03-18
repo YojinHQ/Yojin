@@ -1,5 +1,6 @@
-import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { EnvSchema, loadEnv, _resetEnvCache } from '../src/config/env.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { EnvSchema, _resetEnvCache, loadEnv } from '../src/config/env.js';
 
 vi.mock('dotenv', () => ({
   config: vi.fn(),

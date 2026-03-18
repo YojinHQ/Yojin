@@ -2,14 +2,8 @@
  * Portfolio resolvers — portfolio, positions, enrichedSnapshot, refreshPositions.
  */
 
-import type {
-  PortfolioSnapshot,
-  Position,
-  EnrichedSnapshot,
-  EnrichedPosition,
-  Platform,
-} from '../types.js';
 import { pubsub } from '../pubsub.js';
+import type { EnrichedPosition, EnrichedSnapshot, Platform, PortfolioSnapshot, Position } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Stub data — replaced by real services when available
@@ -118,10 +112,7 @@ export function enrichedSnapshotQuery(): EnrichedSnapshot {
 // Mutation resolvers
 // ---------------------------------------------------------------------------
 
-export function refreshPositionsMutation(
-  _parent: unknown,
-  args: { platform: Platform },
-): PortfolioSnapshot {
+export function refreshPositionsMutation(_parent: unknown, args: { platform: Platform }): PortfolioSnapshot {
   const snapshot = buildSnapshot(args.platform);
   pubsub.publish('portfolioUpdate', snapshot);
   return snapshot;

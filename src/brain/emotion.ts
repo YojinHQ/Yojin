@@ -11,12 +11,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import { BrainStore } from './brain.js';
-import type {
-  BrainCommit,
-  EmotionState,
-  EmotionTracker as EmotionTrackerInterface,
-} from './types.js';
-import { createDefaultEmotion, EmotionStateSchema } from './types.js';
+import type { BrainCommit, EmotionState, EmotionTracker as EmotionTrackerInterface } from './types.js';
+import { EmotionStateSchema, createDefaultEmotion } from './types.js';
 
 const EMOTION_FILE = 'data/brain/emotion.json';
 
@@ -41,10 +37,7 @@ export class EmotionTracker implements EmotionTrackerInterface {
     }
   }
 
-  async updateEmotion(
-    state: Omit<EmotionState, 'updatedAt'>,
-    reason?: string,
-  ): Promise<BrainCommit> {
+  async updateEmotion(state: Omit<EmotionState, 'updatedAt'>, reason?: string): Promise<BrainCommit> {
     const previous = await this.getEmotion();
     const updated: EmotionState = {
       confidence: state.confidence,

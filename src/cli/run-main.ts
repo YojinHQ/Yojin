@@ -2,11 +2,11 @@
  * CLI main runner.
  */
 
+import { startChat } from './chat.js';
+import { setupToken } from './setup-token.js';
 import { loadConfig } from '../config/config.js';
 import { Gateway } from '../gateway/server.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
-import { setupToken } from './setup-token.js';
-import { startChat } from './chat.js';
 
 export async function runMain(args: string[]): Promise<void> {
   const command = args[0] ?? 'start';

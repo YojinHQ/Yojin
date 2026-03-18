@@ -1,12 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { FileAuditLog } from '../../src/trust/audit/audit-log.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { GuardRunner } from '../../src/guards/guard-runner.js';
 import { RateBudgetGuard } from '../../src/guards/security/rate-budget.js';
 import type { Guard, ProposedAction } from '../../src/guards/types.js';
+import { FileAuditLog } from '../../src/trust/audit/audit-log.js';
 
 function makeAction(overrides: Partial<ProposedAction> = {}): ProposedAction {
   return { type: 'tool_call', toolName: 'test-tool', ...overrides };
@@ -43,10 +44,9 @@ describe('GuardRunner', () => {
   });
 
   it('blocks on first failing guard', () => {
-    const runner = new GuardRunner(
-      [makePassGuard('a'), makeBlockGuard('b', 'denied'), makePassGuard('c')],
-      { auditLog },
-    );
+    const runner = new GuardRunner([makePassGuard('a'), makeBlockGuard('b', 'denied'), makePassGuard('c')], {
+      auditLog,
+    });
 
     const result = runner.check(makeAction());
     expect(result.pass).toBe(false);
@@ -90,10 +90,9 @@ describe('GuardRunner', () => {
       },
     });
 
-    const runner = new GuardRunner(
-      [trackingGuard('first'), trackingGuard('second'), trackingGuard('third')],
-      { auditLog },
-    );
+    const runner = new GuardRunner([trackingGuard('first'), trackingGuard('second'), trackingGuard('third')], {
+      auditLog,
+    });
     runner.check(makeAction());
 
     expect(order).toEqual(['first', 'second', 'third']);
@@ -109,10 +108,9 @@ describe('GuardRunner', () => {
       },
     });
 
-    const runner = new GuardRunner(
-      [trackingGuard('a', true), trackingGuard('b', false), trackingGuard('c', true)],
-      { auditLog },
-    );
+    const runner = new GuardRunner([trackingGuard('a', true), trackingGuard('b', false), trackingGuard('c', true)], {
+      auditLog,
+    });
     runner.check(makeAction());
 
     expect(order).toEqual(['a', 'b']);

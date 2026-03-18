@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import {
   buildClaudeOAuthUrl,
   createTokenReference,
@@ -96,9 +97,9 @@ describe('exchangeClaudeOAuthCode', () => {
       .mockResolvedValueOnce(new Response('also bad', { status: 500 }));
     vi.stubGlobal('fetch', mockFetch);
 
-    await expect(
-      exchangeClaudeOAuthCode({ code: 'auth-code', codeVerifier: 'verifier' }),
-    ).rejects.toThrow('OAuth token exchange failed');
+    await expect(exchangeClaudeOAuthCode({ code: 'auth-code', codeVerifier: 'verifier' })).rejects.toThrow(
+      'OAuth token exchange failed',
+    );
     vi.unstubAllGlobals();
   });
 });
@@ -129,9 +130,7 @@ describe('refreshClaudeOAuthToken', () => {
     const mockFetch = vi.fn().mockResolvedValueOnce(new Response('unauthorized', { status: 401 }));
     vi.stubGlobal('fetch', mockFetch);
 
-    await expect(refreshClaudeOAuthToken('rt-expired')).rejects.toThrow(
-      'OAuth token refresh failed',
-    );
+    await expect(refreshClaudeOAuthToken('rt-expired')).rejects.toThrow('OAuth token refresh failed');
     vi.unstubAllGlobals();
   });
 });

@@ -5,8 +5,9 @@
  * callers request a subset by tool name list.
  */
 
-import type { ToolDefinition, ToolResult, ToolSchema } from './types.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
+
+import type { ToolDefinition, ToolResult, ToolSchema } from './types.js';
 
 export class ToolRegistry {
   private tools = new Map<string, ToolDefinition>();

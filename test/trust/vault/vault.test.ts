@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { FileAuditLog } from '../../../src/trust/audit/audit-log.js';
 import { EncryptedVault } from '../../../src/trust/vault/vault.js';
@@ -134,9 +135,7 @@ describe('EncryptedVault', () => {
       await vault.get('KEY');
 
       const events = await auditLog.query({ type: 'secret.access' });
-      const getEvents = events.filter(
-        (e) => (e.details as Record<string, unknown>).operation === 'get',
-      );
+      const getEvents = events.filter((e) => (e.details as Record<string, unknown>).operation === 'get');
       expect(getEvents.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -144,9 +143,7 @@ describe('EncryptedVault', () => {
       await vault.set('KEY', 'value');
 
       const events = await auditLog.query({ type: 'secret.access' });
-      const setEvents = events.filter(
-        (e) => (e.details as Record<string, unknown>).operation === 'set',
-      );
+      const setEvents = events.filter((e) => (e.details as Record<string, unknown>).operation === 'set');
       expect(setEvents).toHaveLength(1);
     });
 
@@ -154,9 +151,7 @@ describe('EncryptedVault', () => {
       await vault.list();
 
       const events = await auditLog.query({ type: 'secret.access' });
-      const listEvents = events.filter(
-        (e) => (e.details as Record<string, unknown>).operation === 'list',
-      );
+      const listEvents = events.filter((e) => (e.details as Record<string, unknown>).operation === 'list');
       expect(listEvents).toHaveLength(1);
     });
 
@@ -165,9 +160,7 @@ describe('EncryptedVault', () => {
       await vault.delete('KEY');
 
       const events = await auditLog.query({ type: 'secret.access' });
-      const deleteEvents = events.filter(
-        (e) => (e.details as Record<string, unknown>).operation === 'delete',
-      );
+      const deleteEvents = events.filter((e) => (e.details as Record<string, unknown>).operation === 'delete');
       expect(deleteEvents).toHaveLength(1);
     });
   });

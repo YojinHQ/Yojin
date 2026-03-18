@@ -31,14 +31,12 @@ const REDACTION_PATTERNS: Array<{
   },
   // PEM private keys
   {
-    pattern:
-      /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC )?PRIVATE KEY-----/g,
+    pattern: /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC )?PRIVATE KEY-----/g,
     replacement: '-----REDACTED PRIVATE KEY-----',
   },
   // JSON credential fields
   {
-    pattern:
-      /"(?:password|secret|token|apiKey|api_key|access_token|refresh_token)"\s*:\s*"[^"]+"/gi,
+    pattern: /"(?:password|secret|token|apiKey|api_key|access_token|refresh_token)"\s*:\s*"[^"]+"/gi,
     replacement: (match) => {
       const key = match.split('"')[1];
       return `"${key}":"****"`;

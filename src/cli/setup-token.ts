@@ -8,11 +8,8 @@
  */
 
 import { createInterface } from 'node:readline';
-import {
-  loginClaudeOAuth,
-  runClaudeSetupToken,
-  createTokenReference,
-} from '../auth/claude-oauth.js';
+
+import { createTokenReference, loginClaudeOAuth, runClaudeSetupToken } from '../auth/claude-oauth.js';
 
 type Method = 'oauth' | 'cli' | 'paste';
 

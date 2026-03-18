@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CooldownGuard } from '../../../src/guards/finance/cooldown.js';
 import type { ProposedAction } from '../../../src/guards/types.js';

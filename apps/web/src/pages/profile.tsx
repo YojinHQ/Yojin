@@ -18,9 +18,7 @@ export default function Profile() {
 
       {/* Account info */}
       <div className="rounded-xl border border-border bg-bg-card p-6 space-y-5">
-        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">
-          Account Information
-        </h3>
+        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">Account Information</h3>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field label="Display Name" value="Dean Shaked" />
           <Field label="Username" value="@dean" />
@@ -31,9 +29,7 @@ export default function Profile() {
 
       {/* Connected platforms */}
       <div className="rounded-xl border border-border bg-bg-card p-6 space-y-5">
-        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">
-          Connected Platforms
-        </h3>
+        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">Connected Platforms</h3>
         <div className="space-y-3">
           <PlatformRow name="Interactive Brokers" status="connected" />
           <PlatformRow name="Coinbase" status="connected" />

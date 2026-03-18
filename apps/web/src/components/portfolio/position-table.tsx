@@ -46,10 +46,7 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
         <thead>
           <tr className="bg-bg-tertiary">
             {columns.map((col) => (
-              <th
-                key={col}
-                className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-muted"
-              >
+              <th key={col} className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-muted">
                 {col}
               </th>
             ))}
@@ -57,10 +54,7 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
         </thead>
         <tbody>
           {positions.map((pos) => (
-            <tr
-              key={pos.symbol}
-              className="border-t border-border transition-colors hover:bg-bg-hover"
-            >
+            <tr key={pos.symbol} className="border-t border-border transition-colors hover:bg-bg-hover">
               <td className="px-4 py-3">
                 <Link to={`/portfolio/${pos.symbol}`} className="font-medium text-accent-primary">
                   {pos.symbol}
@@ -69,9 +63,7 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
               </td>
               <td className="px-4 py-3 text-text-secondary">{pos.assetClass}</td>
               <td className="px-4 py-3 text-text-secondary">{pos.shares}</td>
-              <td className="px-4 py-3 text-text-primary font-medium">
-                {formatCurrency(pos.value)}
-              </td>
+              <td className="px-4 py-3 text-text-primary font-medium">{formatCurrency(pos.value)}</td>
               <td className="px-4 py-3 text-text-secondary">{formatDate(pos.date)}</td>
               <td className="px-4 py-3">
                 <StatusBadge status={pos.status} />

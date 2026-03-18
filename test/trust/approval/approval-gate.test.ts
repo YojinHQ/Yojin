@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { FileAuditLog } from '../../../src/trust/audit/audit-log.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { ApprovalGate } from '../../../src/trust/approval/approval-gate.js';
+import { FileAuditLog } from '../../../src/trust/audit/audit-log.js';
 
 describe('ApprovalGate', () => {
   let tempDir: string;

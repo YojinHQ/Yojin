@@ -2,8 +2,8 @@
  * Slack channel plugin — entry point.
  */
 
-import type { YojinPlugin } from '../../src/plugins/types.js';
 import { buildSlackChannel } from './src/channel.js';
+import type { YojinPlugin } from '../../src/plugins/types.js';
 
 export const slackPlugin: YojinPlugin = {
   id: 'slack',

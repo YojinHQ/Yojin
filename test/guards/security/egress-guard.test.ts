@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { EgressGuard } from '../../../src/guards/security/egress-guard.js';
 import type { ProposedAction } from '../../../src/guards/types.js';

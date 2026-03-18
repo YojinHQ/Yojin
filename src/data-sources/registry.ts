@@ -89,7 +89,9 @@ export class DataSourceRegistry {
    * @throws Error if no async-capable source is available
    */
   async startJob(request: DataQuery): Promise<JobHandle> {
-    const candidates = this.getByCapability(request.capability).filter((s) => s.startJob);
+    const candidates = this.getByCapability(request.capability).filter(
+      (s): s is typeof s & { startJob: NonNullable<typeof s.startJob> } => !!s.startJob,
+    );
 
     if (candidates.length === 0) {
       throw new Error(`No async-capable data source provides capability "${request.capability}"`);
@@ -99,7 +101,7 @@ export class DataSourceRegistry {
 
     for (const source of candidates) {
       try {
-        return await source.startJob!(request);
+        return await source.startJob(request);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         errors.push({ sourceId: source.id, error: message });

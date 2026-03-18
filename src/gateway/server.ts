@@ -3,18 +3,16 @@
  * and routes messages through the agent loop.
  */
 
-import { PluginRegistry } from '../plugins/registry.js';
-import { getLogger } from '../logging/index.js';
-import type { YojinConfig } from '../config/config.js';
-import type { IncomingMessage } from '../plugins/types.js';
-import type { AgentLoopProvider, AgentMessage } from '../core/types.js';
-import { runAgentLoop } from '../core/agent-loop.js';
-import { starterTools } from '../core/starter-tools.js';
-
-// Built-in plugin imports
-import { anthropicPlugin } from '../../providers/anthropic/index.js';
 import { slackPlugin } from '../../channels/slack/index.js';
 import { webPlugin } from '../../channels/web/index.js';
+import { anthropicPlugin } from '../../providers/anthropic/index.js';
+import type { YojinConfig } from '../config/config.js';
+import { runAgentLoop } from '../core/agent-loop.js';
+import { starterTools } from '../core/starter-tools.js';
+import type { AgentLoopProvider, AgentMessage } from '../core/types.js';
+import { getLogger } from '../logging/index.js';
+import { PluginRegistry } from '../plugins/registry.js';
+import type { IncomingMessage } from '../plugins/types.js';
 
 export class Gateway {
   private registry: PluginRegistry;
@@ -116,7 +114,7 @@ export class Gateway {
 
       // Evict oldest threads when over capacity
       if (this.threadHistory.size > Gateway.MAX_THREADS) {
-        const oldest = this.threadHistory.keys().next().value!;
+        const oldest = this.threadHistory.keys().next().value as string;
         this.threadHistory.delete(oldest);
       }
 

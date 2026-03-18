@@ -8,9 +8,9 @@
 
 import { randomUUID } from 'node:crypto';
 
-import type { AuditLog } from '../audit/types.js';
 import type { ApprovalAction, ApprovalGateConfig } from './config.js';
 import { DEFAULT_APPROVAL_CONFIG } from './config.js';
+import type { AuditLog } from '../audit/types.js';
 
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired';
 
@@ -24,9 +24,7 @@ export interface ApprovalRequest {
   status: ApprovalStatus;
 }
 
-export type ApprovalResult =
-  | { approved: true }
-  | { approved: false; reason: string; timedOut: boolean };
+export type ApprovalResult = { approved: true } | { approved: false; reason: string; timedOut: boolean };
 
 interface PendingRequest {
   request: ApprovalRequest;
@@ -55,11 +53,7 @@ export class ApprovalGate {
   }
 
   /** Request approval for an action. Returns a promise that resolves on user response or timeout. */
-  async requestApproval(
-    action: string,
-    description: string,
-    agentId?: string,
-  ): Promise<ApprovalResult> {
+  async requestApproval(action: string, description: string, agentId?: string): Promise<ApprovalResult> {
     const now = new Date();
     const request: ApprovalRequest = {
       id: randomUUID(),
@@ -109,20 +103,13 @@ export class ApprovalGate {
     }
     if (update.timeoutMs !== undefined) {
       if (update.timeoutMs < ApprovalGate.MIN_TIMEOUT_MS) {
-        throw new Error(
-          `timeoutMs must be at least ${ApprovalGate.MIN_TIMEOUT_MS}ms (got ${update.timeoutMs}ms)`,
-        );
+        throw new Error(`timeoutMs must be at least ${ApprovalGate.MIN_TIMEOUT_MS}ms (got ${update.timeoutMs}ms)`);
       }
       (this.config as { timeoutMs: number }).timeoutMs = update.timeoutMs;
     }
   }
 
-  private resolveRequest(
-    requestId: string,
-    approved: boolean,
-    reason: string,
-    timedOut: boolean,
-  ): void {
+  private resolveRequest(requestId: string, approved: boolean, reason: string, timedOut: boolean): void {
     const entry = this.pending.get(requestId);
     if (!entry) return;
 
@@ -144,9 +131,7 @@ export class ApprovalGate {
       },
     });
 
-    const result: ApprovalResult = approved
-      ? { approved: true }
-      : { approved: false, reason, timedOut };
+    const result: ApprovalResult = approved ? { approved: true } : { approved: false, reason, timedOut };
 
     entry.resolve(result);
   }

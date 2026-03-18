@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { KillSwitch } from '../../../src/guards/security/kill-switch.js';
 import type { ProposedAction } from '../../../src/guards/types.js';

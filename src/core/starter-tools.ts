@@ -3,6 +3,7 @@
  */
 
 import { z } from 'zod';
+
 import type { ToolDefinition } from './types.js';
 
 export const getCurrentTimeTool: ToolDefinition = {
@@ -46,10 +47,7 @@ function evaluateMath(expr: string): number {
 
   function parseExponent(): number {
     let base = parseUnary();
-    while (
-      pos < input.length &&
-      (input[pos] === '^' || (input[pos] === '*' && input[pos + 1] === '*'))
-    ) {
+    while (pos < input.length && (input[pos] === '^' || (input[pos] === '*' && input[pos + 1] === '*'))) {
       if (input[pos] === '*') pos += 2;
       else pos++;
       const exp = parseUnary();
@@ -100,8 +98,7 @@ function evaluateMath(expr: string): number {
 
 export const calculateTool: ToolDefinition = {
   name: 'calculate',
-  description:
-    'Evaluate a mathematical expression. Supports basic arithmetic: +, -, *, /, **, %, parentheses.',
+  description: 'Evaluate a mathematical expression. Supports basic arithmetic: +, -, *, /, **, %, parentheses.',
   parameters: z.object({
     expression: z.string().describe('The mathematical expression to evaluate, e.g. "2 + 3 * 4"'),
   }),

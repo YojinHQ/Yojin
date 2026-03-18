@@ -3,10 +3,11 @@
  */
 
 import { createInterface } from 'node:readline';
+
+import { anthropicPlugin } from '../../providers/anthropic/index.js';
 import { loadConfig } from '../config/config.js';
 import { getLogger } from '../logging/index.js';
 import { PluginRegistry } from '../plugins/registry.js';
-import { anthropicPlugin } from '../../providers/anthropic/index.js';
 import type { ProviderMessage, ProviderPlugin } from '../plugins/types.js';
 
 export async function startChat(args: string[]): Promise<void> {
@@ -76,11 +77,7 @@ export async function startChat(args: string[]): Promise<void> {
   ask();
 }
 
-async function streamResponse(
-  provider: ProviderPlugin,
-  model: string,
-  history: ProviderMessage[],
-): Promise<void> {
+async function streamResponse(provider: ProviderPlugin, model: string, history: ProviderMessage[]): Promise<void> {
   let fullResponse = '';
 
   for await (const event of provider.stream({ model, messages: history })) {

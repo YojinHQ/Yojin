@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { ReadOnlyGuard } from '../../../src/guards/finance/read-only.js';
 import type { ProposedAction } from '../../../src/guards/types.js';

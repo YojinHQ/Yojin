@@ -8,9 +8,9 @@
  * Write-blocked paths only block writes — reads are allowed.
  */
 
-import { resolve } from 'node:path';
-import { realpathSync, existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { resolve } from 'node:path';
 
 import type { Guard, GuardResult, ProposedAction } from '../types.js';
 
@@ -47,8 +47,7 @@ export class FsGuard implements Guard {
 
   constructor(options?: FsGuardOptions) {
     // Support legacy blockedPaths option
-    const readPaths =
-      options?.readBlockedPaths ?? options?.blockedPaths ?? DEFAULT_READ_BLOCKED_PATHS;
+    const readPaths = options?.readBlockedPaths ?? options?.blockedPaths ?? DEFAULT_READ_BLOCKED_PATHS;
     const writePaths = options?.writeBlockedPaths ?? DEFAULT_WRITE_BLOCKED_PATHS;
 
     this.readBlockedPaths = readPaths.map((p) => this.resolvePath(p));

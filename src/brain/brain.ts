@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 
-import type { Brain as BrainInterface, BrainCommit } from './types.js';
+import type { BrainCommit, Brain as BrainInterface } from './types.js';
 import { BrainCommitSchema } from './types.js';
 
 const BRAIN_DIR = 'data/brain';
@@ -34,11 +34,7 @@ export class BrainStore implements BrainInterface {
     }
   }
 
-  async commit(
-    message: string,
-    type: BrainCommit['type'],
-    snapshot: Record<string, unknown>,
-  ): Promise<BrainCommit> {
+  async commit(message: string, type: BrainCommit['type'], snapshot: Record<string, unknown>): Promise<BrainCommit> {
     await this.ensureDir();
 
     const timestamp = new Date().toISOString();

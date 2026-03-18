@@ -2,7 +2,7 @@
  * Plugin registry — stores all registered providers and channels.
  */
 
-import type { ProviderPlugin, ChannelPlugin, YojinPluginApi, YojinPlugin } from './types.js';
+import type { ChannelPlugin, ProviderPlugin, YojinPlugin, YojinPluginApi } from './types.js';
 
 export class PluginRegistry {
   private providers = new Map<string, ProviderPlugin>();

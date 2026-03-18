@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
 import { homedir } from 'node:os';
+
+import { describe, expect, it } from 'vitest';
 
 import { FsGuard } from '../../../src/guards/security/fs-guard.js';
 import type { ProposedAction } from '../../../src/guards/types.js';

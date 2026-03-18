@@ -42,9 +42,7 @@ export class FrontalLobe implements FrontalLobeInterface {
     const previous = await this.get();
 
     const diffSummary =
-      previous === DEFAULT_CONTENT
-        ? 'initial working memory'
-        : `updated working memory (${content.length} chars)`;
+      previous === DEFAULT_CONTENT ? 'initial working memory' : `updated working memory (${content.length} chars)`;
 
     // Commit first — if this fails, the file is not yet touched
     const commitResult = await this.brain.commit(diffSummary, 'frontal-lobe', {

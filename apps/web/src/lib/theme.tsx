@@ -53,8 +53,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Apply on mount
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    const initial: ThemeChoice =
-      stored === 'light' || stored === 'system' || stored === 'dark' ? stored : 'dark';
+    const initial: ThemeChoice = stored === 'light' || stored === 'system' || stored === 'dark' ? stored : 'dark';
     applyTheme(resolve(initial));
   }, []);
 
@@ -71,7 +70,5 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener('change', onChange);
   }, [theme]);
 
-  return (
-    <ThemeContext.Provider value={{ theme, resolved, setTheme }}>{children}</ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={{ theme, resolved, setTheme }}>{children}</ThemeContext.Provider>;
 }

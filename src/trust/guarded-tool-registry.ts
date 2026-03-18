@@ -11,8 +11,8 @@
  * 7. Return result
  */
 
-import type { ToolResult } from '../core/types.js';
 import type { ToolRegistry } from '../core/tool-registry.js';
+import type { ToolResult } from '../core/types.js';
 import type { GuardRunner } from '../guards/guard-runner.js';
 import type { ProposedAction } from '../guards/types.js';
 import type { ApprovalGate } from './approval/approval-gate.js';

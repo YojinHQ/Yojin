@@ -1,15 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { ToolRegistry } from '../../src/core/tool-registry.js';
-import { FileAuditLog } from '../../src/trust/audit/audit-log.js';
 import { GuardRunner } from '../../src/guards/guard-runner.js';
 import { OutputDlpGuard } from '../../src/guards/security/output-dlp.js';
-import { GuardedToolRegistry } from '../../src/trust/guarded-tool-registry.js';
 import type { Guard } from '../../src/guards/types.js';
+import { FileAuditLog } from '../../src/trust/audit/audit-log.js';
+import { GuardedToolRegistry } from '../../src/trust/guarded-tool-registry.js';
 
 function makeBlockGuard(name: string, reason: string): Guard {
   return { name, check: () => ({ pass: false, reason }) };

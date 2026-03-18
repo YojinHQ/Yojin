@@ -20,9 +20,7 @@ export default function PortfolioSummary() {
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {summaryCards.map((card) => (
         <Card key={card.label}>
-          <p className="text-xs font-medium uppercase tracking-wider text-text-muted">
-            {card.label}
-          </p>
+          <p className="text-xs font-medium uppercase tracking-wider text-text-muted">{card.label}</p>
           <p className="mt-2 text-2xl font-semibold text-text-primary">{card.value}</p>
           {card.change && (
             <p

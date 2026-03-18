@@ -10,15 +10,14 @@
 
 import * as readline from 'node:readline';
 
-import { FileAuditLog } from '../audit/audit-log.js';
 import { EncryptedVault } from './vault.js';
+import { FileAuditLog } from '../audit/audit-log.js';
 
 function getPassphrase(): string {
   const passphrase = process.env.YOJIN_VAULT_PASSPHRASE;
   if (!passphrase) {
     throw new Error(
-      'YOJIN_VAULT_PASSPHRASE environment variable is required. ' +
-        'Set it before running secret commands.',
+      'YOJIN_VAULT_PASSPHRASE environment variable is required. ' + 'Set it before running secret commands.',
     );
   }
   return passphrase;

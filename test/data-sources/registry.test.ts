@@ -1,15 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { DataSourceRegistry } from '../../src/data-sources/registry.js';
-import type {
-  DataResult,
-  DataSourceConfig,
-  DataSourcePlugin,
-} from '../../src/data-sources/types.js';
-import {
-  DataSourceConfigArraySchema,
-  DataSourceConfigSchema,
-} from '../../src/data-sources/types.js';
+import type { DataResult, DataSourceConfig, DataSourcePlugin } from '../../src/data-sources/types.js';
+import { DataSourceConfigArraySchema, DataSourceConfigSchema } from '../../src/data-sources/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers — mock data source plugins
@@ -100,9 +93,7 @@ describe('DataSourceRegistry — capability resolution', () => {
   it('excludes disabled sources', () => {
     const registry = new DataSourceRegistry();
     registry.register(mockSource({ id: 'enabled', enabled: true, capabilities: [{ id: 'news' }] }));
-    registry.register(
-      mockSource({ id: 'disabled', enabled: false, capabilities: [{ id: 'news' }] }),
-    );
+    registry.register(mockSource({ id: 'disabled', enabled: false, capabilities: [{ id: 'news' }] }));
 
     const sources = registry.getByCapability('news');
     expect(sources.map((s) => s.id)).toEqual(['enabled']);
@@ -297,23 +288,17 @@ describe('DataSourceRegistry — async jobs', () => {
     const registry = new DataSourceRegistry();
     registry.register(mockSource({ id: 'sync-only' }));
 
-    await expect(registry.getJobStatus('sync-only', 'job-1')).rejects.toThrow(
-      'does not support async jobs',
-    );
+    await expect(registry.getJobStatus('sync-only', 'job-1')).rejects.toThrow('does not support async jobs');
   });
 
   it('throws distinct error when source not found in getJobStatus', async () => {
     const registry = new DataSourceRegistry();
-    await expect(registry.getJobStatus('nonexistent', 'job-1')).rejects.toThrow(
-      'Source "nonexistent" not found',
-    );
+    await expect(registry.getJobStatus('nonexistent', 'job-1')).rejects.toThrow('Source "nonexistent" not found');
   });
 
   it('throws distinct error when source not found in getJobResult', async () => {
     const registry = new DataSourceRegistry();
-    await expect(registry.getJobResult('nonexistent', 'job-1')).rejects.toThrow(
-      'Source "nonexistent" not found',
-    );
+    await expect(registry.getJobResult('nonexistent', 'job-1')).rejects.toThrow('Source "nonexistent" not found');
   });
 });
 

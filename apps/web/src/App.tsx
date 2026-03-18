@@ -3,16 +3,16 @@ import { Provider } from 'urql';
 import { graphqlClient } from './lib/graphql';
 import { ThemeProvider } from './lib/theme';
 import AppShell from './components/layout/app-shell';
-import Dashboard from './pages/dashboard';
-import Positions from './pages/positions';
-import AppShell from './components/layout/app-shell';
-import Dashboard from './pages/Dashboard';
-import Positions from './pages/Positions';
-import Position from './pages/Position';
-import Skills from './pages/Alerts';
+import Position from './pages/position';
+import Skills from './pages/skills';
 import Chat from './pages/chat';
 import Profile from './pages/profile';
-import Settings from './pages/Settings';
+import Settings from './pages/settings';
+import Dashboard from './pages/dashboard';
+import Positions from './pages/positions';
+
+function RedirectPositionSymbol() {
+  const { symbol } = useParams<{ symbol: string }>();
   return <Navigate to={`/portfolio/${symbol}`} replace />;
 }
 

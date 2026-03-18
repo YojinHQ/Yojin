@@ -23,5 +23,8 @@ export type {
   AgentLoopOptions,
   AgentLoopProvider,
   MemoryConfig,
+  YojinContext,
 } from './types.js';
 export { starterTools, getCurrentTimeTool, calculateTool } from './starter-tools.js';
+export { EventLog } from './event-log.js';
+export type { EventEntry, EventLogOptions, EventQueryFilter } from './event-log.js';

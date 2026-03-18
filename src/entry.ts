@@ -2,8 +2,8 @@
  * Yojin entry point.
  */
 
-import { initLogger } from './logging/index.js';
 import { runMain } from './cli/run-main.js';
+import { initLogger } from './logging/index.js';
 
 const args = process.argv.slice(2);
 

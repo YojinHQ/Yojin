@@ -1,6 +1,7 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { PluginRegistry } from '../src/plugins/registry.js';
-import type { ProviderPlugin, ChannelPlugin, IncomingMessage } from '../src/plugins/types.js';
+import type { ChannelPlugin, IncomingMessage, ProviderPlugin } from '../src/plugins/types.js';
 
 // We test the gateway's message routing logic without spawning the full Gateway
 // class (which imports anthropicPlugin/slackPlugin and calls getLogger at module
@@ -21,9 +22,7 @@ function makeProvider(id = 'anthropic'): ProviderPlugin {
   };
 }
 
-function makeChannel(
-  id = 'slack',
-): ChannelPlugin & { _handler?: (msg: IncomingMessage) => Promise<void> } {
+function makeChannel(id = 'slack'): ChannelPlugin & { _handler?: (msg: IncomingMessage) => Promise<void> } {
   const channel: ChannelPlugin & { _handler?: (msg: IncomingMessage) => Promise<void> } = {
     id,
     name: 'Test Channel',

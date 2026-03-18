@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { TokenBudget } from '../../src/core/token-budget.js';
 import type { AgentMessage } from '../../src/core/types.js';
 

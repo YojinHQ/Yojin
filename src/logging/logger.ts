@@ -9,16 +9,11 @@
  *   - Configurable via YOJIN_LOG_LEVEL env var
  */
 
-import { Logger as TsLogger, type ILogObj } from 'tslog';
-import {
-  mkdirSync,
-  appendFileSync,
-  writeFileSync,
-  symlinkSync,
-  unlinkSync,
-  existsSync,
-} from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { type ILogObj, Logger as TsLogger } from 'tslog';
+
 import { redact } from './redact.js';
 
 // ---------------------------------------------------------------------------
@@ -101,9 +96,7 @@ class YojinLogger {
       minLevel: LEVEL_MAP[minLevel],
       type: consoleStyle === 'json' ? 'json' : consoleStyle === 'hidden' ? 'hidden' : 'pretty',
       prettyLogTemplate:
-        consoleStyle === 'compact'
-          ? '{{logLevelName}} {{name}} '
-          : '{{hh}}:{{MM}}:{{ss}} {{logLevelName}} {{name}} ',
+        consoleStyle === 'compact' ? '{{logLevelName}} {{name}} ' : '{{hh}}:{{MM}}:{{ss}} {{logLevelName}} {{name}} ',
       stylePrettyLogs: consoleStyle === 'pretty' && process.stderr.isTTY,
       prettyLogTimeZone: 'local',
     });

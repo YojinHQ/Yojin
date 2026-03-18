@@ -10,8 +10,8 @@
  * a tamper-evident chain — any modification to a past event breaks the chain.
  */
 
-import { randomUUID, createHmac } from 'node:crypto';
-import { appendFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
+import { createHmac, randomUUID } from 'node:crypto';
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import type { AuditEvent, AuditEventInput, AuditFilter, AuditLog } from './types.js';
@@ -78,10 +78,12 @@ export class FileAuditLog implements AuditLog {
       events = events.filter((e) => e.agentId === filter.agentId);
     }
     if (filter.since) {
-      events = events.filter((e) => e.timestamp >= filter.since!);
+      const since = filter.since;
+      events = events.filter((e) => e.timestamp >= since);
     }
     if (filter.until) {
-      events = events.filter((e) => e.timestamp <= filter.until!);
+      const until = filter.until;
+      events = events.filter((e) => e.timestamp <= until);
     }
     if (filter.limit !== undefined) {
       events = events.slice(-filter.limit);
@@ -96,9 +98,7 @@ export class FileAuditLog implements AuditLog {
    *
    * Works directly on raw JSONL lines to avoid Zod parse reordering fields.
    */
-  async verifyChain(): Promise<
-    { valid: true } | { valid: false; brokenAt: number; reason: string }
-  > {
+  async verifyChain(): Promise<{ valid: true } | { valid: false; brokenAt: number; reason: string }> {
     if (!existsSync(this.filePath)) return { valid: true };
 
     const content = readFileSync(this.filePath, 'utf-8');

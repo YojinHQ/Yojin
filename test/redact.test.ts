@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { redact, maskToken } from '../src/logging/redact.js';
+
+import { maskToken, redact } from '../src/logging/redact.js';
 
 describe('redact', () => {
   it('redacts Anthropic API keys', () => {

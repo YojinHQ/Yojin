@@ -42,15 +42,7 @@ export const DEFAULT_PII_RULES: RedactionRule[] = [
     name: 'name',
     pattern: /.+/,
     replacement: '<NAME-REDACTED>',
-    fields: [
-      'accountName',
-      'account_name',
-      'ownerName',
-      'owner_name',
-      'userName',
-      'user_name',
-      'displayName',
-    ],
+    fields: ['accountName', 'account_name', 'ownerName', 'owner_name', 'userName', 'user_name', 'displayName'],
   },
   // Phone numbers
   {

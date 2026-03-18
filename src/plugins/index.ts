@@ -1,4 +1,6 @@
 export { PluginRegistry } from './registry.js';
+export { ChannelRouter } from './channel-router.js';
+export type { BroadcastResult } from './channel-router.js';
 export type {
   PluginKind,
   PluginManifest,

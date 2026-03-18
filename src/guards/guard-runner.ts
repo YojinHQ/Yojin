@@ -5,10 +5,10 @@
  * In observe mode, blocks are logged but the action is allowed through.
  */
 
-import type { AuditLog } from '../trust/audit/types.js';
-import type { Guard, GuardResult, PostureName, ProposedAction } from './types.js';
 import { POSTURE_CONFIGS } from './posture.js';
 import type { RateBudgetGuard } from './security/rate-budget.js';
+import type { Guard, GuardResult, PostureName, ProposedAction } from './types.js';
+import type { AuditLog } from '../trust/audit/types.js';
 
 export interface GuardRunnerOptions {
   auditLog: AuditLog;
@@ -102,9 +102,7 @@ export class GuardRunner {
 
     // Propagate new rate limit to RateBudgetGuard
     const newConfig = POSTURE_CONFIGS[posture];
-    const rateBudget = this.guards.find((g) => g.name === 'rate-budget') as
-      | RateBudgetGuard
-      | undefined;
+    const rateBudget = this.guards.find((g) => g.name === 'rate-budget') as RateBudgetGuard | undefined;
     rateBudget?.setMaxCalls(newConfig.rateLimit);
 
     this.auditLog.append({

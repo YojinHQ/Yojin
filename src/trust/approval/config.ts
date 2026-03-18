@@ -4,12 +4,7 @@
 
 import { z } from 'zod';
 
-export const ApprovalActionSchema = z.enum([
-  'trade.execute',
-  'platform.connect',
-  'config.change',
-  'posture.change',
-]);
+export const ApprovalActionSchema = z.enum(['trade.execute', 'platform.connect', 'config.change', 'posture.change']);
 export type ApprovalAction = z.infer<typeof ApprovalActionSchema>;
 
 export const ApprovalGateConfigSchema = z.object({
@@ -20,11 +15,6 @@ export const ApprovalGateConfigSchema = z.object({
 export type ApprovalGateConfig = z.infer<typeof ApprovalGateConfigSchema>;
 
 export const DEFAULT_APPROVAL_CONFIG: ApprovalGateConfig = {
-  actionsRequiringApproval: [
-    'trade.execute',
-    'platform.connect',
-    'config.change',
-    'posture.change',
-  ],
+  actionsRequiringApproval: ['trade.execute', 'platform.connect', 'config.change', 'posture.change'],
   timeoutMs: 5 * 60 * 1000,
 };

@@ -18,12 +18,7 @@ export const TrustConfigSchema = z.object({
     .default({}),
   /** Approval gate configuration. */
   approval: ApprovalGateConfigSchema.default({
-    actionsRequiringApproval: [
-      'trade.execute',
-      'platform.connect',
-      'config.change',
-      'posture.change',
-    ],
+    actionsRequiringApproval: ['trade.execute', 'platform.connect', 'config.change', 'posture.change'],
     timeoutMs: 300000,
   }),
   /** Egress guard allowlist. */

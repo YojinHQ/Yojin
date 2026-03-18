@@ -11,9 +11,7 @@ const statusStyles: Record<PositionStatus, string> = {
 
 export default function StatusBadge({ status }: { status: PositionStatus }) {
   return (
-    <span
-      className={cn('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium', statusStyles[status])}
-    >
+    <span className={cn('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium', statusStyles[status])}>
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );

@@ -7,4 +7,6 @@ export interface Skill {
   category: SkillCategory;
   active: boolean;
   source: 'built-in' | 'custom';
+  createdBy: string;
+  createdAt: string;
 }

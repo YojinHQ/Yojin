@@ -12,25 +12,19 @@
  */
 
 import { spawn } from 'node:child_process';
+
 import Anthropic from '@anthropic-ai/sdk';
+
+import type { AgentLoopProvider, AgentMessage, ContentBlock, ToolSchema } from '../../../src/core/types.js';
+import { getLogger } from '../../../src/logging/index.js';
+import { createProviderApiKeyAuth, createProviderOAuthAuth } from '../../../src/plugin-sdk/index.js';
 import type {
-  ProviderPlugin,
   ProviderCompletionParams,
   ProviderCompletionResult,
-  ProviderStreamEvent,
   ProviderModel,
+  ProviderPlugin,
+  ProviderStreamEvent,
 } from '../../../src/plugins/types.js';
-import type {
-  AgentLoopProvider,
-  AgentMessage,
-  ContentBlock,
-  ToolSchema,
-} from '../../../src/core/types.js';
-import {
-  createProviderApiKeyAuth,
-  createProviderOAuthAuth,
-} from '../../../src/plugin-sdk/index.js';
-import { getLogger } from '../../../src/logging/index.js';
 
 const ANTHROPIC_MODELS: ProviderModel[] = [
   {
@@ -168,7 +162,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
           content: m.content,
         })),
         ...(params.messages.some((m) => m.role === 'system')
-          ? { system: params.messages.find((m) => m.role === 'system')!.content }
+          ? { system: params.messages.find((m) => m.role === 'system')?.content }
           : {}),
         ...(params.temperature != null ? { temperature: params.temperature } : {}),
         ...(params.stopSequences ? { stop_sequences: params.stopSequences } : {}),
@@ -207,7 +201,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
           content: m.content,
         })),
         ...(params.messages.some((m) => m.role === 'system')
-          ? { system: params.messages.find((m) => m.role === 'system')!.content }
+          ? { system: params.messages.find((m) => m.role === 'system')?.content }
           : {}),
         ...(params.temperature != null ? { temperature: params.temperature } : {}),
         ...(params.stopSequences ? { stop_sequences: params.stopSequences } : {}),

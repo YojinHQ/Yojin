@@ -11,19 +11,19 @@
  * - Context compaction summarizes older messages, preserving recent turns
  */
 
-import { ToolRegistry } from './tool-registry.js';
-import { TokenBudget } from './token-budget.js';
-import { truncateToolResult } from './tool-result-truncation.js';
 import { compactMessages } from './context-compaction.js';
+import { TokenBudget } from './token-budget.js';
+import { ToolRegistry } from './tool-registry.js';
+import { truncateToolResult } from './tool-result-truncation.js';
 import type {
-  AgentLoopOptions,
   AgentLoopEvent,
+  AgentLoopOptions,
   AgentMessage,
+  TextBlock,
   ToolCall,
   ToolCallResult,
-  ToolUseBlock,
   ToolResultBlock,
-  TextBlock,
+  ToolUseBlock,
 } from './types.js';
 
 const DEFAULT_MAX_ITERATIONS = 20;
@@ -188,9 +188,7 @@ export async function runAgentLoop(
   const lastAssistant = messages.filter((m) => m.role === 'assistant').pop();
   const fallbackText = extractText(lastAssistant);
   return {
-    text:
-      fallbackText ||
-      'I reached the maximum number of steps. Please try again with a simpler request.',
+    text: fallbackText || 'I reached the maximum number of steps. Please try again with a simpler request.',
     messages,
     iterations,
     usage: totalUsage,

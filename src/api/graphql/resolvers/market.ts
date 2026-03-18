@@ -2,7 +2,7 @@
  * Market resolvers — quote, news, sectorExposure.
  */
 
-import type { Quote, Article, SectorWeight } from '../types.js';
+import type { Article, Quote, SectorWeight } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Stub data
@@ -54,8 +54,7 @@ const stubArticles: Article[] = [
     source: 'Reuters',
     url: 'https://example.com/apple-q4',
     publishedAt: new Date(Date.now() - 3_600_000).toISOString(),
-    summary:
-      'Apple Inc. reported record fourth-quarter revenue driven by iPhone and Services growth.',
+    summary: 'Apple Inc. reported record fourth-quarter revenue driven by iPhone and Services growth.',
     symbols: ['AAPL'],
     sentiment: 0.85,
   },

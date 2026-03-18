@@ -3,8 +3,8 @@
  * approaching the context window limit, preserving recent turns verbatim.
  */
 
-import type { AgentLoopProvider, AgentMessage, TextBlock } from './types.js';
 import type { TokenBudget } from './token-budget.js';
+import type { AgentLoopProvider, AgentMessage, TextBlock } from './types.js';
 
 export interface CompactionConfig {
   /** Number of recent user/assistant turn pairs to preserve verbatim (default 3). */
@@ -141,11 +141,7 @@ function findSplitIndex(messages: AgentMessage[], preserveTurns: number): number
 /**
  * Summarize messages using the LLM provider.
  */
-async function summarizeWithLlm(
-  messages: AgentMessage[],
-  provider: AgentLoopProvider,
-  model: string,
-): Promise<string> {
+async function summarizeWithLlm(messages: AgentMessage[], provider: AgentLoopProvider, model: string): Promise<string> {
   // Build a text representation of the conversation for summarization
   const conversationText = messages
     .map((msg) => {

@@ -4,6 +4,8 @@
 
 import { z } from 'zod';
 
+import type { AgentMessage } from '../core/types.js';
+
 // ---------------------------------------------------------------------------
 // Conversation types
 // ---------------------------------------------------------------------------
@@ -16,19 +18,13 @@ export interface AgentContext {
   userId: string;
 }
 
-export interface ConversationTurn {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: number;
-}
-
 export interface Agent {
   id: string;
   name: string;
   systemPrompt?: string;
 
-  /** Process a conversation turn and return a response. */
-  process(context: AgentContext, history: ConversationTurn[], userMessage: string): Promise<string>;
+  /** Process a conversation and return a response. */
+  process(context: AgentContext, history: AgentMessage[], userMessage: string): Promise<string>;
 }
 
 // ---------------------------------------------------------------------------

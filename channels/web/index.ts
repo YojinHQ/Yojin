@@ -2,8 +2,8 @@
  * Web channel plugin — entry point.
  */
 
-import type { YojinPlugin } from '../../src/plugins/types.js';
 import { buildWebChannel } from './src/channel.js';
+import type { YojinPlugin } from '../../src/plugins/types.js';
 
 export const webPlugin: YojinPlugin = {
   id: 'web',

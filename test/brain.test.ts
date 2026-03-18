@@ -1,12 +1,13 @@
-import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { BrainStore } from '../src/brain/brain.js';
 import { EmotionTracker } from '../src/brain/emotion.js';
 import { FrontalLobe } from '../src/brain/frontal-lobe.js';
-import { loadAgentPrompt, PersonaManager } from '../src/brain/persona.js';
+import { PersonaManager, loadAgentPrompt } from '../src/brain/persona.js';
 import { DEFAULT_EMOTION_VALUES } from '../src/brain/types.js';
 
 let tmpDir: string;

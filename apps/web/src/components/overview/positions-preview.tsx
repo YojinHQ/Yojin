@@ -19,43 +19,37 @@ const positions: Position[] = [
 
 export default function PositionsPreview() {
   return (
-    <div className="rounded-xl border border-border bg-bg-card">
-      <div className="flex items-center justify-between px-6 pt-5 pb-4">
-        <h3 className="font-headline text-lg text-text-primary">Top Positions</h3>
-        <Link
-          to="/portfolio"
-          className="text-sm text-accent-primary hover:text-accent-primary/80 transition-colors"
-        >
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-bg-card">
+      <div className="flex flex-shrink-0 items-center justify-between px-3 py-2">
+        <h3 className="text-sm font-medium text-text-primary">Top Positions</h3>
+        <Link to="/portfolio" className="text-xs text-accent-primary hover:text-accent-primary/80 transition-colors">
           View All
         </Link>
       </div>
-      <table className="w-full">
-        <thead>
-          <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-text-muted">
-            <th className="px-6 pb-3 font-medium">Symbol</th>
-            <th className="px-6 pb-3 font-medium">Name</th>
-            <th className="px-6 pb-3 text-right font-medium">Value</th>
-            <th className="px-6 pb-3 text-right font-medium">Change</th>
-          </tr>
-        </thead>
-        <tbody>
-          {positions.map((pos) => (
-            <tr key={pos.symbol} className="border-b border-border last:border-b-0">
-              <td className="px-6 py-3 text-sm font-medium text-accent-primary">{pos.symbol}</td>
-              <td className="px-6 py-3 text-sm text-text-secondary">{pos.name}</td>
-              <td className="px-6 py-3 text-right text-sm text-text-primary">{pos.value}</td>
-              <td
-                className={cn(
-                  'px-6 py-3 text-right text-sm',
-                  pos.positive ? 'text-success' : 'text-error',
-                )}
-              >
-                {pos.change}
-              </td>
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="w-full">
+          <thead className="sticky top-0 z-10 bg-bg-card">
+            <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-text-muted">
+              <th className="px-3 pb-1.5 font-medium">Symbol</th>
+              <th className="px-3 pb-1.5 font-medium">Name</th>
+              <th className="px-3 pb-1.5 text-right font-medium">Value</th>
+              <th className="px-3 pb-1.5 text-right font-medium">Change</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {positions.map((pos) => (
+              <tr key={pos.symbol} className="border-b border-border last:border-b-0">
+                <td className="px-3 py-1.5 text-xs font-medium text-accent-primary">{pos.symbol}</td>
+                <td className="px-3 py-1.5 text-xs text-text-secondary">{pos.name}</td>
+                <td className="px-3 py-1.5 text-right text-xs text-text-primary">{pos.value}</td>
+                <td className={cn('px-3 py-1.5 text-right text-xs', pos.positive ? 'text-success' : 'text-error')}>
+                  {pos.change}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

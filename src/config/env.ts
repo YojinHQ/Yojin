@@ -6,8 +6,8 @@
  * causing subtle bugs deep in the call stack.
  */
 
-import { z } from 'zod';
 import { config as loadDotenv } from 'dotenv';
+import { z } from 'zod';
 
 /**
  * Treat empty / whitespace-only strings as undefined — `.env` files
@@ -20,9 +20,7 @@ const envString = z
 
 /** String that must start with the given prefix when present. */
 const prefixed = (prefix: string) =>
-  envString.pipe(
-    z.union([z.string().startsWith(prefix, `Must start with "${prefix}"`), z.undefined()]),
-  );
+  envString.pipe(z.union([z.string().startsWith(prefix, `Must start with "${prefix}"`), z.undefined()]));
 
 export const EnvSchema = z.object({
   // ── Anthropic / Claude ──────────────────────────────────

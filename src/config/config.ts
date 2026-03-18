@@ -2,6 +2,8 @@
  * Configuration loading and validation.
  */
 
+import { readFile } from 'node:fs/promises';
+
 import { z } from 'zod';
 
 import type { Env } from './env.js';
@@ -91,3 +93,88 @@ function resolveAnthropicAuthMode(env: Env): AnthropicAuthMode | undefined {
   }
   return undefined;
 }
+
+// ---------------------------------------------------------------------------
+// JSON config loader — hot-reload on each call
+// ---------------------------------------------------------------------------
+
+/**
+ * Load a typed config from a JSON file, validating with a Zod schema.
+ * Returns Zod defaults when the file does not exist.
+ */
+export async function loadJsonConfig<T>(filePath: string, schema: z.ZodType<T>): Promise<T> {
+  let raw: string;
+  try {
+    raw = await readFile(filePath, 'utf-8');
+  } catch {
+    try {
+      return schema.parse({});
+    } catch (err) {
+      throw new Error(
+        `Failed to load config from ${filePath} (file missing and schema has required fields): ${(err as Error).message}`,
+        { cause: err },
+      );
+    }
+  }
+
+  try {
+    const json: unknown = JSON.parse(raw);
+    return schema.parse(json);
+  } catch (err) {
+    throw new Error(`Failed to load config from ${filePath}: ${(err as Error).message}`, {
+      cause: err,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Domain config schemas — minimal, grow as consuming modules are built
+// ---------------------------------------------------------------------------
+
+export const AlertsConfigSchema = z.object({
+  rules: z
+    .array(
+      z.object({
+        id: z.string(),
+        type: z.string(),
+        enabled: z.boolean().default(true),
+        params: z.record(z.unknown()).default({}),
+      }),
+    )
+    .default([]),
+  digestSchedule: z.string().default('0 7 * * *'),
+});
+export type AlertsConfig = z.infer<typeof AlertsConfigSchema>;
+
+export const OpenBBConfigSchema = z.object({
+  providers: z
+    .record(
+      z.object({
+        apiKey: z.string().optional(),
+        enabled: z.boolean().default(true),
+      }),
+    )
+    .default({}),
+  defaultEquityProvider: z.string().default('fmp'),
+});
+export type OpenBBConfig = z.infer<typeof OpenBBConfigSchema>;
+
+export const AIProviderConfigSchema = z.object({
+  defaultProvider: z.string().default('anthropic'),
+  defaultModel: z.string().default('claude-sonnet-4-20250514'),
+  fallbackProvider: z.string().optional(),
+  fallbackModel: z.string().optional(),
+});
+export type AIProviderConfig = z.infer<typeof AIProviderConfigSchema>;
+
+export const GuardConfigSchema = z.object({
+  posture: z.enum(['local', 'standard', 'unbounded']).default('local'),
+  rateLimit: z
+    .object({
+      callsPerMinute: z.number().default(60),
+    })
+    .default({}),
+  symbolWhitelist: z.array(z.string()).default([]),
+  cooldownSeconds: z.number().default(30),
+});
+export type GuardConfig = z.infer<typeof GuardConfigSchema>;

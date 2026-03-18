@@ -42,7 +42,7 @@ Types: feat, fix, refactor, test, docs, chore
 ## Git Hooks (Husky)
 
 Enforced automatically via `.husky/`:
-- **pre-commit**: Runs `lint-staged` → formats staged files with Prettier
+- **pre-commit**: Runs `lint-staged` (Prettier formatting), `tsc --noEmit` (typecheck), and strict version pinning check
 - **pre-push**: Runs `format:check`, `typecheck`, `lint`, `test:ci`
 
 These hooks are installed automatically via `pnpm install` (the `prepare` script runs `husky`).

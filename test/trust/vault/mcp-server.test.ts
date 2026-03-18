@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
+import type { AuditEventInput, AuditLog } from '../../../src/trust/audit/types.js';
 import { SecretProxy } from '../../../src/trust/vault/mcp-server.js';
 import type { SecretVault } from '../../../src/trust/vault/types.js';
-import type { AuditLog, AuditEventInput } from '../../../src/trust/audit/types.js';
 
 /** Minimal mock vault that stores secrets in-memory. */
 function createMockVault(secrets: Record<string, string>): SecretVault {
@@ -21,6 +21,7 @@ function createMockVault(secrets: Record<string, string>): SecretVault {
       return Object.keys(secrets);
     },
     async delete(key: string) {
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
       delete secrets[key];
     },
   };
@@ -108,8 +109,7 @@ describe('SecretProxy', () => {
   it('scrubs JWTs from response', async () => {
     const vault = createMockVault({ KEY: 'val' });
     const audit = createMockAuditLog();
-    const jwt =
-      'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
     const { mockFn } = createMockFetch(`{"token":"${jwt}"}`);
 
     const proxy = new SecretProxy(vault, audit, mockFn);
@@ -194,9 +194,9 @@ describe('SecretProxy', () => {
     const { mockFn } = createMockFetch('ok');
 
     const proxy = new SecretProxy(vault, audit, mockFn);
-    await expect(
-      proxy.authenticatedFetch('MISSING_KEY', 'https://api.example.com'),
-    ).rejects.toThrow('Secret not found: MISSING_KEY');
+    await expect(proxy.authenticatedFetch('MISSING_KEY', 'https://api.example.com')).rejects.toThrow(
+      'Secret not found: MISSING_KEY',
+    );
   });
 
   it('hasCredential checks vault without exposing values', async () => {

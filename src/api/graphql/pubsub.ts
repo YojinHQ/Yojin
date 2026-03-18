@@ -6,6 +6,7 @@
  */
 
 import { createPubSub } from 'graphql-yoga';
+
 import type { Alert, PortfolioSnapshot, PriceEvent } from './types.js';
 
 export type PubSubEvents = {

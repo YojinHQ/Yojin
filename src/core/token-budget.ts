@@ -60,9 +60,7 @@ export class TokenBudget {
     if (typeof message.content === 'string') {
       return overhead + this.estimateStringTokens(message.content);
     }
-    return (
-      overhead + message.content.reduce((sum, block) => sum + this.estimateBlockTokens(block), 0)
-    );
+    return overhead + message.content.reduce((sum, block) => sum + this.estimateBlockTokens(block), 0);
   }
 
   /** Estimate total token count for a message array + optional system prompt. */

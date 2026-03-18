@@ -48,11 +48,7 @@ export function createDefaultEmotion(): EmotionState {
 
 export interface Brain {
   /** Create a versioned snapshot of the current state. */
-  commit(
-    message: string,
-    type: BrainCommit['type'],
-    snapshot: Record<string, unknown>,
-  ): Promise<BrainCommit>;
+  commit(message: string, type: BrainCommit['type'], snapshot: Record<string, unknown>): Promise<BrainCommit>;
 
   /** Get ordered commit history (newest first). */
   getLog(limit?: number): Promise<BrainCommit[]>;

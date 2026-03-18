@@ -1,4 +1,5 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+
 import { createProviderApiKeyAuth, createProviderOAuthAuth } from '../src/plugin-sdk/index.js';
 
 describe('createProviderApiKeyAuth', () => {

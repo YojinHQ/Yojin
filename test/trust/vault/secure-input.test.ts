@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { createSecretTools } from '../../../src/trust/vault/secure-input.js';
 import type { SecretVault } from '../../../src/trust/vault/types.js';
@@ -21,6 +21,7 @@ function createMockVault(): SecretVault & { store: Record<string, string> } {
       return Object.keys(store);
     },
     async delete(key: string) {
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
       delete store[key];
     },
   };
