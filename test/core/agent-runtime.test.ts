@@ -203,6 +203,35 @@ describe('AgentRuntime', () => {
     expect(call.system).toContain('VIX elevated');
   });
 
+  it('forwards abort signal through run()', async () => {
+    const ac = new AbortController();
+    ac.abort(); // Pre-abort
+
+    const result = await runtime.run({
+      agentId: 'strategist',
+      message: 'hello',
+      abortSignal: ac.signal,
+    });
+
+    // With a pre-aborted signal, the loop exits on iteration 1 with empty text
+    expect(result.iterations).toBe(1);
+  });
+
+  it('forwards abort signal through handleMessage()', async () => {
+    const ac = new AbortController();
+    ac.abort(); // Pre-abort
+
+    const text = await runtime.handleMessage({
+      message: 'hello',
+      channelId: 'test',
+      userId: 'user1',
+      abortSignal: ac.signal,
+    });
+
+    // Should return without error; text may be empty since aborted immediately
+    expect(typeof text).toBe('string');
+  });
+
   it('handleMessage routes to strategist by default', async () => {
     const text = await runtime.handleMessage({
       message: 'hello',

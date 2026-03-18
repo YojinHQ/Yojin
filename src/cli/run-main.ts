@@ -4,6 +4,9 @@
 
 import { startChat } from './chat.js';
 import { setupToken } from './setup-token.js';
+import { LocalRuntimeBridge } from '../acp/runtime-bridge.js';
+import { startAcpServer } from '../acp/server.js';
+import { AcpSessionStore } from '../acp/session-store.js';
 import { createDefaultProfiles } from '../agents/defaults.js';
 import { AgentRegistry } from '../agents/registry.js';
 import { ClaudeCodeProvider } from '../ai-providers/claude-code.js';
@@ -38,6 +41,9 @@ export async function runMain(args: string[]): Promise<void> {
     case 'setup-token':
       await setupToken(args.slice(1));
       break;
+    case 'acp':
+      await startAcp();
+      break;
     case 'version':
       console.log('yojin v0.1.0');
       break;
@@ -48,10 +54,7 @@ export async function runMain(args: string[]): Promise<void> {
   }
 }
 
-async function startGateway(): Promise<void> {
-  const config = loadConfig();
-
-  // --- Composition root: wire AgentRuntime ---
+async function wireRuntime(): Promise<{ agentRuntime: AgentRuntime; dataRoot: string }> {
   const dataRoot = '.';
   const auditLog = new FileAuditLog(`${dataRoot}/data/audit`);
   const toolRegistry = new ToolRegistry();
@@ -86,6 +89,13 @@ async function startGateway(): Promise<void> {
     dataRoot,
   });
 
+  return { agentRuntime, dataRoot };
+}
+
+async function startGateway(): Promise<void> {
+  const config = loadConfig();
+  const { agentRuntime } = await wireRuntime();
+
   const gateway = new Gateway(config, agentRuntime);
 
   // Graceful shutdown
@@ -97,6 +107,20 @@ async function startGateway(): Promise<void> {
   process.on('SIGTERM', shutdown);
 
   await gateway.start();
+}
+
+async function startAcp(): Promise<void> {
+  const { agentRuntime, dataRoot } = await wireRuntime();
+  const bridge = new LocalRuntimeBridge(agentRuntime);
+  const acpSessionStore = new AcpSessionStore(`${dataRoot}/data/acp`);
+  const { shutdown } = startAcpServer({ bridge, sessionStore: acpSessionStore });
+
+  const gracefulShutdown = () => {
+    shutdown();
+    process.exit(0);
+  };
+  process.on('SIGINT', gracefulShutdown);
+  process.on('SIGTERM', gracefulShutdown);
 }
 
 function printHelp(): void {
@@ -115,6 +139,7 @@ Usage:
   yojin secret delete <key>          Delete a secret
   yojin setup-token [--method M]     Acquire a Claude OAuth token
                                      Methods: oauth, cli, paste
+  yojin acp                          Start ACP (Agent Client Protocol) server
   yojin version                      Print version
   yojin help                         Show this help message
 `);

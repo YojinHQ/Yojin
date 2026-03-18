@@ -76,6 +76,7 @@ export class AgentRuntime {
     sessionKey?: string;
     context?: string;
     onEvent?: AgentLoopEventHandler;
+    abortSignal?: AbortSignal;
   }): Promise<AgentStepResult> {
     const profile = this.agentRegistry.get(params.agentId);
     if (!profile) {
@@ -103,6 +104,7 @@ export class AgentRuntime {
         systemPrompt,
         tools: guardedTools,
         onEvent: params.onEvent,
+        abortSignal: params.abortSignal,
       });
     } catch (err) {
       await this.eventLog.append({
@@ -143,6 +145,8 @@ export class AgentRuntime {
     channelId: string;
     userId: string;
     threadId?: string;
+    onEvent?: AgentLoopEventHandler;
+    abortSignal?: AbortSignal;
   }): Promise<string> {
     const agentId: string = 'strategist';
 
@@ -166,7 +170,13 @@ export class AgentRuntime {
       }
     }
 
-    const result = await this.run({ agentId, message: params.message, sessionKey });
+    const result = await this.run({
+      agentId,
+      message: params.message,
+      sessionKey,
+      onEvent: params.onEvent,
+      abortSignal: params.abortSignal,
+    });
     return result.text;
   }
 

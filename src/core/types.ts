@@ -143,6 +143,8 @@ export interface AgentLoopOptions {
   approvalGate?: ApprovalGate;
   /** Agent identity — included in guard audit logs. */
   agentId?: string;
+  /** Abort signal — when triggered, the loop stops after the current iteration. */
+  abortSignal?: AbortSignal;
 }
 
 // ---------------------------------------------------------------------------
