@@ -14,7 +14,9 @@ const meta: Meta<typeof Toggle> = {
 export default meta;
 type Story = StoryObj<typeof Toggle>;
 
-function ControlledToggle(props: Omit<React.ComponentProps<typeof Toggle>, 'checked' | 'onChange'> & { defaultChecked?: boolean }) {
+function ControlledToggle(
+  props: Omit<React.ComponentProps<typeof Toggle>, 'checked' | 'onChange'> & { defaultChecked?: boolean },
+) {
   const { defaultChecked = false, ...rest } = props;
   const [checked, setChecked] = useState(defaultChecked);
   return <Toggle {...rest} checked={checked} onChange={setChecked} />;
@@ -39,11 +41,7 @@ export const Disabled: Story = {
 export const WithLabel: Story = {
   render: () => (
     <div style={{ width: 400 }}>
-      <ControlledToggle
-        label="Morning digest"
-        description="Daily portfolio summary at 8 AM"
-        defaultChecked
-      />
+      <ControlledToggle label="Morning digest" description="Daily portfolio summary at 8 AM" defaultChecked />
     </div>
   ),
 };
@@ -54,7 +52,11 @@ export const SettingsGroup: Story = {
       <ControlledToggle label="Price alerts" description="Notify when positions hit target price" defaultChecked />
       <ControlledToggle label="Risk warnings" description="Alert on concentration or exposure changes" defaultChecked />
       <ControlledToggle label="Agent activity" description="Notify when agents complete tasks" />
-      <ControlledToggle label="PII redaction" description="Strip identifiers before external API calls" defaultChecked />
+      <ControlledToggle
+        label="PII redaction"
+        description="Strip identifiers before external API calls"
+        defaultChecked
+      />
     </div>
   ),
 };

@@ -65,7 +65,9 @@ export default function Dropdown({ trigger, items, align = 'left', position = 'b
                     : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary',
                 )}
               >
-                {item.icon && <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center">{item.icon}</span>}
+                {item.icon && (
+                  <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center">{item.icon}</span>
+                )}
                 {item.label}
               </button>
             );
