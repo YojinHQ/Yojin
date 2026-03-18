@@ -1,24 +1,40 @@
 import { Link } from 'react-router';
 import { cn } from '../../lib/utils';
 import { SymbolLogo } from '../common/symbol-logo';
+import { usePositions } from '../../api';
+import Spinner from '../common/spinner';
 
-interface Position {
-  symbol: string;
-  name: string;
-  value: string;
-  change: string;
-  positive: boolean;
+function formatCurrency(n: number): string {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
-const positions: Position[] = [
-  { symbol: 'AAPL', name: 'Apple Inc.', value: '$18,432.50', change: '+2.4%', positive: true },
-  { symbol: 'MSFT', name: 'Microsoft Corp.', value: '$15,221.80', change: '+1.8%', positive: true },
-  { symbol: 'GOOGL', name: 'Alphabet Inc.', value: '$12,845.20', change: '-0.6%', positive: false },
-  { symbol: 'AMZN', name: 'Amazon.com Inc.', value: '$11,534.00', change: '+3.1%', positive: true },
-  { symbol: 'NVDA', name: 'NVIDIA Corp.', value: '$22,150.75', change: '+5.2%', positive: true },
-];
+function formatPercent(n: number): string {
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${n.toFixed(1)}%`;
+}
 
 export default function PositionsPreview() {
+  const [{ data, fetching, error }] = usePositions();
+
+  if (fetching) {
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center rounded-lg border border-border bg-bg-card">
+        <Spinner size="sm" />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center rounded-lg border border-border bg-bg-card">
+        <p className="text-xs text-text-muted">Unable to load positions</p>
+      </div>
+    );
+  }
+
+  // Sort by market value descending, show top 5
+  const top = [...data.positions].sort((a, b) => b.marketValue - a.marketValue).slice(0, 5);
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-bg-card">
       <div className="flex flex-shrink-0 items-center justify-between px-3 py-2">
@@ -38,7 +54,7 @@ export default function PositionsPreview() {
             </tr>
           </thead>
           <tbody>
-            {positions.map((pos) => (
+            {top.map((pos) => (
               <tr key={pos.symbol} className="border-b border-border last:border-b-0">
                 <td className="px-3 py-1.5">
                   <div className="flex items-center gap-2">
@@ -47,9 +63,14 @@ export default function PositionsPreview() {
                   </div>
                 </td>
                 <td className="px-3 py-1.5 text-xs text-text-secondary">{pos.name}</td>
-                <td className="px-3 py-1.5 text-right text-xs text-text-primary">{pos.value}</td>
-                <td className={cn('px-3 py-1.5 text-right text-xs', pos.positive ? 'text-success' : 'text-error')}>
-                  {pos.change}
+                <td className="px-3 py-1.5 text-right text-xs text-text-primary">{formatCurrency(pos.marketValue)}</td>
+                <td
+                  className={cn(
+                    'px-3 py-1.5 text-right text-xs',
+                    pos.unrealizedPnlPercent >= 0 ? 'text-success' : 'text-error',
+                  )}
+                >
+                  {formatPercent(pos.unrealizedPnlPercent)}
                 </td>
               </tr>
             ))}

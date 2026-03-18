@@ -1,4 +1,6 @@
 import { cn } from '../../lib/utils';
+import { usePortfolio } from '../../api';
+import Spinner from '../common/spinner';
 
 interface StatCard {
   label: string;
@@ -7,18 +9,77 @@ interface StatCard {
   positive?: boolean;
 }
 
-const stats: StatCard[] = [
-  { label: 'Total Value', value: '$124,850.32', change: null },
-  { label: "Today's P&L", value: '+$1,245.67', change: '+1.01%', positive: true },
-  { label: 'Total Return', value: '+$18,432.10', change: '+17.3%', positive: true },
-  { label: 'Trades Today', value: '3', change: null },
-  { label: 'Positions', value: '12', change: null },
-  { label: 'Accounts', value: '2', change: null },
-];
+function formatCurrency(n: number): string {
+  const abs = Math.abs(n);
+  const formatted = abs.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  return n < 0 ? `-${formatted}` : n > 0 ? `+${formatted}` : formatted;
+}
+
+function formatPercent(n: number): string {
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${n.toFixed(2)}%`;
+}
+
+function buildStats(
+  totalValue: number,
+  totalCost: number,
+  totalPnl: number,
+  totalPnlPercent: number,
+  positionCount: number,
+): StatCard[] {
+  return [
+    {
+      label: 'Total Value',
+      value: totalValue.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+      change: null,
+    },
+    {
+      label: "Today's P&L",
+      value: formatCurrency(totalPnl),
+      change: formatPercent(totalPnlPercent),
+      positive: totalPnl >= 0,
+    },
+    {
+      label: 'Total Return',
+      value: formatCurrency(totalValue - totalCost),
+      change: totalCost > 0 ? formatPercent(((totalValue - totalCost) / totalCost) * 100) : null,
+      positive: totalValue >= totalCost,
+    },
+    { label: 'Positions', value: String(positionCount), change: null },
+  ];
+}
 
 export default function PortfolioValueStrip() {
+  const [{ data, fetching, error }] = usePortfolio();
+
+  if (fetching) {
+    return (
+      <div className="grid flex-shrink-0 grid-cols-2 gap-1.5 md:grid-cols-3 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-center justify-center rounded-lg border border-border bg-bg-card px-3 py-4"
+          >
+            <Spinner size="sm" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error || !data?.portfolio) {
+    return (
+      <div className="flex-shrink-0 rounded-lg border border-border bg-bg-card px-3 py-2 text-xs text-text-muted">
+        Unable to load portfolio data
+      </div>
+    );
+  }
+
+  const { totalValue, totalCost, totalPnl, totalPnlPercent, positions } = data.portfolio;
+  const stats = buildStats(totalValue, totalCost, totalPnl, totalPnlPercent, positions.length);
+
   return (
-    <div className="grid flex-shrink-0 grid-cols-2 gap-1.5 md:grid-cols-3 lg:grid-cols-6">
+    <div className="grid flex-shrink-0 grid-cols-2 gap-1.5 md:grid-cols-3 lg:grid-cols-4">
       {stats.map((stat) => (
         <div key={stat.label} className="rounded-lg border border-border bg-bg-card px-3 py-2">
           <p className="text-2xs uppercase tracking-wider text-text-secondary">{stat.label}</p>
