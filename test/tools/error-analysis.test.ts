@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { createErrorAnalysisTools } from '../../src/tools/error-analysis.js';
+import type { ToolDefinition } from '../../src/core/types.js';
 import type { DataSourceRegistry } from '../../src/data-sources/registry.js';
 import type { DataSourcePlugin, HealthCheckResult } from '../../src/data-sources/types.js';
-import type { ToolDefinition } from '../../src/core/types.js';
+import { createErrorAnalysisTools } from '../../src/tools/error-analysis.js';
 
 function makeSource(
   id: string,

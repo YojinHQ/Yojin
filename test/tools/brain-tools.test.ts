@@ -1,14 +1,15 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { BrainStore } from '../../src/brain/brain.js';
 import { EmotionTracker } from '../../src/brain/emotion.js';
 import { FrontalLobe } from '../../src/brain/frontal-lobe.js';
 import { PersonaManager } from '../../src/brain/persona.js';
-import { createBrainTools } from '../../src/tools/brain-tools.js';
 import type { ToolDefinition } from '../../src/core/types.js';
+import { createBrainTools } from '../../src/tools/brain-tools.js';
 
 let tmpDir: string;
 let tools: ToolDefinition[];

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSecurityAuditTools } from '../../src/tools/security-audit.js';
+import type { ToolDefinition } from '../../src/core/types.js';
 import type { GuardRunner } from '../../src/guards/guard-runner.js';
 import type { GuardResult, PostureName } from '../../src/guards/types.js';
-import type { ToolDefinition } from '../../src/core/types.js';
+import { createSecurityAuditTools } from '../../src/tools/security-audit.js';
 
 function makeGuardRunner(
   options: {
