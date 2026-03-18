@@ -1,3 +1,6 @@
+import { anthropic } from '@ai-sdk/anthropic';
+import { openai } from '@ai-sdk/openai';
+import { generateText, jsonSchema } from 'ai';
 import type { LanguageModel, ToolSet } from 'ai';
 
 import type { AIProvider } from './types.js';
@@ -26,8 +29,7 @@ export class VercelAIProvider implements AIProvider {
     stopReason: string;
     usage?: { inputTokens: number; outputTokens: number };
   }> {
-    const { generateText, jsonSchema } = await import('ai');
-    const modelInstance = await this.resolveModel(params.model);
+    const modelInstance = this.resolveModel(params.model);
 
     // Build a lookup map from tool call ID → tool name, needed for tool-result parts.
     const toolCallNames = new Map<string, string>();
@@ -118,17 +120,15 @@ export class VercelAIProvider implements AIProvider {
     };
   }
 
-  private async resolveModel(modelId: string): Promise<LanguageModel> {
+  private resolveModel(modelId: string): LanguageModel {
     if (modelId.startsWith('claude')) {
-      const { anthropic } = await import('@ai-sdk/anthropic');
       return anthropic(modelId);
     }
     if (modelId.startsWith('gpt')) {
-      const { openai } = await import('@ai-sdk/openai');
       return openai(modelId);
     }
-    // Default to Anthropic for unknown model IDs
-    const { anthropic } = await import('@ai-sdk/anthropic');
-    return anthropic(modelId);
+    throw new Error(
+      `VercelAIProvider: unsupported model ID "${modelId}". Add a resolver branch for this model family.`,
+    );
   }
 }

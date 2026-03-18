@@ -13,7 +13,6 @@ export class ProviderRouter {
   private backends = new Map<string, AIProvider>();
   private configOverride?: AIProviderConfig;
   private readonly configPath: string;
-  private pendingOverrides?: { provider?: string; model?: string };
   private refreshTimer?: ReturnType<typeof setInterval>;
 
   constructor(options: ProviderRouterOptions = {}) {
@@ -28,17 +27,23 @@ export class ProviderRouter {
     this.configOverride = config;
   }
 
-  setPendingOverrides(overrides: { provider?: string; model?: string }): void {
-    this.pendingOverrides = overrides;
-  }
-
   resolve(overrides?: { provider?: string; model?: string }): { provider: AIProvider; model: string } {
     const config = this.getConfig();
     const providerId = overrides?.provider ?? config.defaultProvider;
     const model = overrides?.model ?? config.defaultModel;
-    const provider = this.backends.get(providerId) ?? this.firstAvailable();
+    if (providerId) {
+      const provider = this.backends.get(providerId);
+      if (!provider) {
+        throw new Error(
+          `AI provider "${providerId}" is not registered. Available: [${[...this.backends.keys()].join(', ')}]`,
+        );
+      }
+      return { provider, model };
+    }
+
+    const provider = this.firstAvailable();
     if (!provider) {
-      throw new Error(`No AI provider available (wanted: ${providerId})`);
+      throw new Error('No AI provider registered');
     }
     return { provider, model };
   }
@@ -49,15 +54,13 @@ export class ProviderRouter {
     messages: AgentMessage[];
     tools?: ToolSchema[];
     maxTokens?: number;
+    providerOverrides?: { provider?: string; model?: string };
   }): Promise<{
     content: ContentBlock[];
     stopReason: string;
     usage?: { inputTokens: number; outputTokens: number };
   }> {
-    const overrides = this.pendingOverrides;
-    this.pendingOverrides = undefined;
-
-    const { provider, model } = this.resolve(overrides);
+    const { provider, model } = this.resolve(params.providerOverrides);
     const config = this.getConfig();
 
     try {

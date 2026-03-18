@@ -16,6 +16,8 @@ import { starterTools } from '../core/starter-tools.js';
 import { ToolRegistry } from '../core/tool-registry.js';
 import { Gateway } from '../gateway/server.js';
 import { GuardRunner } from '../guards/guard-runner.js';
+import { getPostureConfig } from '../guards/posture.js';
+import { createDefaultGuards } from '../guards/registry.js';
 import { JsonlSessionStore } from '../sessions/jsonl-store.js';
 import { FileAuditLog } from '../trust/audit/audit-log.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
@@ -68,13 +70,19 @@ async function startGateway(): Promise<void> {
   await providerRouter.loadConfig();
   providerRouter.startConfigRefresh();
 
+  const posture = getPostureConfig('local');
+  const { guards, outputDlp } = createDefaultGuards(posture);
+  const guardRunner = new GuardRunner(guards, { auditLog, posture: 'local' });
+  guardRunner.freeze();
+
   const agentRuntime = new AgentRuntime({
     agentRegistry,
     toolRegistry,
-    guardRunner: new GuardRunner([], { auditLog }),
+    guardRunner,
     sessionStore: new JsonlSessionStore(`${dataRoot}/data/sessions`),
     eventLog: new EventLog(`${dataRoot}/data/event-log`),
     provider: providerRouter,
+    outputDlp,
     dataRoot,
   });
 

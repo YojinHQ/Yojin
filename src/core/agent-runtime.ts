@@ -159,7 +159,7 @@ export class AgentRuntime {
           channelId: params.channelId,
           threadId: params.threadId,
           userId: params.userId,
-          providerId: 'default',
+          providerId: 'agent-runtime',
           model,
         });
         sessionKey = session.id;

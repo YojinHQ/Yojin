@@ -28,11 +28,16 @@ describe('ProviderRouter', () => {
     backend = mockBackend('test-backend');
     router = new ProviderRouter({ configPath: 'nonexistent.json' });
     router.registerBackend(backend);
+    router.setConfig({ defaultProvider: 'test-backend', defaultModel: 'mock-model' });
   });
 
   it('resolves to registered backend', () => {
     const resolved = router.resolve();
     expect(resolved.provider.id).toBe('test-backend');
+  });
+
+  it('throws when named provider is not registered', () => {
+    expect(() => router.resolve({ provider: 'nonexistent' })).toThrow('AI provider "nonexistent" is not registered');
   });
 
   it('respects per-agent profile override', () => {
