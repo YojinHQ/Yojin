@@ -1,3 +1,5 @@
+unset GIT_WORK_TREE
+unset GIT_DIR
 cd "$(git rev-parse --show-toplevel)"
 
 # Build + test backend

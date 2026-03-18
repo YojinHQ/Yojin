@@ -10,59 +10,74 @@ interface Message {
   content: string;
 }
 
-const MOCK_RESPONSES: Record<string, string> = {
-  'How is my portfolio performing today?':
-    'Your portfolio is up 1.2% today, outperforming the S&P 500 by 0.4%. Your top mover is NVDA (+3.8%) while AAPL is slightly down (-0.3%). Overall, your positions are well-balanced with no immediate concerns.',
-  'Analyze my current risk exposure':
-    'Your current risk exposure is moderate. Tech sector concentration is at 42%, which is above the recommended 30% threshold. Consider diversifying into healthcare or energy. Your max drawdown risk is estimated at 12.5% based on current volatility.',
-  'Show me my top performing positions':
-    'Your top 3 performers this month: 1) NVDA +18.4% 2) META +12.1% 3) AMZN +8.7%. Together they represent 35% of your portfolio and have contributed 78% of your total gains this period.',
-  'What market trends should I watch?':
-    'Key trends to watch: 1) Fed rate decision next week - markets pricing in a hold. 2) AI infrastructure spending accelerating - positive for your NVDA and MSFT positions. 3) Oil prices declining - could benefit consumer discretionary holdings.',
-};
+async function sendChatMessage(message: string, threadId: string): Promise<{ threadId: string; response: string }> {
+  let res: Response;
+  try {
+    res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, threadId }),
+    });
+  } catch {
+    throw new Error('Cannot reach the backend. Is the server running? (pnpm dev)');
+  }
 
-function getMockResponse(userMessage: string): string {
-  return (
-    MOCK_RESPONSES[userMessage] ??
-    `I've analyzed your question about "${userMessage}". Based on your current portfolio composition and market conditions, I'd recommend reviewing your positions in the context of recent sector rotations. Would you like me to dive deeper into any specific aspect?`
-  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `Request failed (${res.status})`);
+  }
+
+  const data = (await res.json()) as { threadId: string; response: string };
+  if (typeof data.response !== 'string') {
+    throw new Error('Unexpected response format from server');
+  }
+  return data;
 }
 
 export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [threadId] = useState(() => `web-${crypto.randomUUID()}`);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isLoading]);
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, []);
-
-  const handleSend = useCallback((content: string) => {
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content,
-    };
-    setMessages((prev) => [...prev, userMessage]);
-
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      const assistantMessage: Message = {
+  const handleSend = useCallback(
+    async (content: string) => {
+      const userMessage: Message = {
         id: crypto.randomUUID(),
-        role: 'assistant',
-        content: getMockResponse(content),
+        role: 'user',
+        content,
       };
-      setMessages((prev) => [...prev, assistantMessage]);
-    }, 800);
-  }, []);
+      setMessages((prev) => [...prev, userMessage]);
+      setIsLoading(true);
+
+      try {
+        const { response } = await sendChatMessage(content, threadId);
+        const assistantMessage: Message = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: response,
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+      } catch (err) {
+        const errorText = err instanceof Error ? err.message : 'Something went wrong';
+        const errorMessage: Message = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `Sorry, I couldn't process that request. ${errorText}`,
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [threadId],
+  );
 
   const handleQuerySelect = useCallback(
     (query: string) => {
@@ -80,6 +95,22 @@ export default function Chat() {
           {messages.map((msg) => (
             <ChatMessage key={msg.id} id={msg.id} role={msg.role} content={msg.content} />
           ))}
+          {isLoading && (
+            <div className="flex gap-3">
+              <img
+                src="/yojin_inverse_avatar.png"
+                alt="Yojin"
+                className="h-8 w-8 flex-shrink-0 rounded-full object-cover"
+              />
+              <div className="bg-bg-card border-border rounded-2xl rounded-tl-sm border px-4 py-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="bg-text-muted h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:-0.3s]" />
+                  <span className="bg-text-muted h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:-0.15s]" />
+                  <span className="bg-text-muted h-1.5 w-1.5 animate-bounce rounded-full" />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -95,7 +126,7 @@ export default function Chat() {
       {/* Chat input - pinned bottom */}
       <div className="px-6 pb-6">
         <div className="mx-auto max-w-3xl">
-          <ChatInput onSend={handleSend} />
+          <ChatInput onSend={handleSend} disabled={isLoading} />
         </div>
       </div>
     </div>

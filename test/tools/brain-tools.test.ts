@@ -36,8 +36,8 @@ afterEach(async () => {
 });
 
 describe('createBrainTools', () => {
-  it('creates 7 tools', () => {
-    expect(tools).toHaveLength(7);
+  it('creates 8 tools', () => {
+    expect(tools).toHaveLength(8);
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
       'brain_get_emotion',
@@ -45,6 +45,7 @@ describe('createBrainTools', () => {
       'brain_get_memory',
       'brain_get_persona',
       'brain_rollback',
+      'brain_set_persona',
       'brain_update_emotion',
       'brain_update_memory',
     ]);

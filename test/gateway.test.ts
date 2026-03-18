@@ -44,7 +44,11 @@ function makeChannel(id = 'slack'): ChannelPlugin & { _handler?: (msg: IncomingM
   return channel;
 }
 
-describe('Gateway message routing', () => {
+// ---------------------------------------------------------------------------
+// 1. Plugin-level routing tests (unchanged from original)
+// ---------------------------------------------------------------------------
+
+describe('Gateway message routing (plugin-level)', () => {
   let registry: PluginRegistry;
   let provider: ProviderPlugin;
   let channel: ReturnType<typeof makeChannel>;
@@ -126,5 +130,131 @@ describe('Gateway message routing', () => {
 
     // The handler should not throw
     await expect(channel._handler!(msg)).rejects.toThrow('API down');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2. AgentRuntime delegation tests
+// ---------------------------------------------------------------------------
+
+describe('Gateway AgentRuntime delegation', () => {
+  let channel: ReturnType<typeof makeChannel>;
+  let mockRuntime: { handleMessage: ReturnType<typeof vi.fn> };
+
+  beforeEach(() => {
+    channel = makeChannel();
+    mockRuntime = {
+      handleMessage: vi.fn().mockResolvedValue('Response from AgentRuntime'),
+    };
+  });
+
+  /**
+   * Simulates handleIncomingMessage delegation pattern used by Gateway
+   * when an AgentRuntime is configured, without importing Gateway directly
+   * (which pulls in real plugin modules).
+   */
+  async function simulateGatewayHandler(
+    msg: IncomingMessage,
+    channelId: string,
+    runtime: typeof mockRuntime,
+    ch: ReturnType<typeof makeChannel>,
+  ): Promise<void> {
+    try {
+      const responseText = await runtime.handleMessage({
+        message: msg.text,
+        channelId,
+        userId: msg.userId,
+        threadId: msg.threadId,
+      });
+
+      await ch.messagingAdapter.sendMessage({
+        channelId: msg.channelId,
+        threadId: msg.threadId,
+        text: responseText,
+      });
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      void errMsg; // logged in real Gateway
+      await ch.messagingAdapter.sendMessage({
+        channelId: msg.channelId,
+        threadId: msg.threadId,
+        text: 'Sorry, something went wrong processing your message.',
+      });
+    }
+  }
+
+  it('delegates to agentRuntime.handleMessage with correct params', async () => {
+    const msg: IncomingMessage = {
+      channelId: 'C123',
+      threadId: 'T456',
+      userId: 'U789',
+      text: 'Hello agent!',
+      timestamp: '1234567890',
+    };
+
+    await simulateGatewayHandler(msg, 'slack', mockRuntime, channel);
+
+    expect(mockRuntime.handleMessage).toHaveBeenCalledWith({
+      message: 'Hello agent!',
+      channelId: 'slack',
+      userId: 'U789',
+      threadId: 'T456',
+    });
+  });
+
+  it('sends AgentRuntime response back to channel', async () => {
+    const msg: IncomingMessage = {
+      channelId: 'C123',
+      threadId: 'T456',
+      userId: 'U789',
+      text: 'Hello agent!',
+      timestamp: '1234567890',
+    };
+
+    await simulateGatewayHandler(msg, 'slack', mockRuntime, channel);
+
+    expect(channel.messagingAdapter.sendMessage).toHaveBeenCalledWith({
+      channelId: 'C123',
+      threadId: 'T456',
+      text: 'Response from AgentRuntime',
+    });
+  });
+
+  it('handles messages without threadId via AgentRuntime', async () => {
+    const msg: IncomingMessage = {
+      channelId: 'C123',
+      userId: 'U789',
+      text: 'No thread',
+      timestamp: '1234567890',
+    };
+
+    await simulateGatewayHandler(msg, 'slack', mockRuntime, channel);
+
+    expect(mockRuntime.handleMessage).toHaveBeenCalledWith({
+      message: 'No thread',
+      channelId: 'slack',
+      userId: 'U789',
+      threadId: undefined,
+    });
+  });
+
+  it('sends error message when AgentRuntime throws', async () => {
+    mockRuntime.handleMessage.mockRejectedValueOnce(new Error('Runtime error'));
+
+    const msg: IncomingMessage = {
+      channelId: 'C123',
+      threadId: 'T456',
+      userId: 'U789',
+      text: 'This will fail',
+      timestamp: '1234567890',
+    };
+
+    await simulateGatewayHandler(msg, 'slack', mockRuntime, channel);
+
+    expect(channel.messagingAdapter.sendMessage).toHaveBeenCalledWith({
+      channelId: 'C123',
+      threadId: 'T456',
+      text: 'Sorry, something went wrong processing your message.',
+    });
   });
 });

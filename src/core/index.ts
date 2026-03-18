@@ -1,3 +1,5 @@
+export { AgentRuntime } from './agent-runtime.js';
+export type { AgentRuntimeOptions } from './agent-runtime.js';
 export { ToolRegistry } from './tool-registry.js';
 export { runAgentLoop } from './agent-loop.js';
 export type { AgentLoopResult } from './agent-loop.js';

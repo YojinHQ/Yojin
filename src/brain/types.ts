@@ -74,6 +74,9 @@ export interface EmotionTracker {
 }
 
 export interface PersonaManager {
+  /** True if no user-customized persona exists yet. */
+  isFirstRun(): boolean;
+
   /** Get active persona (override if exists, else default). */
   getPersona(): Promise<string>;
 

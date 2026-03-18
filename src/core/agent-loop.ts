@@ -112,13 +112,21 @@ export async function runAgentLoop(
       }
     }
 
-    // ── Thought: ask the LLM ──────────────────────────────────────────
-    const response = await provider.completeWithTools({
-      model,
-      system: systemPrompt,
-      messages,
-      tools: toolSchemas.length > 0 ? toolSchemas : undefined,
-    });
+    // ── Thought: ask the LLM (streaming when available) ───────────────
+    const response = provider.streamWithTools
+      ? await provider.streamWithTools({
+          model,
+          system: systemPrompt,
+          messages,
+          tools: toolSchemas.length > 0 ? toolSchemas : undefined,
+          onTextDelta: (text) => emit(onEvent, { type: 'text_delta', text }),
+        })
+      : await provider.completeWithTools({
+          model,
+          system: systemPrompt,
+          messages,
+          tools: toolSchemas.length > 0 ? toolSchemas : undefined,
+        });
 
     if (response.usage) {
       totalUsage.inputTokens += response.usage.inputTokens;

@@ -1,0 +1,3 @@
+# Force LF for shell scripts — CRLF breaks bash on macOS/Linux
+*.sh text eol=lf
+.husky/* text eol=lf

@@ -98,6 +98,20 @@ export function createBrainTools(options: BrainToolsOptions): ToolDefinition[] {
     },
   };
 
+  const setPersona: ToolDefinition = {
+    name: 'brain_set_persona',
+    description:
+      'Update the active persona — rewrite your personality, communication style, and constraint rules. ' +
+      'The content should be a complete Markdown persona document.',
+    parameters: z.object({
+      content: z.string().min(1).describe('Full persona document in Markdown'),
+    }),
+    async execute(params: { content: string }): Promise<ToolResult> {
+      await persona.setPersona(params.content);
+      return { content: 'Persona updated successfully.' };
+    },
+  };
+
   const getLog: ToolDefinition = {
     name: 'brain_get_log',
     description:
@@ -134,7 +148,7 @@ export function createBrainTools(options: BrainToolsOptions): ToolDefinition[] {
     },
   };
 
-  return [getMemory, updateMemory, getEmotion, updateEmotion, getPersona, getLog, rollback];
+  return [getMemory, updateMemory, getEmotion, updateEmotion, getPersona, setPersona, getLog, rollback];
 }
 
 function describeLevel(value: number): string {

@@ -4,6 +4,7 @@
 
 import type { ZodSchema } from 'zod';
 
+import type { AgentRuntime } from './agent-runtime.js';
 import type { EventLog } from './event-log.js';
 import type { ToolRegistry } from './tool-registry.js';
 import type { YojinConfig } from '../config/config.js';
@@ -93,6 +94,7 @@ export interface AgentMessage {
 
 export type AgentLoopEvent =
   | { type: 'thought'; text: string }
+  | { type: 'text_delta'; text: string }
   | { type: 'action'; toolCalls: ToolCall[] }
   | { type: 'observation'; results: ToolCallResult[] }
   | {
@@ -159,6 +161,20 @@ export interface AgentLoopProvider {
     stopReason: string;
     usage?: { inputTokens: number; outputTokens: number };
   }>;
+
+  /** Streaming variant — yields text deltas, resolves to the same shape. */
+  streamWithTools?(params: {
+    model: string;
+    system?: string;
+    messages: AgentMessage[];
+    tools?: ToolSchema[];
+    maxTokens?: number;
+    onTextDelta?: (text: string) => void;
+  }): Promise<{
+    content: ContentBlock[];
+    stopReason: string;
+    usage?: { inputTokens: number; outputTokens: number };
+  }>;
 }
 
 export interface ToolSchema {
@@ -177,4 +193,5 @@ export interface YojinContext {
   sessionStore: SessionStore;
   eventLog: EventLog;
   channelRouter: ChannelRouter;
+  agentRuntime?: AgentRuntime;
 }

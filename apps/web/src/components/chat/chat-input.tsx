@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import Button from '../common/button';
 
-export default function ChatInput({ onSend }: { onSend: (message: string) => void }) {
+export default function ChatInput({ onSend, disabled }: { onSend: (message: string) => void; disabled?: boolean }) {
   const [value, setValue] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!value.trim()) return;
+    if (!value.trim() || disabled) return;
     onSend(value.trim());
     setValue('');
   };
@@ -22,8 +22,9 @@ export default function ChatInput({ onSend }: { onSend: (message: string) => voi
         onChange={(e) => setValue(e.target.value)}
         placeholder="Ask Yojin anything about your portfolio..."
         className="text-text-primary placeholder:text-text-muted flex-1 bg-transparent text-sm outline-none"
+        disabled={disabled}
       />
-      <Button type="submit" disabled={!value.trim()}>
+      <Button type="submit" disabled={!value.trim() || disabled}>
         Send
       </Button>
     </form>

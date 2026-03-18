@@ -1,17 +1,19 @@
 /**
  * Anthropic/Claude provider plugin implementation.
  *
- * Supports two auth modes:
- *   - "api_key": Direct API calls via ANTHROPIC_API_KEY
- *   - "cli":     Spawns `claude` CLI subprocess via CLAUDE_CODE_OAUTH_TOKEN
+ * Supports three auth modes:
+ *   - "api_key":  Direct API calls via ANTHROPIC_API_KEY
+ *   - "oauth":    Direct API calls via CLAUDE_CODE_OAUTH_TOKEN (Bearer auth)
+ *   - "cli":      Spawns `claude` CLI subprocess (legacy fallback)
  *
- * CLAUDE_CODE_OAUTH_TOKEN cannot be used directly against the API — the
- * standard api.anthropic.com/v1/messages endpoint does not accept OAuth
- * Bearer tokens. Claude Code handles OAuth internally, so when an OAuth
- * token is present we delegate to the CLI.
+ * OAuth mode uses authToken (Bearer) instead of apiKey (x-api-key) header,
+ * plus Claude Code identity headers so the Anthropic API accepts the token.
+ * This enables full tool_use support without spawning a subprocess.
  */
 
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { platform } from 'node:os';
+import { promisify } from 'node:util';
 
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -28,29 +30,192 @@ import type {
 
 const ANTHROPIC_MODELS: ProviderModel[] = [
   {
-    id: 'claude-opus-4-20250514',
-    name: 'Claude Opus 4',
+    id: 'claude-opus-4-6',
+    name: 'Claude Opus 4.6',
     contextWindow: 200_000,
     maxOutputTokens: 32_000,
     capabilities: ['text', 'vision', 'tool_use'],
   },
   {
-    id: 'claude-sonnet-4-20250514',
-    name: 'Claude Sonnet 4',
+    id: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6',
     contextWindow: 200_000,
     maxOutputTokens: 16_000,
     capabilities: ['text', 'vision', 'tool_use'],
   },
   {
-    id: 'claude-haiku-4-20250514',
-    name: 'Claude Haiku 4',
+    id: 'claude-haiku-4-5-20251001',
+    name: 'Claude Haiku 4.5',
     contextWindow: 200_000,
     maxOutputTokens: 8_000,
     capabilities: ['text', 'vision', 'tool_use'],
   },
 ];
 
-type AuthMode = 'api_key' | 'cli';
+type AuthMode = 'api_key' | 'oauth' | 'cli';
+
+/**
+ * Detect OAuth tokens by prefix.
+ * Anthropic's OAuth tokens use the 'sk-ant-oat' prefix as of 2025-04.
+ * If this prefix changes, update here and in readTokenFromKeychain().
+ */
+function isOAuthToken(token: string): boolean {
+  return token.startsWith('sk-ant-oat');
+}
+
+/**
+ * Claude Code identity headers required for OAuth Bearer auth.
+ * Version pinned to the Claude Code CLI release this OAuth flow was
+ * validated against. Update alongside anthropic-beta feature flags.
+ */
+const OAUTH_HEADERS = {
+  'anthropic-beta': 'claude-code-20250219,oauth-2025-04-20,prompt-caching-2024-07-31',
+  'user-agent': 'claude-cli/2.1.78',
+  'x-app': 'cli',
+};
+
+/** System prompt prefix required when using OAuth Bearer auth. */
+const OAUTH_SYSTEM_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude.\n\n";
+
+/** MCP server prefix for OAuth tool name remapping. */
+const MCP_TOOL_PREFIX = 'mcp__yojin__';
+
+/**
+ * OAuth mode requires tool names to be either Claude Code built-in names
+ * or MCP-prefixed (mcp__<server>__<tool>). Remap custom names to MCP format.
+ */
+function toOAuthToolName(name: string): string {
+  // Already MCP-prefixed or a Claude Code built-in — leave as-is
+  if (name.startsWith('mcp__')) return name;
+  return MCP_TOOL_PREFIX + name;
+}
+
+/**
+ * Reverse the OAuth tool name mapping back to the original name.
+ * Only strips the prefix if toOAuthToolName would have added it —
+ * i.e. the original name did NOT already start with mcp__.
+ */
+function fromOAuthToolName(name: string): string {
+  if (name.startsWith(MCP_TOOL_PREFIX)) {
+    const stripped = name.slice(MCP_TOOL_PREFIX.length);
+    // If stripped name still starts with mcp__, the original was already prefixed
+    if (!stripped.startsWith('mcp__')) return stripped;
+  }
+  return name;
+}
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Attempt to read Claude Code OAuth token from macOS Keychain.
+ * Returns the access token or null if unavailable.
+ * Uses async execFile to avoid blocking the event loop.
+ */
+async function readTokenFromKeychain(): Promise<string | null> {
+  if (platform() !== 'darwin') return null;
+  try {
+    const { stdout } = await execFileAsync(
+      'security',
+      ['find-generic-password', '-s', 'Claude Code-credentials', '-w'],
+      {
+        encoding: 'utf8',
+        timeout: 3000,
+      },
+    );
+    const parsed = JSON.parse(stdout.trim()) as { claudeAiOauth?: { accessToken?: string } };
+    const token = parsed.claudeAiOauth?.accessToken;
+    return token && isOAuthToken(token) ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Strip JSON Schema metadata fields that the Anthropic API rejects.
+ * Zod's `.jsonSchema()` adds `$schema` and `additionalProperties` which
+ * are valid JSON Schema but not accepted by the Messages API.
+ */
+function cleanInputSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  const { $schema: _schema, additionalProperties: _additionalProperties, ...rest } = schema;
+  return rest;
+}
+
+/** Build Anthropic API messages from AgentMessages, applying optional name remapping. */
+function buildApiMessages(messages: AgentMessage[], remapName: (n: string) => string): Anthropic.MessageParam[] {
+  return messages.map((m) => {
+    if (typeof m.content === 'string') {
+      return { role: m.role as 'user' | 'assistant', content: m.content };
+    }
+    const blocks = m.content.map((block) => {
+      if (block.type === 'text') {
+        return { type: 'text' as const, text: block.text };
+      }
+      if (block.type === 'tool_use') {
+        return {
+          type: 'tool_use' as const,
+          id: block.id,
+          name: remapName(block.name),
+          input: block.input as Record<string, unknown>,
+        };
+      }
+      if (block.type === 'tool_result') {
+        return {
+          type: 'tool_result' as const,
+          tool_use_id: block.tool_use_id,
+          content: block.content,
+          ...(block.is_error ? { is_error: true as const } : {}),
+        };
+      }
+      return block;
+    });
+    return { role: m.role as 'user' | 'assistant', content: blocks };
+  }) as Anthropic.MessageParam[];
+}
+
+/** Build the system parameter, prepending the OAuth prefix when needed. */
+function buildSystemParam(
+  system: string | undefined,
+  useOAuth: boolean,
+): string | Anthropic.TextBlockParam[] | undefined {
+  if (useOAuth) {
+    return [
+      { type: 'text' as const, text: OAUTH_SYSTEM_PREFIX.trim() },
+      ...(system ? [{ type: 'text' as const, text: system }] : []),
+    ];
+  }
+  return system;
+}
+
+/** Map Anthropic response content blocks back to our ContentBlock type. */
+function mapResponseContent(blocks: Anthropic.ContentBlock[], unremapName: (n: string) => string): ContentBlock[] {
+  return blocks.map((block) => {
+    if (block.type === 'text') {
+      return { type: 'text' as const, text: block.text };
+    }
+    if (block.type === 'tool_use') {
+      return {
+        type: 'tool_use' as const,
+        id: block.id,
+        name: unremapName(block.name),
+        input: block.input,
+      };
+    }
+    return { type: 'text' as const, text: '' };
+  });
+}
+
+/** Build Anthropic tool definitions with optional name remapping. */
+function buildToolDefs(
+  tools: ToolSchema[] | undefined,
+  remapName: (n: string) => string,
+): Anthropic.Tool[] | undefined {
+  if (!tools?.length) return undefined;
+  return tools.map((t) => ({
+    name: remapName(t.name),
+    description: t.description,
+    input_schema: cleanInputSchema(t.input_schema as Record<string, unknown>) as Anthropic.Tool.InputSchema,
+  }));
+}
 
 // ---------------------------------------------------------------------------
 // CLI mode — spawn `claude` subprocess with CLAUDE_CODE_OAUTH_TOKEN
@@ -120,25 +285,54 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       const oauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
       const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
 
-      if (oauthToken) {
-        authMode = 'cli';
-        log.info('Using CLI mode (CLAUDE_CODE_OAUTH_TOKEN)');
+      if (oauthToken && isOAuthToken(oauthToken)) {
+        // OAuth mode: use Bearer auth with Claude Code identity headers.
+        authMode = 'oauth';
+        client = new Anthropic({
+          apiKey: null,
+          authToken: oauthToken,
+          defaultHeaders: OAUTH_HEADERS,
+        });
+        log.info('Using OAuth mode (CLAUDE_CODE_OAUTH_TOKEN → Bearer auth)');
       } else if (apiKey) {
         authMode = 'api_key';
         client = new Anthropic({ apiKey });
         log.info('Using API key mode');
       } else {
-        authMode = 'api_key';
-        client = new Anthropic();
-        log.warn('No credentials found, using SDK defaults');
+        if (oauthToken) {
+          log.warn(
+            'CLAUDE_CODE_OAUTH_TOKEN set but does not match expected OAuth format (sk-ant-oat*) — trying Keychain fallback',
+          );
+        }
+        // Try macOS Keychain as fallback (reads Claude Code's stored OAuth token)
+        const keychainToken = await readTokenFromKeychain();
+        if (keychainToken) {
+          authMode = 'oauth';
+          client = new Anthropic({
+            apiKey: null,
+            authToken: keychainToken,
+            defaultHeaders: OAUTH_HEADERS,
+          });
+          log.info('Using OAuth mode (macOS Keychain → Bearer auth)');
+        } else if (oauthToken) {
+          // Non-standard OAuth token — fall back to CLI subprocess
+          authMode = 'cli';
+          log.info('Using CLI mode (CLAUDE_CODE_OAUTH_TOKEN)');
+        } else {
+          log.error(
+            'No credentials found. Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN, ' +
+              'or log in to Claude Code (the token is read from macOS Keychain).',
+          );
+          throw new Error('No Anthropic credentials found. Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN.');
+        }
       }
     },
 
     resolveModel(modelRef: string): ProviderModel | undefined {
       const aliases: Record<string, string> = {
-        opus: 'claude-opus-4-20250514',
-        sonnet: 'claude-sonnet-4-20250514',
-        haiku: 'claude-haiku-4-20250514',
+        opus: 'claude-opus-4-6',
+        sonnet: 'claude-sonnet-4-6',
+        haiku: 'claude-haiku-4-5-20251001',
       };
       const resolved = aliases[modelRef] ?? modelRef;
       return ANTHROPIC_MODELS.find((m) => m.id === resolved);
@@ -154,6 +348,9 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       }
 
       // -- API mode --
+      const systemMsg = params.messages.find((m) => m.role === 'system')?.content;
+      const systemParam = buildSystemParam(systemMsg, authMode === 'oauth');
+
       const response = await client.messages.create({
         model: params.model,
         max_tokens: params.maxTokens ?? 4096,
@@ -161,9 +358,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
           role: m.role === 'system' ? 'user' : m.role,
           content: m.content,
         })),
-        ...(params.messages.some((m) => m.role === 'system')
-          ? { system: params.messages.find((m) => m.role === 'system')?.content }
-          : {}),
+        ...(systemParam ? { system: systemParam } : {}),
         ...(params.temperature != null ? { temperature: params.temperature } : {}),
         ...(params.stopSequences ? { stop_sequences: params.stopSequences } : {}),
       });
@@ -193,6 +388,9 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       }
 
       // -- API mode --
+      const streamSystemMsg = params.messages.find((m) => m.role === 'system')?.content;
+      const systemParam = buildSystemParam(streamSystemMsg, authMode === 'oauth');
+
       const stream = client.messages.stream({
         model: params.model,
         max_tokens: params.maxTokens ?? 4096,
@@ -200,9 +398,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
           role: m.role === 'system' ? 'user' : m.role,
           content: m.content,
         })),
-        ...(params.messages.some((m) => m.role === 'system')
-          ? { system: params.messages.find((m) => m.role === 'system')?.content }
-          : {}),
+        ...(systemParam ? { system: systemParam } : {}),
         ...(params.temperature != null ? { temperature: params.temperature } : {}),
         ...(params.stopSequences ? { stop_sequences: params.stopSequences } : {}),
       });
@@ -249,74 +445,73 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
         };
       }
 
-      // Convert AgentMessages to Anthropic API format
-      const apiMessages = params.messages.map((m) => {
-        if (typeof m.content === 'string') {
-          return { role: m.role as 'user' | 'assistant', content: m.content };
-        }
-        // Map content blocks to Anthropic format
-        const blocks = m.content.map((block) => {
-          if (block.type === 'text') {
-            return { type: 'text' as const, text: block.text };
-          }
-          if (block.type === 'tool_use') {
-            return {
-              type: 'tool_use' as const,
-              id: block.id,
-              name: block.name,
-              input: block.input as Record<string, unknown>,
-            };
-          }
-          if (block.type === 'tool_result') {
-            return {
-              type: 'tool_result' as const,
-              tool_use_id: block.tool_use_id,
-              content: block.content,
-              ...(block.is_error ? { is_error: true as const } : {}),
-            };
-          }
-          return block;
-        });
-        return { role: m.role as 'user' | 'assistant', content: blocks };
-      });
+      const useOAuth = authMode === 'oauth';
+      const remapName = useOAuth ? toOAuthToolName : (n: string) => n;
+      const unremapName = useOAuth ? fromOAuthToolName : (n: string) => n;
+
+      const apiMessages = buildApiMessages(params.messages, remapName);
+      const systemParam = buildSystemParam(params.system, useOAuth);
+      const toolDefs = buildToolDefs(params.tools, remapName);
 
       const response = await client.messages.create({
         model: params.model,
         max_tokens: params.maxTokens ?? 4096,
-        messages: apiMessages as Anthropic.MessageParam[],
-        ...(params.system ? { system: params.system } : {}),
-        ...(params.tools?.length
-          ? {
-              tools: params.tools.map((t) => ({
-                name: t.name,
-                description: t.description,
-                input_schema: t.input_schema as Anthropic.Tool.InputSchema,
-              })),
-            }
-          : {}),
-      });
-
-      const content: ContentBlock[] = response.content.map((block) => {
-        if (block.type === 'text') {
-          return { type: 'text' as const, text: block.text };
-        }
-        if (block.type === 'tool_use') {
-          return {
-            type: 'tool_use' as const,
-            id: block.id,
-            name: block.name,
-            input: block.input,
-          };
-        }
-        return { type: 'text' as const, text: '' };
+        messages: apiMessages,
+        ...(systemParam ? { system: systemParam } : {}),
+        ...(toolDefs ? { tools: toolDefs } : {}),
       });
 
       return {
-        content,
+        content: mapResponseContent(response.content, unremapName),
         stopReason: response.stop_reason ?? 'end_turn',
         usage: {
           inputTokens: response.usage.input_tokens,
           outputTokens: response.usage.output_tokens,
+        },
+      };
+    },
+
+    async streamWithTools(params: {
+      model: string;
+      system?: string;
+      messages: AgentMessage[];
+      tools?: ToolSchema[];
+      maxTokens?: number;
+      onTextDelta?: (text: string) => void;
+    }) {
+      if (authMode === 'cli') {
+        // CLI mode: no streaming, fall back to completeWithTools
+        return this.completeWithTools(params);
+      }
+
+      const useOAuth = authMode === 'oauth';
+      const remapName = useOAuth ? toOAuthToolName : (n: string) => n;
+      const unremapName = useOAuth ? fromOAuthToolName : (n: string) => n;
+
+      const apiMessages = buildApiMessages(params.messages, remapName);
+      const systemParam = buildSystemParam(params.system, useOAuth);
+      const toolDefs = buildToolDefs(params.tools, remapName);
+
+      const stream = client.messages.stream({
+        model: params.model,
+        max_tokens: params.maxTokens ?? 4096,
+        messages: apiMessages,
+        ...(systemParam ? { system: systemParam } : {}),
+        ...(toolDefs ? { tools: toolDefs } : {}),
+      });
+
+      stream.on('text', (text) => {
+        params.onTextDelta?.(text);
+      });
+
+      const finalMessage = await stream.finalMessage();
+
+      return {
+        content: mapResponseContent(finalMessage.content, unremapName),
+        stopReason: finalMessage.stop_reason ?? 'end_turn',
+        usage: {
+          inputTokens: finalMessage.usage.input_tokens,
+          outputTokens: finalMessage.usage.output_tokens,
         },
       };
     },

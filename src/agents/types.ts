@@ -1,31 +1,6 @@
-/**
- * Agent types — represents an AI agent that processes conversations.
- */
-
 import { z } from 'zod';
 
 import type { AgentMessage } from '../core/types.js';
-
-// ---------------------------------------------------------------------------
-// Conversation types
-// ---------------------------------------------------------------------------
-
-export interface AgentContext {
-  providerId: string;
-  model: string;
-  channelId: string;
-  threadId?: string;
-  userId: string;
-}
-
-export interface Agent {
-  id: string;
-  name: string;
-  systemPrompt?: string;
-
-  /** Process a conversation and return a response. */
-  process(context: AgentContext, history: AgentMessage[], userMessage: string): Promise<string>;
-}
 
 // ---------------------------------------------------------------------------
 // Agent profile — serializable config for agent identity and tool scoping
@@ -51,7 +26,7 @@ export const AgentProfileSchema = z.object({
   capabilities: z.array(z.string()),
   /** Optional LLM provider override (e.g. 'anthropic'). */
   provider: z.string().optional(),
-  /** Optional model override (e.g. 'claude-sonnet-4-20250514'). */
+  /** Optional model override (e.g. 'claude-opus-4-6'). */
   model: z.string().optional(),
 });
 
@@ -66,4 +41,34 @@ export type AgentProfile = z.infer<typeof AgentProfileSchema>;
  */
 export interface LoadedAgentProfile extends AgentProfile {
   systemPrompt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Agent step result — output of a single agent invocation in a workflow
+// ---------------------------------------------------------------------------
+
+export interface AgentStepResult {
+  agentId: string;
+  text: string;
+  messages: AgentMessage[];
+  iterations: number;
+  usage: { inputTokens: number; outputTokens: number };
+  compactions: number;
+}
+
+// ---------------------------------------------------------------------------
+// Workflow types — orchestration primitives
+// ---------------------------------------------------------------------------
+
+export interface WorkflowStep {
+  agentId: string;
+  buildMessage: (previousOutputs: Map<string, AgentStepResult>, triggerMessage?: string) => string;
+}
+
+export type WorkflowStage = WorkflowStep | WorkflowStep[];
+
+export interface Workflow {
+  id: string;
+  name: string;
+  stages: WorkflowStage[];
 }
