@@ -118,6 +118,7 @@ export async function startChat(args: string[]): Promise<void> {
   const provider = pluginRegistry.getProvider(providerId);
   if (!provider) {
     console.error(`${c.red}error:${c.reset} Provider "${providerId}" not found`);
+    await pluginRegistry.shutdownAll();
     process.exit(1);
   }
 
@@ -125,6 +126,7 @@ export async function startChat(args: string[]): Promise<void> {
   const loopProvider = provider as unknown as AgentLoopProvider;
   if (typeof loopProvider.completeWithTools !== 'function') {
     console.error(`${c.red}error:${c.reset} Provider "${providerId}" does not support tool use`);
+    await pluginRegistry.shutdownAll();
     process.exit(1);
   }
 
@@ -143,6 +145,7 @@ export async function startChat(args: string[]): Promise<void> {
     tools = agentRegistry.getToolsForAgent(agentId, toolRegistry);
     if (tools.length === 0) {
       console.error(`${c.red}error:${c.reset} Agent "${agentId}" not found or has no tools`);
+      await pluginRegistry.shutdownAll();
       process.exit(1);
     }
     // Load agent system prompt if no --system override
@@ -177,8 +180,8 @@ export async function startChat(args: string[]): Promise<void> {
     rl.question(`${c.cyan}${c.bold}> ${c.reset}`, async (input) => {
       const trimmed = input.trim();
       if (!trimmed || trimmed === 'exit' || trimmed === 'quit') {
-        rl.close();
         await pluginRegistry.shutdownAll();
+        rl.close();
         return;
       }
 

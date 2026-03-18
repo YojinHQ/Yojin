@@ -75,26 +75,31 @@ async function readPassphraseFromTty(prompt: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const stdin = process.stdin;
     const wasRaw = stdin.isRaw;
+    const wasEncoding = (stdin as NodeJS.ReadStream & { readableEncoding?: BufferEncoding | null }).readableEncoding;
     let input = '';
 
     stdin.setRawMode(true);
     stdin.resume();
     stdin.setEncoding('utf8');
 
+    const cleanup = (): void => {
+      stdin.setRawMode(wasRaw ?? false);
+      stdin.pause();
+      stdin.removeListener('data', onData);
+      if (wasEncoding) stdin.setEncoding(wasEncoding);
+      process.stderr.write('\n');
+    };
+
     const onData = (char: string): void => {
       const code = char.charCodeAt(0);
 
       if (char === '\r' || char === '\n') {
-        stdin.setRawMode(wasRaw ?? false);
-        stdin.pause();
-        stdin.removeListener('data', onData);
-        process.stderr.write('\n');
+        cleanup();
         resolve(input);
       } else if (code === 3) {
-        stdin.setRawMode(wasRaw ?? false);
-        stdin.pause();
-        stdin.removeListener('data', onData);
-        process.stderr.write('\n');
+        cleanup();
+        // Re-raise SIGINT so the process exits as the user expects
+        process.kill(process.pid, 'SIGINT');
         reject(new Error('Cancelled by user'));
       } else if (code === 127 || code === 8) {
         if (input.length > 0) {

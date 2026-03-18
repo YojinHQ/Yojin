@@ -11,8 +11,9 @@
  * This enables full tool_use support without spawning a subprocess.
  */
 
-import { execSync, spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { platform } from 'node:os';
+import { promisify } from 'node:util';
 
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -53,12 +54,20 @@ const ANTHROPIC_MODELS: ProviderModel[] = [
 
 type AuthMode = 'api_key' | 'oauth' | 'cli';
 
-/** Detect OAuth tokens by prefix. */
+/**
+ * Detect OAuth tokens by prefix.
+ * Anthropic's OAuth tokens use the 'sk-ant-oat' prefix as of 2025-04.
+ * If this prefix changes, update here and in readTokenFromKeychain().
+ */
 function isOAuthToken(token: string): boolean {
   return token.startsWith('sk-ant-oat');
 }
 
-/** Claude Code identity headers required for OAuth Bearer auth. */
+/**
+ * Claude Code identity headers required for OAuth Bearer auth.
+ * Version pinned to the Claude Code CLI release this OAuth flow was
+ * validated against. Update alongside anthropic-beta feature flags.
+ */
 const OAUTH_HEADERS = {
   'anthropic-beta': 'claude-code-20250219,oauth-2025-04-20,prompt-caching-2024-07-31',
   'user-agent': 'claude-cli/2.1.78',
@@ -81,24 +90,39 @@ function toOAuthToolName(name: string): string {
   return MCP_TOOL_PREFIX + name;
 }
 
-/** Reverse the OAuth tool name mapping back to the original name. */
+/**
+ * Reverse the OAuth tool name mapping back to the original name.
+ * Only strips the prefix if toOAuthToolName would have added it —
+ * i.e. the original name did NOT already start with mcp__.
+ */
 function fromOAuthToolName(name: string): string {
-  if (name.startsWith(MCP_TOOL_PREFIX)) return name.slice(MCP_TOOL_PREFIX.length);
+  if (name.startsWith(MCP_TOOL_PREFIX)) {
+    const stripped = name.slice(MCP_TOOL_PREFIX.length);
+    // If stripped name still starts with mcp__, the original was already prefixed
+    if (!stripped.startsWith('mcp__')) return stripped;
+  }
   return name;
 }
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Attempt to read Claude Code OAuth token from macOS Keychain.
  * Returns the access token or null if unavailable.
+ * Uses async execFile to avoid blocking the event loop.
  */
-function readTokenFromKeychain(): string | null {
+async function readTokenFromKeychain(): Promise<string | null> {
   if (platform() !== 'darwin') return null;
   try {
-    const raw = execSync('security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null', {
-      encoding: 'utf8',
-      timeout: 3000,
-    }).trim();
-    const parsed = JSON.parse(raw) as { claudeAiOauth?: { accessToken?: string } };
+    const { stdout } = await execFileAsync(
+      'security',
+      ['find-generic-password', '-s', 'Claude Code-credentials', '-w'],
+      {
+        encoding: 'utf8',
+        timeout: 3000,
+      },
+    );
+    const parsed = JSON.parse(stdout.trim()) as { claudeAiOauth?: { accessToken?: string } };
     const token = parsed.claudeAiOauth?.accessToken;
     return token && isOAuthToken(token) ? token : null;
   } catch {
@@ -198,8 +222,13 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
         client = new Anthropic({ apiKey });
         log.info('Using API key mode');
       } else {
+        if (oauthToken) {
+          log.warn(
+            'CLAUDE_CODE_OAUTH_TOKEN set but does not match expected OAuth format (sk-ant-oat*) — trying Keychain fallback',
+          );
+        }
         // Try macOS Keychain as fallback (reads Claude Code's stored OAuth token)
-        const keychainToken = readTokenFromKeychain();
+        const keychainToken = await readTokenFromKeychain();
         if (keychainToken) {
           authMode = 'oauth';
           client = new Anthropic({
