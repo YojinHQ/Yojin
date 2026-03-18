@@ -1,3 +1,5 @@
+import Badge from '../common/badge';
+import type { BadgeVariant } from '../common/badge';
 import { cn } from '../../lib/utils';
 
 interface Alert {
@@ -39,10 +41,10 @@ const alerts: Alert[] = [
   },
 ];
 
-const badgeStyles: Record<Alert['type'], string> = {
-  action: 'bg-accent-primary/15 text-accent-primary',
-  alert: 'bg-warning/15 text-warning',
-  insight: 'bg-info/15 text-info',
+const badgeVariant: Record<Alert['type'], BadgeVariant> = {
+  action: 'accent',
+  alert: 'warning',
+  insight: 'success',
 };
 
 const urgencyIndicator: Record<Alert['urgency'], string> = {
@@ -58,12 +60,10 @@ export default function IntelAlerts() {
         <div key={i} className="rounded-md bg-bg-tertiary p-2.5">
           <div className="mb-1 flex items-center gap-1.5">
             <span className={cn('inline-block h-1.5 w-1.5 rounded-full', urgencyIndicator[alert.urgency])} />
-            <span className={cn('rounded-full px-1.5 py-px text-[10px] font-medium', badgeStyles[alert.type])}>
-              {alert.label}
-            </span>
+            <Badge variant={badgeVariant[alert.type]}>{alert.label}</Badge>
           </div>
           <p className="text-xs font-medium text-text-primary">{alert.title}</p>
-          <p className="mt-0.5 text-[11px] leading-snug text-text-secondary">{alert.description}</p>
+          <p className="mt-0.5 text-2xs leading-snug text-text-secondary">{alert.description}</p>
         </div>
       ))}
     </div>

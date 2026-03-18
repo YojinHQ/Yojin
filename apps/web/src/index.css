@@ -19,8 +19,12 @@
   --color-error: #e57373;
   --color-info: #7da9d4;
   --color-market: #a78bfa;
+  --color-accent-dark: #b30004;
   --font-headline: 'Young Serif', serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --text-2xs: 11px;
+  --text-3xs: 9px;
+  --text-badge: 10px;
 }
 
 @layer base {
@@ -50,6 +54,12 @@
     --color-error: #d43d3d;
     --color-info: #3b7cb8;
     --color-market: #7c5cbf;
+    --color-accent-dark: #9a0003;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-bg-tertiary) transparent;
   }
 
   ::-webkit-scrollbar {

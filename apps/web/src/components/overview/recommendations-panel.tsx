@@ -131,9 +131,9 @@ const typeLabelColor: Record<ItemType, string> = {
 };
 
 const typeIconBg: Record<ItemType, string> = {
-  action: 'bg-accent-primary/12',
-  alert: 'bg-warning/12',
-  insight: 'bg-success/12',
+  action: 'bg-accent-primary/10',
+  alert: 'bg-warning/10',
+  insight: 'bg-success/10',
 };
 
 const typeIconColor: Record<ItemType, string> = {
@@ -175,7 +175,7 @@ const filterMap: Record<FilterTab, ItemType | null> = {
 };
 
 function ItemIcon({ icon, type }: { icon: IconName; type: ItemType }) {
-  const svgClass = cn('h-4 w-4', typeIconColor[type]);
+  const svgClass = cn('h-3.5 w-3.5', typeIconColor[type]);
 
   const icons: Record<IconName, React.ReactNode> = {
     rebalance: (
@@ -300,7 +300,7 @@ function ItemIcon({ icon, type }: { icon: IconName; type: ItemType }) {
   };
 
   return (
-    <div className={cn('flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl', typeIconBg[type])}>
+    <div className={cn('flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg', typeIconBg[type])}>
       {icons[icon]}
     </div>
   );
@@ -309,7 +309,7 @@ function ItemIcon({ icon, type }: { icon: IconName; type: ItemType }) {
 function SectionHeader({ type }: { type: ItemType }) {
   return (
     <div className="flex items-center gap-2.5 px-1 pt-4 pb-2">
-      <span className={cn('text-[10px] font-semibold tracking-[0.1em] uppercase', sectionHeaderColor[type])}>
+      <span className={cn('text-2xs font-semibold tracking-[0.1em] uppercase', sectionHeaderColor[type])}>
         {typeLabel[type]}s
       </span>
       <div className={cn('h-px flex-1', sectionLineColor[type])} />
@@ -337,12 +337,12 @@ function RecommendationCard({
       <div className="flex items-center gap-3 px-3 py-2.5" onClick={onToggle}>
         <ItemIcon icon={item.icon} type={item.type} />
         <div className="min-w-0 flex-1">
-          <span className={cn('text-[10px] font-semibold tracking-wide uppercase', typeLabelColor[item.type])}>
+          <span className={cn('text-2xs font-semibold tracking-wide uppercase', typeLabelColor[item.type])}>
             {typeLabel[item.type]}
           </span>
-          <p className="text-[13px] font-medium leading-tight text-text-primary truncate">{item.title}</p>
+          <p className="text-xs font-medium leading-tight text-text-primary truncate">{item.title}</p>
         </div>
-        <span className="flex-shrink-0 text-[11px] text-text-muted">{item.time}</span>
+        <span className="flex-shrink-0 text-2xs text-text-muted">{item.time}</span>
       </div>
 
       {/* Expanded content */}
@@ -375,10 +375,10 @@ function RecommendationCard({
 
             {/* Action buttons */}
             <div className="mt-3 flex gap-2">
-              <button className="flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary">
+              <button className="flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary">
                 Dismiss
               </button>
-              <button className="flex-1 rounded-lg bg-accent-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-secondary">
+              <button className="flex-1 rounded-lg bg-accent-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-secondary">
                 {item.primaryAction}
               </button>
             </div>
@@ -413,8 +413,8 @@ export default function RecommendationsPanel() {
       {/* Header */}
       <div className="px-4 pt-3.5 pb-1">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-medium tracking-wide text-text-secondary uppercase">Recommendations</h2>
-          <span className="text-[11px] tabular-nums text-text-muted">{totalCount} items</span>
+          <h2 className="text-2xs font-medium tracking-wide text-text-secondary uppercase">Recommendations</h2>
+          <span className="text-2xs tabular-nums text-text-muted">{totalCount} items</span>
         </div>
       </div>
 
@@ -425,7 +425,7 @@ export default function RecommendationsPanel() {
             key={tab.key}
             onClick={() => setActiveFilter(tab.key)}
             className={cn(
-              'relative px-2.5 pb-2 text-xs font-medium transition-colors',
+              'relative px-2 pb-2 text-2xs font-medium transition-colors',
               activeFilter === tab.key ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary',
             )}
           >

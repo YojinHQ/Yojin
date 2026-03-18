@@ -1,6 +1,14 @@
 cd "$(git rev-parse --show-toplevel)"
 pnpm run lint-staged
+
+# Typecheck backend
 pnpm exec tsc --noEmit
+
+# Typecheck + lint frontend only when web app files are staged
+if git diff --cached --name-only | grep -q '^apps/web/'; then
+  pnpm --filter web typecheck
+  pnpm --filter web lint
+fi
 
 # Enforce strict pinned versions in package.json (no ^ or ~ prefixes)
 if grep -E '"[~^]' package.json; then

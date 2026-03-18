@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Button from '../common/button';
 
 export default function ChatInput({ onSend, disabled }: { onSend: (message: string) => void; disabled?: boolean }) {
   const [value, setValue] = useState('');
@@ -23,13 +24,9 @@ export default function ChatInput({ onSend, disabled }: { onSend: (message: stri
         className="text-text-primary placeholder:text-text-muted flex-1 bg-transparent text-sm outline-none"
         disabled={disabled}
       />
-      <button
-        type="submit"
-        disabled={!value.trim() || disabled}
-        className="bg-accent-primary hover:bg-accent-secondary rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-      >
+      <Button type="submit" disabled={!value.trim() || disabled}>
         Send
-      </button>
+      </Button>
     </form>
   );
 }
