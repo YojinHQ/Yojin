@@ -4,7 +4,7 @@
 
 import { startChat } from './chat.js';
 import { setupToken } from './setup-token.js';
-import { loadConfig } from '../config/config.js';
+import { buildContext } from '../composition.js';
 import { Gateway } from '../gateway/server.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
 
@@ -35,8 +35,8 @@ export async function runMain(args: string[]): Promise<void> {
 }
 
 async function startGateway(): Promise<void> {
-  const config = loadConfig();
-  const gateway = new Gateway(config);
+  const services = await buildContext({ skipVault: true });
+  const gateway = new Gateway(services.config);
 
   // Graceful shutdown
   const shutdown = async () => {

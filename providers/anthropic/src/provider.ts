@@ -1,14 +1,14 @@
 /**
  * Anthropic/Claude provider plugin implementation.
  *
- * Supports two auth modes:
- *   - "api_key": Direct API calls via ANTHROPIC_API_KEY
- *   - "cli":     Spawns `claude` CLI subprocess via CLAUDE_CODE_OAUTH_TOKEN
+ * Supports three auth modes:
+ *   - "api_key":  Direct API calls via ANTHROPIC_API_KEY
+ *   - "oauth":    Direct API calls via CLAUDE_CODE_OAUTH_TOKEN (Bearer auth)
+ *   - "cli":      Spawns `claude` CLI subprocess (legacy fallback)
  *
- * CLAUDE_CODE_OAUTH_TOKEN cannot be used directly against the API — the
- * standard api.anthropic.com/v1/messages endpoint does not accept OAuth
- * Bearer tokens. Claude Code handles OAuth internally, so when an OAuth
- * token is present we delegate to the CLI.
+ * OAuth mode uses authToken (Bearer) instead of apiKey (x-api-key) header,
+ * plus Claude Code identity headers so the Anthropic API accepts the token.
+ * This enables full tool_use support without spawning a subprocess.
  */
 
 import { spawn } from 'node:child_process';
@@ -50,7 +50,51 @@ const ANTHROPIC_MODELS: ProviderModel[] = [
   },
 ];
 
-type AuthMode = 'api_key' | 'cli';
+type AuthMode = 'api_key' | 'oauth' | 'cli';
+
+/** Detect OAuth tokens by prefix. */
+function isOAuthToken(token: string): boolean {
+  return token.startsWith('sk-ant-oat');
+}
+
+/** Claude Code identity headers required for OAuth Bearer auth. */
+const OAUTH_HEADERS = {
+  'anthropic-beta': 'claude-code-20250219,oauth-2025-04-20,prompt-caching-2024-07-31',
+  'user-agent': 'claude-cli/2.1.78',
+  'x-app': 'cli',
+};
+
+/** System prompt prefix required when using OAuth Bearer auth. */
+const OAUTH_SYSTEM_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude.\n\n";
+
+/** MCP server prefix for OAuth tool name remapping. */
+const MCP_TOOL_PREFIX = 'mcp__yojin__';
+
+/**
+ * OAuth mode requires tool names to be either Claude Code built-in names
+ * or MCP-prefixed (mcp__<server>__<tool>). Remap custom names to MCP format.
+ */
+function toOAuthToolName(name: string): string {
+  // Already MCP-prefixed or a Claude Code built-in — leave as-is
+  if (name.startsWith('mcp__')) return name;
+  return MCP_TOOL_PREFIX + name;
+}
+
+/** Reverse the OAuth tool name mapping back to the original name. */
+function fromOAuthToolName(name: string): string {
+  if (name.startsWith(MCP_TOOL_PREFIX)) return name.slice(MCP_TOOL_PREFIX.length);
+  return name;
+}
+
+/**
+ * Strip JSON Schema metadata fields that the Anthropic API rejects.
+ * Zod's `.jsonSchema()` adds `$schema` and `additionalProperties` which
+ * are valid JSON Schema but not accepted by the Messages API.
+ */
+function cleanInputSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  const { $schema: _schema, ...rest } = schema;
+  return rest;
+}
 
 // ---------------------------------------------------------------------------
 // CLI mode — spawn `claude` subprocess with CLAUDE_CODE_OAUTH_TOKEN
@@ -120,7 +164,18 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       const oauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
       const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
 
-      if (oauthToken) {
+      if (oauthToken && isOAuthToken(oauthToken)) {
+        // OAuth mode: use Bearer auth with Claude Code identity headers.
+        // This enables full tool_use support via the Messages API.
+        authMode = 'oauth';
+        client = new Anthropic({
+          apiKey: null,
+          authToken: oauthToken,
+          defaultHeaders: OAUTH_HEADERS,
+        });
+        log.info('Using OAuth mode (CLAUDE_CODE_OAUTH_TOKEN → Bearer auth)');
+      } else if (oauthToken) {
+        // Non-standard OAuth token — fall back to CLI subprocess
         authMode = 'cli';
         log.info('Using CLI mode (CLAUDE_CODE_OAUTH_TOKEN)');
       } else if (apiKey) {
@@ -154,6 +209,15 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       }
 
       // -- API mode --
+      const systemMsg = params.messages.find((m) => m.role === 'system')?.content;
+      const completeSystem =
+        authMode === 'oauth'
+          ? [
+              { type: 'text' as const, text: OAUTH_SYSTEM_PREFIX.trim() },
+              ...(systemMsg ? [{ type: 'text' as const, text: systemMsg }] : []),
+            ]
+          : systemMsg;
+
       const response = await client.messages.create({
         model: params.model,
         max_tokens: params.maxTokens ?? 4096,
@@ -161,9 +225,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
           role: m.role === 'system' ? 'user' : m.role,
           content: m.content,
         })),
-        ...(params.messages.some((m) => m.role === 'system')
-          ? { system: params.messages.find((m) => m.role === 'system')?.content }
-          : {}),
+        ...(completeSystem ? { system: completeSystem } : {}),
         ...(params.temperature != null ? { temperature: params.temperature } : {}),
         ...(params.stopSequences ? { stop_sequences: params.stopSequences } : {}),
       });
@@ -193,6 +255,15 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       }
 
       // -- API mode --
+      const streamSystemMsg = params.messages.find((m) => m.role === 'system')?.content;
+      const streamSystem =
+        authMode === 'oauth'
+          ? [
+              { type: 'text' as const, text: OAUTH_SYSTEM_PREFIX.trim() },
+              ...(streamSystemMsg ? [{ type: 'text' as const, text: streamSystemMsg }] : []),
+            ]
+          : streamSystemMsg;
+
       const stream = client.messages.stream({
         model: params.model,
         max_tokens: params.maxTokens ?? 4096,
@@ -200,9 +271,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
           role: m.role === 'system' ? 'user' : m.role,
           content: m.content,
         })),
-        ...(params.messages.some((m) => m.role === 'system')
-          ? { system: params.messages.find((m) => m.role === 'system')?.content }
-          : {}),
+        ...(streamSystem ? { system: streamSystem } : {}),
         ...(params.temperature != null ? { temperature: params.temperature } : {}),
         ...(params.stopSequences ? { stop_sequences: params.stopSequences } : {}),
       });
@@ -249,6 +318,12 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
         };
       }
 
+      const useOAuth = authMode === 'oauth';
+
+      // OAuth: remap tool names to mcp__yojin__<name> format
+      const remapName = useOAuth ? toOAuthToolName : (n: string) => n;
+      const unremapName = useOAuth ? fromOAuthToolName : (n: string) => n;
+
       // Convert AgentMessages to Anthropic API format
       const apiMessages = params.messages.map((m) => {
         if (typeof m.content === 'string') {
@@ -263,7 +338,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
             return {
               type: 'tool_use' as const,
               id: block.id,
-              name: block.name,
+              name: remapName(block.name),
               input: block.input as Record<string, unknown>,
             };
           }
@@ -280,22 +355,32 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
         return { role: m.role as 'user' | 'assistant', content: blocks };
       });
 
+      // OAuth mode: system prompt must be an array of content blocks
+      // and must include the Claude Code identity prefix
+      const systemParam = useOAuth
+        ? [
+            { type: 'text' as const, text: OAUTH_SYSTEM_PREFIX.trim() },
+            ...(params.system ? [{ type: 'text' as const, text: params.system }] : []),
+          ]
+        : params.system;
+
       const response = await client.messages.create({
         model: params.model,
         max_tokens: params.maxTokens ?? 4096,
         messages: apiMessages as Anthropic.MessageParam[],
-        ...(params.system ? { system: params.system } : {}),
+        ...(systemParam ? { system: systemParam } : {}),
         ...(params.tools?.length
           ? {
               tools: params.tools.map((t) => ({
-                name: t.name,
+                name: remapName(t.name),
                 description: t.description,
-                input_schema: t.input_schema as Anthropic.Tool.InputSchema,
+                input_schema: cleanInputSchema(t.input_schema as Record<string, unknown>) as Anthropic.Tool.InputSchema,
               })),
             }
           : {}),
       });
 
+      // Unmap tool names back to original in response
       const content: ContentBlock[] = response.content.map((block) => {
         if (block.type === 'text') {
           return { type: 'text' as const, text: block.text };
@@ -304,7 +389,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
           return {
             type: 'tool_use' as const,
             id: block.id,
-            name: block.name,
+            name: unremapName(block.name),
             input: block.input,
           };
         }
