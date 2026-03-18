@@ -79,7 +79,7 @@ describe('createDefaultProfiles', () => {
   });
 
   it('credential tools are exclusive to the trader', () => {
-    const credTools = ['check_credential', 'list_credentials'];
+    const credTools = ['store_credential', 'check_credential', 'list_credentials'];
     for (const profile of profiles) {
       if (profile.id === 'trader') {
         for (const tool of credTools) {
