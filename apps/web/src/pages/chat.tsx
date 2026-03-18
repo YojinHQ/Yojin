@@ -40,7 +40,7 @@ export default function Chat() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isLoading]);
 
   const handleSend = useCallback(
     async (content: string) => {

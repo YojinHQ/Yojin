@@ -119,8 +119,8 @@ export function buildWebChannel(): ChannelPlugin {
             return c.json({ error: 'Request timed out' }, 504);
           }
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Internal server error';
-          return c.json({ error: message }, 500);
+          console.error('[web] /api/chat unhandled error:', err);
+          return c.json({ error: 'Internal server error' }, 500);
         }
       });
 
