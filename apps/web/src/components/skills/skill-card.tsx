@@ -15,29 +15,29 @@ const sourceStyles: Record<string, string> = {
 
 export default function SkillCard({ skill }: { skill: Skill }) {
   return (
-    <div className="bg-bg-card border border-border rounded-xl p-5 hover:border-accent-primary hover:shadow-[0_0_12px_var(--color-accent-glow)] transition-all flex flex-col justify-between min-h-[180px] cursor-pointer">
+    <div className="bg-bg-card border border-border rounded-xl p-4 hover:border-accent-primary hover:shadow-[0_0_12px_var(--color-accent-glow)] transition-all flex flex-col justify-between min-h-[160px] cursor-pointer">
       <div>
         <div className="flex items-start justify-between">
           <span
             className={cn(
-              'inline-block rounded px-2.5 py-0.5 text-[11px] font-semibold tracking-wide uppercase border',
+              'inline-block rounded px-1.5 py-px text-2xs font-semibold tracking-wide uppercase border',
               categoryColors[skill.category],
             )}
           >
             {skill.category}
           </span>
-          {skill.active && <div className="h-2.5 w-2.5 rounded-full bg-success mt-0.5" />}
+          {skill.active && <div className="h-2 w-2 rounded-full bg-success mt-0.5" />}
         </div>
 
-        <h3 className="text-text-primary font-semibold mt-3 text-[15px] leading-snug">{skill.name}</h3>
-        <p className="text-text-secondary text-sm mt-1.5 leading-relaxed">{skill.description}</p>
+        <h3 className="text-text-primary font-semibold mt-2.5 text-xs leading-snug">{skill.name}</h3>
+        <p className="text-text-secondary text-xs mt-1 leading-relaxed">{skill.description}</p>
       </div>
 
       <div className="flex items-center gap-2 mt-4 pt-1">
-        <span className={cn('inline-block rounded px-2 py-0.5 text-[11px] font-medium', sourceStyles[skill.source])}>
+        <span className={cn('inline-block rounded px-1.5 py-px text-2xs font-medium', sourceStyles[skill.source])}>
           {skill.source === 'built-in' ? 'System' : 'User'}
         </span>
-        <span className="text-text-muted text-xs">
+        <span className="text-text-muted text-2xs">
           Created by {skill.createdBy} &bull; {skill.createdAt}
         </span>
       </div>

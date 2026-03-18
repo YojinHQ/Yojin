@@ -17,7 +17,7 @@ export default function Position() {
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-2 text-xs">
         <Link to="/portfolio" className="text-text-muted hover:text-text-secondary">
           Portfolio
         </Link>
@@ -28,7 +28,7 @@ export default function Position() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-text-primary">{symbol?.toUpperCase()}</h2>
+          <h2 className="text-lg font-semibold text-text-primary">{symbol?.toUpperCase()}</h2>
           <p className="mt-1 text-sm text-text-muted">Position details, research, and analysis.</p>
         </div>
       </div>
@@ -38,7 +38,7 @@ export default function Position() {
         {['Current Price', 'Quantity', 'Market Value', 'Total P&L'].map((label) => (
           <Card key={label}>
             <p className="text-xs font-medium uppercase tracking-wider text-text-muted">{label}</p>
-            <p className="mt-2 text-xl font-semibold text-text-primary">--</p>
+            <p className="mt-1.5 text-base font-semibold text-text-primary">--</p>
           </Card>
         ))}
       </div>

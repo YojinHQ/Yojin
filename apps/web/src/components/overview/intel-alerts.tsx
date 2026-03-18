@@ -58,12 +58,12 @@ export default function IntelAlerts() {
         <div key={i} className="rounded-md bg-bg-tertiary p-2.5">
           <div className="mb-1 flex items-center gap-1.5">
             <span className={cn('inline-block h-1.5 w-1.5 rounded-full', urgencyIndicator[alert.urgency])} />
-            <span className={cn('rounded-full px-1.5 py-px text-[10px] font-medium', badgeStyles[alert.type])}>
+            <span className={cn('rounded-full px-1.5 py-px text-2xs font-medium', badgeStyles[alert.type])}>
               {alert.label}
             </span>
           </div>
           <p className="text-xs font-medium text-text-primary">{alert.title}</p>
-          <p className="mt-0.5 text-[11px] leading-snug text-text-secondary">{alert.description}</p>
+          <p className="mt-0.5 text-mini leading-snug text-text-secondary">{alert.description}</p>
         </div>
       ))}
     </div>

@@ -26,7 +26,7 @@ export default function Input({ label, hint, error, size = 'md', className, id, 
       <input
         id={inputId}
         className={cn(
-          'w-full border bg-bg-card text-text-primary placeholder:text-text-muted outline-none transition-colors focus:border-accent-primary focus:ring-2 focus:ring-accent-primary/20',
+          'w-full border bg-bg-card text-text-primary placeholder:text-text-muted outline-none transition-colors focus-visible:border-accent-primary focus-visible:ring-2 focus-visible:ring-accent-primary/30',
           error ? 'border-error' : 'border-border',
           sizeStyles[size],
           className,

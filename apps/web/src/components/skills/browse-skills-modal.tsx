@@ -129,15 +129,15 @@ function IconNewspaper() {
 
 const iconBgs: Record<string, string> = {
   risk1: 'bg-error/20 text-error',
-  risk2: 'bg-[#e57373]/20 text-[#e57373]',
+  risk2: 'bg-error/20 text-error',
   portfolio1: 'bg-warning/20 text-warning',
-  portfolio2: 'bg-[#d4a34a]/20 text-[#d4a34a]',
+  portfolio2: 'bg-warning/20 text-warning',
   market1: 'bg-market/20 text-market',
-  market2: 'bg-[#8b7ad4]/20 text-[#8b7ad4]',
+  market2: 'bg-market/20 text-market',
   research1: 'bg-success/20 text-success',
-  research2: 'bg-[#4a9e72]/20 text-[#4a9e72]',
+  research2: 'bg-success/20 text-success',
   scheduled1: 'bg-info/20 text-info',
-  scheduled2: 'bg-[#6b9bc4]/20 text-[#6b9bc4]',
+  scheduled2: 'bg-info/20 text-info',
 };
 
 const templates: Template[] = [
@@ -327,7 +327,7 @@ export default function BrowseSkillsModal({ open, onClose }: BrowseSkillsModalPr
                     <div className="text-text-muted text-xs mt-0.5 leading-relaxed">{t.description}</div>
                     <span
                       className={cn(
-                        'inline-block mt-2 rounded px-2 py-0.5 text-[10px] font-medium',
+                        'inline-block mt-2 rounded px-2 py-0.5 text-2xs font-medium',
                         categoryBadge[t.category],
                       )}
                     >

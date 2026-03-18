@@ -14,7 +14,7 @@ interface TabsProps {
 
 const sizeStyles = {
   sm: { container: 'gap-0.5 p-0.5', button: 'px-2.5 py-0.5 text-xs' },
-  md: { container: 'gap-1 p-1', button: 'px-3 py-1.5 text-sm' },
+  md: { container: 'gap-1 p-1', button: 'px-3 py-1.5 text-xs' },
 };
 
 export default function Tabs({ tabs, value, onChange, size = 'md' }: TabsProps) {

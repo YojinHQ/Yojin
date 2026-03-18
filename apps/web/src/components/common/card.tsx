@@ -10,9 +10,9 @@ interface CardProps {
 
 export default function Card({ title, children, className = '', section = false }: CardProps) {
   return (
-    <div className={cn('rounded-xl border border-border bg-bg-card', section ? 'p-6 space-y-5' : 'p-5', className)}>
+    <div className={cn('rounded-xl border border-border bg-bg-card', section ? 'p-5 space-y-4' : 'p-4', className)}>
       {title && (
-        <h3 className={cn('text-sm font-medium text-text-secondary', section ? 'uppercase tracking-wider' : 'mb-4')}>
+        <h3 className={cn('text-xs font-medium text-text-secondary', section ? 'uppercase tracking-wider' : 'mb-3')}>
           {title}
         </h3>
       )}

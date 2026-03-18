@@ -13,7 +13,7 @@ const navItems: NavItem[] = [
     label: 'Overview',
     path: '/',
     icon: (
-      <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -26,7 +26,7 @@ const navItems: NavItem[] = [
     label: 'Chat',
     path: '/chat',
     icon: (
-      <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -39,7 +39,7 @@ const navItems: NavItem[] = [
     label: 'Portfolio',
     path: '/portfolio',
     icon: (
-      <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -52,7 +52,7 @@ const navItems: NavItem[] = [
     label: 'Skills',
     path: '/skills',
     icon: (
-      <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -68,7 +68,7 @@ export default function Sidebar() {
   const logoSrc = resolved === 'dark' ? '/yojin_logo_white.png' : '/yojin_logo.png';
 
   return (
-    <aside className="flex w-[200px] flex-shrink-0 flex-col border-r border-border bg-bg-secondary">
+    <aside className="flex w-[180px] flex-shrink-0 flex-col border-r border-border bg-bg-secondary">
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-4">
         <img
@@ -94,7 +94,7 @@ export default function Sidebar() {
             to={item.path}
             end={item.path === '/'}
             className={({ isActive }) =>
-              `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
+              `flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
                 isActive
                   ? 'border-l-2 border-accent-primary bg-accent-glow text-accent-secondary'
                   : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'

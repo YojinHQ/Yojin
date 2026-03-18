@@ -21,15 +21,15 @@ export default function PositionsPreview() {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-bg-card">
       <div className="flex flex-shrink-0 items-center justify-between px-3 py-2">
-        <h3 className="text-sm font-medium text-text-primary">Top Positions</h3>
-        <Link to="/portfolio" className="text-xs text-accent-primary hover:text-accent-primary/80 transition-colors">
+        <h3 className="text-2xs font-medium text-text-primary uppercase tracking-wider">Top Positions</h3>
+        <Link to="/portfolio" className="text-2xs text-accent-primary hover:text-accent-primary/80 transition-colors">
           View All
         </Link>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full">
           <thead className="sticky top-0 z-10 bg-bg-card">
-            <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-text-muted">
+            <tr className="border-b border-border text-left text-2xs uppercase tracking-wider text-text-muted">
               <th className="px-3 pb-1.5 font-medium">Symbol</th>
               <th className="px-3 pb-1.5 font-medium">Name</th>
               <th className="px-3 pb-1.5 text-right font-medium">Value</th>
@@ -39,10 +39,10 @@ export default function PositionsPreview() {
           <tbody>
             {positions.map((pos) => (
               <tr key={pos.symbol} className="border-b border-border last:border-b-0">
-                <td className="px-3 py-1.5 text-xs font-medium text-accent-primary">{pos.symbol}</td>
-                <td className="px-3 py-1.5 text-xs text-text-secondary">{pos.name}</td>
-                <td className="px-3 py-1.5 text-right text-xs text-text-primary">{pos.value}</td>
-                <td className={cn('px-3 py-1.5 text-right text-xs', pos.positive ? 'text-success' : 'text-error')}>
+                <td className="px-3 py-1 text-2xs font-medium text-accent-primary">{pos.symbol}</td>
+                <td className="px-3 py-1 text-2xs text-text-secondary">{pos.name}</td>
+                <td className="px-3 py-1 text-right text-2xs text-text-primary">{pos.value}</td>
+                <td className={cn('px-3 py-1 text-right text-2xs', pos.positive ? 'text-success' : 'text-error')}>
                   {pos.change}
                 </td>
               </tr>

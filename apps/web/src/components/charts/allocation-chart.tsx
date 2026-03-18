@@ -3,11 +3,11 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import { tooltipStyle } from '../../lib/mock-chart-data';
 
 const ASSET_CLASSES = [
-  { key: 'equities', label: 'Equities', color: '#FF5A5E' },
-  { key: 'crypto', label: 'Crypto', color: '#FF8083' },
-  { key: 'fixedIncome', label: 'Fixed Income', color: '#5bb98c' },
-  { key: 'cash', label: 'Cash', color: '#7da9d4' },
-  { key: 'other', label: 'Other', color: '#d4a34a' },
+  { key: 'equities', label: 'Equities', color: 'var(--color-accent-primary)' },
+  { key: 'crypto', label: 'Crypto', color: 'var(--color-accent-secondary)' },
+  { key: 'fixedIncome', label: 'Fixed Income', color: 'var(--color-success)' },
+  { key: 'cash', label: 'Cash', color: 'var(--color-info)' },
+  { key: 'other', label: 'Other', color: 'var(--color-warning)' },
 ] as const;
 
 type AllocationPoint = Record<string, string | number>;
@@ -64,12 +64,12 @@ export default function AllocationChart() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-bg-card p-3">
       <div className="mb-1.5 flex flex-shrink-0 items-center justify-between">
-        <h3 className="text-sm font-medium text-text-primary">Asset Allocation</h3>
+        <h3 className="text-2xs font-medium text-text-primary uppercase tracking-wider">Asset Allocation</h3>
         <div className="flex gap-2">
           {ASSET_CLASSES.map((a) => (
             <div key={a.key} className="flex items-center gap-1">
               <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: a.color }} />
-              <span className="text-[10px] text-text-muted">{a.label}</span>
+              <span className="text-2xs text-text-muted">{a.label}</span>
             </div>
           ))}
         </div>

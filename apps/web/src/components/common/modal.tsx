@@ -31,14 +31,14 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'max-
         aria-modal="true"
         aria-label={title}
         className={cn(
-          'relative w-full max-h-[80vh] overflow-auto rounded-2xl border border-border bg-bg-secondary p-6',
+          'relative w-full max-h-[80vh] overflow-auto rounded-2xl border border-border bg-bg-secondary p-5',
           maxWidth,
           className,
         )}
       >
         {title && (
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="font-headline text-xl text-text-primary">{title}</h2>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-headline text-base text-text-primary">{title}</h2>
             <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors">
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
