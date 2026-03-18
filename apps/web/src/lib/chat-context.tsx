@@ -21,8 +21,8 @@ interface ChatEvent {
 }
 
 const SEND_MESSAGE_MUTATION = `
-  mutation SendMessage($threadId: String!, $message: String!) {
-    sendMessage(threadId: $threadId, message: $message) {
+  mutation SendMessage($threadId: String!, $message: String!, $imageBase64: String, $imageMediaType: String) {
+    sendMessage(threadId: $threadId, message: $message, imageBase64: $imageBase64, imageMediaType: $imageMediaType) {
       threadId
       messageId
     }
@@ -44,6 +44,11 @@ const CHAT_SUBSCRIPTION = `
   }
 `;
 
+export interface ChatImageData {
+  base64: string;
+  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+}
+
 interface ChatContextValue {
   messages: ChatMessage[];
   streamingContent: string;
@@ -52,7 +57,7 @@ interface ChatContextValue {
   activeTools: string[];
   piiProtected: boolean;
   piiTypes: string[];
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string, image?: ChatImageData) => void;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -83,7 +88,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const processQueueRef = useRef<() => void>(() => {});
 
   const processMessage = useCallback(
-    async (content: string) => {
+    async (content: string, image?: ChatImageData) => {
       isProcessingRef.current = true;
       piiDetectedRef.current = false;
       piiTypesRef.current = [];
@@ -94,7 +99,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setPiiProtected(false);
       setPiiTypes([]);
 
-      const result = await sendMessageMutation({ threadId, message: content });
+      const variables: Record<string, string> = { threadId, message: content };
+      if (image) {
+        variables.imageBase64 = image.base64;
+        variables.imageMediaType = image.mediaType;
+      }
+
+      const result = await sendMessageMutation(variables);
       if (result.error) {
         setMessages((prev) => [
           ...prev,
@@ -186,13 +197,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   useSubscription({ query: CHAT_SUBSCRIPTION, variables: { threadId } }, handleSubscription);
 
   const sendMessage = useCallback(
-    (content: string) => {
+    (content: string, image?: ChatImageData) => {
       if (isProcessingRef.current) {
+        // Queue text-only — images are not queued to avoid holding large base64 strings
         queueRef.current.push(content);
         setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content }]);
       } else {
         setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content }]);
-        processMessage(content);
+        processMessage(content, image);
       }
     },
     [processMessage],

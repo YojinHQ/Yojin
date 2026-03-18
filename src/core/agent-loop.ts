@@ -19,6 +19,7 @@ import type {
   AgentLoopEvent,
   AgentLoopOptions,
   AgentMessage,
+  ContentBlock,
   TextBlock,
   ToolCall,
   ToolCallResult,
@@ -44,7 +45,7 @@ export interface AgentLoopResult {
 }
 
 export async function runAgentLoop(
-  userMessage: string,
+  userMessage: string | ContentBlock[],
   history: AgentMessage[],
   options: AgentLoopOptions,
 ): Promise<AgentLoopResult> {
@@ -89,13 +90,13 @@ export async function runAgentLoop(
   const toolSchemas = registry.toSchemas();
 
   // ── PII: scrub sensitive data from user message before LLM ──────
-  let messageForLlm = userMessage;
+  let messageContentForLlm: string | ContentBlock[] = userMessage;
   let piiMap: import('rehydra').EncryptedPIIMap | undefined;
 
-  if (piiScanner) {
+  if (piiScanner && typeof userMessage === 'string') {
     const scrubResult = await piiScanner.scrub(userMessage);
     if (scrubResult.entitiesFound > 0) {
-      messageForLlm = scrubResult.sanitized;
+      messageContentForLlm = scrubResult.sanitized;
       piiMap = scrubResult.piiMap;
       emit(onEvent, {
         type: 'pii_redacted',
@@ -104,10 +105,37 @@ export async function runAgentLoop(
         processingTimeMs: scrubResult.processingTimeMs,
       });
     }
+  } else if (piiScanner && Array.isArray(userMessage)) {
+    // For ContentBlock[] messages, scan only text blocks for PII
+    const textParts = userMessage.filter((b) => b.type === 'text').map((b) => (b as TextBlock).text);
+    if (textParts.length > 0) {
+      const combined = textParts.join('\n');
+      const scrubResult = await piiScanner.scrub(combined);
+      if (scrubResult.entitiesFound > 0) {
+        // Replace text blocks with scrubbed versions
+        let scrubOffset = 0;
+        const scrubbed = scrubResult.sanitized;
+        messageContentForLlm = userMessage.map((b) => {
+          if (b.type !== 'text') return b;
+          const original = (b as TextBlock).text;
+          const end = scrubOffset + original.length;
+          const replacement = scrubbed.slice(scrubOffset, end);
+          scrubOffset = end + 1; // +1 for the \n separator
+          return { type: 'text' as const, text: replacement };
+        });
+        piiMap = scrubResult.piiMap;
+        emit(onEvent, {
+          type: 'pii_redacted',
+          entitiesFound: scrubResult.entitiesFound,
+          typesFound: scrubResult.typesFound,
+          processingTimeMs: scrubResult.processingTimeMs,
+        });
+      }
+    }
   }
 
   // Send scrubbed text to LLM, but keep original in history for future turns
-  let messages: AgentMessage[] = [...history, { role: 'user', content: messageForLlm }];
+  let messages: AgentMessage[] = [...history, { role: 'user', content: messageContentForLlm }];
   const originalUserIdx = messages.length - 1;
   const totalUsage = { inputTokens: 0, outputTokens: 0 };
   let compactions = 0;

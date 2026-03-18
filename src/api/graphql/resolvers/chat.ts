@@ -21,15 +21,17 @@ export function setChatAgentRuntime(agentRuntime: AgentRuntime): void {
 // Mutation: sendMessage
 // ---------------------------------------------------------------------------
 
+const VALID_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+
 export function sendMessageMutation(
   _parent: unknown,
-  args: { threadId: string; message: string },
+  args: { threadId: string; message: string; imageBase64?: string; imageMediaType?: string },
 ): { threadId: string; messageId: string } {
   if (!runtime) {
     throw new Error('Chat runtime not initialized');
   }
 
-  const { threadId, message } = args;
+  const { threadId, message, imageBase64, imageMediaType } = args;
   const messageId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   // Fire-and-forget: run agent in background, stream events via pubsub
@@ -38,12 +40,19 @@ export function sendMessageMutation(
       // Emit thinking state immediately
       pubsub.publish(`chat:${threadId}`, { type: 'THINKING', threadId } satisfies ChatEvent);
 
+      // Validate image type if provided
+      const validatedImageType =
+        imageBase64 && imageMediaType && VALID_IMAGE_TYPES.has(imageMediaType)
+          ? (imageMediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp')
+          : undefined;
+
       // runtime is guaranteed non-null — checked above before the void IIFE
       await (runtime as AgentRuntime).handleMessage({
         message,
         channelId: 'web',
         userId: 'web-user',
         threadId,
+        ...(imageBase64 && validatedImageType ? { imageBase64, imageMediaType: validatedImageType } : {}),
         onEvent: (event: AgentLoopEvent) => {
           if (event.type === 'text_delta') {
             pubsub.publish(`chat:${threadId}`, {

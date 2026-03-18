@@ -157,6 +157,10 @@ export class AgentRuntime {
     userId: string;
     threadId?: string;
     onEvent?: AgentLoopEventHandler;
+    /** Optional base64-encoded image to include with the message. */
+    imageBase64?: string;
+    /** MIME type of the image (required when imageBase64 is provided). */
+    imageMediaType?: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
   }): Promise<string> {
     const model = DEFAULT_MODEL;
 
@@ -191,9 +195,21 @@ export class AgentRuntime {
       data: { agentId: 'chat', sessionKey: sessionKey ?? null },
     });
 
+    // Build user message — text-only or mixed content with image
+    const userContent: string | import('./types.js').ContentBlock[] =
+      params.imageBase64 && params.imageMediaType
+        ? [
+            {
+              type: 'image' as const,
+              source: { type: 'base64' as const, media_type: params.imageMediaType, data: params.imageBase64 },
+            },
+            { type: 'text' as const, text: params.message },
+          ]
+        : params.message;
+
     let result;
     try {
-      result = await runAgentLoop(params.message, history, {
+      result = await runAgentLoop(userContent, history, {
         provider: this.provider,
         model,
         systemPrompt: AgentRuntime.CHAT_SYSTEM_PROMPT,
