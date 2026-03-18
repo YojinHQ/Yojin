@@ -1,12 +1,14 @@
 import { Client, cacheExchange, fetchExchange, subscriptionExchange } from 'urql';
 import { createClient as createSSEClient } from 'graphql-sse';
 
+const graphqlUrl = (import.meta.env.VITE_GRAPHQL_URL as string | undefined) ?? '/graphql';
+
 const sseClient = createSSEClient({
-  url: import.meta.env.VITE_GRAPHQL_URL ?? '/graphql',
+  url: graphqlUrl,
 });
 
 export const graphqlClient = new Client({
-  url: import.meta.env.VITE_GRAPHQL_URL ?? '/graphql',
+  url: graphqlUrl,
   exchanges: [
     cacheExchange,
     fetchExchange,

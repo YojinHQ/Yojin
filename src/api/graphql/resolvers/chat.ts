@@ -72,6 +72,12 @@ export function sendMessageMutation(
               messageId,
               content: event.text,
             } satisfies ChatEvent);
+          } else if (event.type === 'max_iterations') {
+            pubsub.publish(`chat:${threadId}`, {
+              type: 'ERROR',
+              threadId,
+              error: 'Agent reached maximum iterations without completing.',
+            } satisfies ChatEvent);
           }
         },
       });

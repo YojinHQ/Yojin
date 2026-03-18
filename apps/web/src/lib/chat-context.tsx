@@ -140,11 +140,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       } else if (event.type === 'TOOL_USE' && event.toolName) {
         setIsThinking(false);
         setActiveTools((prev) => [...prev, event.toolName ?? '']);
-      } else if (event.type === 'TEXT_DELTA' && event.delta) {
+      } else if (event.type === 'TEXT_DELTA' && event.delta != null) {
         setIsThinking(false);
         setActiveTools([]);
         setStreamingContent((prev) => prev + event.delta);
-      } else if (event.type === 'MESSAGE_COMPLETE' && event.content) {
+      } else if (event.type === 'MESSAGE_COMPLETE') {
         const msgId = event.messageId ?? crypto.randomUUID();
         if (completedMessagesRef.current.has(msgId)) return data;
         completedMessagesRef.current.add(msgId);
