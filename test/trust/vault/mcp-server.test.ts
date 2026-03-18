@@ -168,7 +168,7 @@ describe('SecretProxy', () => {
     expect(result.status).toBe(201);
   });
 
-  it('logs secret.access audit event for every fetch', async () => {
+  it('logs secret.proxy_fetch audit event for every fetch', async () => {
     const vault = createMockVault({ API_KEY: 'val' });
     const audit = createMockAuditLog();
     const { mockFn } = createMockFetch('ok');
@@ -179,10 +179,9 @@ describe('SecretProxy', () => {
     });
 
     expect(audit.events).toHaveLength(1);
-    expect(audit.events[0].type).toBe('secret.access');
+    expect(audit.events[0].type).toBe('secret.proxy_fetch');
     expect(audit.events[0].details).toEqual({
       key: 'API_KEY',
-      action: 'proxy_fetch',
       url: 'https://api.example.com/data',
       method: 'POST',
     });
@@ -253,7 +252,7 @@ describe('SecretProxy', () => {
     it('blocks credentials to domains not in the allowlist', async () => {
       const vault = createMockVault({ KEY: 'super-secret' });
       const audit = createMockAuditLog();
-      const { mockFn } = createMockFetch('ok');
+      const { mockFn, calls } = createMockFetch('ok');
 
       const proxy = new SecretProxy(vault, audit, { allowedDomains: ['api.example.com'] }, mockFn);
 
@@ -261,9 +260,10 @@ describe('SecretProxy', () => {
         "SecretProxy: credential 'KEY' cannot be sent to 'evil.com' — domain not in allowlist",
       );
       // Credential was never retrieved — fetch was never called
+      expect(calls).toHaveLength(0);
       expect(audit.events).toHaveLength(1);
+      expect(audit.events[0].type).toBe('secret.proxy_blocked');
       expect(audit.events[0].details).toMatchObject({
-        action: 'proxy_fetch_blocked',
         reason: expect.stringContaining('evil.com'),
       });
     });
@@ -298,6 +298,33 @@ describe('SecretProxy', () => {
       const proxy = new SecretProxy(vault, audit, { allowedDomains: ['api.example.com'] });
 
       await expect(proxy.authenticatedFetch('KEY', 'not-a-url')).rejects.toThrow('SecretProxy: invalid URL');
+    });
+
+    it('blocks plaintext HTTP — credentials require HTTPS', async () => {
+      const vault = createMockVault({ KEY: 'super-secret' });
+      const audit = createMockAuditLog();
+      const { mockFn, calls } = createMockFetch('ok');
+
+      const proxy = new SecretProxy(vault, audit, { allowedDomains: ['api.example.com'] }, mockFn);
+
+      await expect(proxy.authenticatedFetch('KEY', 'http://api.example.com/data')).rejects.toThrow('HTTPS required');
+      expect(calls).toHaveLength(0);
+      expect(audit.events).toHaveLength(1);
+      expect(audit.events[0].type).toBe('secret.proxy_blocked');
+      expect(audit.events[0].details).toMatchObject({
+        reason: expect.stringContaining('HTTPS'),
+      });
+    });
+
+    it('allows HTTPS to approved domains', async () => {
+      const vault = createMockVault({ KEY: 'val' });
+      const audit = createMockAuditLog();
+      const { mockFn } = createMockFetch('{"ok":true}');
+
+      const proxy = new SecretProxy(vault, audit, { allowedDomains: ['api.example.com'] }, mockFn);
+
+      const result = await proxy.authenticatedFetch('KEY', 'https://api.example.com/data');
+      expect(result.status).toBe(200);
     });
   });
 });

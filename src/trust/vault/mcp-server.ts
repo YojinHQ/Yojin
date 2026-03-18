@@ -10,7 +10,7 @@
  */
 
 import type { SecretVault } from './types.js';
-import type { AuditEventInput, AuditLog } from '../audit/types.js';
+import type { AuditLog } from '../audit/types.js';
 
 // Re-export DLP patterns so the proxy can scrub responses
 const CREDENTIAL_PATTERNS: RegExp[] = [
@@ -94,16 +94,27 @@ export class SecretProxy {
       throw new Error(`SecretProxy: invalid URL: ${url}`);
     }
 
-    if (!this.allowedDomains.has(parsed.hostname)) {
+    if (parsed.protocol !== 'https:') {
       this.auditLog.append({
-        type: 'secret.access',
+        type: 'secret.proxy_blocked',
         details: {
           key,
-          action: 'proxy_fetch_blocked',
+          url,
+          reason: `Protocol '${parsed.protocol}' is not allowed — credentials may only be sent over HTTPS`,
+        },
+      });
+      throw new Error(`SecretProxy: credential '${key}' cannot be sent over '${parsed.protocol}' — HTTPS required`);
+    }
+
+    if (!this.allowedDomains.has(parsed.hostname)) {
+      this.auditLog.append({
+        type: 'secret.proxy_blocked',
+        details: {
+          key,
           url,
           reason: `Domain '${parsed.hostname}' is not in the SecretProxy allowlist`,
         },
-      } as AuditEventInput);
+      });
       throw new Error(
         `SecretProxy: credential '${key}' cannot be sent to '${parsed.hostname}' — domain not in allowlist`,
       );
@@ -120,14 +131,13 @@ export class SecretProxy {
 
     // Log the authenticated request (without the credential value)
     this.auditLog.append({
-      type: 'secret.access',
+      type: 'secret.proxy_fetch',
       details: {
         key,
-        action: 'proxy_fetch',
         url,
         method,
       },
-    } as AuditEventInput);
+    });
 
     // Make the request with a timeout
     const controller = new AbortController();

@@ -15,6 +15,8 @@ export const AuditEventTypeSchema = z.enum([
   'guard.pass',
   'guard.block',
   'secret.access',
+  'secret.proxy_fetch',
+  'secret.proxy_blocked',
   'pii.redact',
   'approval.request',
   'approval.result',
@@ -47,6 +49,20 @@ export const SecretAccessDetailsSchema = z.object({
   agentId: z.string().optional(),
 });
 export type SecretAccessDetails = z.infer<typeof SecretAccessDetailsSchema>;
+
+export const SecretProxyFetchDetailsSchema = z.object({
+  key: z.string(),
+  url: z.string(),
+  method: z.string(),
+});
+export type SecretProxyFetchDetails = z.infer<typeof SecretProxyFetchDetailsSchema>;
+
+export const SecretProxyBlockedDetailsSchema = z.object({
+  key: z.string(),
+  url: z.string(),
+  reason: z.string(),
+});
+export type SecretProxyBlockedDetails = z.infer<typeof SecretProxyBlockedDetailsSchema>;
 
 export const PiiRedactDetailsSchema = z.object({
   fieldsRedacted: z.number(),
