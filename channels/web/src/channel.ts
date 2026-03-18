@@ -94,9 +94,13 @@ export function buildWebChannel(): ChannelPlugin {
 
       // Chat endpoint — POST message, get response
       app.post('/api/chat', async (c) => {
+        let threadId: string | undefined;
         try {
-          const body = await c.req.json<{ message: string; threadId?: string }>();
-          const threadId = body.threadId ?? `web-${Date.now()}`;
+          const body = await c.req.json<{ message: string; threadId?: string }>().catch(() => null);
+          if (!body || typeof body.message !== 'string' || !body.message.trim()) {
+            return c.json({ error: 'Invalid request body' }, 400);
+          }
+          threadId = body.threadId ?? `web-${Date.now()}`;
 
           const incoming: IncomingMessage = {
             channelId: 'web',
@@ -119,6 +123,7 @@ export function buildWebChannel(): ChannelPlugin {
             return c.json({ error: 'Request timed out' }, 504);
           }
         } catch (err) {
+          if (threadId) pendingResponses.delete(threadId);
           console.error('[web] /api/chat unhandled error:', err);
           return c.json({ error: 'Internal server error' }, 500);
         }

@@ -27,7 +27,11 @@ async function sendChatMessage(message: string, threadId: string): Promise<{ thr
     throw new Error((body as { error?: string }).error ?? `Request failed (${res.status})`);
   }
 
-  return res.json() as Promise<{ threadId: string; response: string }>;
+  const data = (await res.json()) as { threadId: string; response: string };
+  if (typeof data.response !== 'string') {
+    throw new Error('Unexpected response format from server');
+  }
+  return data;
 }
 
 export default function Chat() {
