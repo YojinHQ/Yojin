@@ -51,7 +51,7 @@ export class ToolRegistry {
   }
 
   /** Execute a tool by name. Returns error result for unknown tools. */
-  async execute(name: string, input: unknown): Promise<ToolResult> {
+  async execute(name: string, input: unknown, _context?: unknown): Promise<ToolResult> {
     const tool = this.tools.get(name);
     if (!tool) {
       return { content: `Unknown tool: ${name}`, isError: true };

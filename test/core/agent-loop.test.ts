@@ -9,6 +9,10 @@ import type {
   ContentBlock,
   ToolDefinition,
 } from '../../src/core/types.js';
+import { GuardRunner } from '../../src/guards/guard-runner.js';
+import { OutputDlpGuard } from '../../src/guards/security/output-dlp.js';
+import type { Guard, GuardResult, ProposedAction } from '../../src/guards/types.js';
+import type { AuditEvent, AuditEventInput, AuditLog } from '../../src/trust/audit/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -288,5 +292,142 @@ describe('runAgentLoop', () => {
     // 2 iterations × 100 input + 50 output each
     expect(result.usage.inputTokens).toBe(200);
     expect(result.usage.outputTokens).toBe(100);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Guard integration tests
+// ---------------------------------------------------------------------------
+
+/** In-memory audit log for testing. */
+function mockAuditLog(): AuditLog {
+  const events: AuditEventInput[] = [];
+  return {
+    append: (event: AuditEventInput) => events.push(event),
+    query: async () => [] as AuditEvent[],
+  };
+}
+
+/** Guard that blocks a specific tool by name. */
+function blockingGuard(blockedTool: string): Guard {
+  return {
+    name: 'test-blocker',
+    check(action: ProposedAction): GuardResult {
+      if (action.toolName === blockedTool) {
+        return { pass: false, reason: `Tool "${blockedTool}" is blocked by test guard` };
+      }
+      return { pass: true };
+    },
+  };
+}
+
+/** Tool that returns a secret in its output (for DLP testing). */
+const leakyTool: ToolDefinition = {
+  name: 'leaky',
+  description: 'Returns a secret',
+  parameters: z.object({}),
+  execute: async () => ({ content: 'Here is a key: sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAA' }),
+};
+
+describe('runAgentLoop with guards', () => {
+  it('blocks tool execution when guard rejects', async () => {
+    const auditLog = mockAuditLog();
+    const guardRunner = new GuardRunner([blockingGuard('echo')], { auditLog });
+
+    const provider = mockProvider([
+      toolCallResponse([{ id: 'tc1', name: 'echo', input: { message: 'test' } }]),
+      textResponse('Handled the block'),
+    ]);
+
+    const result = await runAgentLoop('Echo test', [], {
+      provider,
+      model: 'test-model',
+      tools: [echoTool],
+      guardRunner,
+    });
+
+    expect(result.text).toBe('Handled the block');
+    // The tool result should contain the guard block message
+    const toolResultMsg = result.messages.find(
+      (m) =>
+        m.role === 'user' &&
+        Array.isArray(m.content) &&
+        m.content.some((b) => b.type === 'tool_result' && b.content.includes('Blocked by guard')),
+    );
+    expect(toolResultMsg).toBeDefined();
+  });
+
+  it('allows tool execution when guard passes', async () => {
+    const auditLog = mockAuditLog();
+    // Guard blocks 'dangerous_tool', but we're calling 'echo' — should pass
+    const guardRunner = new GuardRunner([blockingGuard('dangerous_tool')], { auditLog });
+
+    const provider = mockProvider([
+      toolCallResponse([{ id: 'tc1', name: 'echo', input: { message: 'hello' } }]),
+      textResponse('Echo succeeded'),
+    ]);
+
+    const result = await runAgentLoop('Echo hello', [], {
+      provider,
+      model: 'test-model',
+      tools: [echoTool],
+      guardRunner,
+    });
+
+    expect(result.text).toBe('Echo succeeded');
+    // Verify the echo tool actually executed — tool result should contain "Echo: hello"
+    const toolResultMsg = result.messages.find(
+      (m) =>
+        m.role === 'user' &&
+        Array.isArray(m.content) &&
+        m.content.some((b) => b.type === 'tool_result' && b.content.includes('Echo: hello')),
+    );
+    expect(toolResultMsg).toBeDefined();
+  });
+
+  it('suppresses output when DLP detects a secret', async () => {
+    const auditLog = mockAuditLog();
+    const guardRunner = new GuardRunner([], { auditLog });
+    const outputDlp = new OutputDlpGuard();
+
+    const provider = mockProvider([
+      toolCallResponse([{ id: 'tc1', name: 'leaky', input: {} }]),
+      textResponse('Handled the DLP block'),
+    ]);
+
+    const result = await runAgentLoop('Leak a secret', [], {
+      provider,
+      model: 'test-model',
+      tools: [leakyTool],
+      guardRunner,
+      outputDlp,
+    });
+
+    expect(result.text).toBe('Handled the DLP block');
+    // The tool result should be suppressed by DLP
+    const toolResultMsg = result.messages.find(
+      (m) =>
+        m.role === 'user' &&
+        Array.isArray(m.content) &&
+        m.content.some((b) => b.type === 'tool_result' && b.content.includes('Output blocked by DLP')),
+    );
+    expect(toolResultMsg).toBeDefined();
+  });
+
+  it('works without guardRunner (backward compatibility)', async () => {
+    const provider = mockProvider([
+      toolCallResponse([{ id: 'tc1', name: 'echo', input: { message: 'compat' } }]),
+      textResponse('Still works'),
+    ]);
+
+    const result = await runAgentLoop('Echo compat', [], {
+      provider,
+      model: 'test-model',
+      tools: [echoTool],
+      // No guardRunner — plain ToolRegistry path
+    });
+
+    expect(result.text).toBe('Still works');
+    expect(result.iterations).toBe(2);
   });
 });
