@@ -59,9 +59,9 @@ export default function Dropdown({ trigger, items, align = 'left', position = 'b
                   setOpen(false);
                 }}
                 className={cn(
-                  'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors',
+                  'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors',
                   item.variant === 'danger'
-                    ? 'text-accent-primary hover:bg-bg-hover'
+                    ? 'text-error hover:bg-error/10'
                     : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary',
                 )}
               >

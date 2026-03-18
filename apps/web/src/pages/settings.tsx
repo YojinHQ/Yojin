@@ -2,41 +2,81 @@ import { useState } from 'react';
 import { useTheme } from '../lib/theme';
 import type { ThemeChoice } from '../lib/theme';
 import { cn } from '../lib/utils';
+import Card from '../components/common/card';
+import Toggle from '../components/common/toggle';
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
+  const [notifications, setNotifications] = useState({
+    morningDigest: true,
+    priceAlerts: true,
+    riskWarnings: true,
+    agentActivity: false,
+  });
+  const [privacy, setPrivacy] = useState({
+    piiRedaction: true,
+    auditLogging: true,
+  });
+
+  const updateNotification = (key: keyof typeof notifications) => (value: boolean) => {
+    setNotifications((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const updatePrivacy = (key: keyof typeof privacy) => (value: boolean) => {
+    setPrivacy((prev) => ({ ...prev, [key]: value }));
+  };
 
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
-      {/* Appearance */}
-      <div className="rounded-xl border border-border bg-bg-card p-6 space-y-5">
-        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">Appearance</h3>
+      <Card title="Appearance" section>
         <ThemePicker current={theme} onChange={setTheme} />
-      </div>
+      </Card>
 
-      {/* Notifications */}
-      <div className="rounded-xl border border-border bg-bg-card p-6 space-y-5">
-        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">Notifications</h3>
+      <Card title="Notifications" section>
         <div className="space-y-4">
-          <ToggleRow label="Morning digest" description="Daily portfolio summary at 8 AM" defaultOn />
-          <ToggleRow label="Price alerts" description="Notify when positions hit target price" defaultOn />
-          <ToggleRow label="Risk warnings" description="Alert on concentration or exposure changes" defaultOn />
-          <ToggleRow label="Agent activity" description="Notify when agents complete tasks" />
+          <Toggle
+            label="Morning digest"
+            description="Daily portfolio summary at 8 AM"
+            checked={notifications.morningDigest}
+            onChange={updateNotification('morningDigest')}
+          />
+          <Toggle
+            label="Price alerts"
+            description="Notify when positions hit target price"
+            checked={notifications.priceAlerts}
+            onChange={updateNotification('priceAlerts')}
+          />
+          <Toggle
+            label="Risk warnings"
+            description="Alert on concentration or exposure changes"
+            checked={notifications.riskWarnings}
+            onChange={updateNotification('riskWarnings')}
+          />
+          <Toggle
+            label="Agent activity"
+            description="Notify when agents complete tasks"
+            checked={notifications.agentActivity}
+            onChange={updateNotification('agentActivity')}
+          />
         </div>
-      </div>
+      </Card>
 
-      {/* Data & Privacy */}
-      <div className="rounded-xl border border-border bg-bg-card p-6 space-y-5">
-        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">Data & Privacy</h3>
+      <Card title="Data & Privacy" section>
         <div className="space-y-4">
-          <ToggleRow
+          <Toggle
             label="PII redaction"
             description="Strip personal identifiers before external API calls"
-            defaultOn
+            checked={privacy.piiRedaction}
+            onChange={updatePrivacy('piiRedaction')}
           />
-          <ToggleRow label="Audit logging" description="Log all security events to audit trail" defaultOn />
+          <Toggle
+            label="Audit logging"
+            description="Log all security events to audit trail"
+            checked={privacy.auditLogging}
+            onChange={updatePrivacy('auditLogging')}
+          />
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -104,35 +144,6 @@ function ThemePicker({ current, onChange }: { current: ThemeChoice; onChange: (t
           </button>
         );
       })}
-    </div>
-  );
-}
-
-function ToggleRow({
-  label,
-  description,
-  defaultOn = false,
-}: {
-  label: string;
-  description: string;
-  defaultOn?: boolean;
-}) {
-  const [checked, setChecked] = useState(defaultOn);
-  return (
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-sm text-text-primary">{label}</p>
-        <p className="text-xs text-text-muted">{description}</p>
-      </div>
-      <label className="relative inline-flex cursor-pointer items-center">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => setChecked(e.target.checked)}
-          className="peer sr-only"
-        />
-        <div className="h-5 w-9 rounded-full bg-bg-tertiary peer-checked:bg-accent-primary peer-focus:ring-2 peer-focus:ring-accent-primary/20 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-text-primary after:transition-all peer-checked:after:translate-x-full" />
-      </label>
     </div>
   );
 }

@@ -16,12 +16,12 @@ export interface EgressGuardOptions {
 
 export class EgressGuard implements Guard {
   readonly name = 'egress-guard';
-  private readonly allowedDomains: Set<string>;
-  private readonly blockedPorts: Set<number>;
+  private readonly allowedDomains: ReadonlySet<string>;
+  private readonly blockedPorts: ReadonlySet<number>;
 
   constructor(options?: EgressGuardOptions) {
-    this.allowedDomains = new Set(options?.allowedDomains ?? DEFAULT_ALLOWED_DOMAINS);
-    this.blockedPorts = new Set(options?.blockedPorts ?? []);
+    this.allowedDomains = Object.freeze(new Set(options?.allowedDomains ?? DEFAULT_ALLOWED_DOMAINS));
+    this.blockedPorts = Object.freeze(new Set(options?.blockedPorts ?? []));
   }
 
   check(action: ProposedAction): GuardResult {
@@ -52,10 +52,5 @@ export class EgressGuard implements Guard {
     }
 
     return { pass: true };
-  }
-
-  /** Add a domain to the allowlist at runtime. */
-  allow(domain: string): void {
-    this.allowedDomains.add(domain);
   }
 }

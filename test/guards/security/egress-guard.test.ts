@@ -48,11 +48,12 @@ describe('EgressGuard', () => {
     expect(portGuard.check(action('http://localhost:22')).pass).toBe(false);
   });
 
-  it('supports runtime allowlist updates', () => {
-    const dynamic = new EgressGuard({ allowedDomains: [] });
-    expect(dynamic.check(action('https://newsite.com')).pass).toBe(false);
+  it('allowlist is immutable — no runtime modification', () => {
+    const guard2 = new EgressGuard({ allowedDomains: ['safe.com'] });
+    expect(guard2.check(action('https://safe.com')).pass).toBe(true);
+    expect(guard2.check(action('https://evil.com')).pass).toBe(false);
 
-    dynamic.allow('newsite.com');
-    expect(dynamic.check(action('https://newsite.com')).pass).toBe(true);
+    // Verify there is no allow() method to mutate the allowlist at runtime
+    expect('allow' in guard2).toBe(false);
   });
 });

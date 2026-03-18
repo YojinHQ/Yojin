@@ -1,10 +1,10 @@
 import { cn } from '../lib/utils';
+import Card from '../components/common/card';
 
 export default function Profile() {
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
-      {/* Profile header */}
-      <div className="rounded-xl border border-border bg-bg-card p-6">
+      <Card className="p-6">
         <div className="flex items-center gap-5">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent-primary/20 text-xl font-semibold text-accent-primary">
             DS
@@ -14,28 +14,24 @@ export default function Profile() {
             <p className="text-sm text-text-muted">@dean</p>
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* Account info */}
-      <div className="rounded-xl border border-border bg-bg-card p-6 space-y-5">
-        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">Account Information</h3>
+      <Card title="Account Information" section>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field label="Display Name" value="Dean Shaked" />
           <Field label="Username" value="@dean" />
           <Field label="Email" value="dean@yojin.ai" />
           <Field label="Role" value="Owner" />
         </div>
-      </div>
+      </Card>
 
-      {/* Connected platforms */}
-      <div className="rounded-xl border border-border bg-bg-card p-6 space-y-5">
-        <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider">Connected Platforms</h3>
+      <Card title="Connected Platforms" section>
         <div className="space-y-3">
           <PlatformRow name="Interactive Brokers" status="connected" />
           <PlatformRow name="Coinbase" status="connected" />
           <PlatformRow name="Robinhood" status="disconnected" />
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

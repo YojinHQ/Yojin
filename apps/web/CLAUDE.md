@@ -114,7 +114,7 @@ const variantStyles: Record<Variant, string> = {
 - **Props**: extend native HTML attributes where applicable (`ButtonHTMLAttributes`, etc.)
 - **State**: local `useState` for UI state; urql for server state via GraphQL
 - **No global state library** — component state + GraphQL covers current needs
-- **Stories**: co-locate as `*.stories.tsx` next to the component in `common/`
+- **Stories**: co-locate as `*.stories.tsx` next to the component in any directory
 
 ## GraphQL
 

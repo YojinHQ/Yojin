@@ -21,15 +21,15 @@ export default function PositionsPreview() {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-bg-card">
       <div className="flex flex-shrink-0 items-center justify-between px-3 py-2">
-        <h3 className="text-sm font-medium text-text-primary">Top Positions</h3>
-        <Link to="/portfolio" className="text-xs text-accent-primary hover:text-accent-primary/80 transition-colors">
+        <h3 className="text-2xs font-medium text-text-primary uppercase tracking-wider">Top Positions</h3>
+        <Link to="/portfolio" className="text-2xs text-accent-primary hover:text-accent-primary/80 transition-colors">
           View All
         </Link>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full">
           <thead className="sticky top-0 z-10 bg-bg-card">
-            <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-text-muted">
+            <tr className="border-b border-border text-left text-2xs uppercase tracking-wider text-text-muted">
               <th className="px-3 pb-1.5 font-medium">Symbol</th>
               <th className="px-3 pb-1.5 font-medium">Name</th>
               <th className="px-3 pb-1.5 text-right font-medium">Value</th>

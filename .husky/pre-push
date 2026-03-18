@@ -1,0 +1,17 @@
+cd "$(git rev-parse --show-toplevel)"
+
+# Build + test backend
+pnpm build
+pnpm test
+
+# Build + test frontend only when web app changes are being pushed
+BASE=$(git merge-base HEAD @{upstream} 2>/dev/null \
+  || git merge-base HEAD origin/main 2>/dev/null \
+  || git rev-list --max-parents=0 HEAD)
+if git diff --name-only "$BASE" HEAD | grep -q '^apps/web/'; then
+  pnpm --filter web build
+  # Only run tests if test files exist (vitest exits 1 with no test files)
+  if find apps/web/src -name '*.test.*' -o -name '*.spec.*' 2>/dev/null | grep -q .; then
+    pnpm --filter web test
+  fi
+fi

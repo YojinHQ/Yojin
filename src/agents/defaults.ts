@@ -106,6 +106,7 @@ export function createDefaultProfiles(): AgentProfile[] {
         'fetch_positions',
         'check_platform_health',
         // Credential tools
+        'store_credential',
         'check_credential',
         'list_credentials',
         // Diagnostics

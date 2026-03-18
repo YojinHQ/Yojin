@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react';
 import PortfolioStats from '../components/portfolio/portfolio-stats';
-import FilterTabs from '../components/portfolio/filter-tabs';
+import Tabs from '../components/common/tabs';
 import PositionTable from '../components/portfolio/position-table';
-import type { FilterStatus } from '../components/portfolio/filter-tabs';
+
+const FILTER_STATUSES = ['all', 'holding', 'watching', 'pending', 'sold'] as const;
+type FilterStatus = (typeof FILTER_STATUSES)[number];
 
 const mockPositions = [
   {
@@ -122,7 +124,16 @@ export default function Positions() {
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
       <PortfolioStats />
-      <FilterTabs activeFilter={filter} onChange={setFilter} counts={counts} />
+      <Tabs
+        tabs={FILTER_STATUSES.map((f) => ({
+          label: `${f.charAt(0).toUpperCase() + f.slice(1)} (${counts[f]})`,
+          value: f,
+        }))}
+        value={filter}
+        onChange={(v) => {
+          if ((FILTER_STATUSES as readonly string[]).includes(v)) setFilter(v as FilterStatus);
+        }}
+      />
       <PositionTable positions={filteredPositions} />
     </div>
   );

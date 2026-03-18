@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Button from '../common/button';
 
 export default function ChatInput({ onSend }: { onSend: (message: string) => void }) {
   const [value, setValue] = useState('');
@@ -22,13 +23,9 @@ export default function ChatInput({ onSend }: { onSend: (message: string) => voi
         placeholder="Ask Yojin anything about your portfolio..."
         className="text-text-primary placeholder:text-text-muted flex-1 bg-transparent text-sm outline-none"
       />
-      <button
-        type="submit"
-        disabled={!value.trim()}
-        className="bg-accent-primary hover:bg-accent-secondary rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-      >
+      <Button type="submit" disabled={!value.trim()}>
         Send
-      </button>
+      </Button>
     </form>
   );
 }

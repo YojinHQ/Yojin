@@ -49,7 +49,7 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "*.{ts,js,mjs}": [
+    "*.{ts,tsx,js,jsx,mjs}": [
       "prettier --write",
       "eslint --fix --no-warn-ignored"
     ],

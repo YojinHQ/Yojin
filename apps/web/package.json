@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "4.2.1",
+    "@urql/core": "6.0.1",
     "clsx": "2.1.1",
     "graphql": "16.13.1",
     "react": "19.2.4",
@@ -23,7 +24,6 @@
     "recharts": "3.8.0",
     "tailwind-merge": "3.5.0",
     "tailwindcss": "4.2.1",
-    "@urql/core": "6.0.1",
     "urql": "5.0.1"
   },
   "devDependencies": {
@@ -35,6 +35,9 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.2.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
     "eslint-plugin-storybook": "10.2.19",
     "jsdom": "29.0.0",
     "storybook": "^10.2.19",
