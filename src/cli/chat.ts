@@ -189,7 +189,6 @@ export async function startChat(args: string[]): Promise<void> {
     rl.question(`${c.cyan}${c.bold}> ${c.reset}`, async (input) => {
       const trimmed = input.trim();
       if (!trimmed || trimmed === 'exit' || trimmed === 'quit') {
-        await pluginRegistry.shutdownAll();
         rl.close();
         return;
       }

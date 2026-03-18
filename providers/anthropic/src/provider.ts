@@ -349,13 +349,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
 
       // -- API mode --
       const systemMsg = params.messages.find((m) => m.role === 'system')?.content;
-      const completeSystem =
-        authMode === 'oauth'
-          ? [
-              { type: 'text' as const, text: OAUTH_SYSTEM_PREFIX.trim() },
-              ...(systemMsg ? [{ type: 'text' as const, text: systemMsg }] : []),
-            ]
-          : systemMsg;
+      const systemParam = buildSystemParam(systemMsg, authMode === 'oauth');
 
       const response = await client.messages.create({
         model: params.model,
@@ -364,7 +358,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
           role: m.role === 'system' ? 'user' : m.role,
           content: m.content,
         })),
-        ...(completeSystem ? { system: completeSystem } : {}),
+        ...(systemParam ? { system: systemParam } : {}),
         ...(params.temperature != null ? { temperature: params.temperature } : {}),
         ...(params.stopSequences ? { stop_sequences: params.stopSequences } : {}),
       });
@@ -395,13 +389,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
 
       // -- API mode --
       const streamSystemMsg = params.messages.find((m) => m.role === 'system')?.content;
-      const streamSystem =
-        authMode === 'oauth'
-          ? [
-              { type: 'text' as const, text: OAUTH_SYSTEM_PREFIX.trim() },
-              ...(streamSystemMsg ? [{ type: 'text' as const, text: streamSystemMsg }] : []),
-            ]
-          : streamSystemMsg;
+      const systemParam = buildSystemParam(streamSystemMsg, authMode === 'oauth');
 
       const stream = client.messages.stream({
         model: params.model,
@@ -410,7 +398,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
           role: m.role === 'system' ? 'user' : m.role,
           content: m.content,
         })),
-        ...(streamSystem ? { system: streamSystem } : {}),
+        ...(systemParam ? { system: systemParam } : {}),
         ...(params.temperature != null ? { temperature: params.temperature } : {}),
         ...(params.stopSequences ? { stop_sequences: params.stopSequences } : {}),
       });
