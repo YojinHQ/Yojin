@@ -63,19 +63,19 @@ export interface PositionConfidence {
 }
 
 // ---------------------------------------------------------------------------
-// Screenshot parse result (Result-style)
+// Screenshot parse result (Result-style, reuses PlatformConnectorResult)
 // ---------------------------------------------------------------------------
 
-export type ScreenshotParseResult =
-  | { success: true; positions: ExtractedPosition[]; metadata: ExtractionMetadata }
-  | { success: false; error: string };
+export type ScreenshotParseResult = PlatformConnectorResult;
 
 // ---------------------------------------------------------------------------
 // Zod schemas for validating Claude Vision output
 // ---------------------------------------------------------------------------
 
+// Keep in sync with AssetClass and Platform in ../api/graphql/types.ts
 export const AssetClassSchema = z.enum(['EQUITY', 'CRYPTO', 'BOND', 'COMMODITY', 'CURRENCY', 'OTHER']);
 
+// Keep in sync with Platform in ../api/graphql/types.ts
 export const PlatformSchema = z.enum(['INTERACTIVE_BROKERS', 'ROBINHOOD', 'COINBASE', 'MANUAL']);
 
 export const ExtractedPositionSchema = z.object({
@@ -92,7 +92,7 @@ export const ExtractedPositionSchema = z.object({
 
 export const ExtractionResponseSchema = z.object({
   platform: PlatformSchema,
-  positions: z.array(ExtractedPositionSchema).min(1),
+  positions: z.array(ExtractedPositionSchema),
   notes: z.string().optional(),
 });
 

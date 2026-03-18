@@ -35,10 +35,12 @@ export default function ChatInput({
     if (!file) return;
 
     if (!ACCEPTED_TYPES.has(file.type)) {
+      alert(`Unsupported file type: ${file.type}. Accepted: JPEG, PNG, GIF, WebP.`);
       return;
     }
 
     if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      alert(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum size is ${MAX_SIZE_MB} MB.`);
       return;
     }
 
@@ -62,8 +64,15 @@ export default function ChatInput({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (!file || !ACCEPTED_TYPES.has(file.type)) return;
-    if (file.size > MAX_SIZE_MB * 1024 * 1024) return;
+    if (!file) return;
+    if (!ACCEPTED_TYPES.has(file.type)) {
+      alert(`Unsupported file type: ${file.type}. Accepted: JPEG, PNG, GIF, WebP.`);
+      return;
+    }
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      alert(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum size is ${MAX_SIZE_MB} MB.`);
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = () => {

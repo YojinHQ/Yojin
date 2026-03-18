@@ -34,6 +34,13 @@ export function sendMessageMutation(
   const { threadId, message, imageBase64, imageMediaType } = args;
   const messageId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+  // Server-side size guard: reject base64 payloads over ~10 MB decoded
+  // (base64 is ~4/3 of original size, so 14 MB base64 ≈ 10.5 MB decoded)
+  const MAX_IMAGE_BASE64_LENGTH = 14 * 1024 * 1024;
+  if (imageBase64 && imageBase64.length > MAX_IMAGE_BASE64_LENGTH) {
+    throw new Error('Image too large — maximum size is 10 MB.');
+  }
+
   // Fire-and-forget: run agent in background, stream events via pubsub
   void (async () => {
     try {

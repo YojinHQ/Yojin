@@ -51,8 +51,11 @@ export class TokenBudget {
         // tool results are more token-dense
         return Math.ceil((block.content.length / TOOL_RESULT_CHARS_PER_TOKEN) * SAFETY_MARGIN);
       case 'image':
-        // Base64 image data — estimate from the encoded string length
-        return this.estimateStringTokens(block.source.data);
+        // Anthropic Vision billing is tile-based (512x512 tiles), not file-size-based.
+        // Without image dimensions we can't compute tiles, so use a conservative flat
+        // estimate (~1600 tokens) rather than the base64 string length which overestimates
+        // by 10-100x for typical screenshots and can trigger false compaction.
+        return 1600;
     }
   }
 

@@ -26,10 +26,12 @@ export interface ParseScreenshotParams {
   provider: AgentLoopProvider;
   model: string;
   platformHint?: Platform;
+  /** Max tokens for the vision response (default 4096). */
+  maxTokens?: number;
 }
 
 export async function parsePortfolioScreenshot(params: ParseScreenshotParams): Promise<ScreenshotParseResult> {
-  const { imageData, mediaType, provider, model, platformHint } = params;
+  const { imageData, mediaType, provider, model, platformHint, maxTokens = 4096 } = params;
 
   const base64Data = imageData.toString('base64');
   const prompt = buildExtractionPrompt(platformHint);
@@ -55,7 +57,7 @@ export async function parsePortfolioScreenshot(params: ParseScreenshotParams): P
       model,
       system: SYSTEM_PROMPT,
       messages,
-      maxTokens: 4096,
+      maxTokens,
     });
 
     usage = result.usage;
@@ -194,7 +196,10 @@ export function extractJsonFromResponse(text: string): unknown {
     }
   }
 
-  // Try to find a JSON object anywhere in the text
+  // Last resort: try to find a JSON object anywhere in the text.
+  // NOTE: this regex is greedy — it matches from the first '{' to the last '}',
+  // which can fail if there are stray '}' characters after the JSON payload.
+  // If the LLM returns well-formed JSON as instructed, this is rarely hit.
   const objectMatch = /\{[\s\S]*\}/.exec(text);
   if (objectMatch?.[0]) {
     try {
@@ -263,6 +268,6 @@ function checkConsistency(pos: ExtractedPosition): boolean {
   if (pos.marketValue === 0) return pos.quantity === 0 || pos.currentPrice === 0;
 
   const computed = pos.quantity * pos.currentPrice;
-  const diff = Math.abs(computed - pos.marketValue) / pos.marketValue;
+  const diff = Math.abs(computed - pos.marketValue) / Math.abs(pos.marketValue);
   return diff <= CONSISTENCY_TOLERANCE;
 }

@@ -199,7 +199,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const sendMessage = useCallback(
     (content: string, image?: ChatImageData) => {
       if (isProcessingRef.current) {
-        // Queue text-only — images are not queued to avoid holding large base64 strings
+        // Queue text-only — images are not queued to avoid holding large base64 strings in memory.
+        // Warn the user that the image will not be sent.
+        if (image) {
+          alert(
+            'A message is still being processed. Your image was not included — please re-attach it after the response completes.',
+          );
+        }
         queueRef.current.push(content);
         setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content }]);
       } else {

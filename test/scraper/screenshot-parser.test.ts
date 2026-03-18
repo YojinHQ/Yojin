@@ -537,12 +537,12 @@ describe('Zod schemas', () => {
       expect(result.success).toBe(true);
     });
 
-    it('rejects empty positions array', () => {
+    it('accepts empty positions array (empty portfolio)', () => {
       const result = ExtractionResponseSchema.safeParse({
         platform: 'COINBASE',
         positions: [],
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
     });
 
     it('rejects missing platform', () => {
