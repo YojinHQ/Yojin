@@ -7,5 +7,8 @@ pnpm test
 # Build + test frontend only when web app changes are being pushed
 if git diff --name-only "$(git merge-base HEAD @{upstream} 2>/dev/null || echo HEAD~1)" HEAD | grep -q '^apps/web/'; then
   pnpm --filter web build
-  pnpm --filter web test
+  # Only run tests if test files exist (vitest exits 1 with no test files)
+  if find apps/web/src -name '*.test.*' -o -name '*.spec.*' 2>/dev/null | grep -q .; then
+    pnpm --filter web test
+  fi
 fi
