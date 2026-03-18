@@ -106,7 +106,9 @@ export async function runAgentLoop(
     }
   }
 
+  // Send scrubbed text to LLM, but keep original in history for future turns
   let messages: AgentMessage[] = [...history, { role: 'user', content: messageForLlm }];
+  const originalUserIdx = messages.length - 1;
   const totalUsage = { inputTokens: 0, outputTokens: 0 };
   let compactions = 0;
 
@@ -168,6 +170,10 @@ export async function runAgentLoop(
       const finalText = piiScanner && piiMap ? await piiScanner.restore(thoughtText, piiMap) : thoughtText;
       emit(onEvent, { type: 'done', text: finalText, iterations });
       messages.push({ role: 'assistant', content: response.content });
+      // Restore original user message in history so future turns don't see stale PII tags
+      if (piiMap) {
+        messages[originalUserIdx] = { role: 'user', content: userMessage };
+      }
       return { text: finalText, messages, iterations, usage: totalUsage, compactions };
     }
 
@@ -231,6 +237,9 @@ export async function runAgentLoop(
 
   // Max iterations reached
   emit(onEvent, { type: 'max_iterations', iterations });
+  if (piiMap) {
+    messages[originalUserIdx] = { role: 'user', content: userMessage };
+  }
   const lastAssistant = messages.filter((m) => m.role === 'assistant').pop();
   const fallbackText = extractText(lastAssistant);
   return {

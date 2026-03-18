@@ -202,6 +202,7 @@ export async function startChat(args: string[]): Promise<void> {
       const spinner = new ThinkingSpinner();
       let streamingStarted = false;
       let spinnerActive = false;
+      let piiDetected = false;
 
       try {
         spinner.start();
@@ -218,6 +219,7 @@ export async function startChat(args: string[]): Promise<void> {
           piiScanner,
           onEvent: (event) => {
             if (event.type === 'pii_redacted') {
+              piiDetected = true;
               if (spinnerActive) {
                 spinner.stop();
                 spinnerActive = false;
@@ -236,7 +238,11 @@ export async function startChat(args: string[]): Promise<void> {
               if (!streamingStarted) {
                 streamingStarted = true;
               }
-              process.stdout.write(event.text);
+              // When PII was detected, buffer text (don't print raw tags).
+              // The rehydrated result.text will be printed after the loop.
+              if (!piiDetected) {
+                process.stdout.write(event.text);
+              }
             }
             if (event.type === 'action') {
               if (spinnerActive) {
@@ -278,9 +284,11 @@ export async function startChat(args: string[]): Promise<void> {
 
         history = result.messages;
 
-        if (streamingStarted) {
+        if (streamingStarted && !piiDetected) {
+          // Streaming already printed to terminal — just add newline
           process.stdout.write('\n');
         } else if (result.text) {
+          // Either non-streaming or PII-buffered — print the (rehydrated) result
           process.stdout.write(result.text + '\n');
         }
 

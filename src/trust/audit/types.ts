@@ -67,7 +67,7 @@ export type SecretProxyBlockedDetails = z.infer<typeof SecretProxyBlockedDetails
 export const PiiRedactDetailsSchema = z.object({
   fieldsRedacted: z.number(),
   rulesApplied: z.array(z.string()),
-  hash: z.string(),
+  hash: z.string().optional(),
 });
 export type PiiRedactDetails = z.infer<typeof PiiRedactDetailsSchema>;
 

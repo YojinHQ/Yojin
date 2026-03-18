@@ -103,7 +103,6 @@ export class ChatPiiScanner {
       details: {
         fieldsRedacted: result.stats.totalEntities,
         rulesApplied: typesFound,
-        hash: '',
       },
     });
 
