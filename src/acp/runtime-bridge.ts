@@ -1,4 +1,7 @@
 import type { AgentLoopEvent, AgentLoopEventHandler } from '../core/types.js';
+import { createSubsystemLogger } from '../logging/logger.js';
+
+const logger = createSubsystemLogger('runtime-bridge');
 
 export interface RuntimeBridge {
   sendPrompt(params: {
@@ -58,6 +61,7 @@ export class LocalRuntimeBridge implements RuntimeBridge {
           if (params.threadId) this.abortControllers.delete(params.threadId);
         });
     } else {
+      logger.warn('sendPrompt called without threadId — abort() will not work for this prompt');
       this.runtime
         .handleMessage({
           message: params.message,

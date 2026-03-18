@@ -107,10 +107,10 @@ pnpm ci:all           # Full CI check across all packages
 
 ## Naming Conventions
 
-| Convention | Example | Usage |
-|---|---|---|
-| **camelCase** | `userName`, `getUserData` | Functions, methods, variables, properties |
-| **PascalCase** | `UserName`, `GetUserData` | Classes, React components, interfaces, type aliases |
-| **snake_case** | `user_name`, `get_user_data` | Database columns, Python interop |
-| **SCREAMING_SNAKE_CASE** | `USER_NAME`, `MAX_RETRIES` | True constants |
-| **kebab-case** | `user-name`, `get-user-data` | File names, URLs, CSS classes |
+| Convention               | Example                      | Usage                                               |
+|--------------------------|------------------------------|-----------------------------------------------------|
+| **camelCase**            | `userName`, `getUserData`    | Functions, methods, variables, properties           |
+| **PascalCase**           | `UserName`, `GetUserData`    | Classes, React components, interfaces, type aliases |
+| **snake_case**           | `user_name`, `get_user_data` | Database columns, Python interop                    |
+| **SCREAMING_SNAKE_CASE** | `USER_NAME`, `MAX_RETRIES`   | True constants                                      |
+| **kebab-case**           | `user-name`, `get-user-data` | File names, URLs, CSS classes                       |

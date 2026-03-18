@@ -50,6 +50,7 @@ export class YojinAcpAgent {
   }
 
   async newSession(params: { cwd: string }): Promise<{ sessionId: string; modes?: unknown }> {
+    // cwd is persisted for future use (e.g., scoping filesystem tools to the client's project directory)
     const session = this.sessionStore.create(params.cwd);
     logger.info('ACP session created', { sessionId: session.sessionId, cwd: params.cwd });
     return { sessionId: session.sessionId };
@@ -119,7 +120,10 @@ export class YojinAcpAgent {
     }
   }
 
-  async setSessionMode(_params: { sessionId: string; mode: string }): Promise<{ mode: string }> {
+  async setSessionMode(params: { sessionId: string; mode: string }): Promise<{ mode: string }> {
+    if (params.mode !== 'default') {
+      throw new Error(`Unsupported session mode: ${params.mode}`);
+    }
     return { mode: 'default' };
   }
 }
