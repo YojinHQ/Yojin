@@ -13,7 +13,9 @@ const meta: Meta<typeof Tabs> = {
 export default meta;
 type Story = StoryObj<typeof Tabs>;
 
-function ControlledTabs(props: Omit<React.ComponentProps<typeof Tabs>, 'value' | 'onChange'> & { defaultValue?: string }) {
+function ControlledTabs(
+  props: Omit<React.ComponentProps<typeof Tabs>, 'value' | 'onChange'> & { defaultValue?: string },
+) {
   const { defaultValue, tabs, ...rest } = props;
   const [value, setValue] = useState(defaultValue ?? tabs[0]?.value ?? '');
   return <Tabs {...rest} tabs={tabs} value={value} onChange={setValue} />;
@@ -21,10 +23,12 @@ function ControlledTabs(props: Omit<React.ComponentProps<typeof Tabs>, 'value' |
 
 export const Default: Story = {
   render: () => (
-    <ControlledTabs tabs={[
-      { label: 'Active', value: 'active' },
-      { label: 'Builder', value: 'builder' },
-    ]} />
+    <ControlledTabs
+      tabs={[
+        { label: 'Active', value: 'active' },
+        { label: 'Builder', value: 'builder' },
+      ]}
+    />
   ),
 };
 
@@ -42,13 +46,15 @@ export const Small: Story = {
 
 export const MultipleOptions: Story = {
   render: () => (
-    <ControlledTabs tabs={[
-      { label: 'All', value: 'all' },
-      { label: 'Holding', value: 'holding' },
-      { label: 'Watching', value: 'watching' },
-      { label: 'Pending', value: 'pending' },
-      { label: 'Sold', value: 'sold' },
-    ]} />
+    <ControlledTabs
+      tabs={[
+        { label: 'All', value: 'all' },
+        { label: 'Holding', value: 'holding' },
+        { label: 'Watching', value: 'watching' },
+        { label: 'Pending', value: 'pending' },
+        { label: 'Sold', value: 'sold' },
+      ]}
+    />
   ),
 };
 

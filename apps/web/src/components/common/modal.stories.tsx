@@ -27,7 +27,9 @@ function ModalDemo({ title, maxWidth, children }: { title?: string; maxWidth?: s
 export const Default: Story = {
   render: () => (
     <ModalDemo title="Confirm Action">
-      <p className="text-sm text-text-secondary">Are you sure you want to disconnect this account? This action cannot be undone.</p>
+      <p className="text-sm text-text-secondary">
+        Are you sure you want to disconnect this account? This action cannot be undone.
+      </p>
       <div className="mt-6 flex justify-end gap-3">
         <Button variant="secondary">Cancel</Button>
         <Button variant="danger">Disconnect</Button>
@@ -41,7 +43,10 @@ export const Wide: Story = {
     <ModalDemo title="Browse Skills" maxWidth="max-w-2xl">
       <div className="grid grid-cols-2 gap-4">
         {['Price Alert', 'Volume Spike', 'Rebalance Reminder', 'VaR Breach'].map((name) => (
-          <div key={name} className="rounded-xl border border-border bg-bg-card p-4 hover:border-border-light transition-colors">
+          <div
+            key={name}
+            className="rounded-xl border border-border bg-bg-card p-4 hover:border-border-light transition-colors"
+          >
             <div className="text-sm font-medium text-text-primary">{name}</div>
             <div className="text-xs text-text-muted mt-1">Skill description goes here</div>
           </div>

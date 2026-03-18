@@ -19,16 +19,11 @@ const thumbSize = {
   md: 'after:h-4 after:w-4',
 };
 
-export default function Toggle({
-  checked,
-  onChange,
-  size = 'md',
-  disabled = false,
-  label,
-  description,
-}: ToggleProps) {
+export default function Toggle({ checked, onChange, size = 'md', disabled = false, label, description }: ToggleProps) {
   const toggle = (
-    <label className={cn('relative inline-flex cursor-pointer items-center', disabled && 'cursor-not-allowed opacity-40')}>
+    <label
+      className={cn('relative inline-flex cursor-pointer items-center', disabled && 'cursor-not-allowed opacity-40')}
+    >
       <input
         type="checkbox"
         checked={checked}
