@@ -7,8 +7,8 @@
 
 import { z } from 'zod';
 
-import type { ToolDefinition, ToolResult } from '../core/types.js';
 import type { Brain, EmotionTracker, FrontalLobe, PersonaManager } from '../brain/types.js';
+import type { ToolDefinition, ToolResult } from '../core/types.js';
 
 export interface BrainToolsOptions {
   brain: Brain;

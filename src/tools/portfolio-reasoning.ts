@@ -9,8 +9,8 @@
 
 import { z } from 'zod';
 
-import type { ToolDefinition, ToolResult } from '../core/types.js';
 import type { EmotionTracker, FrontalLobe } from '../brain/types.js';
+import type { ToolDefinition, ToolResult } from '../core/types.js';
 
 export interface PortfolioReasoningOptions {
   frontalLobe: FrontalLobe;

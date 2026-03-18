@@ -7,11 +7,11 @@
  * - Tool subset resolution via ToolRegistry
  */
 
-import type { ToolDefinition } from '../core/types.js';
-import type { ToolRegistry } from '../core/tool-registry.js';
-import { loadAgentPrompt } from '../brain/persona.js';
 import type { AgentProfile, AgentRole, LoadedAgentProfile } from './types.js';
 import { AgentProfileSchema } from './types.js';
+import { loadAgentPrompt } from '../brain/persona.js';
+import type { ToolRegistry } from '../core/tool-registry.js';
+import type { ToolDefinition } from '../core/types.js';
 
 export class AgentRegistry {
   private profiles = new Map<string, AgentProfile>();
