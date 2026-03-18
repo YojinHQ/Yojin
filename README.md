@@ -279,6 +279,49 @@ Yojin is built with security as a first-class concern. Every agent action passes
 └──────────────────────────────────────────────┘
 ```
 
+### Secure Credential Input
+
+When connecting a platform (e.g. Binance), the LLM never sees your API key. The CLI switches to a secure side-channel for collection:
+
+```
+  LLM Conversation                     Secure Side-Channel (TTY)
+  ────────────────                     ─────────────────────────
+  "Connect your Binance account"
+         │
+         ▼
+  tool_call: store_credential
+    key: "BINANCE_API_KEY"
+    desc: "Binance API key"
+         │
+         │                      ┌─────────────────────────────┐
+         │                      │  Prompt on stderr            │
+         │                      │  (LLM reads stdout only)     │
+         │                      │                              │
+         │                      │  > Enter BINANCE_API_KEY:    │
+         │                      │    ••••••••••••••••          │
+         │                      │    (raw mode, echo off)      │
+         │                      │                              │
+         │                      │  Value ──▶ Encrypted Vault   │
+         │                      │           (AES-256-GCM)      │
+         │                      └─────────────────────────────┘
+         │
+         ▼
+  tool_result: "Credential
+    'BINANCE_API_KEY' stored."
+         │
+         ▼                        Later, when a tool needs it:
+  Conversation continues            SecretProxy retrieves from vault
+  (secret never in context)         ──▶ injects into HTTP headers
+                                    ──▶ scrubs response body
+                                    ──▶ returns safe result to LLM
+```
+
+**Key protections:**
+- **stderr prompts** — LLM only reads stdout, never sees the input prompt
+- **TTY raw mode, echo disabled** — nothing printed while you type
+- **Non-TTY rejection** — refuses piped input, preventing LLM from feeding secrets programmatically
+- **Transport-layer injection** — credentials go from vault directly into HTTP headers, never into prompts
+
 ### PII Redaction Pipeline
 
 ```

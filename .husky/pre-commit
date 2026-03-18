@@ -1,3 +1,4 @@
+cd "$(git rev-parse --show-toplevel)"
 pnpm run lint-staged
 pnpm exec tsc --noEmit
 
