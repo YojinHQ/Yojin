@@ -73,23 +73,11 @@ export function createBrainTools(options: BrainToolsOptions): ToolDefinition[] {
       'Update confidence and risk appetite levels based on new data or analysis. ' +
       'Always provide a reason explaining why the levels changed.',
     parameters: z.object({
-      confidence: z
-        .number()
-        .min(0)
-        .max(1)
-        .describe('Confidence level 0-1 (0 = very uncertain, 1 = very confident)'),
-      riskAppetite: z
-        .number()
-        .min(0)
-        .max(1)
-        .describe('Risk appetite 0-1 (0 = very conservative, 1 = aggressive)'),
+      confidence: z.number().min(0).max(1).describe('Confidence level 0-1 (0 = very uncertain, 1 = very confident)'),
+      riskAppetite: z.number().min(0).max(1).describe('Risk appetite 0-1 (0 = very conservative, 1 = aggressive)'),
       reason: z.string().min(1).describe('Why these levels changed'),
     }),
-    async execute(params: {
-      confidence: number;
-      riskAppetite: number;
-      reason: string;
-    }): Promise<ToolResult> {
+    async execute(params: { confidence: number; riskAppetite: number; reason: string }): Promise<ToolResult> {
       const commit = await emotionTracker.updateEmotion(params);
       return {
         content:
@@ -102,8 +90,7 @@ export function createBrainTools(options: BrainToolsOptions): ToolDefinition[] {
 
   const getPersona: ToolDefinition = {
     name: 'brain_get_persona',
-    description:
-      'Get the active persona — your personality, communication style, and constraint rules.',
+    description: 'Get the active persona — your personality, communication style, and constraint rules.',
     parameters: z.object({}),
     async execute(): Promise<ToolResult> {
       const content = await persona.getPersona();
@@ -117,22 +104,14 @@ export function createBrainTools(options: BrainToolsOptions): ToolDefinition[] {
       'Get the brain commit history — versioned snapshots of working memory, ' +
       'emotion changes, and persona updates.',
     parameters: z.object({
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(100)
-        .default(10)
-        .describe('Max commits to return (default 10)'),
+      limit: z.number().int().min(1).max(100).default(10).describe('Max commits to return (default 10)'),
     }),
     async execute(params: { limit: number }): Promise<ToolResult> {
       const log = await brain.getLog(params.limit);
       if (log.length === 0) {
         return { content: 'No brain commits yet.' };
       }
-      const lines = log.map(
-        (c) => `[${c.hash.slice(0, 8)}] ${c.type} — ${c.message} (${c.timestamp})`,
-      );
+      const lines = log.map((c) => `[${c.hash.slice(0, 8)}] ${c.type} — ${c.message} (${c.timestamp})`);
       return { content: lines.join('\n') };
     },
   };
@@ -140,8 +119,7 @@ export function createBrainTools(options: BrainToolsOptions): ToolDefinition[] {
   const rollback: ToolDefinition = {
     name: 'brain_rollback',
     description:
-      'Restore a previous brain state by commit hash. ' +
-      'Use brain_get_log to find the hash you want to restore.',
+      'Restore a previous brain state by commit hash. ' + 'Use brain_get_log to find the hash you want to restore.',
     parameters: z.object({
       hash: z.string().min(1).describe('Commit hash to restore'),
     }),

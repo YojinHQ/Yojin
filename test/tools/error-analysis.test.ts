@@ -35,8 +35,7 @@ function makeRegistry(sources: DataSourcePlugin[]): DataSourceRegistry {
   return {
     getSource: (id: string) => sourceMap.get(id),
     getSources: () => sources,
-    getByCapability: (cap: string) =>
-      sources.filter((s) => s.enabled && s.capabilities.some((c) => c.id === cap)),
+    getByCapability: (cap: string) => sources.filter((s) => s.enabled && s.capabilities.some((c) => c.id === cap)),
     healthCheckAll: async () => {
       const results = new Map<string, HealthCheckResult>();
       for (const source of sources) {
@@ -141,9 +140,7 @@ describe('diagnose_data_error', () => {
   });
 
   it('returns error when no sources provide requested capability', async () => {
-    const registry = makeRegistry([
-      makeSource('equity-only', { capabilities: [{ id: 'equity-fundamentals' }] }),
-    ]);
+    const registry = makeRegistry([makeSource('equity-only', { capabilities: [{ id: 'equity-fundamentals' }] })]);
     const tool = getDiagnoseTool(registry);
 
     const result = await tool.execute({ capability: 'sentiment' });

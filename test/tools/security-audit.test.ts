@@ -5,10 +5,12 @@ import type { GuardRunner } from '../../src/guards/guard-runner.js';
 import type { GuardResult, PostureName } from '../../src/guards/types.js';
 import type { ToolDefinition } from '../../src/core/types.js';
 
-function makeGuardRunner(options: {
-  result?: GuardResult;
-  posture?: PostureName;
-} = {}): GuardRunner {
+function makeGuardRunner(
+  options: {
+    result?: GuardResult;
+    posture?: PostureName;
+  } = {},
+): GuardRunner {
   const { result = { pass: true }, posture = 'local' } = options;
   return {
     check: () => result,

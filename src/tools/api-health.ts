@@ -23,10 +23,7 @@ export function createApiHealthTools(options: ApiHealthOptions): ToolDefinition[
       'Check the health and connectivity of connected data sources. ' +
       'Reports status, latency, and errors for each source.',
     parameters: z.object({
-      sourceId: z
-        .string()
-        .optional()
-        .describe('Check a specific source (omit for all sources)'),
+      sourceId: z.string().optional().describe('Check a specific source (omit for all sources)'),
     }),
     async execute(params: { sourceId?: string }): Promise<ToolResult> {
       // Single source check

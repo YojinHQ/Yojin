@@ -1,0 +1,1 @@
+SCRIPTS=["build","dev","chat","start","test","test:ci","typecheck","lint","lint:fix","format","format:check","clean","ci","dev:web","build:web","dev:all","build:all","test:all","ci:all","lint-staged","prepare"]

@@ -24,20 +24,10 @@ export function createErrorAnalysisTools(options: ErrorAnalysisOptions): ToolDef
       'Checks source health, identifies failures, and suggests remediation.',
     parameters: z.object({
       sourceId: z.string().optional().describe('Specific source to diagnose (omit for all)'),
-      capability: z
-        .string()
-        .optional()
-        .describe('Capability that failed (e.g. "equity-fundamentals")'),
-      errorMessage: z
-        .string()
-        .optional()
-        .describe('Error message from the failed operation'),
+      capability: z.string().optional().describe('Capability that failed (e.g. "equity-fundamentals")'),
+      errorMessage: z.string().optional().describe('Error message from the failed operation'),
     }),
-    async execute(params: {
-      sourceId?: string;
-      capability?: string;
-      errorMessage?: string;
-    }): Promise<ToolResult> {
+    async execute(params: { sourceId?: string; capability?: string; errorMessage?: string }): Promise<ToolResult> {
       const lines: string[] = ['# Data Pipeline Diagnosis', ''];
 
       // If a specific source was requested, check just that one
@@ -104,9 +94,7 @@ export function createErrorAnalysisTools(options: ErrorAnalysisOptions): ToolDef
       }
 
       lines.push('---');
-      lines.push(
-        `Summary: ${sources.length} sources checked, ${unhealthyCount} unhealthy.`,
-      );
+      lines.push(`Summary: ${sources.length} sources checked, ${unhealthyCount} unhealthy.`);
 
       if (unhealthyCount > 0) {
         lines.push('');
@@ -123,11 +111,7 @@ export function createErrorAnalysisTools(options: ErrorAnalysisOptions): ToolDef
   return [diagnoseError];
 }
 
-function diagnoseSource(
-  healthy: boolean,
-  healthError?: string,
-  operationError?: string,
-): string {
+function diagnoseSource(healthy: boolean, healthError?: string, operationError?: string): string {
   const lines: string[] = ['### Diagnosis'];
 
   if (healthy && !operationError) {

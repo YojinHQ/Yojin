@@ -17,9 +17,7 @@ export interface PortfolioReasoningOptions {
   emotionTracker: EmotionTracker;
 }
 
-export function createPortfolioReasoningTools(
-  options: PortfolioReasoningOptions,
-): ToolDefinition[] {
+export function createPortfolioReasoningTools(options: PortfolioReasoningOptions): ToolDefinition[] {
   const { frontalLobe, emotionTracker } = options;
 
   const portfolioReasoning: ToolDefinition = {
@@ -34,10 +32,7 @@ export function createPortfolioReasoningTools(
         .array(z.string())
         .min(1)
         .describe('Key data points informing the analysis (e.g. "AAPL RSI: 78", "VIX: 22")'),
-      currentHypotheses: z
-        .array(z.string())
-        .optional()
-        .describe('Existing hypotheses to consider or challenge'),
+      currentHypotheses: z.array(z.string()).optional().describe('Existing hypotheses to consider or challenge'),
     }),
     async execute(params: {
       question: string;

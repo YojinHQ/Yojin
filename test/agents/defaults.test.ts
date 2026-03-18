@@ -45,7 +45,15 @@ describe('createDefaultProfiles', () => {
   });
 
   it('brain tools are exclusive to the strategist', () => {
-    const brainTools = ['brain_get_memory', 'brain_update_memory', 'brain_get_emotion', 'brain_update_emotion', 'brain_get_persona', 'brain_get_log', 'brain_rollback'];
+    const brainTools = [
+      'brain_get_memory',
+      'brain_update_memory',
+      'brain_get_emotion',
+      'brain_update_emotion',
+      'brain_get_persona',
+      'brain_get_log',
+      'brain_rollback',
+    ];
 
     for (const profile of profiles) {
       if (profile.id === 'strategist') {

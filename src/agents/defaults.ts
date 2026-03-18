@@ -42,20 +42,13 @@ export function createDefaultProfiles(): AgentProfile[] {
         'calculate',
       ],
       allowedActions: ['tool_call', 'network_request'],
-      capabilities: [
-        'market-data',
-        'technicals',
-        'news',
-        'enrichment',
-        'symbol-resolution',
-      ],
+      capabilities: ['market-data', 'technicals', 'news', 'enrichment', 'symbol-resolution'],
     },
     {
       id: 'strategist',
       name: 'Strategist',
       role: 'strategist',
-      description:
-        'Decision-maker — synthesizes research and risk into portfolio intelligence.',
+      description: 'Decision-maker — synthesizes research and risk into portfolio intelligence.',
       tools: [
         // Brain tools (Strategist-only)
         'brain_get_memory',
@@ -74,20 +67,13 @@ export function createDefaultProfiles(): AgentProfile[] {
         'calculate',
       ],
       allowedActions: ['tool_call'],
-      capabilities: [
-        'reasoning',
-        'memory',
-        'emotion',
-        'persona',
-        'recommendations',
-      ],
+      capabilities: ['reasoning', 'memory', 'emotion', 'persona', 'recommendations'],
     },
     {
       id: 'risk-manager',
       name: 'Risk Manager',
       role: 'risk-manager',
-      description:
-        'Guardian — analyzes portfolio risk, flags concentration and correlation.',
+      description: 'Guardian — analyzes portfolio risk, flags concentration and correlation.',
       tools: [
         // Risk tools
         'analyze_exposure',
@@ -105,20 +91,13 @@ export function createDefaultProfiles(): AgentProfile[] {
         'calculate',
       ],
       allowedActions: ['tool_call'],
-      capabilities: [
-        'exposure-analysis',
-        'concentration',
-        'correlation',
-        'earnings',
-        'drawdown',
-      ],
+      capabilities: ['exposure-analysis', 'concentration', 'correlation', 'earnings', 'drawdown'],
     },
     {
       id: 'trader',
       name: 'Trader',
       role: 'trader',
-      description:
-        'Executor — connects to platforms, fetches positions, manages connections.',
+      description: 'Executor — connects to platforms, fetches positions, manages connections.',
       tools: [
         // Platform tools
         'connect_platform',
@@ -136,11 +115,7 @@ export function createDefaultProfiles(): AgentProfile[] {
         'calculate',
       ],
       allowedActions: ['tool_call', 'network_request'],
-      capabilities: [
-        'platform-connection',
-        'position-fetching',
-        'trade-execution',
-      ],
+      capabilities: ['platform-connection', 'position-fetching', 'trade-execution'],
     },
   ];
 }

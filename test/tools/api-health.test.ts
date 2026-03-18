@@ -76,9 +76,7 @@ describe('check_api_health', () => {
   });
 
   it('reports unhealthy source', async () => {
-    const registry = makeRegistry([
-      makeSource('broken', { healthy: false, error: 'Connection refused' }),
-    ]);
+    const registry = makeRegistry([makeSource('broken', { healthy: false, error: 'Connection refused' })]);
     const tool = getHealthTool(registry);
 
     const result = await tool.execute({ sourceId: 'broken' });

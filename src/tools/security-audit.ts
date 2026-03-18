@@ -26,9 +26,7 @@ export function createSecurityAuditTools(options: SecurityAuditOptions): ToolDef
       'allowed or blocked. Does NOT execute the action — only checks guards. ' +
       'Use this before recommending actions that might violate constraints.',
     parameters: z.object({
-      actionType: z
-        .string()
-        .describe('Action type: tool_call, file_access, network_request, trade, shell_command'),
+      actionType: z.string().describe('Action type: tool_call, file_access, network_request, trade, shell_command'),
       toolName: z.string().optional().describe('Tool name (if action is a tool_call)'),
       symbol: z.string().optional().describe('Financial symbol (if relevant)'),
       agentId: z.string().optional().describe('Agent performing the action'),
