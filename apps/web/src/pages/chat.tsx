@@ -4,13 +4,15 @@ import MorningBriefing from '../components/chat/morning-briefing';
 import FullBriefingCard from '../components/chat/full-briefing-card';
 import QueryBuilder from '../components/chat/query-builder';
 import WaterfallFlow from '../components/chat/waterfall-flow';
+import ManualPositionFlow from '../components/chat/manual-position-flow';
+import ToolRenderer from '../components/chat/tool-cards/tool-renderer';
 import ChatInput from '../components/chat/chat-input';
 import type { ImageAttachment } from '../components/chat/chat-input';
 import ChatMessage from '../components/chat/chat-message';
 import ChatAvatar from '../components/chat/chat-avatar';
 import { useChatContext } from '../lib/chat-context';
 
-/* ─── Message types for local-only UI messages (briefings, rich cards) ─── */
+/* ─── Message types for local-only UI messages (briefings, tool cards) ─── */
 
 interface BriefingMessage {
   id: string;
@@ -18,7 +20,39 @@ interface BriefingMessage {
   type: 'briefing';
 }
 
-type LocalMessage = BriefingMessage;
+interface UserQueryMessage {
+  id: string;
+  role: 'user';
+  type: 'user-query';
+  content: string;
+}
+
+interface ToolResultMessage {
+  id: string;
+  role: 'assistant';
+  type: 'tool-result';
+  tool: string;
+  params: Record<string, string>;
+}
+
+type LocalMessage = BriefingMessage | UserQueryMessage | ToolResultMessage;
+
+/* ─── Tool action parser ─── */
+
+function parseToolAction(action: string): { tool: string; params: Record<string, string> } | null {
+  if (!action.startsWith('tool:')) return null;
+  const parts = action.slice(5).split(':');
+  const tool = parts[0];
+  // Second part (if present) becomes a generic "variant" / "period" param
+  const param = parts[1];
+  const params: Record<string, string> = {};
+  if (param) {
+    // Determine param key based on tool
+    if (tool === 'portfolio-overview') params.period = param;
+    else if (tool === 'positions-list') params.variant = param;
+  }
+  return { tool, params };
+}
 
 /* ─── Page ─── */
 
@@ -26,6 +60,7 @@ export default function Chat() {
   const { messages, streamingContent, isLoading, isThinking, activeTools, sendMessage } = useChatContext();
   const [localMessages, setLocalMessages] = useState<LocalMessage[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeAction, setActiveAction] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -78,6 +113,41 @@ export default function Chat() {
     [sendMessage],
   );
 
+  const handleWaterfallAction = useCallback((action: string, displayLabel: string) => {
+    setActiveCategory(null);
+
+    // Tool actions render rich components in the chat
+    const parsed = parseToolAction(action);
+    if (parsed) {
+      const userMsg: UserQueryMessage = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        type: 'user-query',
+        content: displayLabel,
+      };
+      const toolMsg: ToolResultMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        type: 'tool-result',
+        tool: parsed.tool,
+        params: parsed.params,
+      };
+      setLocalMessages((prev) => [...prev, userMsg, toolMsg]);
+      return;
+    }
+
+    // Non-tool actions (e.g. add-asset) use the action flow
+    setActiveAction(action);
+  }, []);
+
+  const handleActionComplete = useCallback(() => {
+    setActiveAction(null);
+  }, []);
+
+  const handleActionCancel = useCallback(() => {
+    setActiveAction(null);
+  }, []);
+
   const handleWaterfallCancel = useCallback(() => {
     setActiveCategory(null);
   }, []);
@@ -108,12 +178,25 @@ export default function Chat() {
             />
           ))}
 
-          {/* Local-only messages (briefing rich cards) */}
-          {localMessages.map((msg) => (
-            <ChatMessage key={msg.id} role="assistant">
-              <FullBriefingCard />
-            </ChatMessage>
-          ))}
+          {/* Local-only messages (briefings, tool cards, user queries) */}
+          {localMessages.map((msg) => {
+            if (msg.type === 'user-query') {
+              return <ChatMessage key={msg.id} role="user" content={msg.content} />;
+            }
+            if (msg.type === 'tool-result') {
+              return (
+                <ChatMessage key={msg.id} role="assistant">
+                  <ToolRenderer tool={msg.tool} params={msg.params} />
+                </ChatMessage>
+              );
+            }
+            // briefing
+            return (
+              <ChatMessage key={msg.id} role="assistant">
+                <FullBriefingCard />
+              </ChatMessage>
+            );
+          })}
 
           {/* Streaming response */}
           {streamingContent && <ChatMessage id="streaming" role="assistant" content={streamingContent} />}
@@ -166,14 +249,17 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* Query builder / waterfall — shown when no user messages */}
-      {messages.length === 0 && (
+      {/* Query builder / waterfall / manual entry — shown when no messages */}
+      {messages.length === 0 && !localMessages.some((m) => m.type === 'tool-result') && (
         <div className="px-6 pb-4 pt-2">
           <div className="mx-auto max-w-3xl">
-            {activeCategory ? (
+            {activeAction === 'add-asset' ? (
+              <ManualPositionFlow onComplete={handleActionComplete} onCancel={handleActionCancel} />
+            ) : activeCategory ? (
               <WaterfallFlow
                 categoryId={activeCategory}
                 onComplete={handleWaterfallComplete}
+                onAction={handleWaterfallAction}
                 onCancel={handleWaterfallCancel}
               />
             ) : (

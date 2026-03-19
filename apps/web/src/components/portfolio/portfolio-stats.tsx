@@ -1,10 +1,14 @@
+import type { PortfolioSnapshot } from '../../api/types';
 import { cn } from '../../lib/utils';
-import { usePortfolio } from '../../api';
-import Spinner from '../common/spinner';
 
 function formatCurrency(n: number): string {
   const abs = Math.abs(n);
-  const formatted = abs.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  const formatted = abs.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
   return n < 0 ? `-${formatted}` : formatted;
 }
 
@@ -13,56 +17,33 @@ function formatPercent(n: number): string {
   return `${sign}${n.toFixed(2)}%`;
 }
 
-export default function PortfolioStats() {
-  const [{ data, fetching, error }] = usePortfolio();
+interface PortfolioStatsProps {
+  portfolio: PortfolioSnapshot | null;
+}
 
-  if (fetching) {
-    return (
-      <div className="grid grid-cols-3 gap-4">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="flex items-center justify-center rounded-xl border border-border bg-bg-card p-4">
-            <Spinner size="sm" />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  const portfolio = data?.portfolio;
-
+export default function PortfolioStats({ portfolio }: PortfolioStatsProps) {
   const stats = [
-    { label: 'Total Positions', value: String(portfolio?.positions.length ?? 0) },
+    { label: 'Total Positions', value: portfolio ? String(portfolio.positions.length) : '--' },
     {
       label: 'Total Value',
-      value: portfolio ? formatCurrency(portfolio.totalValue) : 'N/A',
+      value: portfolio ? formatCurrency(portfolio.totalValue) : '--',
     },
     {
-      label: 'Unrealized P&L',
-      value: portfolio ? formatCurrency(portfolio.totalPnl) : 'N/A',
-      change: portfolio ? formatPercent(portfolio.totalPnlPercent) : null,
+      label: 'Total P&L',
+      value: portfolio ? formatCurrency(portfolio.totalPnl) : '--',
+      change: portfolio && portfolio.totalCost > 0 ? formatPercent(portfolio.totalPnlPercent) : null,
       positive: portfolio ? portfolio.totalPnl >= 0 : undefined,
     },
   ];
-
-  if (error) {
-    return (
-      <div className="grid grid-cols-3 gap-4">
-        {stats.map((stat) => (
-          <div key={stat.label} className="rounded-xl border border-border bg-bg-card p-4">
-            <p className="text-xs uppercase tracking-wider text-text-muted">{stat.label}</p>
-            <p className="mt-1.5 text-lg font-semibold text-text-muted">N/A</p>
-          </div>
-        ))}
-      </div>
-    );
-  }
 
   return (
     <div className="grid grid-cols-3 gap-4">
       {stats.map((stat) => (
         <div key={stat.label} className="rounded-xl border border-border bg-bg-card p-4">
           <p className="text-xs uppercase tracking-wider text-text-muted">{stat.label}</p>
-          <p className="mt-1.5 text-lg font-semibold text-text-primary">{stat.value}</p>
+          <p className={cn('mt-1.5 text-lg font-semibold text-text-primary', stat.positive === false && 'text-error')}>
+            {stat.value}
+          </p>
           {'change' in stat && stat.change && (
             <p className={cn('text-xs', stat.positive ? 'text-success' : 'text-error')}>{stat.change}</p>
           )}

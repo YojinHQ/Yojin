@@ -24,7 +24,7 @@ export interface Position {
 }
 
 export type AssetClass = 'EQUITY' | 'CRYPTO' | 'BOND' | 'COMMODITY' | 'CURRENCY' | 'OTHER';
-export type Platform = 'INTERACTIVE_BROKERS' | 'ROBINHOOD' | 'COINBASE' | 'MANUAL';
+export type Platform = 'INTERACTIVE_BROKERS' | 'ROBINHOOD' | 'COINBASE' | 'SCHWAB' | 'BINANCE' | 'FIDELITY' | 'MANUAL';
 
 export interface PortfolioSnapshot {
   id: string;
@@ -173,6 +173,15 @@ export interface AlertRuleInput {
   symbol?: string;
   threshold?: number;
   direction?: 'UP' | 'DOWN' | 'BOTH';
+}
+
+export interface ManualPositionInput {
+  symbol: string;
+  name?: string;
+  quantity: number;
+  costBasis: number;
+  assetClass?: AssetClass;
+  platform?: Platform;
 }
 
 // ---------------------------------------------------------------------------

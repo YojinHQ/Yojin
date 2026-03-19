@@ -5,6 +5,7 @@ export {
   usePortfolioHistory,
   useEnrichedSnapshot,
   useRefreshPositions,
+  useAddManualPosition,
   useRiskReport,
   useSectorExposure,
   useAlerts,
@@ -18,6 +19,7 @@ export {
 
 // Types — for components that need to type props or local state
 export type {
+  ManualPositionInput,
   Position,
   PortfolioSnapshot,
   PortfolioHistoryPoint,
@@ -52,6 +54,7 @@ export {
   QUOTE_QUERY,
   NEWS_QUERY,
   REFRESH_POSITIONS_MUTATION,
+  ADD_MANUAL_POSITION_MUTATION,
   CREATE_ALERT_MUTATION,
   DISMISS_ALERT_MUTATION,
   ON_ALERT_SUBSCRIPTION,

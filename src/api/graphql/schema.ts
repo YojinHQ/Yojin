@@ -20,6 +20,9 @@ export const typeDefs = /* GraphQL */ `
     INTERACTIVE_BROKERS
     ROBINHOOD
     COINBASE
+    SCHWAB
+    BINANCE
+    FIDELITY
     MANUAL
   }
 
@@ -256,6 +259,15 @@ export const typeDefs = /* GraphQL */ `
     direction: Direction
   }
 
+  input ManualPositionInput {
+    symbol: String!
+    name: String
+    quantity: Float!
+    costBasis: Float!
+    assetClass: AssetClass
+    platform: Platform
+  }
+
   # ---------------------------------------------------------------------------
   # Root types
   # ---------------------------------------------------------------------------
@@ -282,6 +294,7 @@ export const typeDefs = /* GraphQL */ `
 
   type Mutation {
     refreshPositions(platform: Platform!): PortfolioSnapshot!
+    addManualPosition(input: ManualPositionInput!): PortfolioSnapshot!
     createAlert(rule: AlertRuleInput!): Alert!
     dismissAlert(id: ID!): Alert!
     sendMessage(threadId: String!, message: String!, imageBase64: String, imageMediaType: String): SendMessagePayload!

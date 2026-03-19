@@ -259,6 +259,24 @@ export const DISMISS_ALERT_MUTATION = gql`
   ${ALERT_FIELDS}
 `;
 
+export const ADD_MANUAL_POSITION_MUTATION = gql`
+  mutation AddManualPosition($input: ManualPositionInput!) {
+    addManualPosition(input: $input) {
+      id
+      positions {
+        ...PositionFields
+      }
+      totalValue
+      totalCost
+      totalPnl
+      totalPnlPercent
+      timestamp
+      platform
+    }
+  }
+  ${POSITION_FIELDS}
+`;
+
 // ---------------------------------------------------------------------------
 // Subscriptions
 // ---------------------------------------------------------------------------

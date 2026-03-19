@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router';
+import type { Position } from '../../api';
 import { cn } from '../../lib/utils';
+import Badge from '../common/badge';
 import EmptyState from '../common/empty-state';
 import { SymbolLogo } from '../common/symbol-logo';
-import type { Position } from '../../api';
 
 const columns = ['Symbol', 'Platform', 'Class', 'Quantity', 'Price', 'Value', '% of Total', '% of Class', 'P&L'];
 
@@ -57,7 +58,10 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
         </thead>
         <tbody>
           {positions.map((pos) => (
-            <tr key={pos.symbol} className="border-t border-border transition-colors hover:bg-bg-hover">
+            <tr
+              key={`${pos.symbol}:${pos.platform}`}
+              className="border-t border-border transition-colors hover:bg-bg-hover"
+            >
               <td className="px-4 py-2.5">
                 <div className="flex items-center gap-3">
                   <SymbolLogo
@@ -66,9 +70,16 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
                     size="md"
                   />
                   <div>
-                    <Link to={`/portfolio/${pos.symbol}`} className="font-medium text-text-primary">
-                      {pos.symbol}
-                    </Link>
+                    <div className="flex items-center gap-1.5">
+                      <Link to={`/portfolio/${pos.symbol}`} className="font-medium text-text-primary">
+                        {pos.symbol}
+                      </Link>
+                      {pos.platform === 'MANUAL' && (
+                        <Badge variant="neutral" size="xs">
+                          manual
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-2xs text-text-secondary">{pos.name}</div>
                   </div>
                 </div>
@@ -89,9 +100,10 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
                   : '-'}
               </td>
               <td className="px-4 py-2.5">
-                <span className={cn('font-medium', pos.unrealizedPnlPercent >= 0 ? 'text-success' : 'text-error')}>
-                  {formatPercent(pos.unrealizedPnlPercent)}
-                </span>
+                <div className={cn('font-medium', pos.unrealizedPnl >= 0 ? 'text-success' : 'text-error')}>
+                  {formatCurrency(pos.unrealizedPnl)}
+                  <span className="ml-1 text-2xs">({formatPercent(pos.unrealizedPnlPercent)})</span>
+                </div>
               </td>
             </tr>
           ))}

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router';
-import PositionTable from './position-table';
 import type { Position } from '../../api';
+import PositionTable from './position-table';
 
 const meta: Meta<typeof PositionTable> = {
   title: 'Portfolio/PositionTable',
@@ -27,39 +27,39 @@ const mockPositions: Position[] = [
     name: 'Apple Inc.',
     assetClass: 'EQUITY',
     quantity: 150,
-    costBasis: 175.0,
+    costBasis: 145.0,
     currentPrice: 189.55,
     marketValue: 28432.5,
-    unrealizedPnl: 2182.5,
-    unrealizedPnlPercent: 8.31,
+    unrealizedPnl: 6682.5,
+    unrealizedPnlPercent: 30.71,
     sector: 'Technology',
-    platform: 'INTERACTIVE_BROKERS',
+    platform: 'MANUAL',
   },
   {
     symbol: 'NVDA',
     name: 'NVIDIA Corp.',
     assetClass: 'EQUITY',
     quantity: 45,
-    costBasis: 420.0,
+    costBasis: 380.0,
     currentPrice: 492.24,
     marketValue: 22150.75,
-    unrealizedPnl: 3250.75,
-    unrealizedPnlPercent: 17.2,
+    unrealizedPnl: 5050.75,
+    unrealizedPnlPercent: 29.53,
     sector: 'Technology',
-    platform: 'INTERACTIVE_BROKERS',
+    platform: 'MANUAL',
   },
   {
     symbol: 'BTC',
     name: 'Bitcoin',
     assetClass: 'CRYPTO',
     quantity: 0.45,
-    costBasis: 38000.0,
+    costBasis: 35000.0,
     currentPrice: 41600.0,
     marketValue: 18720.0,
-    unrealizedPnl: 1620.0,
-    unrealizedPnlPercent: 9.47,
+    unrealizedPnl: 2970.0,
+    unrealizedPnlPercent: 18.86,
     sector: null,
-    platform: 'COINBASE',
+    platform: 'MANUAL',
   },
 ];
 
