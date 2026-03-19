@@ -1,19 +1,10 @@
 import { Link } from 'react-router';
+import { cn } from '../../lib/utils';
 import EmptyState from '../common/empty-state';
 import { SymbolLogo } from '../common/symbol-logo';
-import StatusBadge from './status-badge';
+import type { Position } from '../../api';
 
-interface Position {
-  symbol: string;
-  name: string;
-  assetClass: string;
-  shares: number;
-  value: number;
-  date: string;
-  status: 'holding' | 'watching' | 'pending' | 'sold';
-}
-
-const columns = ['Symbol', 'Asset Class', 'Shares', 'Value', 'Date', 'Status'];
+const columns = ['Symbol', 'Asset Class', 'Quantity', 'Price', 'Value', 'P&L'];
 
 function formatCurrency(value: number): string {
   return value.toLocaleString('en-US', {
@@ -24,18 +15,14 @@ function formatCurrency(value: number): string {
   });
 }
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+function formatPercent(n: number): string {
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${n.toFixed(2)}%`;
 }
 
 export default function PositionTable({ positions }: { positions: Position[] }) {
   if (positions.length === 0) {
-    return <EmptyState title="No positions found" description="No positions match the current filter." />;
+    return <EmptyState title="No positions found" description="Import a portfolio to see your positions." />;
   }
 
   return (
@@ -69,11 +56,13 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
                 </div>
               </td>
               <td className="px-4 py-2.5 text-text-secondary">{pos.assetClass}</td>
-              <td className="px-4 py-2.5 text-text-secondary">{pos.shares}</td>
-              <td className="px-4 py-2.5 text-text-primary font-medium">{formatCurrency(pos.value)}</td>
-              <td className="px-4 py-2.5 text-text-secondary">{formatDate(pos.date)}</td>
+              <td className="px-4 py-2.5 text-text-secondary">{pos.quantity}</td>
+              <td className="px-4 py-2.5 text-text-secondary">{formatCurrency(pos.currentPrice)}</td>
+              <td className="px-4 py-2.5 font-medium text-text-primary">{formatCurrency(pos.marketValue)}</td>
               <td className="px-4 py-2.5">
-                <StatusBadge status={pos.status} />
+                <span className={cn('font-medium', pos.unrealizedPnlPercent >= 0 ? 'text-success' : 'text-error')}>
+                  {formatPercent(pos.unrealizedPnlPercent)}
+                </span>
               </td>
             </tr>
           ))}

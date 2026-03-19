@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router';
 import PositionTable from './position-table';
+import type { Position } from '../../api';
 
 const meta: Meta<typeof PositionTable> = {
   title: 'Portfolio/PositionTable',
@@ -20,51 +21,45 @@ const meta: Meta<typeof PositionTable> = {
 export default meta;
 type Story = StoryObj<typeof PositionTable>;
 
-const mockPositions = [
+const mockPositions: Position[] = [
   {
     symbol: 'AAPL',
     name: 'Apple Inc.',
-    assetClass: 'Equity',
-    shares: 150,
-    value: 28432.5,
-    date: '2025-06-15',
-    status: 'holding' as const,
+    assetClass: 'EQUITY',
+    quantity: 150,
+    costBasis: 175.0,
+    currentPrice: 189.55,
+    marketValue: 28432.5,
+    unrealizedPnl: 2182.5,
+    unrealizedPnlPercent: 8.31,
+    sector: 'Technology',
+    platform: 'INTERACTIVE_BROKERS',
   },
   {
     symbol: 'NVDA',
     name: 'NVIDIA Corp.',
-    assetClass: 'Equity',
-    shares: 45,
-    value: 22150.75,
-    date: '2025-03-22',
-    status: 'holding' as const,
+    assetClass: 'EQUITY',
+    quantity: 45,
+    costBasis: 420.0,
+    currentPrice: 492.24,
+    marketValue: 22150.75,
+    unrealizedPnl: 3250.75,
+    unrealizedPnlPercent: 17.2,
+    sector: 'Technology',
+    platform: 'INTERACTIVE_BROKERS',
   },
   {
-    symbol: 'MSFT',
-    name: 'Microsoft Corp.',
-    assetClass: 'Equity',
-    shares: 80,
-    value: 15221.8,
-    date: '2025-01-10',
-    status: 'watching' as const,
-  },
-  {
-    symbol: 'GOOGL',
-    name: 'Alphabet Inc.',
-    assetClass: 'Equity',
-    shares: 60,
-    value: 12845.2,
-    date: '2025-08-05',
-    status: 'pending' as const,
-  },
-  {
-    symbol: 'META',
-    name: 'Meta Platforms',
-    assetClass: 'Equity',
-    shares: 30,
-    value: 8920.0,
-    date: '2024-11-20',
-    status: 'sold' as const,
+    symbol: 'BTC',
+    name: 'Bitcoin',
+    assetClass: 'CRYPTO',
+    quantity: 0.45,
+    costBasis: 38000.0,
+    currentPrice: 41600.0,
+    marketValue: 18720.0,
+    unrealizedPnl: 1620.0,
+    unrealizedPnlPercent: 9.47,
+    sector: null,
+    platform: 'COINBASE',
   },
 ];
 
