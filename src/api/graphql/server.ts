@@ -12,6 +12,7 @@ import { onChatMessageSubscription, sendMessageMutation } from './resolvers/chat
 import { onAlertSubscription, onPortfolioUpdateSubscription, onPriceMoveSubscription } from './resolvers/live.js';
 import { newsQuery, quoteQuery, sectorExposureQuery } from './resolvers/market.js';
 import {
+  addManualPositionMutation,
   enrichedSnapshotQuery,
   portfolioQuery,
   positionsQuery,
@@ -35,6 +36,7 @@ const schema = createSchema({
     },
     Mutation: {
       refreshPositions: refreshPositionsMutation,
+      addManualPosition: addManualPositionMutation,
       createAlert: createAlertMutation,
       dismissAlert: dismissAlertMutation,
       sendMessage: sendMessageMutation,

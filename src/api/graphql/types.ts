@@ -167,6 +167,14 @@ export interface AlertRuleInput {
   direction?: 'UP' | 'DOWN' | 'BOTH';
 }
 
+export interface ManualPositionInput {
+  symbol: string;
+  name?: string;
+  quantity: number;
+  costBasis: number;
+  assetClass?: AssetClass;
+}
+
 // ---------------------------------------------------------------------------
 // Chat
 // ---------------------------------------------------------------------------

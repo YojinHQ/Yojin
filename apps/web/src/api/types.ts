@@ -228,6 +228,22 @@ export interface DismissAlertMutationResult {
   dismissAlert: Alert;
 }
 
+export interface ManualPositionInput {
+  symbol: string;
+  name?: string;
+  quantity: number;
+  costBasis: number;
+  assetClass?: AssetClass;
+}
+
+export interface AddManualPositionMutationResult {
+  addManualPosition: PortfolioSnapshot;
+}
+
+export interface AddManualPositionVariables {
+  input: ManualPositionInput;
+}
+
 // ---------------------------------------------------------------------------
 // Subscription result wrappers
 // ---------------------------------------------------------------------------
