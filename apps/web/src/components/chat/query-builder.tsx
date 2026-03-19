@@ -1,44 +1,66 @@
-export default function QueryBuilder({ onSelect }: { onSelect: (query: string) => void }) {
-  const suggestions = [
-    {
-      icon: '\u{1F4CA}',
-      title: 'Portfolio',
-      description: 'How is my portfolio performing today?',
-      query: 'How is my portfolio performing today?',
-    },
-    {
-      icon: '\u26A1',
-      title: 'Risk & Exposure',
-      description: 'Analyze my current risk exposure',
-      query: 'Analyze my current risk exposure',
-    },
-    {
-      icon: '\u{1F4C8}',
-      title: 'Positions',
-      description: 'Show me my top performing positions',
-      query: 'Show me my top performing positions',
-    },
-    {
-      icon: '\u{1F50D}',
-      title: 'Trends',
-      description: 'What market trends should I watch?',
-      query: 'What market trends should I watch?',
-    },
-  ];
+import type { ReactNode } from 'react';
+import { BarChart3, DollarSign, Briefcase, Activity, Sparkles } from 'lucide-react';
 
+interface QuerySuggestion {
+  id: string;
+  icon: ReactNode;
+  label: string;
+  query: string;
+}
+
+interface QueryBuilderProps {
+  suggestions?: QuerySuggestion[];
+  onSelect: (id: string) => void;
+}
+
+const defaultSuggestions: QuerySuggestion[] = [
+  {
+    id: 'portfolio',
+    icon: <BarChart3 className="h-4 w-4" />,
+    label: 'Portfolio',
+    query: 'How is my portfolio performing today?',
+  },
+  {
+    id: 'risk',
+    icon: <DollarSign className="h-4 w-4" />,
+    label: 'Risk & Exposure',
+    query: 'Analyze my current risk exposure',
+  },
+  {
+    id: 'positions',
+    icon: <Briefcase className="h-4 w-4" />,
+    label: 'Positions',
+    query: 'Show me my top performing positions',
+  },
+  {
+    id: 'trends',
+    icon: <Activity className="h-4 w-4" />,
+    label: 'Trends',
+    query: 'What market trends should I watch?',
+  },
+];
+
+export default function QueryBuilder({ suggestions = defaultSuggestions, onSelect }: QueryBuilderProps) {
   return (
-    <div className="space-y-3">
-      <p className="text-text-secondary text-center text-sm">Let's knock something off your list</p>
-      <div className="grid grid-cols-2 gap-3">
+    <div>
+      {/* Header with star icon */}
+      <div className="my-6 flex items-center justify-center gap-2.5">
+        <Sparkles className="h-5 w-5 text-accent-primary" />
+        <h2 className="text-base font-semibold text-text-primary">Let&apos;s knock something off your list</h2>
+      </div>
+
+      {/* Suggestion grid */}
+      <div className="grid grid-cols-2 gap-2">
         {suggestions.map((s) => (
           <button
-            key={s.title}
-            onClick={() => onSelect(s.query)}
-            className="bg-bg-card border-border hover:border-border-light hover:bg-bg-hover rounded-xl border p-4 text-left transition-colors"
+            key={s.id}
+            onClick={() => onSelect(s.id)}
+            className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-border/60 bg-bg-secondary px-3.5 py-2.5 text-left transition-all hover:border-border-light hover:bg-bg-hover"
           >
-            <div className="mb-1 text-lg">{s.icon}</div>
-            <div className="text-text-primary text-sm font-medium">{s.title}</div>
-            <div className="text-text-muted mt-1 text-xs">{s.description}</div>
+            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-bg-tertiary text-text-muted">
+              {s.icon}
+            </div>
+            <span className="text-xs font-medium text-text-primary">{s.label}</span>
           </button>
         ))}
       </div>

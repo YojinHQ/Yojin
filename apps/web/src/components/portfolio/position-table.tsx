@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import EmptyState from '../common/empty-state';
+import { SymbolLogo } from '../common/symbol-logo';
 import StatusBadge from './status-badge';
 
 interface Position {
@@ -53,10 +54,19 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
           {positions.map((pos) => (
             <tr key={pos.symbol} className="border-t border-border transition-colors hover:bg-bg-hover">
               <td className="px-4 py-2.5">
-                <Link to={`/portfolio/${pos.symbol}`} className="font-medium text-accent-primary">
-                  {pos.symbol}
-                </Link>
-                <div className="text-2xs text-text-muted">{pos.name}</div>
+                <div className="flex items-center gap-3">
+                  <SymbolLogo
+                    symbol={pos.symbol}
+                    assetClass={pos.assetClass.toLowerCase() as 'equity' | 'crypto'}
+                    size="md"
+                  />
+                  <div>
+                    <Link to={`/portfolio/${pos.symbol}`} className="font-medium text-text-primary">
+                      {pos.symbol}
+                    </Link>
+                    <div className="text-2xs text-text-secondary">{pos.name}</div>
+                  </div>
+                </div>
               </td>
               <td className="px-4 py-2.5 text-text-secondary">{pos.assetClass}</td>
               <td className="px-4 py-2.5 text-text-secondary">{pos.shares}</td>

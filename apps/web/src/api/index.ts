@@ -1,0 +1,57 @@
+// Hooks — the primary import for components
+export {
+  usePortfolio,
+  usePositions,
+  useEnrichedSnapshot,
+  useRefreshPositions,
+  useRiskReport,
+  useSectorExposure,
+  useAlerts,
+  useCreateAlert,
+  useDismissAlert,
+  useOnAlert,
+  useQuote,
+  useNews,
+  useOnPriceMove,
+} from './hooks/index.js';
+
+// Types — for components that need to type props or local state
+export type {
+  Position,
+  PortfolioSnapshot,
+  EnrichedPosition,
+  EnrichedSnapshot,
+  SectorWeight,
+  Concentration,
+  CorrelationCluster,
+  RiskReport,
+  Alert,
+  AlertRule,
+  AlertRuleInput,
+  Quote,
+  Article,
+  PriceEvent,
+  AssetClass,
+  Platform,
+  AlertStatus,
+  AlertRuleType,
+  Direction,
+} from './types.js';
+
+// Documents — for advanced use (manual client.query, testing)
+export {
+  PORTFOLIO_QUERY,
+  POSITIONS_QUERY,
+  ENRICHED_SNAPSHOT_QUERY,
+  RISK_REPORT_QUERY,
+  SECTOR_EXPOSURE_QUERY,
+  ALERTS_QUERY,
+  QUOTE_QUERY,
+  NEWS_QUERY,
+  REFRESH_POSITIONS_MUTATION,
+  CREATE_ALERT_MUTATION,
+  DISMISS_ALERT_MUTATION,
+  ON_ALERT_SUBSCRIPTION,
+  ON_PORTFOLIO_UPDATE_SUBSCRIPTION,
+  ON_PRICE_MOVE_SUBSCRIPTION,
+} from './documents.js';

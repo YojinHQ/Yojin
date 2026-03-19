@@ -1,4 +1,5 @@
-import { Client, cacheExchange, fetchExchange, subscriptionExchange } from 'urql';
+import { Client, fetchExchange, subscriptionExchange } from 'urql';
+import { cacheExchange } from '@urql/exchange-graphcache';
 import { createClient as createSSEClient } from 'graphql-sse';
 
 const graphqlUrl = (import.meta.env.VITE_GRAPHQL_URL as string | undefined) ?? '/graphql';
@@ -7,10 +8,59 @@ const sseClient = createSSEClient({
   url: graphqlUrl,
 });
 
+/**
+ * Normalized cache configuration.
+ *
+ * graphcache stores entities by __typename + key, so the same Position
+ * referenced by multiple queries stays in sync automatically.
+ *
+ * Key resolution:
+ * - Most types use `id` (default).
+ * - Position / EnrichedPosition are keyed by `symbol` (no `id` field).
+ * - SectorWeight, Concentration, CorrelationCluster are embedded values (no key).
+ *
+ * Cache updates:
+ * - refreshPositions → invalidates portfolio + positions queries.
+ * - createAlert / dismissAlert → updates the alerts list.
+ */
+const cache = cacheExchange({
+  keys: {
+    Position: (data) => `${data.symbol as string}:${data.platform as string}`,
+    EnrichedPosition: (data) => `${data.symbol as string}:${data.platform as string}`,
+    AlertRule: () => null, // embedded, not an entity
+    SectorWeight: () => null,
+    Concentration: () => null,
+    CorrelationCluster: () => null,
+    PriceEvent: () => null,
+  },
+  updates: {
+    Mutation: {
+      refreshPositions(_result, _args, cache) {
+        cache.invalidate('Query', 'portfolio');
+        cache.invalidate('Query', 'positions');
+        cache.invalidate('Query', 'enrichedSnapshot');
+      },
+      createAlert(_result, _args, cache) {
+        cache.invalidate('Query', 'alerts');
+      },
+      dismissAlert(_result, _args, cache) {
+        cache.invalidate('Query', 'alerts');
+      },
+    },
+  },
+});
+
+/**
+ * Exchange pipeline (order matters):
+ *
+ * 1. cache          — normalized graphcache, deduplicates in-flight requests
+ * 2. fetch          — HTTP transport
+ * 3. subscription   — SSE transport for real-time streaming
+ */
 export const graphqlClient = new Client({
   url: graphqlUrl,
   exchanges: [
-    cacheExchange,
+    cache,
     fetchExchange,
     subscriptionExchange({
       forwardSubscription(request) {

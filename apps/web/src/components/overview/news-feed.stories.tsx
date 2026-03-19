@@ -6,7 +6,7 @@ const meta: Meta<typeof NewsFeed> = {
   component: NewsFeed,
   decorators: [
     (Story) => (
-      <div style={{ width: 320 }} className="border border-border rounded-lg overflow-hidden">
+      <div style={{ width: 360 }} className="border border-border rounded-lg overflow-hidden">
         <Story />
       </div>
     ),
