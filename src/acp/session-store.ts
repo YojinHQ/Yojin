@@ -80,6 +80,8 @@ export class AcpSessionStore {
         const parsed = AcpSessionSchema.safeParse(entry);
         if (parsed.success) {
           this.sessions.set(parsed.data.sessionId, parsed.data);
+        } else {
+          logger.warn('Skipping invalid ACP session entry', { error: parsed.error.message });
         }
       }
     } catch (err) {

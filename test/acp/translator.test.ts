@@ -155,4 +155,116 @@ describe('YojinAcpAgent', () => {
     const result = await agent.authenticate({});
     expect(result).toEqual({});
   });
+
+  // --- New tests for PR review feedback ---
+
+  it('returns stopReason error when runtime throws instead of rethrowing', async () => {
+    const bridge: RuntimeBridge = {
+      sendPrompt: vi.fn(() => ({
+        // eslint-disable-next-line require-yield
+        async *[Symbol.asyncIterator]() {
+          throw new Error('LLM provider unavailable');
+        },
+      })),
+      abort: vi.fn(async () => {}),
+    };
+    const conn = mockConnection();
+    const agent = createAgent(bridge, store, conn);
+
+    const session = await agent.newSession({ cwd: '/tmp' });
+    const result = await agent.prompt({
+      sessionId: session.sessionId,
+      prompt: [{ type: 'text', text: 'hello' }],
+    });
+
+    // Should NOT throw — returns graceful stopReason instead
+    expect(result.stopReason).toBe('error');
+    // Should attempt to send error message to client
+    expect(conn.sessionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: session.sessionId,
+        update: expect.objectContaining({
+          sessionUpdate: 'agent_message_chunk',
+          content: expect.objectContaining({ text: expect.stringContaining('LLM provider unavailable') }),
+        }),
+      }),
+    );
+  });
+
+  it('aborts agent loop when sessionUpdate throws (client disconnect)', async () => {
+    const events: AgentLoopEvent[] = [
+      { type: 'text_delta', text: 'hello' },
+      { type: 'text_delta', text: ' world' },
+      { type: 'done', text: 'hello world', iterations: 1 },
+    ];
+    const bridge = mockBridge(events);
+    const conn = mockConnection();
+    // Simulate client disconnect on first sessionUpdate
+    conn.sessionUpdate.mockRejectedValueOnce(new Error('client disconnected'));
+    const agent = createAgent(bridge, store, conn);
+
+    const session = await agent.newSession({ cwd: '/tmp' });
+    const result = await agent.prompt({
+      sessionId: session.sessionId,
+      prompt: [{ type: 'text', text: 'hello' }],
+    });
+
+    expect(result.stopReason).toBe('error');
+    expect(bridge.abort).toHaveBeenCalledWith(session.sessionId ? store.get(session.sessionId)?.threadId : '');
+  });
+
+  it('rejects concurrent prompts for the same session', async () => {
+    // Create a bridge that never resolves — simulates a long-running prompt
+    let resolvePrompt: () => void;
+    const bridge: RuntimeBridge = {
+      sendPrompt: vi.fn(() => ({
+        // eslint-disable-next-line require-yield
+        async *[Symbol.asyncIterator]() {
+          await new Promise<void>((r) => {
+            resolvePrompt = r;
+          });
+        },
+      })),
+      abort: vi.fn(async () => {}),
+    };
+    const conn = mockConnection();
+    const agent = createAgent(bridge, store, conn);
+
+    const session = await agent.newSession({ cwd: '/tmp' });
+    const promptParams = {
+      sessionId: session.sessionId,
+      prompt: [{ type: 'text', text: 'hello' }],
+    };
+
+    // Start first prompt (will hang)
+    const firstPrompt = agent.prompt(promptParams);
+
+    // Second prompt should be rejected immediately
+    await expect(agent.prompt(promptParams)).rejects.toThrow('already has an in-flight prompt');
+
+    // Clean up: resolve the first prompt
+    resolvePrompt!();
+    await firstPrompt;
+  });
+
+  it('setSessionMode throws for unsupported modes', async () => {
+    const bridge = mockBridge();
+    const conn = mockConnection();
+    const agent = createAgent(bridge, store, conn);
+
+    const session = await agent.newSession({ cwd: '/tmp' });
+    await expect(agent.setSessionMode({ sessionId: session.sessionId, mode: 'turbo' })).rejects.toThrow(
+      'Unsupported session mode',
+    );
+  });
+
+  it('setSessionMode accepts default mode', async () => {
+    const bridge = mockBridge();
+    const conn = mockConnection();
+    const agent = createAgent(bridge, store, conn);
+
+    const session = await agent.newSession({ cwd: '/tmp' });
+    const result = await agent.setSessionMode({ sessionId: session.sessionId, mode: 'default' });
+    expect(result.mode).toBe('default');
+  });
 });

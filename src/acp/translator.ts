@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 
 import type { AgentSideConnection } from '@agentclientprotocol/sdk';
 
-import { mapEventToUpdates } from './event-mapper.js';
+import { createEventMapper } from './event-mapper.js';
 import type { RuntimeBridge } from './runtime-bridge.js';
 import type { AcpSessionStore } from './session-store.js';
 import { createSubsystemLogger } from '../logging/logger.js';
@@ -14,6 +14,8 @@ const PROTOCOL_VERSION = 1;
 const logger = createSubsystemLogger('acp');
 
 export class YojinAcpAgent {
+  private readonly inFlightSessions = new Set<string>();
+
   constructor(
     private readonly bridge: RuntimeBridge,
     private readonly sessionStore: AcpSessionStore,
@@ -74,6 +76,11 @@ export class YojinAcpAgent {
       throw new Error(`Unknown session: ${params.sessionId}`);
     }
 
+    // Guard against concurrent prompts for the same session — prevents history corruption.
+    if (this.inFlightSessions.has(params.sessionId)) {
+      throw new Error(`Session ${params.sessionId} already has an in-flight prompt`);
+    }
+
     const message = params.prompt
       .filter((p): p is { type: string; text: string } => p.type === 'text' && !!p.text)
       .map((p) => p.text)
@@ -83,9 +90,11 @@ export class YojinAcpAgent {
       throw new Error('Empty prompt — no text content');
     }
 
+    this.inFlightSessions.add(params.sessionId);
     let stopReason = 'end_turn';
 
     try {
+      const mapper = createEventMapper(params.sessionId);
       const events = this.bridge.sendPrompt({
         message,
         channelId: 'acp',
@@ -94,9 +103,19 @@ export class YojinAcpAgent {
       });
 
       for await (const event of events) {
-        const updates = mapEventToUpdates(event, params.sessionId);
+        const updates = mapper(event);
         for (const update of updates) {
-          await this.connection.sessionUpdate(update);
+          try {
+            await this.connection.sessionUpdate(update);
+          } catch (sendErr) {
+            // Client disconnected mid-stream — abort the agent loop to stop wasting resources.
+            logger.warn('sessionUpdate failed (client disconnected?), aborting agent loop', {
+              sessionId: params.sessionId,
+              error: String(sendErr),
+            });
+            await this.bridge.abort(session.threadId);
+            return { stopReason: 'error' };
+          }
         }
 
         if (event.type === 'max_iterations') {
@@ -106,8 +125,22 @@ export class YojinAcpAgent {
         }
       }
     } catch (err) {
+      // Runtime error — return graceful stopReason instead of crashing the protocol.
       logger.error('Prompt failed', { sessionId: params.sessionId, error: String(err) });
-      throw err;
+      try {
+        await this.connection.sessionUpdate({
+          sessionId: params.sessionId,
+          update: {
+            sessionUpdate: 'agent_message_chunk',
+            content: { type: 'text', text: `Error: ${err instanceof Error ? err.message : String(err)}` },
+          },
+        });
+      } catch (sendErr) {
+        logger.debug('Failed to send error update to client', { error: String(sendErr) });
+      }
+      return { stopReason: 'error' };
+    } finally {
+      this.inFlightSessions.delete(params.sessionId);
     }
 
     return { stopReason };

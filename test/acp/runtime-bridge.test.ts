@@ -99,7 +99,11 @@ describe('LocalRuntimeBridge', () => {
     const mockRuntime: AgentRuntimeLike = {
       handleMessage: vi.fn(async (params) => {
         capturedSignal = params.abortSignal;
-        await new Promise((r) => setTimeout(r, 1000));
+        // Wait until aborted — mirrors real agent loop behavior
+        await new Promise<void>((resolve) => {
+          if (params.abortSignal?.aborted) return resolve();
+          params.abortSignal?.addEventListener('abort', () => resolve(), { once: true });
+        });
         return 'answer';
       }),
     };
