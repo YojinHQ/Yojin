@@ -50,6 +50,21 @@ describe('TokenBudget', () => {
       expect(tokens).toBeGreaterThan(10);
     });
 
+    it('estimates message with image block', () => {
+      const budget = new TokenBudget();
+      const imageData = 'a'.repeat(1000); // simulated base64
+      const msg: AgentMessage = {
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imageData } },
+          { type: 'text', text: 'Analyze this screenshot' },
+        ],
+      };
+      const tokens = budget.estimateMessageTokens(msg);
+      // Should include image data estimate + text estimate + overhead
+      expect(tokens).toBeGreaterThan(200);
+    });
+
     it('uses denser estimate for tool results', () => {
       const budget = new TokenBudget();
       const textMsg: AgentMessage = { role: 'user', content: 'a'.repeat(1000) };

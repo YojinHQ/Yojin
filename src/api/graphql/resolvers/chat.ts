@@ -6,7 +6,7 @@
  */
 
 import type { AgentRuntime } from '../../../core/agent-runtime.js';
-import type { AgentLoopEvent } from '../../../core/types.js';
+import type { AgentLoopEvent, ImageMediaType } from '../../../core/types.js';
 import { pubsub } from '../pubsub.js';
 import type { ChatEvent } from '../types.js';
 
@@ -21,16 +21,30 @@ export function setChatAgentRuntime(agentRuntime: AgentRuntime): void {
 // Mutation: sendMessage
 // ---------------------------------------------------------------------------
 
+const VALID_IMAGE_TYPES: ReadonlySet<string> = new Set<ImageMediaType>([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]);
+
 export function sendMessageMutation(
   _parent: unknown,
-  args: { threadId: string; message: string },
+  args: { threadId: string; message: string; imageBase64?: string; imageMediaType?: string },
 ): { threadId: string; messageId: string } {
   if (!runtime) {
     throw new Error('Chat runtime not initialized');
   }
 
-  const { threadId, message } = args;
+  const { threadId, message, imageBase64, imageMediaType } = args;
   const messageId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  // Server-side size guard: reject base64 payloads over ~10 MB decoded
+  // (base64 is ~4/3 of original size, so 14 MB base64 ≈ 10.5 MB decoded)
+  const MAX_IMAGE_BASE64_LENGTH = 14 * 1024 * 1024;
+  if (imageBase64 && imageBase64.length > MAX_IMAGE_BASE64_LENGTH) {
+    throw new Error('Image too large — maximum size is 10 MB.');
+  }
 
   // Fire-and-forget: run agent in background, stream events via pubsub
   void (async () => {
@@ -38,12 +52,21 @@ export function sendMessageMutation(
       // Emit thinking state immediately
       pubsub.publish(`chat:${threadId}`, { type: 'THINKING', threadId } satisfies ChatEvent);
 
+      // Validate image type — reject early if base64 is provided with bad/missing type
+      if (imageBase64 && (!imageMediaType || !VALID_IMAGE_TYPES.has(imageMediaType))) {
+        throw new Error(
+          `Unsupported image type: ${imageMediaType ?? 'none'}. Accepted: image/jpeg, image/png, image/gif, image/webp`,
+        );
+      }
+      const validatedImageType = imageBase64 ? (imageMediaType as ImageMediaType) : undefined;
+
       // runtime is guaranteed non-null — checked above before the void IIFE
       await (runtime as AgentRuntime).handleMessage({
         message,
         channelId: 'web',
         userId: 'web-user',
         threadId,
+        ...(imageBase64 && validatedImageType ? { imageBase64, imageMediaType: validatedImageType } : {}),
         onEvent: (event: AgentLoopEvent) => {
           if (event.type === 'text_delta') {
             pubsub.publish(`chat:${threadId}`, {

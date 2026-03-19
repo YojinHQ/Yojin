@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import { runAgentLoop } from '../../src/core/agent-loop.js';
+import { ToolRegistry } from '../../src/core/tool-registry.js';
 import type {
   AgentLoopEvent,
   AgentLoopProvider,
@@ -13,6 +14,7 @@ import { GuardRunner } from '../../src/guards/guard-runner.js';
 import { OutputDlpGuard } from '../../src/guards/security/output-dlp.js';
 import type { Guard, GuardResult, ProposedAction } from '../../src/guards/types.js';
 import type { AuditEvent, AuditEventInput, AuditLog } from '../../src/trust/audit/types.js';
+import { GuardedToolRegistry } from '../../src/trust/guarded-tool-registry.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -385,7 +387,22 @@ const leakyTool: ToolDefinition = {
   execute: async () => ({ content: 'Here is a key: sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAA' }),
 };
 
-describe('runAgentLoop with guards', () => {
+/** Pre-wrap tools with GuardedToolRegistry, matching how AgentRuntime does it. */
+function wrapToolsWithGuards(
+  tools: ToolDefinition[],
+  guardRunner: GuardRunner,
+  outputDlp?: OutputDlpGuard,
+): ToolDefinition[] {
+  const registry = new ToolRegistry();
+  for (const tool of tools) registry.register(tool);
+  const guarded = new GuardedToolRegistry({ registry, guardRunner, outputDlp });
+  return tools.map((tool) => ({
+    ...tool,
+    execute: async (params: unknown) => guarded.execute(tool.name, params, {}),
+  }));
+}
+
+describe('runAgentLoop with pre-wrapped guarded tools', () => {
   it('blocks tool execution when guard rejects', async () => {
     const auditLog = mockAuditLog();
     const guardRunner = new GuardRunner([blockingGuard('echo')], { auditLog });
@@ -398,8 +415,7 @@ describe('runAgentLoop with guards', () => {
     const result = await runAgentLoop('Echo test', [], {
       provider,
       model: 'test-model',
-      tools: [echoTool],
-      guardRunner,
+      tools: wrapToolsWithGuards([echoTool], guardRunner),
     });
 
     expect(result.text).toBe('Handled the block');
@@ -426,8 +442,7 @@ describe('runAgentLoop with guards', () => {
     const result = await runAgentLoop('Echo hello', [], {
       provider,
       model: 'test-model',
-      tools: [echoTool],
-      guardRunner,
+      tools: wrapToolsWithGuards([echoTool], guardRunner),
     });
 
     expect(result.text).toBe('Echo succeeded');
@@ -454,9 +469,7 @@ describe('runAgentLoop with guards', () => {
     const result = await runAgentLoop('Leak a secret', [], {
       provider,
       model: 'test-model',
-      tools: [leakyTool],
-      guardRunner,
-      outputDlp,
+      tools: wrapToolsWithGuards([leakyTool], guardRunner, outputDlp),
     });
 
     expect(result.text).toBe('Handled the DLP block');

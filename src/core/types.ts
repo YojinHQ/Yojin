@@ -8,11 +8,8 @@ import type { AgentRuntime } from './agent-runtime.js';
 import type { EventLog } from './event-log.js';
 import type { ToolRegistry } from './tool-registry.js';
 import type { YojinConfig } from '../config/config.js';
-import type { GuardRunner } from '../guards/guard-runner.js';
-import type { OutputDlpGuard } from '../guards/security/output-dlp.js';
 import type { ChannelRouter } from '../plugins/channel-router.js';
 import type { SessionStore } from '../sessions/types.js';
-import type { ApprovalGate } from '../trust/approval/approval-gate.js';
 import type { ChatPiiScanner } from '../trust/pii/chat-scanner.js';
 
 // ---------------------------------------------------------------------------
@@ -82,7 +79,18 @@ export interface ToolResultBlock {
   is_error?: boolean;
 }
 
-export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
+export type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+
+export interface ImageBlock {
+  type: 'image';
+  source: {
+    type: 'base64';
+    media_type: ImageMediaType;
+    data: string;
+  };
+}
+
+export type ContentBlock = TextBlock | ImageBlock | ToolUseBlock | ToolResultBlock;
 
 export interface AgentMessage {
   role: 'user' | 'assistant';
@@ -137,12 +145,6 @@ export interface AgentLoopOptions {
   maxIterations?: number;
   memory?: MemoryConfig;
   onEvent?: AgentLoopEventHandler;
-  /** Guard pipeline for pre-execution checks. When provided, all tool calls go through GuardedToolRegistry. */
-  guardRunner?: GuardRunner;
-  /** Output DLP guard for post-execution scanning. Only used when guardRunner is also provided. */
-  outputDlp?: OutputDlpGuard;
-  /** Approval gate for irreversible actions. Only used when guardRunner is also provided. */
-  approvalGate?: ApprovalGate;
   /** Agent identity — included in guard audit logs. */
   agentId?: string;
   /** Abort signal — when triggered, the loop stops after the current iteration. */

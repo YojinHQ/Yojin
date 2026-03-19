@@ -39,6 +39,7 @@ export async function setupToken(args: string[]): Promise<void> {
   console.log(`\nYojin — Claude OAuth token setup (method: ${method})\n`);
 
   let token: string;
+  let refreshToken: string | undefined;
 
   switch (method) {
     case 'oauth': {
@@ -53,6 +54,9 @@ export async function setupToken(args: string[]): Promise<void> {
         onProgress: (msg) => console.log(msg),
       });
       token = result.accessToken;
+      if (result.refreshToken) {
+        refreshToken = result.refreshToken;
+      }
       break;
     }
 
@@ -78,5 +82,9 @@ export async function setupToken(args: string[]): Promise<void> {
 
   console.log(`\nToken acquired: ${createTokenReference(token)}`);
   console.log('\nAdd this to your .env file:\n');
-  console.log(`  CLAUDE_CODE_OAUTH_TOKEN=${token}\n`);
+  console.log(`  CLAUDE_CODE_OAUTH_TOKEN=${token}`);
+  if (refreshToken) {
+    console.log(`  CLAUDE_CODE_OAUTH_REFRESH_TOKEN=${refreshToken}`);
+  }
+  console.log();
 }

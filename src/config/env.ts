@@ -26,6 +26,7 @@ export const EnvSchema = z.object({
   // ── Anthropic / Claude ──────────────────────────────────
   ANTHROPIC_API_KEY: envString,
   CLAUDE_CODE_OAUTH_TOKEN: envString,
+  CLAUDE_CODE_OAUTH_REFRESH_TOKEN: envString,
 
   // ── Slack ───────────────────────────────────────────────
   SLACK_BOT_TOKEN: prefixed('xoxb-'),

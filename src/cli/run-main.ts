@@ -2,6 +2,7 @@
  * CLI main runner.
  */
 
+import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 
 import { startChat } from './chat.js';
@@ -26,21 +27,28 @@ export async function runMain(args: string[]): Promise<void> {
   const command = args[0] ?? 'start';
 
   switch (command) {
+    // --- User-facing commands ---
     case 'start':
+    case 'serve':
       await startGateway();
       break;
     case 'chat':
       await startChat(args.slice(1));
       break;
-    case 'secret':
-      await runSecretCommand(args.slice(1));
-      break;
+    case 'setup':
     case 'setup-token':
       await setupToken(args.slice(1));
+      break;
+    case 'web':
+      await startFrontend();
+      break;
+    case 'secret':
+      await runSecretCommand(args.slice(1));
       break;
     case 'acp':
       await startAcp();
       break;
+
     case 'version':
       console.log(`yojin v${PKG_VERSION}`);
       break;
@@ -101,6 +109,17 @@ async function startGateway(): Promise<void> {
   await gateway.start();
 }
 
+function startFrontend(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('pnpm', ['--filter', '@yojin/web', 'dev'], {
+      stdio: 'inherit',
+      shell: true,
+    });
+    child.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`Frontend exited with code ${code}`))));
+    child.on('error', reject);
+  });
+}
+
 async function startAcp(): Promise<void> {
   const { agentRuntime, dataRoot } = await buildFullRuntime();
   const bridge = new LocalRuntimeBridge(agentRuntime);
@@ -117,22 +136,22 @@ async function startAcp(): Promise<void> {
 
 function printHelp(): void {
   console.log(`
-yojin — Multi-LLM, multi-channel AI agent platform
+Yojin — Your personal AI finance agent
 
-Usage:
-  yojin start                        Start the gateway server (default)
-  yojin chat [options]               Interactive terminal chat
-    --model <model>                    Model to use (default: claude-opus-4-6)
-    --provider <id>                    Provider to use (default: anthropic)
-    --system <prompt>                  System prompt
-  yojin secret set <key>             Store a secret (hidden TTY input)
-  yojin secret show <key>            Reveal a secret (TTY + confirmation)
-  yojin secret list                  List secret names (never values)
-  yojin secret delete <key>          Delete a secret
-  yojin setup-token [--method M]     Acquire a Claude OAuth token
-                                     Methods: oauth, cli, paste
-  yojin acp                          Start ACP (Agent Client Protocol) server
-  yojin version                      Print version
-  yojin help                         Show this help message
+Commands:
+  yojin                Start Yojin (server + dashboard)
+  yojin chat [options] Chat with Yojin in your terminal
+    --model <model>      Model to use (default: claude-opus-4-6)
+    --provider <id>      Provider to use (default: anthropic)
+    --system <prompt>    System prompt
+  yojin setup          Connect your Claude account
+
+Advanced:
+  yojin serve          Alias for start
+  yojin web            Start the dashboard only
+  yojin secret <cmd>   Manage stored credentials
+  yojin acp            Start ACP (Agent Client Protocol) server
+  yojin version        Print version
+  yojin help           Show this message
 `);
 }

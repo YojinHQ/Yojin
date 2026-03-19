@@ -19,14 +19,13 @@ import type {
   AgentLoopEvent,
   AgentLoopOptions,
   AgentMessage,
+  ContentBlock,
   TextBlock,
   ToolCall,
   ToolCallResult,
-  ToolExecutor,
   ToolResultBlock,
   ToolUseBlock,
 } from './types.js';
-import { GuardedToolRegistry } from '../trust/guarded-tool-registry.js';
 
 const DEFAULT_MAX_ITERATIONS = 20;
 
@@ -44,7 +43,7 @@ export interface AgentLoopResult {
 }
 
 export async function runAgentLoop(
-  userMessage: string,
+  userMessage: string | ContentBlock[],
   history: AgentMessage[],
   options: AgentLoopOptions,
 ): Promise<AgentLoopResult> {
@@ -56,9 +55,6 @@ export async function runAgentLoop(
     maxIterations = DEFAULT_MAX_ITERATIONS,
     memory,
     onEvent,
-    guardRunner,
-    outputDlp,
-    approvalGate,
     agentId,
     abortSignal,
     piiScanner,
@@ -68,16 +64,6 @@ export async function runAgentLoop(
   for (const tool of tools) {
     registry.register(tool);
   }
-
-  // Fail fast if outputDlp or approvalGate provided without guardRunner
-  if ((outputDlp || approvalGate) && !guardRunner) {
-    throw new Error('outputDlp and approvalGate require guardRunner to be provided');
-  }
-
-  // Wrap with guard pipeline when guardRunner is provided
-  const executor: ToolExecutor = guardRunner
-    ? new GuardedToolRegistry({ registry, guardRunner, outputDlp, approvalGate })
-    : registry;
 
   const budget = new TokenBudget({
     contextWindow: memory?.contextWindow,
@@ -90,25 +76,15 @@ export async function runAgentLoop(
   const toolSchemas = registry.toSchemas();
 
   // ── PII: scrub sensitive data from user message before LLM ──────
-  let messageForLlm = userMessage;
-  let piiMap: import('rehydra').EncryptedPIIMap | undefined;
-
-  if (piiScanner) {
-    const scrubResult = await piiScanner.scrub(userMessage);
-    if (scrubResult.entitiesFound > 0) {
-      messageForLlm = scrubResult.sanitized;
-      piiMap = scrubResult.piiMap;
-      emit(onEvent, {
-        type: 'pii_redacted',
-        entitiesFound: scrubResult.entitiesFound,
-        typesFound: scrubResult.typesFound,
-        processingTimeMs: scrubResult.processingTimeMs,
-      });
-    }
+  const piiResult = piiScanner ? await scrubUserMessage(piiScanner, userMessage) : undefined;
+  const messageContentForLlm = piiResult?.content ?? userMessage;
+  const piiMap = piiResult?.piiMap;
+  if (piiResult?.event) {
+    emit(onEvent, piiResult.event);
   }
 
   // Send scrubbed text to LLM, but keep original in history for future turns
-  let messages: AgentMessage[] = [...history, { role: 'user', content: messageForLlm }];
+  let messages: AgentMessage[] = [...history, { role: 'user', content: messageContentForLlm }];
   const originalUserIdx = messages.length - 1;
   const totalUsage = { inputTokens: 0, outputTokens: 0 };
   let compactions = 0;
@@ -201,7 +177,7 @@ export async function runAgentLoop(
     const results: ToolCallResult[] = await Promise.all(
       toolCalls.map(async (call) => {
         try {
-          const result = await executor.execute(call.name, call.input, { agentId });
+          const result = await registry.execute(call.name, call.input, { agentId });
           return { toolCallId: call.id, name: call.name, result };
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -271,4 +247,57 @@ function extractText(message: AgentMessage | undefined): string {
     .filter((b): b is TextBlock => b.type === 'text')
     .map((b) => b.text)
     .join('');
+}
+
+/** Scrub PII from user messages before sending to LLM. */
+async function scrubUserMessage(
+  piiScanner: import('../trust/pii/chat-scanner.js').ChatPiiScanner,
+  userMessage: string | ContentBlock[],
+): Promise<
+  { content: string | ContentBlock[]; piiMap?: import('rehydra').EncryptedPIIMap; event: AgentLoopEvent } | undefined
+> {
+  if (typeof userMessage === 'string') {
+    const result = await piiScanner.scrub(userMessage);
+    if (result.entitiesFound === 0) return undefined;
+    return {
+      content: result.sanitized,
+      piiMap: result.piiMap,
+      event: {
+        type: 'pii_redacted',
+        entitiesFound: result.entitiesFound,
+        typesFound: result.typesFound,
+        processingTimeMs: result.processingTimeMs,
+      },
+    };
+  }
+
+  // ContentBlock[] — scan only text blocks
+  const textParts = userMessage.filter((b) => b.type === 'text').map((b) => (b as TextBlock).text);
+  if (textParts.length === 0) return undefined;
+
+  const combined = textParts.join('\n');
+  const result = await piiScanner.scrub(combined);
+  if (result.entitiesFound === 0) return undefined;
+
+  let scrubOffset = 0;
+  const scrubbed = result.sanitized;
+  const content = userMessage.map((b) => {
+    if (b.type !== 'text') return b;
+    const original = (b as TextBlock).text;
+    const end = scrubOffset + original.length;
+    const replacement = scrubbed.slice(scrubOffset, end);
+    scrubOffset = end + 1; // +1 for the \n separator
+    return { type: 'text' as const, text: replacement };
+  });
+
+  return {
+    content,
+    piiMap: result.piiMap,
+    event: {
+      type: 'pii_redacted',
+      entitiesFound: result.entitiesFound,
+      typesFound: result.typesFound,
+      processingTimeMs: result.processingTimeMs,
+    },
+  };
 }

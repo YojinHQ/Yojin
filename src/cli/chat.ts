@@ -13,6 +13,7 @@ import { runOnboarding } from './onboarding.js';
 import { runAgentLoop } from '../core/agent-loop.js';
 import type { AgentLoopProvider, AgentMessage, ToolDefinition } from '../core/types.js';
 import { getLogger } from '../logging/index.js';
+import { GuardedToolRegistry } from '../trust/guarded-tool-registry.js';
 
 // ---------------------------------------------------------------------------
 // Terminal colors & formatting
@@ -148,11 +149,19 @@ export async function startChat(args: string[]): Promise<void> {
     }
   } else {
     // All tools
-    tools = toolRegistry
-      .toSchemas()
-      .map((schema) => toolRegistry.subset([schema.name])[0])
-      .filter(Boolean);
+    tools = toolRegistry.all();
   }
+
+  // Pre-wrap tools with guard pipeline (Single Responsibility: the loop only runs TAO)
+  const guardedTools: ToolDefinition[] = guardRunner
+    ? (() => {
+        const guarded = new GuardedToolRegistry({ registry: toolRegistry, guardRunner, outputDlp });
+        return tools.map((tool) => ({
+          ...tool,
+          execute: async (params: unknown) => guarded.execute(tool.name, params, {}),
+        }));
+      })()
+    : tools;
 
   const rl = createInterface({
     input: process.stdin,
@@ -212,9 +221,7 @@ export async function startChat(args: string[]): Promise<void> {
           provider: loopProvider,
           model,
           systemPrompt: resolvedSystemPrompt,
-          tools,
-          guardRunner,
-          outputDlp,
+          tools: guardedTools,
           agentId,
           piiScanner,
           onEvent: (event) => {

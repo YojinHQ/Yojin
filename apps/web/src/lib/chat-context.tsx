@@ -21,8 +21,8 @@ interface ChatEvent {
 }
 
 const SEND_MESSAGE_MUTATION = `
-  mutation SendMessage($threadId: String!, $message: String!) {
-    sendMessage(threadId: $threadId, message: $message) {
+  mutation SendMessage($threadId: String!, $message: String!, $imageBase64: String, $imageMediaType: String) {
+    sendMessage(threadId: $threadId, message: $message, imageBase64: $imageBase64, imageMediaType: $imageMediaType) {
       threadId
       messageId
     }
@@ -44,15 +44,18 @@ const CHAT_SUBSCRIPTION = `
   }
 `;
 
+export interface ChatImageData {
+  base64: string;
+  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+}
+
 interface ChatContextValue {
   messages: ChatMessage[];
   streamingContent: string;
   isLoading: boolean;
   isThinking: boolean;
   activeTools: string[];
-  piiProtected: boolean;
-  piiTypes: string[];
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string, image?: ChatImageData) => void;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -70,8 +73,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [activeTools, setActiveTools] = useState<string[]>([]);
-  const [piiProtected, setPiiProtected] = useState(false);
-  const [piiTypes, setPiiTypes] = useState<string[]>([]);
   const [threadId] = useState(() => `web-${crypto.randomUUID()}`);
   const completedMessagesRef = useRef(new Set<string>());
   const queueRef = useRef<string[]>([]);
@@ -82,8 +83,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [, sendMessageMutation] = useMutation(SEND_MESSAGE_MUTATION);
   const processQueueRef = useRef<() => void>(() => {});
 
+  const resetStreamingState = useCallback(() => {
+    setStreamingContent('');
+    setIsThinking(false);
+    setActiveTools([]);
+    setIsLoading(false);
+    isProcessingRef.current = false;
+  }, []);
+
   const processMessage = useCallback(
-    async (content: string) => {
+    async (content: string, image?: ChatImageData) => {
       isProcessingRef.current = true;
       piiDetectedRef.current = false;
       piiTypesRef.current = [];
@@ -91,10 +100,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setStreamingContent('');
       setIsThinking(false);
       setActiveTools([]);
-      setPiiProtected(false);
-      setPiiTypes([]);
 
-      const result = await sendMessageMutation({ threadId, message: content });
+      const variables: Record<string, string> = { threadId, message: content };
+      if (image) {
+        variables.imageBase64 = image.base64;
+        variables.imageMediaType = image.mediaType;
+      }
+
+      const result = await sendMessageMutation(variables);
       if (result.error) {
         setMessages((prev) => [
           ...prev,
@@ -104,12 +117,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             content: `Sorry, I couldn't process that request. ${result.error?.message ?? ''}`,
           },
         ]);
-        setIsLoading(false);
-        isProcessingRef.current = false;
+        resetStreamingState();
         processQueueRef.current();
       }
     },
-    [threadId, sendMessageMutation],
+    [threadId, sendMessageMutation, resetStreamingState],
   );
 
   const processQueue = useCallback(() => {
@@ -135,8 +147,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       } else if (event.type === 'PII_REDACTED') {
         piiDetectedRef.current = true;
         piiTypesRef.current = event.piiTypesFound ?? [];
-        setPiiProtected(true);
-        setPiiTypes(event.piiTypesFound ?? []);
       } else if (event.type === 'TOOL_USE' && event.toolName) {
         setIsThinking(false);
         setActiveTools((prev) => [...prev, event.toolName ?? '']);
@@ -158,41 +168,39 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             piiTypes: piiTypesRef.current,
           },
         ]);
-        setStreamingContent('');
-        setIsThinking(false);
-        setActiveTools([]);
-        setIsLoading(false);
-        isProcessingRef.current = false;
+        resetStreamingState();
         setTimeout(() => processQueue(), 0);
       } else if (event.type === 'ERROR') {
         setMessages((prev) => [
           ...prev,
           { id: crypto.randomUUID(), role: 'assistant', content: `Sorry, something went wrong. ${event.error ?? ''}` },
         ]);
-        setStreamingContent('');
-        setIsThinking(false);
-        setActiveTools([]);
-        setIsLoading(false);
-        setPiiProtected(false);
-        isProcessingRef.current = false;
+        resetStreamingState();
         setTimeout(() => processQueue(), 0);
       }
 
       return data;
     },
-    [processQueue],
+    [processQueue, resetStreamingState],
   );
 
   useSubscription({ query: CHAT_SUBSCRIPTION, variables: { threadId } }, handleSubscription);
 
   const sendMessage = useCallback(
-    (content: string) => {
+    (content: string, image?: ChatImageData) => {
       if (isProcessingRef.current) {
+        // Queue text-only — images are not queued to avoid holding large base64 strings in memory.
+        // Warn the user that the image will not be sent.
+        if (image) {
+          alert(
+            'A message is still being processed. Your image was not included — please re-attach it after the response completes.',
+          );
+        }
+        // Don't append to messages here — processQueue does it when the message is actually sent.
         queueRef.current.push(content);
-        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content }]);
       } else {
         setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content }]);
-        processMessage(content);
+        processMessage(content, image);
       }
     },
     [processMessage],
@@ -204,8 +212,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     isLoading,
     isThinking,
     activeTools,
-    piiProtected,
-    piiTypes,
     sendMessage,
   };
 

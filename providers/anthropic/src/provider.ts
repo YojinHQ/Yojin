@@ -166,6 +166,12 @@ function buildApiMessages(messages: AgentMessage[], remapName: (n: string) => st
           ...(block.is_error ? { is_error: true as const } : {}),
         };
       }
+      if (block.type === 'image') {
+        return {
+          type: 'image' as const,
+          source: block.source,
+        };
+      }
       return block;
     });
     return { role: m.role as 'user' | 'assistant', content: blocks };
@@ -257,10 +263,65 @@ function callClaude(prompt: string, model: string): Promise<string> {
 // Provider
 // ---------------------------------------------------------------------------
 
+const identity = (n: string): string => n;
+
+/** Extract the last user message as a plain string (for CLI fallback). */
+function extractLastUserPrompt(messages: { role: string; content: string | ContentBlock[] }[]): string {
+  const lastUser = messages.filter((m) => m.role === 'user').pop();
+  if (!lastUser) return '';
+  if (typeof lastUser.content === 'string') return lastUser.content;
+  return lastUser.content
+    .filter((b) => b.type === 'text')
+    .map((b) => (b as { text: string }).text)
+    .join('');
+}
+
 export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
   const log = getLogger().sub('anthropic');
   let client: Anthropic;
   let authMode: AuthMode;
+
+  /** Build the shared API request object for complete/stream. */
+  function buildBaseRequest(params: ProviderCompletionParams) {
+    const systemMsg = params.messages.find((m) => m.role === 'system')?.content;
+    const systemParam = buildSystemParam(systemMsg, authMode === 'oauth');
+    return {
+      model: params.model,
+      max_tokens: params.maxTokens ?? 4096,
+      messages: params.messages.map((m) => ({
+        role: (m.role === 'system' ? 'user' : m.role) as 'user' | 'assistant',
+        content: m.content,
+      })),
+      ...(systemParam ? { system: systemParam } : {}),
+      ...(params.temperature != null ? { temperature: params.temperature } : {}),
+      ...(params.stopSequences ? { stop_sequences: params.stopSequences } : {}),
+    };
+  }
+
+  /** Build the shared API request object for completeWithTools/streamWithTools. */
+  function buildToolRequest(params: {
+    model: string;
+    system?: string;
+    messages: AgentMessage[];
+    tools?: ToolSchema[];
+    maxTokens?: number;
+  }) {
+    const useOAuth = authMode === 'oauth';
+    const remapName = useOAuth ? toOAuthToolName : identity;
+    const apiMessages = buildApiMessages(params.messages, remapName);
+    const systemParam = buildSystemParam(params.system, useOAuth);
+    const toolDefs = buildToolDefs(params.tools, remapName);
+    return {
+      request: {
+        model: params.model,
+        max_tokens: params.maxTokens ?? 4096,
+        messages: apiMessages,
+        ...(systemParam ? { system: systemParam } : {}),
+        ...(toolDefs ? { tools: toolDefs } : {}),
+      },
+      unremapName: useOAuth ? fromOAuthToolName : identity,
+    };
+  }
 
   return {
     id: 'anthropic',
@@ -341,27 +402,12 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
     async complete(params: ProviderCompletionParams): Promise<ProviderCompletionResult> {
       // -- CLI mode --
       if (authMode === 'cli') {
-        const userMessage = params.messages.filter((m) => m.role === 'user').pop();
-        const prompt = userMessage?.content ?? '';
-        const content = await callClaude(prompt, params.model);
+        const content = await callClaude(extractLastUserPrompt(params.messages), params.model);
         return { content, model: params.model };
       }
 
       // -- API mode --
-      const systemMsg = params.messages.find((m) => m.role === 'system')?.content;
-      const systemParam = buildSystemParam(systemMsg, authMode === 'oauth');
-
-      const response = await client.messages.create({
-        model: params.model,
-        max_tokens: params.maxTokens ?? 4096,
-        messages: params.messages.map((m) => ({
-          role: m.role === 'system' ? 'user' : m.role,
-          content: m.content,
-        })),
-        ...(systemParam ? { system: systemParam } : {}),
-        ...(params.temperature != null ? { temperature: params.temperature } : {}),
-        ...(params.stopSequences ? { stop_sequences: params.stopSequences } : {}),
-      });
+      const response = await client.messages.create(buildBaseRequest(params));
 
       const textBlock = response.content.find((b) => b.type === 'text');
 
@@ -379,29 +425,14 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
     async *stream(params: ProviderCompletionParams): AsyncIterable<ProviderStreamEvent> {
       // -- CLI mode: no streaming, yield full response at once --
       if (authMode === 'cli') {
-        const userMessage = params.messages.filter((m) => m.role === 'user').pop();
-        const prompt = userMessage?.content ?? '';
-        const content = await callClaude(prompt, params.model);
+        const content = await callClaude(extractLastUserPrompt(params.messages), params.model);
         yield { type: 'text_delta', text: content };
         yield { type: 'stop', stopReason: 'end_turn' };
         return;
       }
 
       // -- API mode --
-      const streamSystemMsg = params.messages.find((m) => m.role === 'system')?.content;
-      const systemParam = buildSystemParam(streamSystemMsg, authMode === 'oauth');
-
-      const stream = client.messages.stream({
-        model: params.model,
-        max_tokens: params.maxTokens ?? 4096,
-        messages: params.messages.map((m) => ({
-          role: m.role === 'system' ? 'user' : m.role,
-          content: m.content,
-        })),
-        ...(systemParam ? { system: systemParam } : {}),
-        ...(params.temperature != null ? { temperature: params.temperature } : {}),
-        ...(params.stopSequences ? { stop_sequences: params.stopSequences } : {}),
-      });
+      const stream = client.messages.stream(buildBaseRequest(params));
 
       for await (const event of stream) {
         if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
@@ -428,38 +459,18 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       if (authMode === 'cli') {
         log.warn(
           'CLI mode: completeWithTools falls back to single-turn text completion — ' +
-            'conversation history, system prompt and tools are not forwarded.',
+            'conversation history, system prompt, tools, and image blocks are not forwarded.',
         );
-        const lastUser = params.messages.filter((m) => m.role === 'user').pop();
-        const prompt =
-          typeof lastUser?.content === 'string'
-            ? lastUser.content
-            : (lastUser?.content
-                ?.filter((b) => b.type === 'text')
-                .map((b) => (b as { text: string }).text)
-                .join('') ?? '');
-        const text = await callClaude(prompt, params.model);
+        const text = await callClaude(extractLastUserPrompt(params.messages), params.model);
         return {
           content: [{ type: 'text' as const, text }],
           stopReason: 'end_turn',
         };
       }
 
-      const useOAuth = authMode === 'oauth';
-      const remapName = useOAuth ? toOAuthToolName : (n: string) => n;
-      const unremapName = useOAuth ? fromOAuthToolName : (n: string) => n;
+      const { request, unremapName } = buildToolRequest(params);
 
-      const apiMessages = buildApiMessages(params.messages, remapName);
-      const systemParam = buildSystemParam(params.system, useOAuth);
-      const toolDefs = buildToolDefs(params.tools, remapName);
-
-      const response = await client.messages.create({
-        model: params.model,
-        max_tokens: params.maxTokens ?? 4096,
-        messages: apiMessages,
-        ...(systemParam ? { system: systemParam } : {}),
-        ...(toolDefs ? { tools: toolDefs } : {}),
-      });
+      const response = await client.messages.create(request);
 
       return {
         content: mapResponseContent(response.content, unremapName),
@@ -484,21 +495,9 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
         return this.completeWithTools(params);
       }
 
-      const useOAuth = authMode === 'oauth';
-      const remapName = useOAuth ? toOAuthToolName : (n: string) => n;
-      const unremapName = useOAuth ? fromOAuthToolName : (n: string) => n;
+      const { request, unremapName } = buildToolRequest(params);
 
-      const apiMessages = buildApiMessages(params.messages, remapName);
-      const systemParam = buildSystemParam(params.system, useOAuth);
-      const toolDefs = buildToolDefs(params.tools, remapName);
-
-      const stream = client.messages.stream({
-        model: params.model,
-        max_tokens: params.maxTokens ?? 4096,
-        messages: apiMessages,
-        ...(systemParam ? { system: systemParam } : {}),
-        ...(toolDefs ? { tools: toolDefs } : {}),
-      });
+      const stream = client.messages.stream(request);
 
       stream.on('text', (text) => {
         params.onTextDelta?.(text);

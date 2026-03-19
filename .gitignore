@@ -40,3 +40,4 @@ plans/
 data/*
 !data/default/
 !data/config/
+.claude/worktrees/

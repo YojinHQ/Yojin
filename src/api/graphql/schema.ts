@@ -275,7 +275,7 @@ export const typeDefs = /* GraphQL */ `
     refreshPositions(platform: Platform!): PortfolioSnapshot!
     createAlert(rule: AlertRuleInput!): Alert!
     dismissAlert(id: ID!): Alert!
-    sendMessage(threadId: String!, message: String!): SendMessagePayload!
+    sendMessage(threadId: String!, message: String!, imageBase64: String, imageMediaType: String): SendMessagePayload!
   }
 
   type Subscription {

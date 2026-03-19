@@ -12,7 +12,13 @@
 import { runAgentLoop } from './agent-loop.js';
 import type { EventLog } from './event-log.js';
 import type { ToolRegistry } from './tool-registry.js';
-import type { AgentLoopEventHandler, AgentLoopProvider, ToolDefinition } from './types.js';
+import type {
+  AgentLoopEventHandler,
+  AgentLoopProvider,
+  AgentMessage,
+  ImageMediaType,
+  ToolDefinition,
+} from './types.js';
 import type { AgentRegistry } from '../agents/registry.js';
 import type { AgentProfile, AgentStepResult } from '../agents/types.js';
 import type { EmotionTracker, FrontalLobe, PersonaManager } from '../brain/types.js';
@@ -151,7 +157,9 @@ export class AgentRuntime {
     'CRITICAL: You MUST use your tools to perform actions. NEVER suggest CLI commands, bash snippets, or manual steps. ' +
     'You do NOT have access to a terminal — you can ONLY act through tool calls. ' +
     'When the user asks to store a credential, call store_credential. When they ask to check something, call the relevant tool. ' +
-    'If a tool returns an error (e.g. vault locked), report the error — do not suggest workarounds the user should run manually.';
+    'If a tool returns an error (e.g. vault locked), report the error — do not suggest workarounds the user should run manually. ' +
+    'You can see images that users attach to their messages. When a user sends an image (e.g. a portfolio screenshot), ' +
+    'analyze it directly — describe what you see, extract any visible data, and respond accordingly.';
 
   async handleMessage(params: {
     message: string;
@@ -159,6 +167,10 @@ export class AgentRuntime {
     userId: string;
     threadId?: string;
     onEvent?: AgentLoopEventHandler;
+    /** Optional base64-encoded image to include with the message. */
+    imageBase64?: string;
+    /** MIME type of the image (required when imageBase64 is provided). */
+    imageMediaType?: ImageMediaType;
     abortSignal?: AbortSignal;
   }): Promise<string> {
     const model = DEFAULT_MODEL;
@@ -181,10 +193,7 @@ export class AgentRuntime {
     }
 
     // Use all available tools (same as CLI chat) — not scoped to a single agent.
-    const allTools = this.toolRegistry
-      .toSchemas()
-      .map((s) => this.toolRegistry.subset([s.name])[0])
-      .filter(Boolean);
+    const allTools = this.toolRegistry.all();
     const guardedTools = this.wrapToolsWithGuards(allTools, 'chat');
 
     const history = sessionKey ? (await this.sessionStore.getHistory(sessionKey)).map((e) => e.message) : [];
@@ -194,9 +203,21 @@ export class AgentRuntime {
       data: { agentId: 'chat', sessionKey: sessionKey ?? null },
     });
 
+    // Build user message — text-only or mixed content with image
+    const userContent: string | import('./types.js').ContentBlock[] =
+      params.imageBase64 && params.imageMediaType
+        ? [
+            {
+              type: 'image' as const,
+              source: { type: 'base64' as const, media_type: params.imageMediaType, data: params.imageBase64 },
+            },
+            { type: 'text' as const, text: params.message },
+          ]
+        : params.message;
+
     let result;
     try {
-      result = await runAgentLoop(params.message, history, {
+      result = await runAgentLoop(userContent, history, {
         provider: this.provider,
         model,
         systemPrompt: AgentRuntime.CHAT_SYSTEM_PROMPT,
@@ -215,7 +236,9 @@ export class AgentRuntime {
 
     if (sessionKey) {
       for (const msg of result.messages.slice(history.length)) {
-        await this.sessionStore.append(sessionKey, msg);
+        // Strip base64 image data before persisting — re-sending full images
+        // on every subsequent turn would exhaust the context window and bloat storage.
+        await this.sessionStore.append(sessionKey, AgentRuntime.stripImageData(msg));
       }
     }
 
@@ -239,6 +262,21 @@ export class AgentRuntime {
         return this.guardedRegistry.execute(tool.name, params, { agentId });
       },
     }));
+  }
+
+  /**
+   * Replace ImageBlock entries with a lightweight text stub so we don't
+   * persist (and re-send) large base64 payloads in session history.
+   */
+  private static stripImageData(msg: AgentMessage): AgentMessage {
+    if (typeof msg.content === 'string') return msg;
+    const stripped = msg.content.map((block) => {
+      if (block.type === 'image') {
+        return { type: 'text' as const, text: '[Image attached]' };
+      }
+      return block;
+    });
+    return { ...msg, content: stripped };
   }
 
   private async assembleSystemPrompt(profile: AgentProfile, additionalContext?: string): Promise<string> {

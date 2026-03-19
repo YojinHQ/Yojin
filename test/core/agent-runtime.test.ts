@@ -240,4 +240,39 @@ describe('AgentRuntime', () => {
     });
     expect(text).toBe('response');
   });
+
+  it('strips image data from session history to avoid context bloat', async () => {
+    const sessionStore = new InMemorySessionStore();
+    const imageRuntime = new AgentRuntime({
+      agentRegistry,
+      toolRegistry,
+      guardRunner: new GuardRunner([passGuard()], { auditLog }),
+      sessionStore,
+      eventLog: new EventLog(tempDir),
+      provider: mockProvider(),
+    });
+
+    await imageRuntime.handleMessage({
+      message: 'analyze this',
+      channelId: 'test',
+      userId: 'user1',
+      threadId: 'img-thread',
+      imageBase64: 'iVBORw0KGgoAAAANSUhEUg==',
+      imageMediaType: 'image/png',
+    });
+
+    const session = await sessionStore.getByThread('test', 'img-thread');
+    expect(session).toBeDefined();
+    const history = await sessionStore.getHistory(session!.id);
+    // The user message should have the image replaced with a text stub
+    const userMsg = history.find((e) => e.message.role === 'user');
+    expect(userMsg).toBeDefined();
+    const content = userMsg!.message.content;
+    expect(Array.isArray(content)).toBe(true);
+    const blocks = content as ContentBlock[];
+    // No image blocks should remain in session history
+    expect(blocks.some((b) => b.type === 'image')).toBe(false);
+    // Should have a text stub replacing the image
+    expect(blocks.some((b) => b.type === 'text' && 'text' in b && b.text === '[Image attached]')).toBe(true);
+  });
 });
