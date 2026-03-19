@@ -16,6 +16,7 @@ const PADDING_Y = 16;
 export interface ChatInputProps {
   onSend: (message: string, image?: ImageAttachment) => void;
   disabled?: boolean;
+  disableAttachment?: boolean;
   placeholder?: string;
   initialValue?: string;
 }
@@ -23,6 +24,7 @@ export interface ChatInputProps {
 export default function ChatInput({
   onSend,
   disabled,
+  disableAttachment,
   placeholder = 'How can I help you today?',
   initialValue,
 }: ChatInputProps) {
@@ -43,6 +45,10 @@ export default function ChatInput({
   useEffect(() => {
     resize();
   }, [value, resize]);
+
+  // When attachment is disabled, treat any pre-attached image as absent.
+  // This prevents silently sending an image that gets dropped in the queued path.
+  const effectiveImage = disableAttachment ? null : image;
 
   /** Shared logic: validate a File and read it as an ImageAttachment. */
   const processFile = useCallback((file: File) => {
@@ -72,8 +78,8 @@ export default function ChatInput({
   }, []);
 
   const submit = () => {
-    if ((!value.trim() && !image) || disabled) return;
-    onSend(value.trim() || (image ? 'Analyze this image.' : ''), image ?? undefined);
+    if ((!value.trim() && !effectiveImage) || disabled) return;
+    onSend(value.trim() || (effectiveImage ? 'Analyze this image.' : ''), effectiveImage ?? undefined);
     setValue('');
     setImage(null);
   };
@@ -87,11 +93,13 @@ export default function ChatInput({
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    if (disableAttachment) return;
     const file = e.dataTransfer.files[0];
     if (file) processFile(file);
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
+    if (disableAttachment) return;
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of items) {
@@ -117,7 +125,7 @@ export default function ChatInput({
 
   return (
     <div onDrop={handleDrop} onDragOver={handleDragOver} onPaste={handlePaste}>
-      {image && (
+      {effectiveImage && (
         <div className="mb-1 flex">
           <div className="group inline-flex items-center rounded-full border border-border-light bg-bg-secondary transition-colors hover:border-text-muted">
             <button
@@ -126,9 +134,13 @@ export default function ChatInput({
               className="inline-flex items-center gap-1.5 py-1 pl-1 pr-1.5"
               aria-label="Preview attached image"
             >
-              <img src={image.preview} alt={image.name} className="h-5 w-5 rounded-full object-cover" />
+              <img
+                src={effectiveImage.preview}
+                alt={effectiveImage.name}
+                className="h-5 w-5 rounded-full object-cover"
+              />
               <span className="max-w-[100px] truncate text-2xs text-text-secondary group-hover:text-text-primary">
-                {image.name}
+                {effectiveImage.name}
               </span>
             </button>
             <button
@@ -143,7 +155,7 @@ export default function ChatInput({
         </div>
       )}
 
-      {image && showPreview && (
+      {effectiveImage && showPreview && (
         <div
           role="dialog"
           tabIndex={-1}
@@ -156,7 +168,11 @@ export default function ChatInput({
         >
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative max-h-[80vh] max-w-[80vw]" onClick={(e) => e.stopPropagation()}>
-            <img src={image.preview} alt={image.name} className="max-h-[80vh] max-w-[80vw] rounded-lg object-contain" />
+            <img
+              src={effectiveImage.preview}
+              alt={effectiveImage.name}
+              className="max-h-[80vh] max-w-[80vw] rounded-lg object-contain"
+            />
             <button
               type="button"
               onClick={() => setShowPreview(false)}
@@ -180,11 +196,11 @@ export default function ChatInput({
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          disabled={disabled}
+          disabled={disabled || disableAttachment}
           aria-label="Attach file"
           className={cn(
             'mb-px flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg transition-colors',
-            !disabled
+            !(disabled || disableAttachment)
               ? 'cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text-secondary'
               : 'cursor-default text-text-muted/40',
           )}
@@ -208,7 +224,7 @@ export default function ChatInput({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={image ? 'Add a message or send the image...' : placeholder}
+          placeholder={effectiveImage ? 'Add a message or send the image...' : placeholder}
           rows={1}
           disabled={disabled}
           className="flex-1 resize-none bg-transparent py-1.5 text-sm leading-5 text-text-primary outline-none placeholder:text-text-muted"
@@ -217,10 +233,10 @@ export default function ChatInput({
         <button
           type="button"
           onClick={submit}
-          disabled={(!value.trim() && !image) || disabled}
+          disabled={(!value.trim() && !effectiveImage) || disabled}
           className={cn(
             'mb-px flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg transition-colors',
-            (value.trim() || image) && !disabled
+            (value.trim() || effectiveImage) && !disabled
               ? 'cursor-pointer bg-accent-primary text-white hover:bg-accent-secondary'
               : 'cursor-default bg-bg-tertiary text-text-muted',
           )}

@@ -51,6 +51,7 @@ export interface ChatImageData {
 
 interface ChatContextValue {
   messages: ChatMessage[];
+  pendingMessages: ChatMessage[];
   streamingContent: string;
   isLoading: boolean;
   isThinking: boolean;
@@ -69,6 +70,7 @@ export function useChatContext(): ChatContextValue {
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
@@ -128,6 +130,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     if (queueRef.current.length > 0 && !isProcessingRef.current) {
       const next = queueRef.current.shift();
       if (!next) return;
+      // Move the first pending message into the main messages list.
+      setPendingMessages((prev) => prev.slice(1));
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content: next }]);
       processMessage(next);
     }
@@ -189,15 +193,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const sendMessage = useCallback(
     (content: string, image?: ChatImageData) => {
       if (isProcessingRef.current) {
-        // Queue text-only — images are not queued to avoid holding large base64 strings in memory.
-        // Warn the user that the image will not be sent.
-        if (image) {
-          alert(
-            'A message is still being processed. Your image was not included — please re-attach it after the response completes.',
-          );
-        }
-        // Don't append to messages here — processQueue does it when the message is actually sent.
         queueRef.current.push(content);
+        // Show queued message separately so it renders after the current streaming response.
+        setPendingMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content }]);
       } else {
         setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content }]);
         processMessage(content, image);
@@ -208,6 +206,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const value: ChatContextValue = {
     messages,
+    pendingMessages,
     streamingContent,
     isLoading,
     isThinking,

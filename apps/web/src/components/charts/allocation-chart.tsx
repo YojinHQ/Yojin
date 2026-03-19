@@ -1,110 +1,111 @@
 import { useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { tooltipStyle } from '../../lib/mock-chart-data';
+import { usePositions } from '../../api';
+import Spinner from '../common/spinner';
 
-const ASSET_CLASSES = [
-  { key: 'equities', label: 'Equities', color: 'var(--color-accent-primary)' },
-  { key: 'crypto', label: 'Crypto', color: 'var(--color-accent-secondary)' },
-  { key: 'fixedIncome', label: 'Fixed Income', color: 'var(--color-success)' },
-  { key: 'cash', label: 'Cash', color: 'var(--color-info)' },
-  { key: 'other', label: 'Other', color: 'var(--color-warning)' },
-] as const;
+const ASSET_CLASS_COLORS: Record<string, string> = {
+  EQUITY: 'var(--color-accent-primary)',
+  CRYPTO: 'var(--color-accent-secondary)',
+  BOND: 'var(--color-success)',
+  COMMODITY: 'var(--color-warning)',
+  CURRENCY: 'var(--color-info)',
+  OTHER: 'var(--color-text-muted)',
+};
 
-type AllocationPoint = Record<string, string | number>;
-
-function generateAllocationData(): AllocationPoint[] {
-  const data: AllocationPoint[] = [];
-  const now = new Date();
-
-  // Starting allocation percentages (raw values — stackOffset="expand" normalizes them)
-  let equities = 55;
-  let crypto = 10;
-  let fixedIncome = 18;
-  let cash = 12;
-  let other = 5;
-
-  for (let i = 11; i >= 0; i--) {
-    const date = new Date(now);
-    date.setMonth(date.getMonth() - i);
-    const label = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-
-    // Drift allocation over time — equities & crypto grow, bonds & cash shrink
-    equities += (Math.random() - 0.3) * 2;
-    crypto += (Math.random() - 0.35) * 1.5;
-    fixedIncome += (Math.random() - 0.55) * 1.2;
-    cash += (Math.random() - 0.6) * 1;
-    other += (Math.random() - 0.5) * 0.5;
-
-    // Clamp to reasonable ranges
-    equities = Math.max(40, Math.min(70, equities));
-    crypto = Math.max(5, Math.min(25, crypto));
-    fixedIncome = Math.max(5, Math.min(25, fixedIncome));
-    cash = Math.max(3, Math.min(15, cash));
-    other = Math.max(1, Math.min(8, other));
-
-    data.push({
-      month: label,
-      equities: Math.round(equities * 10) / 10,
-      crypto: Math.round(crypto * 10) / 10,
-      fixedIncome: Math.round(fixedIncome * 10) / 10,
-      cash: Math.round(cash * 10) / 10,
-      other: Math.round(other * 10) / 10,
-    });
-  }
-
-  return data;
+function formatCurrency(n: number): string {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Recharts Formatter type is overly strict
-const formatTooltip: any = (value: number) => [`${(value * 100).toFixed(1)}%`];
-
 export default function AllocationChart() {
-  const data = useMemo(() => generateAllocationData(), []);
+  const [{ data, fetching, error }] = usePositions();
+
+  const allocation = useMemo(() => {
+    const positions = data?.positions ?? [];
+    if (positions.length === 0) return [];
+
+    const totals: Record<string, number> = {};
+    for (const pos of positions) {
+      totals[pos.assetClass] = (totals[pos.assetClass] ?? 0) + pos.marketValue;
+    }
+
+    const grandTotal = Object.values(totals).reduce((a, b) => a + b, 0);
+    return Object.entries(totals)
+      .map(([assetClass, value]) => ({
+        name: assetClass.charAt(0) + assetClass.slice(1).toLowerCase(),
+        value,
+        percent: grandTotal > 0 ? (value / grandTotal) * 100 : 0,
+        color: ASSET_CLASS_COLORS[assetClass] ?? ASSET_CLASS_COLORS.OTHER,
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [data?.positions]);
+
+  if (fetching) {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg border border-border bg-bg-card">
+        <Spinner size="sm" />
+      </div>
+    );
+  }
+
+  if (error || allocation.length === 0) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-lg border border-border bg-bg-card p-3">
+        <h3 className="text-2xs font-medium text-text-primary uppercase tracking-wider mb-4">Asset Allocation</h3>
+        <p className="text-xs text-text-muted">No portfolio data available</p>
+        <p className="mt-0.5 text-2xs text-text-muted/60">Import a portfolio to see allocation</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-bg-card p-3">
       <div className="mb-1.5 flex flex-shrink-0 items-center justify-between">
         <h3 className="text-2xs font-medium text-text-primary uppercase tracking-wider">Asset Allocation</h3>
         <div className="flex gap-2">
-          {ASSET_CLASSES.map((a) => (
-            <div key={a.key} className="flex items-center gap-1">
+          {allocation.map((a) => (
+            <div key={a.name} className="flex items-center gap-1">
               <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: a.color }} />
-              <span className="text-2xs text-text-muted">{a.label}</span>
+              <span className="text-2xs text-text-muted">{a.name}</span>
             </div>
           ))}
         </div>
       </div>
-      <div className="min-h-0 flex-1">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} stackOffset="expand" margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-            <XAxis
-              dataKey="month"
-              tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-              interval="preserveStartEnd"
-            />
-            <YAxis
-              tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-              width={32}
-              tickFormatter={(val: number) => `${(val * 100).toFixed(0)}%`}
-            />
-            <Tooltip contentStyle={tooltipStyle} formatter={formatTooltip} />
-            {ASSET_CLASSES.map((a) => (
-              <Area
-                key={a.key}
-                type="monotone"
-                dataKey={a.key}
-                stackId="1"
-                stroke={a.color}
-                fill={a.color}
-                fillOpacity={0.85}
-              />
-            ))}
-          </AreaChart>
-        </ResponsiveContainer>
+      <div className="flex min-h-0 flex-1 items-center gap-4">
+        <div className="h-full w-1/2">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={allocation}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius="55%"
+                outerRadius="85%"
+                paddingAngle={2}
+                strokeWidth={0}
+              >
+                {allocation.map((entry) => (
+                  <Cell key={entry.name} fill={entry.color} />
+                ))}
+              </Pie>
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Recharts Formatter type is overly strict */}
+              <Tooltip contentStyle={tooltipStyle} formatter={((value: number) => [formatCurrency(value)]) as any} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="flex flex-1 flex-col gap-1.5">
+          {allocation.map((a) => (
+            <div key={a.name} className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: a.color }} />
+                <span className="text-xs text-text-secondary">{a.name}</span>
+              </div>
+              <span className="text-xs font-medium text-text-primary">{a.percent.toFixed(1)}%</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -57,7 +57,8 @@ function parseToolAction(action: string): { tool: string; params: Record<string,
 /* ─── Page ─── */
 
 export default function Chat() {
-  const { messages, streamingContent, isLoading, isThinking, activeTools, sendMessage } = useChatContext();
+  const { messages, pendingMessages, streamingContent, isLoading, isThinking, activeTools, sendMessage } =
+    useChatContext();
   const [localMessages, setLocalMessages] = useState<LocalMessage[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<string | null>(null);
@@ -201,6 +202,11 @@ export default function Chat() {
           {/* Streaming response */}
           {streamingContent && <ChatMessage id="streaming" role="assistant" content={streamingContent} />}
 
+          {/* Pending queued messages — rendered after streaming so conversation order is preserved */}
+          {pendingMessages.map((msg) => (
+            <ChatMessage key={msg.id} role="user" content={msg.content} />
+          ))}
+
           {/* Loading / thinking / tool indicators */}
           {isLoading && !streamingContent && (
             <div className="flex items-start gap-3">
@@ -272,7 +278,7 @@ export default function Chat() {
       {/* Chat input — pinned bottom */}
       <div className="px-6 pb-6">
         <div className="mx-auto max-w-3xl">
-          <ChatInput onSend={handleSend} disabled={isLoading} initialValue={presetMessage} />
+          <ChatInput onSend={handleSend} disableAttachment={isLoading} initialValue={presetMessage} />
         </div>
       </div>
     </div>

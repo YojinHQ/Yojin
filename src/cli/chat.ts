@@ -99,11 +99,48 @@ export async function startChat(args: string[]): Promise<void> {
   const providerId = parseFlag(args, '--provider') ?? config.defaultProvider ?? 'anthropic';
   const model = parseFlag(args, '--model') ?? config.defaultModel ?? 'claude-opus-4-6';
 
-  const provider = pluginRegistry.getProvider(providerId);
+  let provider = pluginRegistry.getProvider(providerId);
   if (!provider) {
-    console.error(`${c.red}error:${c.reset} Provider "${providerId}" not found`);
-    await pluginRegistry.shutdownAll();
-    process.exit(1);
+    // Bootstrap mode — collect LLM provider credentials
+    if (process.stdin.isTTY && services.vault) {
+      const { runBootstrap } = await import('./bootstrap.js');
+      const { readPassphraseFromTty } = await import('../composition.js');
+
+      const result = await runBootstrap({
+        readSecret: readPassphraseFromTty,
+        vault: services.vault,
+        reinitializeProvider: async () => {
+          await pluginRegistry.shutdownAll();
+          await pluginRegistry.initializeAll(config as unknown as Record<string, unknown>);
+          return !!pluginRegistry.getProvider(providerId);
+        },
+        prompt: (q: string) =>
+          new Promise((resolve) => {
+            const promptRl = createInterface({ input: process.stdin, output: process.stdout });
+            promptRl.question(q, (answer) => {
+              promptRl.close();
+              resolve(answer);
+            });
+          }),
+        log: (msg: string) => console.log(msg),
+      });
+
+      if (!result.success) {
+        await pluginRegistry.shutdownAll();
+        process.exit(0);
+      }
+
+      provider = pluginRegistry.getProvider(providerId) ?? undefined;
+      if (!provider) {
+        console.error(`${c.red}error:${c.reset} Provider still not available after bootstrap.`);
+        await pluginRegistry.shutdownAll();
+        process.exit(1);
+      }
+    } else {
+      console.error(`${c.red}error:${c.reset} Provider "${providerId}" not found. Run in a TTY to set up credentials.`);
+      await pluginRegistry.shutdownAll();
+      process.exit(1);
+    }
   }
 
   // Verify the provider supports tool use

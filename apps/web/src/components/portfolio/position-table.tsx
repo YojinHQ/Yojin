@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router';
-import type { Position } from '../../api/types';
+import type { Position } from '../../api';
 import { cn } from '../../lib/utils';
 import EmptyState from '../common/empty-state';
 import { SymbolLogo } from '../common/symbol-logo';
@@ -46,11 +47,11 @@ const platformLabels: Record<string, string> = {
 const TH = 'px-4 py-2.5 text-2xs font-medium uppercase tracking-wider text-text-muted';
 
 export default function PositionTable({ positions }: { positions: Position[] }) {
-  if (positions.length === 0) {
-    return <EmptyState title="No positions found" description="No positions match the current filter." />;
-  }
+  const totalValue = useMemo(() => positions.reduce((sum, p) => sum + p.marketValue, 0), [positions]);
 
-  const totalValue = positions.reduce((sum, pos) => sum + pos.marketValue, 0);
+  if (positions.length === 0) {
+    return <EmptyState title="No positions found" description="Import a portfolio to see your positions." />;
+  }
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-bg-card">

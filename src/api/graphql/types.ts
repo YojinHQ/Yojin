@@ -24,7 +24,16 @@ export interface Position {
 }
 
 export type AssetClass = 'EQUITY' | 'CRYPTO' | 'BOND' | 'COMMODITY' | 'CURRENCY' | 'OTHER';
-export type Platform = 'INTERACTIVE_BROKERS' | 'ROBINHOOD' | 'COINBASE' | 'SCHWAB' | 'BINANCE' | 'FIDELITY' | 'MANUAL';
+export type Platform =
+  | 'INTERACTIVE_BROKERS'
+  | 'ROBINHOOD'
+  | 'COINBASE'
+  | 'SCHWAB'
+  | 'BINANCE'
+  | 'FIDELITY'
+  | 'POLYMARKET'
+  | 'PHANTOM'
+  | 'MANUAL';
 
 export interface PortfolioSnapshot {
   id: string;
@@ -35,6 +44,14 @@ export interface PortfolioSnapshot {
   totalPnlPercent: number;
   timestamp: string;
   platform: Platform | null;
+}
+
+export interface PortfolioHistoryPoint {
+  timestamp: string;
+  totalValue: number;
+  totalCost: number;
+  totalPnl: number;
+  totalPnlPercent: number;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router';
-import type { Position } from '../../api/types';
+import type { Position } from '../../api';
 import PositionTable from './position-table';
 
 const meta: Meta<typeof PositionTable> = {
@@ -25,6 +25,7 @@ const mockPositions: Position[] = [
   {
     symbol: 'AAPL',
     name: 'Apple Inc.',
+    assetClass: 'EQUITY',
     quantity: 150,
     costBasis: 145.0,
     currentPrice: 189.55,
@@ -32,12 +33,12 @@ const mockPositions: Position[] = [
     unrealizedPnl: 6682.5,
     unrealizedPnlPercent: 30.71,
     sector: 'Technology',
-    assetClass: 'EQUITY',
     platform: 'MANUAL',
   },
   {
     symbol: 'NVDA',
     name: 'NVIDIA Corp.',
+    assetClass: 'EQUITY',
     quantity: 45,
     costBasis: 380.0,
     currentPrice: 492.24,
@@ -45,12 +46,12 @@ const mockPositions: Position[] = [
     unrealizedPnl: 5050.75,
     unrealizedPnlPercent: 29.53,
     sector: 'Technology',
-    assetClass: 'EQUITY',
     platform: 'MANUAL',
   },
   {
     symbol: 'BTC',
     name: 'Bitcoin',
+    assetClass: 'CRYPTO',
     quantity: 0.45,
     costBasis: 35000.0,
     currentPrice: 41600.0,
@@ -58,7 +59,6 @@ const mockPositions: Position[] = [
     unrealizedPnl: 2970.0,
     unrealizedPnlPercent: 18.86,
     sector: null,
-    assetClass: 'CRYPTO',
     platform: 'MANUAL',
   },
 ];

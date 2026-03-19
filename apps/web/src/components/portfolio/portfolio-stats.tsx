@@ -1,13 +1,20 @@
 import type { PortfolioSnapshot } from '../../api/types';
 import { cn } from '../../lib/utils';
 
-function formatCurrency(value: number): string {
-  return value.toLocaleString('en-US', {
+function formatCurrency(n: number): string {
+  const abs = Math.abs(n);
+  const formatted = abs.toLocaleString('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+  return n < 0 ? `-${formatted}` : formatted;
+}
+
+function formatPercent(n: number): string {
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${n.toFixed(2)}%`;
 }
 
 interface PortfolioStatsProps {
@@ -24,11 +31,8 @@ export default function PortfolioStats({ portfolio }: PortfolioStatsProps) {
     {
       label: 'Total P&L',
       value: portfolio ? formatCurrency(portfolio.totalPnl) : '--',
-      colorClass: portfolio ? (portfolio.totalPnl >= 0 ? 'text-success' : 'text-error') : undefined,
-      sub:
-        portfolio && portfolio.totalCost > 0
-          ? `${portfolio.totalPnlPercent >= 0 ? '+' : ''}${portfolio.totalPnlPercent.toFixed(2)}%`
-          : undefined,
+      change: portfolio && portfolio.totalCost > 0 ? formatPercent(portfolio.totalPnlPercent) : null,
+      positive: portfolio ? portfolio.totalPnl >= 0 : undefined,
     },
   ];
 
@@ -37,10 +41,12 @@ export default function PortfolioStats({ portfolio }: PortfolioStatsProps) {
       {stats.map((stat) => (
         <div key={stat.label} className="rounded-xl border border-border bg-bg-card p-4">
           <p className="text-xs uppercase tracking-wider text-text-muted">{stat.label}</p>
-          <p className={cn('mt-1.5 text-lg font-semibold text-text-primary', stat.colorClass)}>
+          <p className={cn('mt-1.5 text-lg font-semibold text-text-primary', stat.positive === false && 'text-error')}>
             {stat.value}
-            {stat.sub && <span className="ml-2 text-xs">{stat.sub}</span>}
           </p>
+          {'change' in stat && stat.change && (
+            <p className={cn('text-xs', stat.positive ? 'text-success' : 'text-error')}>{stat.change}</p>
+          )}
         </div>
       ))}
     </div>

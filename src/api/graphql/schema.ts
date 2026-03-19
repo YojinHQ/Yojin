@@ -23,6 +23,8 @@ export const typeDefs = /* GraphQL */ `
     SCHWAB
     BINANCE
     FIDELITY
+    POLYMARKET
+    PHANTOM
     MANUAL
   }
 
@@ -269,18 +271,82 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # ---------------------------------------------------------------------------
+  # Connections / Onboarding
+  # ---------------------------------------------------------------------------
+
+  enum IntegrationTier {
+    CLI
+    API
+    UI
+    SCREENSHOT
+  }
+  enum ConnectionStatus {
+    PENDING
+    VALIDATING
+    CONNECTED
+    ERROR
+    DISCONNECTED
+  }
+
+  input ConnectPlatformInput {
+    platform: Platform!
+    tier: IntegrationTier
+  }
+
+  type ConnectionResult {
+    success: Boolean!
+    connection: Connection
+    error: String
+  }
+
+  type Connection {
+    platform: Platform!
+    tier: IntegrationTier!
+    status: ConnectionStatus!
+    lastSync: String
+    lastError: String
+    syncInterval: Int!
+    autoRefresh: Boolean!
+  }
+
+  type TierAvailability {
+    tier: IntegrationTier!
+    available: Boolean!
+    requiresCredentials: [String!]!
+  }
+
+  type ConnectionEvent {
+    platform: Platform!
+    step: String!
+    message: String!
+    tier: IntegrationTier
+    error: String
+  }
+
+  # ---------------------------------------------------------------------------
   # Root types
   # ---------------------------------------------------------------------------
+
+  type PortfolioHistoryPoint {
+    timestamp: String!
+    totalValue: Float!
+    totalCost: Float!
+    totalPnl: Float!
+    totalPnlPercent: Float!
+  }
 
   type Query {
     portfolio: PortfolioSnapshot
     positions: [Position!]!
+    portfolioHistory: [PortfolioHistoryPoint!]!
     enrichedSnapshot: EnrichedSnapshot
     riskReport: RiskReport
     alerts(status: AlertStatus): [Alert!]!
     news(symbol: String, limit: Int): [Article!]!
     quote(symbol: String!): Quote
     sectorExposure: [SectorWeight!]!
+    listConnections: [Connection!]!
+    detectAvailableTiers(platform: Platform!): [TierAvailability!]!
   }
 
   type Mutation {
@@ -289,6 +355,8 @@ export const typeDefs = /* GraphQL */ `
     createAlert(rule: AlertRuleInput!): Alert!
     dismissAlert(id: ID!): Alert!
     sendMessage(threadId: String!, message: String!, imageBase64: String, imageMediaType: String): SendMessagePayload!
+    connectPlatform(input: ConnectPlatformInput!): ConnectionResult!
+    disconnectPlatform(platform: Platform!, removeCredentials: Boolean = false): ConnectionResult!
   }
 
   type Subscription {
@@ -296,5 +364,6 @@ export const typeDefs = /* GraphQL */ `
     onPortfolioUpdate: PortfolioSnapshot!
     onPriceMove(symbol: String!, threshold: Float!): PriceEvent!
     onChatMessage(threadId: String!): ChatEvent!
+    onConnectionStatus(platform: Platform!): ConnectionEvent!
   }
 `;

@@ -10,6 +10,8 @@ import { z } from 'zod';
 
 import { createDefaultProfiles } from './agents/defaults.js';
 import { AgentRegistry } from './agents/registry.js';
+import { pubsub } from './api/graphql/pubsub.js';
+import { setConnectionManager } from './api/graphql/resolvers/connections.js';
 import { BrainStore } from './brain/brain.js';
 import { EmotionTracker } from './brain/emotion.js';
 import { FrontalLobe } from './brain/frontal-lobe.js';
@@ -28,6 +30,9 @@ import type { PostureName } from './guards/types.js';
 import { getLogger } from './logging/index.js';
 import { PluginRegistry } from './plugins/registry.js';
 import { PortfolioSnapshotStore } from './portfolio/snapshot-store.js';
+import { createPlatformTools } from './scraper/adapter.js';
+import { ConnectionManager } from './scraper/connection-manager.js';
+import { loadCredentialLookup } from './scraper/platform-credentials.js';
 import { createApiHealthTools } from './tools/api-health.js';
 import { createBrainTools } from './tools/brain-tools.js';
 import { createErrorAnalysisTools } from './tools/error-analysis.js';
@@ -60,6 +65,7 @@ export interface YojinServices {
   outputDlp: OutputDlpGuard;
   auditLog: FileAuditLog;
   vault?: EncryptedVault;
+  connectionManager?: ConnectionManager;
   pluginRegistry: PluginRegistry;
   dataSourceRegistry: DataSourceRegistry;
   personaManager: PersonaManager;
@@ -80,7 +86,7 @@ export interface YojinServices {
  * Read a passphrase from TTY with echo disabled.
  * Prompts on stderr so the LLM (reading stdout) never sees it.
  */
-async function readPassphraseFromTty(prompt: string): Promise<string> {
+export async function readPassphraseFromTty(prompt: string): Promise<string> {
   process.stderr.write(prompt);
 
   return new Promise((resolve, reject) => {
@@ -187,6 +193,22 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     }
   }
 
+  // 4b. ConnectionManager (requires vault)
+  let connectionManager: ConnectionManager | undefined;
+  if (vault) {
+    const credentialLookup = await loadCredentialLookup(`${dataRoot}/data/config/platform-credentials.json`);
+    connectionManager = new ConnectionManager({
+      vault,
+      pubsub,
+      auditLog,
+      configPath: `${dataRoot}/data/config/connections.json`,
+      statePath: `${dataRoot}/data/cache/connection-state.json`,
+      credentialLookup,
+    });
+    setConnectionManager(connectionManager);
+    log.info('ConnectionManager ready');
+  }
+
   // 5. Brain
   const brain = new BrainStore(dataRoot);
   const frontalLobe = new FrontalLobe(brain, dataRoot);
@@ -248,6 +270,13 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     toolRegistry.register(tool);
   }
 
+  // Platform tools (3 tools if ConnectionManager available)
+  if (connectionManager) {
+    for (const tool of createPlatformTools(connectionManager)) {
+      toolRegistry.register(tool);
+    }
+  }
+
   const toolCount = toolRegistry.toSchemas().length;
   log.info(`ToolRegistry ready — ${toolCount} tools registered`);
 
@@ -275,6 +304,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     outputDlp,
     auditLog,
     vault,
+    connectionManager,
     pluginRegistry,
     dataSourceRegistry,
     personaManager: persona,

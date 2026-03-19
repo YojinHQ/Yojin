@@ -455,7 +455,7 @@ describe('Zod schemas', () => {
     });
 
     it('rejects invalid platforms', () => {
-      expect(PlatformSchema.safeParse('BINANCE').success).toBe(false);
+      expect(PlatformSchema.safeParse('KRAKEN').success).toBe(false);
       expect(PlatformSchema.safeParse('').success).toBe(false);
       expect(PlatformSchema.safeParse(123).success).toBe(false);
     });

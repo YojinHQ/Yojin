@@ -11,8 +11,8 @@ import type {
   AssetClass,
   EnrichedPosition,
   EnrichedSnapshot,
-  ManualPositionInput,
   Platform,
+  PortfolioHistoryPoint,
   PortfolioSnapshot,
   Position,
 } from '../types.js';
@@ -57,6 +57,18 @@ export async function positionsQuery(): Promise<Position[]> {
   return snapshot.positions;
 }
 
+export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> {
+  if (!snapshotStore) return [];
+  const snapshots = await snapshotStore.getAll();
+  return snapshots.map((s) => ({
+    timestamp: s.timestamp,
+    totalValue: s.totalValue,
+    totalCost: s.totalCost,
+    totalPnl: s.totalPnl,
+    totalPnlPercent: s.totalPnlPercent,
+  }));
+}
+
 export async function enrichedSnapshotQuery(): Promise<EnrichedSnapshot> {
   const snapshot = await getSnapshot();
   const enriched: EnrichedPosition[] = snapshot.positions.map((p) => ({
@@ -87,6 +99,15 @@ export async function enrichedSnapshotQuery(): Promise<EnrichedSnapshot> {
 // ---------------------------------------------------------------------------
 // Mutation resolvers
 // ---------------------------------------------------------------------------
+
+interface ManualPositionInput {
+  symbol: string;
+  name?: string;
+  quantity: number;
+  costBasis: number;
+  assetClass?: string;
+  platform?: string;
+}
 
 export async function addManualPositionMutation(
   _parent: unknown,

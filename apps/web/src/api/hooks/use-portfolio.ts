@@ -3,6 +3,7 @@ import { useQuery, useMutation } from 'urql';
 import {
   PORTFOLIO_QUERY,
   POSITIONS_QUERY,
+  PORTFOLIO_HISTORY_QUERY,
   ENRICHED_SNAPSHOT_QUERY,
   REFRESH_POSITIONS_MUTATION,
   ADD_MANUAL_POSITION_MUTATION,
@@ -10,6 +11,7 @@ import {
 import type {
   PortfolioQueryResult,
   PositionsQueryResult,
+  PortfolioHistoryQueryResult,
   EnrichedSnapshotQueryResult,
   RefreshPositionsMutationResult,
   RefreshPositionsVariables,
@@ -25,6 +27,11 @@ export function usePortfolio() {
 /** Flat list of all positions across platforms. */
 export function usePositions() {
   return useQuery<PositionsQueryResult>({ query: POSITIONS_QUERY });
+}
+
+/** Historical portfolio snapshots for charting total value, P&L over time. */
+export function usePortfolioHistory() {
+  return useQuery<PortfolioHistoryQueryResult>({ query: PORTFOLIO_HISTORY_QUERY });
 }
 
 /** Enriched snapshot — positions augmented with sentiment, analyst data, fundamentals. */

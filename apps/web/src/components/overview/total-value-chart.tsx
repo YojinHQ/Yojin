@@ -1,13 +1,66 @@
 import { useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { timeRanges, RANGE_DAYS, generateMockData, tooltipStyle, formatValue } from '../../lib/mock-chart-data';
-import type { TimeRange } from '../../lib/mock-chart-data';
+import { tooltipStyle, formatValue } from '../../lib/mock-chart-data';
+import { usePortfolioHistory } from '../../api';
+import Spinner from '../common/spinner';
+
+const timeRanges = ['1W', '1M', '3M', '1Y', 'ALL'] as const;
+type TimeRange = (typeof timeRanges)[number];
+
+const RANGE_DAYS: Record<TimeRange, number> = {
+  '1W': 7,
+  '1M': 30,
+  '3M': 90,
+  '1Y': 365,
+  ALL: Infinity,
+};
 
 export default function TotalValueChart() {
-  const [activeRange, setActiveRange] = useState<TimeRange>('1M');
-  const chartData = useMemo(() => generateMockData(RANGE_DAYS[activeRange]), [activeRange]);
+  const [activeRange, setActiveRange] = useState<TimeRange>('ALL');
+  const [{ data, fetching, error }] = usePortfolioHistory();
+
+  const chartData = useMemo(() => {
+    const history = data?.portfolioHistory ?? [];
+    if (history.length === 0) return [];
+
+    const days = RANGE_DAYS[activeRange];
+    if (days === Infinity) {
+      return history.map((p) => ({
+        date: new Date(p.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        value: p.totalValue,
+      }));
+    }
+
+    const latest = new Date(history[history.length - 1].timestamp).getTime();
+    const cutoff = latest - days * 24 * 60 * 60 * 1000;
+    return history
+      .filter((p) => new Date(p.timestamp).getTime() >= cutoff)
+      .map((p) => ({
+        date: new Date(p.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        value: p.totalValue,
+      }));
+  }, [data?.portfolioHistory, activeRange]);
+
   const baselineValue = chartData[0]?.value ?? 0;
+
+  if (fetching) {
+    return (
+      <div className="flex min-h-[120px] flex-[1.5] items-center justify-center rounded-lg border border-border bg-bg-card">
+        <Spinner size="sm" />
+      </div>
+    );
+  }
+
+  if (error || chartData.length === 0) {
+    return (
+      <div className="flex min-h-[120px] flex-[1.5] flex-col items-center justify-center rounded-lg border border-border bg-bg-card px-3 pt-2 pb-1">
+        <h3 className="text-2xs font-medium text-text-primary uppercase tracking-wider mb-2">Total Value</h3>
+        <p className="text-xs text-text-muted">No history available</p>
+        <p className="mt-0.5 text-2xs text-text-muted/60">Import portfolio snapshots to see value over time</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[120px] flex-[1.5] flex-col rounded-lg border border-border bg-bg-card px-3 pt-2 pb-1">
@@ -50,7 +103,7 @@ export default function TotalValueChart() {
               axisLine={false}
               tickLine={false}
               width={40}
-              domain={['dataMin - 2000', 'dataMax + 2000']}
+              domain={['dataMin - 200', 'dataMax + 200']}
               tickFormatter={(val: number) => `$${(val / 1000).toFixed(0)}k`}
             />
             <ReferenceLine
