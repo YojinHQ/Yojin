@@ -2,7 +2,7 @@
  * Brain — git-like versioned cognitive state for the Strategist agent.
  *
  * Every state change (frontal lobe update, emotion shift) creates a versioned
- * snapshot stored as JSONL in data/brain/commits.jsonl.
+ * snapshot stored as JSONL in brain/commits.jsonl (relative to data root ~/.yojin/).
  */
 
 import { createHash } from 'node:crypto';
@@ -12,7 +12,7 @@ import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import type { BrainCommit, Brain as BrainInterface } from './types.js';
 import { BrainCommitSchema } from './types.js';
 
-const BRAIN_DIR = 'data/brain';
+const BRAIN_DIR = 'brain';
 const COMMITS_FILE = `${BRAIN_DIR}/commits.jsonl`;
 
 function computeHash(content: string, timestamp: string): string {

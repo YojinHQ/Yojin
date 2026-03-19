@@ -4,7 +4,7 @@
  * When tripped, ALL actions are denied until manually reset.
  * Triggered by:
  *   - Environment variable YOJIN_KILL_SWITCH=1
- *   - Sentinel file existence (e.g. data/.kill)
+ *   - Sentinel file existence (e.g. .kill in data root ~/.yojin/)
  *   - Programmatic trip via trip()
  *
  * Always runs first in the pipeline.
@@ -30,7 +30,7 @@ export class KillSwitch implements Guard {
 
   constructor(options?: KillSwitchOptions) {
     this.envVar = options?.envVar ?? 'YOJIN_KILL_SWITCH';
-    this.sentinelPath = options?.sentinelPath ?? 'data/.kill';
+    this.sentinelPath = options?.sentinelPath ?? '.kill';
   }
 
   check(_action: ProposedAction): GuardResult {

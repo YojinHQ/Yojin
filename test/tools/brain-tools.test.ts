@@ -2,7 +2,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../src/paths.js', () => ({
+  resolveDefaultsRoot: () => join(tmpDir, 'defaults'),
+}));
 
 import { BrainStore } from '../../src/brain/brain.js';
 import { EmotionTracker } from '../../src/brain/emotion.js';

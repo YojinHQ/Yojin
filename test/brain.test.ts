@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BrainStore } from '../src/brain/brain.js';
 import { EmotionTracker } from '../src/brain/emotion.js';
@@ -10,10 +10,17 @@ import { FrontalLobe } from '../src/brain/frontal-lobe.js';
 import { PersonaManager, loadAgentPrompt } from '../src/brain/persona.js';
 import { DEFAULT_EMOTION_VALUES } from '../src/brain/types.js';
 
+vi.mock('../src/paths.js', () => ({
+  resolveDefaultsRoot: () => defaultsRoot,
+}));
+
+let defaultsRoot: string;
+
 let tmpDir: string;
 
 beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), 'brain-test-'));
+  defaultsRoot = join(tmpDir, 'defaults');
 });
 
 afterEach(async () => {
@@ -98,7 +105,7 @@ describe('BrainStore', () => {
     const brain = new BrainStore(tmpDir);
     await brain.commit('persist test', 'manual', { v: 1 });
 
-    const raw = await readFile(join(tmpDir, 'data/brain/commits.jsonl'), 'utf-8');
+    const raw = await readFile(join(tmpDir, 'brain/commits.jsonl'), 'utf-8');
     const lines = raw.trim().split('\n');
     expect(lines).toHaveLength(1);
 
@@ -201,7 +208,7 @@ describe('EmotionTracker', () => {
     const brain = new BrainStore(tmpDir);
     const tracker = new EmotionTracker(brain, tmpDir);
 
-    const emotionDir = join(tmpDir, 'data/brain');
+    const emotionDir = join(tmpDir, 'brain');
     await mkdir(emotionDir, { recursive: true });
     await writeFile(join(emotionDir, 'emotion.json'), '{ invalid json }', 'utf-8');
 
@@ -238,16 +245,15 @@ describe('PersonaManager', () => {
   it('auto-copies default to override on first read', async () => {
     const mgr = new PersonaManager(tmpDir);
 
-    // Create the default file
-    const defaultDir = join(tmpDir, 'data/default');
-    await mkdir(defaultDir, { recursive: true });
-    await writeFile(join(defaultDir, 'persona.default.md'), '# Conservative Analyst\n');
+    // Create the default file in the defaults root
+    await mkdir(defaultsRoot, { recursive: true });
+    await writeFile(join(defaultsRoot, 'persona.default.md'), '# Conservative Analyst\n');
 
     const persona = await mgr.getPersona();
     expect(persona).toBe('# Conservative Analyst\n');
 
     // Override should now exist
-    const overrideContent = await readFile(join(tmpDir, 'data/brain/persona.md'), 'utf-8');
+    const overrideContent = await readFile(join(tmpDir, 'brain/persona.md'), 'utf-8');
     expect(overrideContent).toBe('# Conservative Analyst\n');
   });
 
@@ -262,9 +268,8 @@ describe('PersonaManager', () => {
   it('override takes priority over default', async () => {
     const mgr = new PersonaManager(tmpDir);
 
-    const defaultDir = join(tmpDir, 'data/default');
-    await mkdir(defaultDir, { recursive: true });
-    await writeFile(join(defaultDir, 'persona.default.md'), '# Default\n');
+    await mkdir(defaultsRoot, { recursive: true });
+    await writeFile(join(defaultsRoot, 'persona.default.md'), '# Default\n');
 
     await mgr.setPersona('# Custom Override\n');
 
@@ -275,9 +280,8 @@ describe('PersonaManager', () => {
   it('resetPersona removes override, falls back to default', async () => {
     const mgr = new PersonaManager(tmpDir);
 
-    const defaultDir = join(tmpDir, 'data/default');
-    await mkdir(defaultDir, { recursive: true });
-    await writeFile(join(defaultDir, 'persona.default.md'), '# Default\n');
+    await mkdir(defaultsRoot, { recursive: true });
+    await writeFile(join(defaultsRoot, 'persona.default.md'), '# Default\n');
 
     await mgr.setPersona('# Override\n');
     await mgr.resetPersona();
@@ -294,7 +298,7 @@ describe('PersonaManager', () => {
 
 describe('loadAgentPrompt', () => {
   it('loads from default path', async () => {
-    const agentDir = join(tmpDir, 'data/default/agents');
+    const agentDir = join(defaultsRoot, 'agents');
     await mkdir(agentDir, { recursive: true });
     await writeFile(join(agentDir, 'strategist.default.md'), '# Strategist\nYou decide.\n');
 
@@ -303,8 +307,8 @@ describe('loadAgentPrompt', () => {
   });
 
   it('override takes priority over default', async () => {
-    const defaultDir = join(tmpDir, 'data/default/agents');
-    const overrideDir = join(tmpDir, 'data/brain/agents');
+    const defaultDir = join(defaultsRoot, 'agents');
+    const overrideDir = join(tmpDir, 'brain/agents');
     await mkdir(defaultDir, { recursive: true });
     await mkdir(overrideDir, { recursive: true });
 

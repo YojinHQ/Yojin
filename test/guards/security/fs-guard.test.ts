@@ -67,12 +67,12 @@ describe('FsGuard', () => {
     });
 
     it('allows reading audit log', () => {
-      const result = guard.check(readAction('data/audit/security.jsonl'));
+      const result = guard.check(readAction(`${HOME}/.yojin/audit/security.jsonl`));
       expect(result.pass).toBe(true);
     });
 
     it('blocks writing to audit log', () => {
-      const result = guard.check(writeAction('data/audit/security.jsonl'));
+      const result = guard.check(writeAction(`${HOME}/.yojin/audit/security.jsonl`));
       expect(result.pass).toBe(false);
     });
   });
@@ -103,6 +103,12 @@ describe('FsGuard', () => {
       const custom = new FsGuard({ blockedPaths: ['/legacy/blocked'] });
       expect(custom.check(readAction('/legacy/blocked/file.txt')).pass).toBe(false);
       expect(custom.check(writeAction('/legacy/blocked/file.txt')).pass).toBe(false);
+    });
+
+    it('uses auditPath option for write-blocking when provided', () => {
+      const guard = new FsGuard({ auditPath: '/home/user/.yojin/audit' });
+      const result = guard.check({ type: 'file_write', path: '/home/user/.yojin/audit/security.jsonl' });
+      expect(result.pass).toBe(false);
     });
   });
 });

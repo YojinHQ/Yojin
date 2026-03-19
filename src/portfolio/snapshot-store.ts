@@ -1,9 +1,9 @@
 /**
  * PortfolioSnapshotStore — JSONL-backed persistence for portfolio snapshots.
  *
- * Each snapshot is appended as a single JSON line to `data/snapshots/portfolio.jsonl`.
- * The latest snapshot is the current portfolio state. Historical snapshots are preserved
- * for tracking changes over time.
+ * Each snapshot is appended as a single JSON line to `snapshots/portfolio.jsonl`
+ * (relative to data root ~/.yojin/). The latest snapshot is the current portfolio state.
+ * Historical snapshots are preserved for tracking changes over time.
  *
  * File format:
  *   Each line: JSON object with id, positions, totals, metadata, and timestamp.
@@ -27,7 +27,7 @@ export class PortfolioSnapshotStore {
   private readonly filePath: string;
 
   constructor(dataRoot: string) {
-    this.filePath = join(dataRoot, 'data', 'snapshots', 'portfolio.jsonl');
+    this.filePath = join(dataRoot, 'snapshots', 'portfolio.jsonl');
   }
 
   /** Append a new snapshot. Returns the saved snapshot with computed totals. */

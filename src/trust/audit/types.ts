@@ -2,7 +2,7 @@
  * Security audit log types and Zod schemas.
  *
  * All security events are validated against these schemas before being
- * appended to the immutable audit log (data/audit/security.jsonl).
+ * appended to the immutable audit log (audit/security.jsonl, relative to data root).
  */
 
 import { z } from 'zod';

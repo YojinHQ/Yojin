@@ -13,7 +13,7 @@ export const TrustConfigSchema = z.object({
   /** Vault configuration. */
   vault: z
     .object({
-      path: z.string().default('data/config/vault.enc.json'),
+      path: z.string().default('vault/secrets.json'),
     })
     .default({}),
   /** Approval gate configuration. */

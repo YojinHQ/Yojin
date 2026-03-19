@@ -17,6 +17,11 @@
   "bin": {
     "yojin": "./yojin.mjs"
   },
+  "files": [
+    "dist/",
+    "data/default/",
+    "yojin.mjs"
+  ],
   "exports": {
     ".": "./dist/src/index.js",
     "./plugin-sdk": "./dist/src/plugin-sdk/index.js",

@@ -59,7 +59,7 @@ export class AgentRegistry {
    * Load a profile with its system prompt resolved from Markdown files.
    *
    * Uses `loadAgentPrompt()` from `src/brain/persona.ts` which follows
-   * the default/override pattern (data/default/agents/ → data/brain/agents/).
+   * the default/override pattern (package defaults → brain/agents/ in data root).
    */
   async loadProfile(id: string, dataRoot = '.'): Promise<LoadedAgentProfile> {
     const profile = this.profiles.get(id);

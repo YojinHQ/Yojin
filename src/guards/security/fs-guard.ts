@@ -2,7 +2,7 @@
  * FsGuard — blocks file access to sensitive system paths.
  *
  * Separates read-blocked paths (always blocked, e.g. ~/.ssh private keys)
- * from write-blocked paths (block writes only, e.g. /etc/hosts, data/audit/).
+ * from write-blocked paths (block writes only, e.g. /etc/hosts, audit/).
  *
  * Read-blocked paths block ALL access (read + write).
  * Write-blocked paths only block writes — reads are allowed.
@@ -12,6 +12,7 @@ import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
+import { resolveDataRoot } from '../../paths.js';
 import type { Guard, GuardResult, ProposedAction } from '../types.js';
 
 const HOME = homedir();
@@ -27,17 +28,19 @@ const DEFAULT_READ_BLOCKED_PATHS = [
 ];
 
 /** Paths where only writes are blocked (reads are fine). */
-const DEFAULT_WRITE_BLOCKED_PATHS = ['/etc/passwd', '/etc/hosts', 'data/audit'];
+const DEFAULT_WRITE_BLOCKED_PATHS = ['/etc/passwd', '/etc/hosts'];
 
 const WRITE_ACTION_TYPES = new Set(['file_write', 'file_delete', 'file_modify', 'file_create']);
 
 export interface FsGuardOptions {
   /** Paths where ALL access is blocked (default: ~/.ssh, ~/.aws, etc.). */
   readBlockedPaths?: string[];
-  /** Paths where only writes are blocked (default: /etc/passwd, data/audit/). */
+  /** Paths where only writes are blocked (default: /etc/passwd, /etc/hosts). */
   writeBlockedPaths?: string[];
   /** Legacy: treated as readBlockedPaths for backward compatibility. */
   blockedPaths?: string[];
+  /** Resolved audit directory path to write-block. Defaults to resolveDataRoot()/audit. */
+  auditPath?: string;
 }
 
 export class FsGuard implements Guard {
@@ -48,7 +51,8 @@ export class FsGuard implements Guard {
   constructor(options?: FsGuardOptions) {
     // Support legacy blockedPaths option
     const readPaths = options?.readBlockedPaths ?? options?.blockedPaths ?? DEFAULT_READ_BLOCKED_PATHS;
-    const writePaths = options?.writeBlockedPaths ?? DEFAULT_WRITE_BLOCKED_PATHS;
+    const auditPath = options?.auditPath ?? `${resolveDataRoot()}/audit`;
+    const writePaths = [...(options?.writeBlockedPaths ?? DEFAULT_WRITE_BLOCKED_PATHS), auditPath];
 
     this.readBlockedPaths = readPaths.map((p) => this.resolvePath(p));
     this.writeBlockedPaths = writePaths.map((p) => this.resolvePath(p));

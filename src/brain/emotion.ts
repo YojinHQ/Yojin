@@ -3,7 +3,7 @@
  *
  * Each emotion state includes a reason explaining why it changed
  * (e.g., "VIX spike to 35 → lowered confidence"). Stored as JSON
- * at data/brain/emotion.json, auto-commits on every update.
+ * at brain/emotion.json (relative to data root ~/.yojin/), auto-commits on every update.
  */
 
 import { existsSync } from 'node:fs';
@@ -14,7 +14,7 @@ import { BrainStore } from './brain.js';
 import type { BrainCommit, EmotionState, EmotionTracker as EmotionTrackerInterface } from './types.js';
 import { EmotionStateSchema, createDefaultEmotion } from './types.js';
 
-const EMOTION_FILE = 'data/brain/emotion.json';
+const EMOTION_FILE = 'brain/emotion.json';
 
 export class EmotionTracker implements EmotionTrackerInterface {
   private readonly filePath: string;

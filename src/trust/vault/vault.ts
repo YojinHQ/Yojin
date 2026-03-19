@@ -13,6 +13,7 @@ import { promisify } from 'node:util';
 
 import type { SecretVault, VaultFile } from './types.js';
 import { VaultFileSchema } from './types.js';
+import { resolveDataRoot } from '../../paths.js';
 import type { AuditLog } from '../audit/types.js';
 
 const pbkdf2Async = promisify(pbkdf2);
@@ -36,7 +37,7 @@ export class EncryptedVault implements SecretVault {
   private vaultData: VaultFile | null = null;
 
   constructor(options: VaultOptions) {
-    this.vaultPath = options.vaultPath ?? 'data/config/vault.enc.json';
+    this.vaultPath = options.vaultPath ?? `${resolveDataRoot()}/vault/secrets.json`;
     this.auditLog = options.auditLog;
   }
 

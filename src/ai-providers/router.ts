@@ -2,6 +2,7 @@ import { type AIProvider, type AIProviderConfig, AIProviderConfigSchema } from '
 import { loadJsonConfig } from '../config/config.js';
 import type { AgentMessage, ContentBlock, ToolSchema } from '../core/types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
+import { resolveDataRoot } from '../paths.js';
 
 const logger = createSubsystemLogger('provider-router');
 
@@ -16,7 +17,7 @@ export class ProviderRouter {
   private refreshTimer?: ReturnType<typeof setInterval>;
 
   constructor(options: ProviderRouterOptions = {}) {
-    this.configPath = options.configPath ?? 'data/config/ai-provider.json';
+    this.configPath = options.configPath ?? `${resolveDataRoot()}/config/ai-provider.json`;
   }
 
   registerBackend(provider: AIProvider): void {

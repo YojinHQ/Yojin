@@ -2,7 +2,7 @@
  * Platform credential requirements — which credentials each tier needs per platform.
  *
  * Hardcoded defaults for known platforms, overridable via
- * data/config/platform-credentials.json (config wins on conflict).
+ * config/platform-credentials.json (relative to data root ~/.yojin/, config wins on conflict).
  */
 
 import { readFile } from 'node:fs/promises';
@@ -75,7 +75,7 @@ export function mergeCredentialOverrides(
 
 /**
  * Load credential requirements with optional config overrides.
- * Reads data/config/platform-credentials.json if it exists.
+ * Reads config/platform-credentials.json (relative to data root) if it exists.
  */
 export async function loadCredentialLookup(configPath: string): Promise<CredentialLookup> {
   try {
