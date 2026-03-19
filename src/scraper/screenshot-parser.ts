@@ -7,28 +7,21 @@ import {
   type ExtractedPosition,
   type ExtractionMetadata,
   ExtractionResponseSchema,
+  type ParseScreenshotParams,
   type PositionConfidence,
   type ScreenshotParseResult,
 } from './types.js';
 import type { Platform } from '../api/graphql/types.js';
-import type { AgentLoopProvider, AgentMessage } from '../core/types.js';
+import type { AgentMessage } from '../core/types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
+
+export type { ParseScreenshotParams } from './types.js';
 
 const logger = createSubsystemLogger('screenshot-parser');
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-
-export interface ParseScreenshotParams {
-  imageData: Buffer;
-  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
-  provider: AgentLoopProvider;
-  model: string;
-  platformHint?: Platform;
-  /** Max tokens for the vision response (default 4096). */
-  maxTokens?: number;
-}
 
 export async function parsePortfolioScreenshot(params: ParseScreenshotParams): Promise<ScreenshotParseResult> {
   const { imageData, mediaType, provider, model, platformHint, maxTokens = 4096 } = params;

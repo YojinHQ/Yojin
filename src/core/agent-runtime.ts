@@ -12,7 +12,13 @@
 import { runAgentLoop } from './agent-loop.js';
 import type { EventLog } from './event-log.js';
 import type { ToolRegistry } from './tool-registry.js';
-import type { AgentLoopEventHandler, AgentLoopProvider, AgentMessage, ToolDefinition } from './types.js';
+import type {
+  AgentLoopEventHandler,
+  AgentLoopProvider,
+  AgentMessage,
+  ImageMediaType,
+  ToolDefinition,
+} from './types.js';
 import type { AgentRegistry } from '../agents/registry.js';
 import type { AgentProfile, AgentStepResult } from '../agents/types.js';
 import type { EmotionTracker, FrontalLobe, PersonaManager } from '../brain/types.js';
@@ -164,7 +170,7 @@ export class AgentRuntime {
     /** Optional base64-encoded image to include with the message. */
     imageBase64?: string;
     /** MIME type of the image (required when imageBase64 is provided). */
-    imageMediaType?: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+    imageMediaType?: ImageMediaType;
     abortSignal?: AbortSignal;
   }): Promise<string> {
     const model = DEFAULT_MODEL;

@@ -1,7 +1,7 @@
 import { useCallback, useRef, useEffect } from 'react';
 import MorningBriefing from '../components/chat/morning-briefing';
 import QueryBuilder from '../components/chat/query-builder';
-import ChatInput, { type ImageAttachment } from '../components/chat/chat-input';
+import ChatInput from '../components/chat/chat-input';
 import ChatMessage from '../components/chat/chat-message';
 import { useChatContext } from '../lib/chat-context';
 
@@ -106,11 +106,7 @@ export default function Chat() {
       {/* Chat input */}
       <div className="px-6 pb-6">
         <div className="mx-auto max-w-3xl">
-          <ChatInput
-            onSend={(message: string, image?: ImageAttachment) =>
-              sendMessage(message, image ? { base64: image.base64, mediaType: image.mediaType } : undefined)
-            }
-          />
+          <ChatInput onSend={sendMessage} />
         </div>
       </div>
     </div>

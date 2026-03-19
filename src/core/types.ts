@@ -82,11 +82,13 @@ export interface ToolResultBlock {
   is_error?: boolean;
 }
 
+export type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+
 export interface ImageBlock {
   type: 'image';
   source: {
     type: 'base64';
-    media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+    media_type: ImageMediaType;
     data: string;
   };
 }

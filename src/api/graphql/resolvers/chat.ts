@@ -6,7 +6,7 @@
  */
 
 import type { AgentRuntime } from '../../../core/agent-runtime.js';
-import type { AgentLoopEvent } from '../../../core/types.js';
+import type { AgentLoopEvent, ImageMediaType } from '../../../core/types.js';
 import { pubsub } from '../pubsub.js';
 import type { ChatEvent } from '../types.js';
 
@@ -21,7 +21,12 @@ export function setChatAgentRuntime(agentRuntime: AgentRuntime): void {
 // Mutation: sendMessage
 // ---------------------------------------------------------------------------
 
-const VALID_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+const VALID_IMAGE_TYPES: ReadonlySet<string> = new Set<ImageMediaType>([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]);
 
 export function sendMessageMutation(
   _parent: unknown,
@@ -53,9 +58,7 @@ export function sendMessageMutation(
           `Unsupported image type: ${imageMediaType ?? 'none'}. Accepted: image/jpeg, image/png, image/gif, image/webp`,
         );
       }
-      const validatedImageType = imageBase64
-        ? (imageMediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp')
-        : undefined;
+      const validatedImageType = imageBase64 ? (imageMediaType as ImageMediaType) : undefined;
 
       // runtime is guaranteed non-null — checked above before the void IIFE
       await (runtime as AgentRuntime).handleMessage({

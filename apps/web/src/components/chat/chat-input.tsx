@@ -1,9 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import Button from '../common/button';
+import type { ChatImageData } from '../../lib/chat-context';
 
-export interface ImageAttachment {
-  base64: string;
-  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+export interface ImageAttachment extends ChatImageData {
   preview: string;
   name: string;
 }
