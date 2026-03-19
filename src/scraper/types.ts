@@ -8,7 +8,7 @@
 
 import { z } from 'zod';
 
-import type { Platform } from '../api/graphql/types.js';
+import { KNOWN_PLATFORMS, type Platform } from '../api/graphql/types.js';
 import type { AgentLoopProvider, ImageMediaType } from '../core/types.js';
 
 // ---------------------------------------------------------------------------
@@ -17,17 +17,11 @@ import type { AgentLoopProvider, ImageMediaType } from '../core/types.js';
 
 export const AssetClassSchema = z.enum(['EQUITY', 'CRYPTO', 'BOND', 'COMMODITY', 'CURRENCY', 'OTHER']);
 
-export const PlatformSchema = z.enum([
-  'INTERACTIVE_BROKERS',
-  'ROBINHOOD',
-  'COINBASE',
-  'SCHWAB',
-  'BINANCE',
-  'FIDELITY',
-  'POLYMARKET',
-  'PHANTOM',
-  'MANUAL',
-]);
+/** Accepts known platforms or any non-empty custom string. */
+export const PlatformSchema = z.string().min(1) as z.ZodType<Platform>;
+
+/** Re-export for consumers that only need the Zod enum of known values. */
+export const KnownPlatformSchema = z.enum(KNOWN_PLATFORMS);
 
 export const IntegrationTierSchema = z.enum(['CLI', 'API', 'UI', 'SCREENSHOT']);
 

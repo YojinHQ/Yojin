@@ -224,7 +224,7 @@ export const NEWS_QUERY = gql`
 // ---------------------------------------------------------------------------
 
 export const REFRESH_POSITIONS_MUTATION = gql`
-  mutation RefreshPositions($platform: Platform!) {
+  mutation RefreshPositions($platform: String!) {
     refreshPositions(platform: $platform) {
       id
       positions {

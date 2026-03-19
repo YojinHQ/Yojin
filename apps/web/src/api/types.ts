@@ -10,7 +10,30 @@
 // ---------------------------------------------------------------------------
 
 export type AssetClass = 'EQUITY' | 'CRYPTO' | 'BOND' | 'COMMODITY' | 'CURRENCY' | 'OTHER';
-export type Platform = 'INTERACTIVE_BROKERS' | 'ROBINHOOD' | 'COINBASE' | 'SCHWAB' | 'BINANCE' | 'FIDELITY' | 'MANUAL';
+
+/** Platforms with first-class support (branding, credentials, connectors). */
+export const KNOWN_PLATFORMS = [
+  'INTERACTIVE_BROKERS',
+  'ROBINHOOD',
+  'COINBASE',
+  'SCHWAB',
+  'BINANCE',
+  'FIDELITY',
+  'POLYMARKET',
+  'PHANTOM',
+  'MANUAL',
+] as const;
+
+export type KnownPlatform = (typeof KNOWN_PLATFORMS)[number];
+
+/** A known platform or any custom string (e.g. "Alpaca", "OKX"). */
+ 
+export type Platform = KnownPlatform | (string & {});
+
+/** Type guard — true for first-class platforms, false for custom strings. */
+export function isKnownPlatform(value: string): value is KnownPlatform {
+  return (KNOWN_PLATFORMS as readonly string[]).includes(value);
+}
 export type AlertStatus = 'ACTIVE' | 'TRIGGERED' | 'DISMISSED';
 export type AlertRuleType =
   | 'PRICE_MOVE'

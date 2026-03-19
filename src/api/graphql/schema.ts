@@ -16,17 +16,10 @@ export const typeDefs = /* GraphQL */ `
     OTHER
   }
 
-  enum Platform {
-    INTERACTIVE_BROKERS
-    ROBINHOOD
-    COINBASE
-    SCHWAB
-    BINANCE
-    FIDELITY
-    POLYMARKET
-    PHANTOM
-    MANUAL
-  }
+  # Platform is a String (not an enum) to support custom user-defined platforms.
+  # Known platforms: INTERACTIVE_BROKERS, ROBINHOOD, COINBASE, SCHWAB, BINANCE,
+  # FIDELITY, POLYMARKET, PHANTOM, MANUAL.
+  # Any other value is treated as a custom platform.
 
   enum AlertStatus {
     ACTIVE
@@ -63,7 +56,7 @@ export const typeDefs = /* GraphQL */ `
     unrealizedPnlPercent: Float!
     sector: String
     assetClass: AssetClass!
-    platform: Platform!
+    platform: String!
   }
 
   type PortfolioSnapshot {
@@ -74,7 +67,7 @@ export const typeDefs = /* GraphQL */ `
     totalPnl: Float!
     totalPnlPercent: Float!
     timestamp: String!
-    platform: Platform
+    platform: String
   }
 
   # ---------------------------------------------------------------------------
@@ -92,7 +85,7 @@ export const typeDefs = /* GraphQL */ `
     unrealizedPnlPercent: Float!
     sector: String
     assetClass: AssetClass!
-    platform: Platform!
+    platform: String!
     sentimentScore: Float
     sentimentLabel: String
     analystRating: String
@@ -267,7 +260,7 @@ export const typeDefs = /* GraphQL */ `
     quantity: Float!
     costBasis: Float!
     assetClass: AssetClass
-    platform: Platform
+    platform: String
   }
 
   # ---------------------------------------------------------------------------
@@ -289,7 +282,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   input ConnectPlatformInput {
-    platform: Platform!
+    platform: String!
     tier: IntegrationTier
   }
 
@@ -300,7 +293,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type Connection {
-    platform: Platform!
+    platform: String!
     tier: IntegrationTier!
     status: ConnectionStatus!
     lastSync: String
@@ -316,7 +309,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type ConnectionEvent {
-    platform: Platform!
+    platform: String!
     step: String!
     message: String!
     tier: IntegrationTier
@@ -346,17 +339,17 @@ export const typeDefs = /* GraphQL */ `
     quote(symbol: String!): Quote
     sectorExposure: [SectorWeight!]!
     listConnections: [Connection!]!
-    detectAvailableTiers(platform: Platform!): [TierAvailability!]!
+    detectAvailableTiers(platform: String!): [TierAvailability!]!
   }
 
   type Mutation {
-    refreshPositions(platform: Platform!): PortfolioSnapshot!
+    refreshPositions(platform: String!): PortfolioSnapshot!
     addManualPosition(input: ManualPositionInput!): PortfolioSnapshot!
     createAlert(rule: AlertRuleInput!): Alert!
     dismissAlert(id: ID!): Alert!
     sendMessage(threadId: String!, message: String!, imageBase64: String, imageMediaType: String): SendMessagePayload!
     connectPlatform(input: ConnectPlatformInput!): ConnectionResult!
-    disconnectPlatform(platform: Platform!, removeCredentials: Boolean = false): ConnectionResult!
+    disconnectPlatform(platform: String!, removeCredentials: Boolean = false): ConnectionResult!
   }
 
   type Subscription {
@@ -364,6 +357,6 @@ export const typeDefs = /* GraphQL */ `
     onPortfolioUpdate: PortfolioSnapshot!
     onPriceMove(symbol: String!, threshold: Float!): PriceEvent!
     onChatMessage(threadId: String!): ChatEvent!
-    onConnectionStatus(platform: Platform!): ConnectionEvent!
+    onConnectionStatus(platform: String!): ConnectionEvent!
   }
 `;

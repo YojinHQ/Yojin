@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router';
-import type { Position } from '../../api';
+import type { KnownPlatform, Position } from '../../api';
+import { isKnownPlatform } from '../../api';
 import { cn } from '../../lib/utils';
 import EmptyState from '../common/empty-state';
 import { SymbolLogo } from '../common/symbol-logo';
@@ -24,25 +25,23 @@ function formatPercent(value: number): string {
   return `${sign}${value.toFixed(2)}%`;
 }
 
-const platformColors: Record<string, string> = {
-  INTERACTIVE_BROKERS: 'bg-blue-500/20 text-blue-400',
-  ROBINHOOD: 'bg-green-500/20 text-green-400',
-  COINBASE: 'bg-blue-400/20 text-blue-300',
-  SCHWAB: 'bg-cyan-500/20 text-cyan-400',
-  BINANCE: 'bg-yellow-500/20 text-yellow-400',
-  FIDELITY: 'bg-emerald-500/20 text-emerald-400',
-  MANUAL: 'bg-gray-500/20 text-gray-400',
-};
+const PLATFORM_BADGE = 'bg-bg-tertiary text-text-muted';
 
-const platformLabels: Record<string, string> = {
+const platformLabels: Record<KnownPlatform, string> = {
   INTERACTIVE_BROKERS: 'IBKR',
   ROBINHOOD: 'Robinhood',
   COINBASE: 'Coinbase',
   SCHWAB: 'Schwab',
   BINANCE: 'Binance',
   FIDELITY: 'Fidelity',
+  POLYMARKET: 'Polymarket',
+  PHANTOM: 'Phantom',
   MANUAL: 'Manual',
 };
+
+function getPlatformLabel(platform: string): string {
+  return isKnownPlatform(platform) ? platformLabels[platform] : platform;
+}
 
 const TH = 'px-4 py-2.5 text-2xs font-medium uppercase tracking-wider text-text-muted';
 
@@ -63,6 +62,7 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
             <th className={cn(TH, 'text-right')}>Qty</th>
             <th className={cn(TH, 'text-right')}>Avg Entry</th>
             <th className={cn(TH, 'text-right')}>Price</th>
+            <th className={cn(TH, 'text-right')}>Value</th>
             <th className={cn(TH, 'text-right')}>Today ($)</th>
             <th className={cn(TH, 'text-right')}>Today (%)</th>
             <th className={cn(TH, 'text-right')}>Weight</th>
@@ -88,18 +88,12 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
                       <Link to={`/portfolio/${pos.symbol}`} className="font-medium text-text-primary">
                         {pos.symbol}
                       </Link>
-                      <div className="text-2xs text-text-secondary">{pos.name}</div>
                     </div>
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <span
-                    className={cn(
-                      'inline-block rounded px-1.5 py-0.5 text-2xs font-medium',
-                      platformColors[pos.platform] ?? 'bg-gray-500/20 text-gray-400',
-                    )}
-                  >
-                    {platformLabels[pos.platform] ?? pos.platform}
+                  <span className={cn('inline-block rounded px-1.5 py-0.5 text-2xs font-medium', PLATFORM_BADGE)}>
+                    {getPlatformLabel(pos.platform)}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums text-text-secondary">{pos.quantity}</td>
@@ -108,6 +102,9 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums font-medium text-text-primary">
                   {formatCurrency(pos.currentPrice)}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums font-medium text-text-primary">
+                  {formatCurrency(pos.marketValue)}
                 </td>
                 <td
                   className={cn(

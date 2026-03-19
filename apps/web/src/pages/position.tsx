@@ -1,4 +1,4 @@
-import { useParams, Link } from 'react-router';
+import { useParams } from 'react-router';
 import Card from '../components/common/card';
 
 function PlaceholderCard({ title, description }: { title: string; description: string }) {
@@ -16,15 +16,6 @@ export default function Position() {
 
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs">
-        <Link to="/portfolio" className="text-text-muted hover:text-text-secondary">
-          Portfolio
-        </Link>
-        <span className="text-text-muted">/</span>
-        <span className="text-text-primary">{symbol?.toUpperCase()}</span>
-      </div>
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

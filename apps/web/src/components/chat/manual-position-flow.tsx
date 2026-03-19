@@ -54,6 +54,7 @@ function inferAssetClass(symbol: string): AssetClass {
   return CRYPTO_SYMBOLS.has(symbol.toUpperCase()) ? 'CRYPTO' : 'EQUITY';
 }
 
+/** Map preset display names to canonical known platform identifiers. */
 const ACCOUNT_TO_PLATFORM: Record<string, Platform> = {
   IBKR: 'INTERACTIVE_BROKERS',
   Robinhood: 'ROBINHOOD',
@@ -63,8 +64,9 @@ const ACCOUNT_TO_PLATFORM: Record<string, Platform> = {
   Fidelity: 'FIDELITY',
 };
 
+/** Returns the known platform for a preset, or the raw input as a custom platform. */
 function inferPlatform(account: string): Platform {
-  return ACCOUNT_TO_PLATFORM[account] ?? 'MANUAL';
+  return ACCOUNT_TO_PLATFORM[account] ?? account;
 }
 
 /* ─── Component ─── */
