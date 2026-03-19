@@ -4,7 +4,14 @@ import EmptyState from '../common/empty-state';
 import { SymbolLogo } from '../common/symbol-logo';
 import type { Position } from '../../api';
 
-const columns = ['Symbol', 'Asset Class', 'Quantity', 'Price', 'Value', 'P&L'];
+const columns = ['Symbol', 'Platform', 'Asset Class', 'Quantity', 'Price', 'Value', 'P&L'];
+
+const PLATFORM_LABELS: Record<string, string> = {
+  INTERACTIVE_BROKERS: 'IBKR',
+  ROBINHOOD: 'Robinhood',
+  COINBASE: 'Coinbase',
+  MANUAL: 'Manual',
+};
 
 function formatCurrency(value: number): string {
   return value.toLocaleString('en-US', {
@@ -55,6 +62,7 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
                   </div>
                 </div>
               </td>
+              <td className="px-4 py-2.5 text-text-secondary">{PLATFORM_LABELS[pos.platform] ?? pos.platform}</td>
               <td className="px-4 py-2.5 text-text-secondary">{pos.assetClass}</td>
               <td className="px-4 py-2.5 text-text-secondary">{pos.quantity}</td>
               <td className="px-4 py-2.5 text-text-secondary">{formatCurrency(pos.currentPrice)}</td>
