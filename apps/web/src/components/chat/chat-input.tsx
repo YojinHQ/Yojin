@@ -88,11 +88,13 @@ export default function ChatInput({
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    if (disableAttachment) return;
     const file = e.dataTransfer.files[0];
     if (file) processFile(file);
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
+    if (disableAttachment) return;
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of items) {
