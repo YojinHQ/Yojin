@@ -70,7 +70,9 @@ async function buildFullRuntime(): Promise<{ agentRuntime: AgentRuntime; dataRoo
   const services = await buildContext({ dataRoot });
 
   const providerRouter = new ProviderRouter();
-  providerRouter.registerBackend(new ClaudeCodeProvider());
+  const claudeProvider = new ClaudeCodeProvider();
+  await claudeProvider.initialize();
+  providerRouter.registerBackend(claudeProvider);
   providerRouter.registerBackend(new VercelAIProvider());
   await providerRouter.loadConfig();
   providerRouter.startConfigRefresh();
