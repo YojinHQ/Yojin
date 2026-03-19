@@ -145,6 +145,8 @@ export interface AgentLoopOptions {
   approvalGate?: ApprovalGate;
   /** Agent identity — included in guard audit logs. */
   agentId?: string;
+  /** Abort signal — when triggered, the loop stops after the current iteration. */
+  abortSignal?: AbortSignal;
   /** PII scanner for masking sensitive data in user messages before LLM. */
   piiScanner?: ChatPiiScanner;
 }

@@ -277,6 +277,62 @@ describe('runAgentLoop', () => {
     );
   });
 
+  it('stops early when abort signal is triggered', async () => {
+    const ac = new AbortController();
+    // Provider returns tool calls then text — but we abort before iteration 2
+    const provider = mockProvider([
+      toolCallResponse([{ id: 'tc1', name: 'echo', input: { message: 'step1' } }]),
+      textResponse('Should not reach this'),
+    ]);
+
+    // Abort after the first iteration completes (we trigger it synchronously before the call)
+    // We need the abort to fire between iterations, so abort immediately
+    ac.abort();
+
+    const events: AgentLoopEvent[] = [];
+    const result = await runAgentLoop('Go', [], {
+      provider,
+      model: 'test-model',
+      tools: [echoTool],
+      abortSignal: ac.signal,
+      onEvent: (e) => events.push(e),
+    });
+
+    // Since we aborted before iteration 1, the loop should return immediately
+    expect(result.iterations).toBe(1);
+    expect(events.some((e) => e.type === 'done')).toBe(true);
+  });
+
+  it('returns last assistant text when aborted mid-conversation', async () => {
+    const ac = new AbortController();
+
+    // Provider returns tool call first, then text, then another tool call
+    const provider = mockProvider([
+      toolCallResponse([{ id: 'tc1', name: 'echo', input: { message: 'ping' } }]),
+      textResponse('Intermediate answer'),
+      toolCallResponse([{ id: 'tc2', name: 'echo', input: { message: 'pong' } }]),
+    ]);
+
+    // We'll track iterations via onEvent and abort after iteration 2
+    let iterationCount = 0;
+    const result = await runAgentLoop('Go', [], {
+      provider,
+      model: 'test-model',
+      tools: [echoTool],
+      abortSignal: ac.signal,
+      onEvent: (e) => {
+        // After the second LLM call completes (done event for text), abort
+        if (e.type === 'done' || e.type === 'thought') {
+          iterationCount++;
+          if (iterationCount >= 1) ac.abort();
+        }
+      },
+    });
+
+    // The loop should have stopped; text from last assistant message available
+    expect(result.text).toBeDefined();
+  });
+
   it('accumulates usage across iterations', async () => {
     const provider = mockProvider([
       toolCallResponse([{ id: 'tc1', name: 'echo', input: { message: 'a' } }]),

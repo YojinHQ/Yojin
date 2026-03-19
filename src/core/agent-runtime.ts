@@ -80,6 +80,7 @@ export class AgentRuntime {
     sessionKey?: string;
     context?: string;
     onEvent?: AgentLoopEventHandler;
+    abortSignal?: AbortSignal;
   }): Promise<AgentStepResult> {
     const profile = this.agentRegistry.get(params.agentId);
     if (!profile) {
@@ -107,6 +108,7 @@ export class AgentRuntime {
         systemPrompt,
         tools: guardedTools,
         onEvent: params.onEvent,
+        abortSignal: params.abortSignal,
         piiScanner: this.piiScanner,
       });
     } catch (err) {
@@ -157,6 +159,7 @@ export class AgentRuntime {
     userId: string;
     threadId?: string;
     onEvent?: AgentLoopEventHandler;
+    abortSignal?: AbortSignal;
   }): Promise<string> {
     const model = DEFAULT_MODEL;
 
@@ -199,6 +202,7 @@ export class AgentRuntime {
         systemPrompt: AgentRuntime.CHAT_SYSTEM_PROMPT,
         tools: guardedTools,
         onEvent: params.onEvent,
+        abortSignal: params.abortSignal,
         piiScanner: this.piiScanner,
       });
     } catch (err) {

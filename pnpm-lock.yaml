@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@agentclientprotocol/sdk':
+        specifier: 0.16.1
+        version: 0.16.1(zod@3.25.76)
       '@ai-sdk/anthropic':
         specifier: 3.0.58
         version: 3.0.58(zod@3.25.76)
@@ -200,6 +203,11 @@ packages:
 
   '@adobe/css-tools@4.4.4':
     resolution: {integrity: sha512-Elp+iwUx5rN5+Y8xLt5/GRoG20WGoDCQ/1Fb+1LiGtvwbDavuSk0jhD/eZdckHAuzcDzccnkv+rEjyWfRx18gg==}
+
+  '@agentclientprotocol/sdk@0.16.1':
+    resolution: {integrity: sha512-1ad+Sc/0sCtZGHthxxvgEUo5Wsbw16I+aF+YwdiLnPwkZG8KAGUEAPK6LM6Pf69lCyJPt1Aomk1d+8oE3C4ZEw==}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
 
   '@ai-sdk/anthropic@3.0.58':
     resolution: {integrity: sha512-/53SACgmVukO4bkms4dpxpRlYhW8Ct6QZRe6sj1Pi5H00hYhxIrqfiLbZBGxkdRvjsBQeP/4TVGsXgH5rQeb8Q==}
@@ -3609,6 +3617,10 @@ snapshots:
       graphql: 16.13.1
 
   '@adobe/css-tools@4.4.4': {}
+
+  '@agentclientprotocol/sdk@0.16.1(zod@3.25.76)':
+    dependencies:
+      zod: 3.25.76
 
   '@ai-sdk/anthropic@3.0.58(zod@3.25.76)':
     dependencies:

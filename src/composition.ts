@@ -62,6 +62,11 @@ export interface YojinServices {
   dataSourceRegistry: DataSourceRegistry;
   personaManager: PersonaManager;
   piiScanner: ChatPiiScanner;
+  brain: {
+    persona: PersonaManager;
+    frontalLobe: FrontalLobe;
+    emotion: EmotionTracker;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -263,6 +268,11 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     dataSourceRegistry,
     personaManager: persona,
     piiScanner,
+    brain: {
+      persona,
+      frontalLobe,
+      emotion: emotionTracker,
+    },
   };
 }
 
