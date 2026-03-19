@@ -91,48 +91,11 @@ export async function runAgentLoop(
   const toolSchemas = registry.toSchemas();
 
   // ── PII: scrub sensitive data from user message before LLM ──────
-  let messageContentForLlm: string | ContentBlock[] = userMessage;
-  let piiMap: import('rehydra').EncryptedPIIMap | undefined;
-
-  if (piiScanner && typeof userMessage === 'string') {
-    const scrubResult = await piiScanner.scrub(userMessage);
-    if (scrubResult.entitiesFound > 0) {
-      messageContentForLlm = scrubResult.sanitized;
-      piiMap = scrubResult.piiMap;
-      emit(onEvent, {
-        type: 'pii_redacted',
-        entitiesFound: scrubResult.entitiesFound,
-        typesFound: scrubResult.typesFound,
-        processingTimeMs: scrubResult.processingTimeMs,
-      });
-    }
-  } else if (piiScanner && Array.isArray(userMessage)) {
-    // For ContentBlock[] messages, scan only text blocks for PII
-    const textParts = userMessage.filter((b) => b.type === 'text').map((b) => (b as TextBlock).text);
-    if (textParts.length > 0) {
-      const combined = textParts.join('\n');
-      const scrubResult = await piiScanner.scrub(combined);
-      if (scrubResult.entitiesFound > 0) {
-        // Replace text blocks with scrubbed versions
-        let scrubOffset = 0;
-        const scrubbed = scrubResult.sanitized;
-        messageContentForLlm = userMessage.map((b) => {
-          if (b.type !== 'text') return b;
-          const original = (b as TextBlock).text;
-          const end = scrubOffset + original.length;
-          const replacement = scrubbed.slice(scrubOffset, end);
-          scrubOffset = end + 1; // +1 for the \n separator
-          return { type: 'text' as const, text: replacement };
-        });
-        piiMap = scrubResult.piiMap;
-        emit(onEvent, {
-          type: 'pii_redacted',
-          entitiesFound: scrubResult.entitiesFound,
-          typesFound: scrubResult.typesFound,
-          processingTimeMs: scrubResult.processingTimeMs,
-        });
-      }
-    }
+  const piiResult = piiScanner ? await scrubUserMessage(piiScanner, userMessage) : undefined;
+  const messageContentForLlm = piiResult?.content ?? userMessage;
+  const piiMap = piiResult?.piiMap;
+  if (piiResult?.event) {
+    emit(onEvent, piiResult.event);
   }
 
   // Send scrubbed text to LLM, but keep original in history for future turns
@@ -299,4 +262,57 @@ function extractText(message: AgentMessage | undefined): string {
     .filter((b): b is TextBlock => b.type === 'text')
     .map((b) => b.text)
     .join('');
+}
+
+/** Scrub PII from user messages before sending to LLM. */
+async function scrubUserMessage(
+  piiScanner: import('../trust/pii/chat-scanner.js').ChatPiiScanner,
+  userMessage: string | ContentBlock[],
+): Promise<
+  { content: string | ContentBlock[]; piiMap?: import('rehydra').EncryptedPIIMap; event: AgentLoopEvent } | undefined
+> {
+  if (typeof userMessage === 'string') {
+    const result = await piiScanner.scrub(userMessage);
+    if (result.entitiesFound === 0) return undefined;
+    return {
+      content: result.sanitized,
+      piiMap: result.piiMap,
+      event: {
+        type: 'pii_redacted',
+        entitiesFound: result.entitiesFound,
+        typesFound: result.typesFound,
+        processingTimeMs: result.processingTimeMs,
+      },
+    };
+  }
+
+  // ContentBlock[] — scan only text blocks
+  const textParts = userMessage.filter((b) => b.type === 'text').map((b) => (b as TextBlock).text);
+  if (textParts.length === 0) return undefined;
+
+  const combined = textParts.join('\n');
+  const result = await piiScanner.scrub(combined);
+  if (result.entitiesFound === 0) return undefined;
+
+  let scrubOffset = 0;
+  const scrubbed = result.sanitized;
+  const content = userMessage.map((b) => {
+    if (b.type !== 'text') return b;
+    const original = (b as TextBlock).text;
+    const end = scrubOffset + original.length;
+    const replacement = scrubbed.slice(scrubOffset, end);
+    scrubOffset = end + 1; // +1 for the \n separator
+    return { type: 'text' as const, text: replacement };
+  });
+
+  return {
+    content,
+    piiMap: result.piiMap,
+    event: {
+      type: 'pii_redacted',
+      entitiesFound: result.entitiesFound,
+      typesFound: result.typesFound,
+      processingTimeMs: result.processingTimeMs,
+    },
+  };
 }
