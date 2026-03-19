@@ -40,25 +40,23 @@ describe('connection resolvers', () => {
     setConnectionManager(manager);
   });
 
-  it('connectPlatform converts credential array to record', async () => {
+  it('connectPlatform passes platform and tier to ConnectionManager', async () => {
     await connectPlatformResolver(null, {
-      input: { platform: 'COINBASE', tier: 'API', credentials: [{ key: 'API_KEY', value: 'k' }] },
+      input: { platform: 'COINBASE', tier: 'API' },
     });
     expect(manager.connectPlatform).toHaveBeenCalledWith({
       platform: 'COINBASE',
       tier: 'API',
-      credentials: { API_KEY: 'k' },
     });
   });
 
-  it('connectPlatform passes undefined credentials when none provided', async () => {
+  it('connectPlatform passes undefined tier when not provided', async () => {
     await connectPlatformResolver(null, {
       input: { platform: 'COINBASE' },
     });
     expect(manager.connectPlatform).toHaveBeenCalledWith({
       platform: 'COINBASE',
       tier: undefined,
-      credentials: undefined,
     });
   });
 

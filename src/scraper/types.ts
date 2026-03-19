@@ -55,7 +55,42 @@ export const ConnectionStateSchema = z.object({
 export const ConnectionStateFileSchema = z.array(ConnectionStateSchema);
 export type ConnectionStateFile = z.infer<typeof ConnectionStateFileSchema>;
 
-export type { IntegrationTier } from '../api/graphql/types.js';
+// ---------------------------------------------------------------------------
+// Connection domain types (canonical definitions — re-exported by api/graphql/types.ts)
+// ---------------------------------------------------------------------------
+
+export type IntegrationTier = z.infer<typeof IntegrationTierSchema>;
+export type ConnectionStatus = z.infer<typeof ConnectionStatusSchema>;
+
+export interface ConnectionEvent {
+  platform: Platform;
+  step: 'TIER_DETECTED' | 'CREDENTIALS_STORED' | 'VALIDATING' | 'CONNECTED' | 'ERROR' | 'DISCONNECTED';
+  message: string;
+  tier?: IntegrationTier;
+  error?: string;
+}
+
+export interface Connection {
+  platform: Platform;
+  tier: IntegrationTier;
+  status: ConnectionStatus;
+  lastSync: string | null;
+  lastError: string | null;
+  syncInterval: number;
+  autoRefresh: boolean;
+}
+
+export interface ConnectionResult {
+  success: boolean;
+  connection?: Connection;
+  error?: string;
+}
+
+export interface TierAvailability {
+  tier: IntegrationTier;
+  available: boolean;
+  requiresCredentials: string[];
+}
 
 export const ExtractedPositionSchema = z.object({
   symbol: z.string().min(1),

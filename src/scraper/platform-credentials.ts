@@ -7,7 +7,7 @@
 
 import { readFile } from 'node:fs/promises';
 
-import type { IntegrationTier } from '../api/graphql/types.js';
+import type { IntegrationTier } from './types.js';
 
 export type CredentialLookup = (platform: string, tier: IntegrationTier) => string[];
 
@@ -84,8 +84,13 @@ export async function loadCredentialLookup(configPath: string): Promise<Credenti
     if (Object.keys(overrides).length > 0) {
       return mergeCredentialOverrides(overrides);
     }
-  } catch {
-    // No override file or invalid — use defaults
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw new Error(
+        `Failed to parse platform credentials override at ${configPath}: ${err instanceof Error ? err.message : String(err)}`,
+        { cause: err },
+      );
+    }
   }
   return getCredentialRequirements;
 }

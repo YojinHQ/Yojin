@@ -10,17 +10,21 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { type CredentialLookup, getCredentialRequirements } from './platform-credentials.js';
-import type { PlatformConnector, PlatformConnectorResult } from './types.js';
-import { ConnectionStateFileSchema, ConnectionsFileSchema } from './types.js';
-import type {
-  Connection,
-  ConnectionEvent,
-  ConnectionResult,
-  ConnectionStatus,
-  IntegrationTier,
-  Platform,
-  TierAvailability,
-} from '../api/graphql/types.js';
+import {
+  type Connection,
+  type ConnectionEvent,
+  type ConnectionResult,
+  type ConnectionStateFile,
+  ConnectionStateFileSchema,
+  type ConnectionStatus,
+  type ConnectionsFile,
+  ConnectionsFileSchema,
+  type IntegrationTier,
+  type PlatformConnector,
+  type PlatformConnectorResult,
+  type TierAvailability,
+} from './types.js';
+import type { Platform } from '../api/graphql/types.js';
 import type { SecretVault } from '../trust/vault/types.js';
 
 // ---------------------------------------------------------------------------
@@ -74,7 +78,7 @@ export interface DisconnectPlatformOptions {
 
 export class ConnectionManager {
   private readonly connectors = new Map<string, TieredPlatformConnector>();
-  /** In-progress platforms — prevents concurrent connect attempts */
+  /** In-progress platforms — prevents concurrent connect/disconnect attempts */
   private readonly inProgress = new Set<string>();
 
   private readonly vault: SecretVault;
@@ -84,6 +88,9 @@ export class ConnectionManager {
   private readonly statePath: string;
   private readonly credentialLookup: CredentialLookup;
 
+  /** Async mutex for serializing config/state file I/O */
+  private ioQueue: Promise<void> = Promise.resolve();
+
   constructor(opts: ConnectionManagerOptions) {
     this.vault = opts.vault;
     this.pubsub = opts.pubsub;
@@ -91,6 +98,19 @@ export class ConnectionManager {
     this.configPath = opts.configPath;
     this.statePath = opts.statePath;
     this.credentialLookup = opts.credentialLookup ?? getCredentialRequirements;
+  }
+
+  // -------------------------------------------------------------------------
+  // I/O mutex
+  // -------------------------------------------------------------------------
+
+  private withIoLock<T>(fn: () => Promise<T>): Promise<T> {
+    const result = this.ioQueue.then(fn, fn);
+    this.ioQueue = result.then(
+      () => {},
+      () => {},
+    );
+    return result;
   }
 
   // -------------------------------------------------------------------------
@@ -173,6 +193,7 @@ export class ConnectionManager {
       const key = `${platform}:${tier}`;
       const connector = this.connectors.get(key);
       if (!connector) {
+        await this.rollbackCredentials(credentialRefs);
         return this.failConnection(channel, platform, tier, `No connector registered for ${platform}:${tier}`);
       }
 
@@ -184,14 +205,35 @@ export class ConnectionManager {
         tier,
       });
 
-      const connectResult = await connector.connect(credentialRefs);
+      let connectResult: { success: boolean; error?: string };
+      try {
+        connectResult = await connector.connect(credentialRefs);
+      } catch (err) {
+        await this.rollbackCredentials(credentialRefs);
+        return this.failConnection(channel, platform, tier, err instanceof Error ? err.message : 'Connection failed');
+      }
+
       if (!connectResult.success) {
+        await this.rollbackCredentials(credentialRefs);
         return this.failConnection(channel, platform, tier, connectResult.error ?? 'Connection failed');
       }
 
       // Test scrape
-      const fetchResult: PlatformConnectorResult = await connector.fetchPositions();
+      let fetchResult: PlatformConnectorResult;
+      try {
+        fetchResult = await connector.fetchPositions();
+      } catch (err) {
+        await this.rollbackCredentials(credentialRefs);
+        return this.failConnection(
+          channel,
+          platform,
+          tier,
+          err instanceof Error ? err.message : 'Position fetch failed',
+        );
+      }
+
       if (!fetchResult.success) {
+        await this.rollbackCredentials(credentialRefs);
         return this.failConnection(channel, platform, tier, fetchResult.error);
       }
 
@@ -231,38 +273,71 @@ export class ConnectionManager {
   async disconnectPlatform(platform: Platform, opts: DisconnectPlatformOptions = {}): Promise<ConnectionResult> {
     const { removeCredentials = false } = opts;
 
-    // Remove from config
-    const configs = await this.readConfig();
-    const filtered = configs.filter((c) => c.platform !== platform);
-    await this.writeConfig(filtered);
+    // Concurrency guard
+    if (this.inProgress.has(platform)) {
+      return { success: false, error: `Operation already in progress for ${platform}` };
+    }
+    this.inProgress.add(platform);
 
-    // Update state to DISCONNECTED
-    const states = await this.readState();
-    const existing = states.find((s) => s.platform === platform);
-    const existingTier = existing?.tier ?? ('SCREENSHOT' as IntegrationTier);
-    const filteredStates = states.filter((s) => s.platform !== platform);
-    filteredStates.push({ platform, tier: existingTier, status: 'DISCONNECTED', lastSync: null, lastError: null });
-    await this.writeState(filteredStates);
+    try {
+      // Check if platform exists in config or state
+      const configs = await this.readConfig();
+      const states = await this.readState();
+      const configEntry = configs.find((c) => c.platform === platform);
+      const stateEntry = states.find((s) => s.platform === platform);
 
-    // Optionally remove credentials
-    if (removeCredentials) {
-      const keys = await this.vault.list();
-      const prefix = `${platform}_`;
-      for (const key of keys) {
-        if (key.startsWith(prefix)) {
-          await this.vault.delete(key);
+      if (!configEntry && !stateEntry) {
+        return { success: false, error: `${platform} is not connected` };
+      }
+
+      // Resolve connector and call disconnect()
+      const tier = configEntry?.tier ?? stateEntry?.tier ?? ('SCREENSHOT' as IntegrationTier);
+      const connectorKey = `${platform}:${tier}`;
+      const connector = this.connectors.get(connectorKey);
+      if (connector) {
+        await connector.disconnect();
+      }
+
+      // Remove from config and update state — serialized via I/O lock
+      await this.withIoLock(async () => {
+        const currentConfigs = await this.readConfig();
+        const filtered = currentConfigs.filter((c) => c.platform !== platform);
+        await this.writeConfig(filtered);
+
+        const currentStates = await this.readState();
+        const filteredStates = currentStates.filter((s) => s.platform !== platform);
+        filteredStates.push({ platform, tier, status: 'DISCONNECTED', lastSync: null, lastError: null });
+        await this.writeState(filteredStates);
+      });
+
+      // Optionally remove credentials
+      if (removeCredentials) {
+        const keys = await this.vault.list();
+        const prefix = `${platform}_`;
+        for (const key of keys) {
+          if (key.startsWith(prefix)) {
+            await this.vault.delete(key);
+          }
         }
       }
+
+      this.auditLog.append({
+        type: 'connection.removed',
+        platform,
+        removeCredentials,
+        timestamp: new Date().toISOString(),
+      });
+
+      this.publish(`connectionStatus:${platform}`, {
+        platform,
+        step: 'DISCONNECTED' as ConnectionEvent['step'],
+        message: `${platform} disconnected`,
+      });
+
+      return { success: true };
+    } finally {
+      this.inProgress.delete(platform);
     }
-
-    this.auditLog.append({
-      type: 'connection.removed',
-      platform,
-      removeCredentials,
-      timestamp: new Date().toISOString(),
-    });
-
-    return { success: true };
   }
 
   // -------------------------------------------------------------------------
@@ -270,22 +345,45 @@ export class ConnectionManager {
   // -------------------------------------------------------------------------
 
   async listConnections(): Promise<Connection[]> {
-    const configs = await this.readConfig();
-    const states = await this.readState();
+    return this.withIoLock(async () => {
+      const configs = await this.readConfig();
+      const states = await this.readState();
 
-    const stateMap = new Map(states.map((s) => [s.platform, s]));
+      const stateMap = new Map(states.map((s) => [s.platform, s]));
+      const seenPlatforms = new Set<string>();
+      const connections: Connection[] = [];
 
-    return configs.map((c) => {
-      const s = stateMap.get(c.platform);
-      return {
-        platform: c.platform,
-        tier: c.tier,
-        status: s?.status ?? 'PENDING',
-        lastSync: s?.lastSync ?? null,
-        lastError: s?.lastError ?? null,
-        syncInterval: c.syncInterval,
-        autoRefresh: c.autoRefresh,
-      };
+      // Map configs first (connected platforms)
+      for (const c of configs) {
+        seenPlatforms.add(c.platform);
+        const s = stateMap.get(c.platform);
+        connections.push({
+          platform: c.platform,
+          tier: c.tier,
+          status: s?.status ?? 'PENDING',
+          lastSync: s?.lastSync ?? null,
+          lastError: s?.lastError ?? null,
+          syncInterval: c.syncInterval,
+          autoRefresh: c.autoRefresh,
+        });
+      }
+
+      // Include state entries without matching config (disconnected/errored)
+      for (const s of states) {
+        if (!seenPlatforms.has(s.platform)) {
+          connections.push({
+            platform: s.platform as Platform,
+            tier: s.tier as IntegrationTier,
+            status: s.status as ConnectionStatus,
+            lastSync: s.lastSync ?? null,
+            lastError: s.lastError ?? null,
+            syncInterval: 0,
+            autoRefresh: false,
+          });
+        }
+      }
+
+      return connections;
     });
   }
 
@@ -307,12 +405,15 @@ export class ConnectionManager {
     try {
       const raw = await readFile(this.configPath, 'utf-8');
       return ConnectionsFileSchema.parse(JSON.parse(raw));
-    } catch {
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw err;
+      }
       return [];
     }
   }
 
-  private async writeConfig(data: unknown): Promise<void> {
+  private async writeConfig(data: ConnectionsFile): Promise<void> {
     await mkdir(path.dirname(this.configPath), { recursive: true });
     await writeFile(this.configPath, JSON.stringify(data, null, 2), 'utf-8');
   }
@@ -324,10 +425,12 @@ export class ConnectionManager {
     syncInterval: number;
     autoRefresh: boolean;
   }): Promise<void> {
-    const configs = await this.readConfig();
-    const filtered = configs.filter((c) => c.platform !== entry.platform);
-    filtered.push(entry);
-    await this.writeConfig(filtered);
+    await this.withIoLock(async () => {
+      const configs = await this.readConfig();
+      const filtered = configs.filter((c) => c.platform !== entry.platform);
+      filtered.push(entry);
+      await this.writeConfig(filtered);
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -338,12 +441,15 @@ export class ConnectionManager {
     try {
       const raw = await readFile(this.statePath, 'utf-8');
       return ConnectionStateFileSchema.parse(JSON.parse(raw));
-    } catch {
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw err;
+      }
       return [];
     }
   }
 
-  private async writeState(data: unknown): Promise<void> {
+  private async writeState(data: ConnectionStateFile): Promise<void> {
     await mkdir(path.dirname(this.statePath), { recursive: true });
     await writeFile(this.statePath, JSON.stringify(data, null, 2), 'utf-8');
   }
@@ -355,10 +461,12 @@ export class ConnectionManager {
     lastSync: string | null;
     lastError: string | null;
   }): Promise<void> {
-    const states = await this.readState();
-    const filtered = states.filter((s) => s.platform !== entry.platform);
-    filtered.push(entry);
-    await this.writeState(filtered);
+    await this.withIoLock(async () => {
+      const states = await this.readState();
+      const filtered = states.filter((s) => s.platform !== entry.platform);
+      filtered.push(entry);
+      await this.writeState(filtered);
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -375,6 +483,22 @@ export class ConnectionManager {
     this.auditLog.append({ type: 'connection.failure', platform, tier, error, timestamp: new Date().toISOString() });
     this.publish(channel, { platform, step: 'ERROR', message: error, error });
     return { success: false, error };
+  }
+
+  /** Remove stored credentials on connection failure rollback */
+  private async rollbackCredentials(credentialRefs: string[]): Promise<void> {
+    for (const ref of credentialRefs) {
+      try {
+        await this.vault.delete(ref);
+      } catch (err) {
+        this.auditLog.append({
+          type: 'credential.rollback_failed',
+          key: ref,
+          error: err instanceof Error ? err.message : String(err),
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
   }
 
   private publish(

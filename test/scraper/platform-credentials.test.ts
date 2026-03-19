@@ -14,6 +14,7 @@ describe('getCredentialRequirements', () => {
   });
 
   it('returns empty array for unknown platform', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const reqs = getCredentialRequirements('UNKNOWN_PLATFORM' as any, 'API');
     expect(reqs).toEqual([]);
   });

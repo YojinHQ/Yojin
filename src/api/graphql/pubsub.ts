@@ -7,7 +7,8 @@
 
 import { createPubSub } from 'graphql-yoga';
 
-import type { Alert, ChatEvent, ConnectionEvent, PortfolioSnapshot, PriceEvent } from './types.js';
+import type { Alert, ChatEvent, PortfolioSnapshot, PriceEvent } from './types.js';
+import type { ConnectionEvent } from '../../scraper/types.js';
 
 export type PubSubEvents = {
   alert: [Alert];

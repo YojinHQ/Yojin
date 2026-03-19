@@ -43,6 +43,9 @@ export async function runBootstrap(deps: BootstrapDeps): Promise<BootstrapResult
       }
 
       await vault.set('ANTHROPIC_API_KEY', key);
+      // Vault is the durable store. process.env is set temporarily so
+      // reinitializeProvider() can pick up the key without a restart.
+      // Exposure: visible to child processes and /proc on Linux.
       process.env.ANTHROPIC_API_KEY = key;
 
       const ok = await reinitializeProvider();
@@ -60,6 +63,9 @@ export async function runBootstrap(deps: BootstrapDeps): Promise<BootstrapResult
         const { runOAuthFlow } = await import('./setup-token.js');
         const { token } = await runOAuthFlow();
         await vault.set('CLAUDE_CODE_OAUTH_TOKEN', token);
+        // Vault is the durable store. process.env is set temporarily so
+        // reinitializeProvider() can pick up the key without a restart.
+        // Exposure: visible to child processes and /proc on Linux.
         process.env.CLAUDE_CODE_OAUTH_TOKEN = token;
 
         const ok = await reinitializeProvider();

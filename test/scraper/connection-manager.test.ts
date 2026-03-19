@@ -320,7 +320,9 @@ describe('connectPlatform — failure', () => {
     await manager.connectPlatform({ platform: 'COINBASE', tier: 'API' });
 
     const connections = await manager.listConnections();
-    expect(connections).toHaveLength(0);
+    // listConnections now includes state-only entries (ERROR), but no config entry should exist
+    const connected = connections.filter((c) => c.status === 'CONNECTED');
+    expect(connected).toHaveLength(0);
   });
 
   it('sets state to ERROR on connect failure', async () => {
@@ -413,7 +415,9 @@ describe('disconnectPlatform', () => {
 
     const result = await manager.disconnectPlatform('COINBASE');
     expect(result.success).toBe(true);
-    expect(await manager.listConnections()).toHaveLength(0);
+    // Config entry removed; state-only DISCONNECTED entry may remain
+    const connected = (await manager.listConnections()).filter((c) => c.status === 'CONNECTED');
+    expect(connected).toHaveLength(0);
   });
 
   it('sets state to DISCONNECTED', async () => {
@@ -442,6 +446,9 @@ describe('disconnectPlatform', () => {
   });
 
   it('removes vault credentials when removeCredentials=true', async () => {
+    manager.registerConnector(makeConnector('COINBASE', 'API'));
+    await manager.connectPlatform({ platform: 'COINBASE', tier: 'API' });
+
     vault.store.set('COINBASE_API_KEY', 'stored-key');
     vault.store.set('COINBASE_API_SECRET', 'stored-secret');
     vault.store.set('ROBINHOOD_API_TOKEN', 'rh-token'); // should NOT be removed
@@ -454,11 +461,20 @@ describe('disconnectPlatform', () => {
   });
 
   it('does NOT remove credentials by default', async () => {
+    manager.registerConnector(makeConnector('COINBASE', 'API'));
+    await manager.connectPlatform({ platform: 'COINBASE', tier: 'API' });
+
     vault.store.set('COINBASE_API_KEY', 'stored-key');
 
     await manager.disconnectPlatform('COINBASE');
 
     expect(await vault.has('COINBASE_API_KEY')).toBe(true);
+  });
+
+  it('returns error when disconnecting a never-connected platform', async () => {
+    const result = await manager.disconnectPlatform('COINBASE');
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/not connected/);
   });
 });
 

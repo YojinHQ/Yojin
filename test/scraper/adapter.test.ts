@@ -48,6 +48,7 @@ describe('createPlatformTools', () => {
 
     it('returns error on connection failure', async () => {
       const manager = createMockManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (manager.connectPlatform as any).mockResolvedValue({ success: false, error: 'Invalid API key' });
       const tools = createPlatformTools(manager);
       const connectTool = tools.find((t) => t.name === 'connect_platform')!;
@@ -59,6 +60,7 @@ describe('createPlatformTools', () => {
 
     it('handles no available tiers', async () => {
       const manager = createMockManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (manager.detectAvailableTiers as any).mockResolvedValue([
         { tier: 'API', available: false, requiresCredentials: [] },
       ]);
@@ -107,6 +109,7 @@ describe('createPlatformTools', () => {
 
     it('formats connection list', async () => {
       const manager = createMockManager();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (manager.listConnections as any).mockResolvedValue([
         { platform: 'COINBASE', tier: 'API', status: 'CONNECTED', lastSync: '2026-03-19T10:00:00Z' },
       ]);

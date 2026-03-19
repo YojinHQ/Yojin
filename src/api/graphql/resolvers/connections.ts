@@ -7,8 +7,9 @@
  */
 
 import type { ConnectionManager } from '../../../scraper/connection-manager.js';
+import type { Connection, ConnectionResult, IntegrationTier, TierAvailability } from '../../../scraper/types.js';
 import { pubsub } from '../pubsub.js';
-import type { Connection, ConnectionResult, IntegrationTier, Platform, TierAvailability } from '../types.js';
+import type { Platform } from '../types.js';
 
 let connectionManager: ConnectionManager | undefined;
 
@@ -40,12 +41,11 @@ export async function detectAvailableTiersResolver(
 
 export async function connectPlatformResolver(
   _parent: unknown,
-  args: { input: { platform: Platform; tier?: IntegrationTier; credentials?: Array<{ key: string; value: string }> } },
+  args: { input: { platform: Platform; tier?: IntegrationTier } },
 ): Promise<ConnectionResult> {
   if (!connectionManager) throw new Error('ConnectionManager not initialized');
-  const { platform, tier, credentials } = args.input;
-  const credRecord = credentials ? Object.fromEntries(credentials.map((c) => [c.key, c.value])) : undefined;
-  return connectionManager.connectPlatform({ platform, tier, credentials: credRecord });
+  const { platform, tier } = args.input;
+  return connectionManager.connectPlatform({ platform, tier });
 }
 
 export async function disconnectPlatformResolver(
@@ -61,7 +61,7 @@ export async function disconnectPlatformResolver(
 // ---------------------------------------------------------------------------
 
 export const onConnectionStatusSubscription = {
-  subscribe: (_parent: unknown, args: { platform: string }) => {
+  subscribe: (_parent: unknown, args: { platform: Platform }) => {
     return pubsub.subscribe(`connectionStatus:${args.platform}` as `connectionStatus:${string}`);
   },
   resolve: (payload: unknown) => payload,

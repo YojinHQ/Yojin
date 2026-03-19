@@ -110,6 +110,7 @@ export async function startChat(args: string[]): Promise<void> {
         readSecret: readPassphraseFromTty,
         vault: services.vault,
         reinitializeProvider: async () => {
+          await pluginRegistry.shutdownAll();
           await pluginRegistry.initializeAll(config as unknown as Record<string, unknown>);
           return !!pluginRegistry.getProvider(providerId);
         },
