@@ -1,0 +1,123 @@
+/**
+ * Portfolio tools — save and query portfolio positions.
+ *
+ * These tools let the agent persist positions extracted from portfolio
+ * screenshots (or other sources) and retrieve the current portfolio state.
+ */
+
+import { z } from 'zod';
+
+import type { AssetClass, Platform, Position } from '../api/graphql/types.js';
+import type { ToolDefinition, ToolResult } from '../core/types.js';
+import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
+
+const PositionInputSchema = z.object({
+  symbol: z.string().min(1).describe('Ticker symbol (e.g. AAPL, BTC)'),
+  name: z.string().default('').describe('Full name of the asset'),
+  quantity: z.number().default(0).describe('Number of shares/units held'),
+  costBasis: z.number().default(0).describe('Average cost per share/unit'),
+  currentPrice: z.number().default(0).describe('Current price per share/unit'),
+  marketValue: z.number().default(0).describe('Total market value of the position'),
+  unrealizedPnl: z.number().default(0).describe('Unrealized profit/loss'),
+  unrealizedPnlPercent: z.number().default(0).describe('Unrealized P&L as a percentage'),
+  sector: z.string().optional().describe('Sector (e.g. Technology, Healthcare)'),
+  assetClass: z
+    .enum(['EQUITY', 'CRYPTO', 'BOND', 'COMMODITY', 'CURRENCY', 'OTHER'])
+    .default('OTHER')
+    .describe('Asset class'),
+});
+
+const PlatformSchema = z
+  .enum(['INTERACTIVE_BROKERS', 'ROBINHOOD', 'COINBASE', 'MANUAL'])
+  .describe('Platform the positions were imported from');
+
+export interface PortfolioToolsOptions {
+  snapshotStore: PortfolioSnapshotStore;
+}
+
+export function createPortfolioTools(options: PortfolioToolsOptions): ToolDefinition[] {
+  const { snapshotStore } = options;
+
+  const savePositions: ToolDefinition = {
+    name: 'save_portfolio_positions',
+    description:
+      'Save portfolio positions extracted from a screenshot or user input. ' +
+      'Call this whenever a user shares a portfolio screenshot or provides position data. ' +
+      'This persists the positions so the user can track their portfolio over time.',
+    parameters: z.object({
+      platform: PlatformSchema,
+      positions: z.array(PositionInputSchema).min(1).describe('Array of positions to save'),
+    }),
+    async execute(params: {
+      platform: Platform;
+      positions: Array<z.infer<typeof PositionInputSchema>>;
+    }): Promise<ToolResult> {
+      const positions: Position[] = params.positions.map((p) => ({
+        symbol: p.symbol.toUpperCase(),
+        name: p.name,
+        quantity: p.quantity,
+        costBasis: p.costBasis,
+        currentPrice: p.currentPrice,
+        marketValue: p.marketValue || p.quantity * p.currentPrice,
+        unrealizedPnl: p.unrealizedPnl || (p.currentPrice - p.costBasis) * p.quantity,
+        unrealizedPnlPercent:
+          p.unrealizedPnlPercent || (p.costBasis > 0 ? ((p.currentPrice - p.costBasis) / p.costBasis) * 100 : 0),
+        sector: p.sector,
+        assetClass: p.assetClass as AssetClass,
+        platform: params.platform,
+      }));
+
+      const snapshot = await snapshotStore.save({
+        positions,
+        platform: params.platform,
+      });
+
+      return {
+        content:
+          `Portfolio saved successfully.\n` +
+          `Snapshot ID: ${snapshot.id}\n` +
+          `Platform: ${params.platform}\n` +
+          `Positions: ${positions.length}\n` +
+          `Total Value: $${snapshot.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n` +
+          `Total P&L: $${snapshot.totalPnl.toLocaleString('en-US', { minimumFractionDigits: 2 })} ` +
+          `(${snapshot.totalPnlPercent.toFixed(2)}%)`,
+      };
+    },
+  };
+
+  const getPortfolio: ToolDefinition = {
+    name: 'get_portfolio',
+    description:
+      'Get the current portfolio positions. Returns the latest saved snapshot ' +
+      'with all positions, totals, and metadata.',
+    parameters: z.object({}),
+    async execute(): Promise<ToolResult> {
+      const snapshot = await snapshotStore.getLatest();
+      if (!snapshot) {
+        return {
+          content: 'No portfolio data found. The user has not imported any positions yet.',
+        };
+      }
+
+      const summary = snapshot.positions
+        .map(
+          (p) =>
+            `  ${p.symbol}: ${p.quantity} shares @ $${p.currentPrice} = $${p.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2 })} ` +
+            `(P&L: ${p.unrealizedPnl >= 0 ? '+' : ''}$${p.unrealizedPnl.toLocaleString('en-US', { minimumFractionDigits: 2 })})`,
+        )
+        .join('\n');
+
+      return {
+        content:
+          `Portfolio (${snapshot.platform ?? 'ALL'}) — ${snapshot.timestamp}\n` +
+          `Positions:\n${summary}\n\n` +
+          `Total Value: $${snapshot.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n` +
+          `Total Cost: $${snapshot.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n` +
+          `Total P&L: $${snapshot.totalPnl.toLocaleString('en-US', { minimumFractionDigits: 2 })} ` +
+          `(${snapshot.totalPnlPercent.toFixed(2)}%)`,
+      };
+    },
+  };
+
+  return [savePositions, getPortfolio];
+}
