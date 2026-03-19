@@ -6,28 +6,46 @@ import FeedDetailModal from './feed-detail-modal';
 import type { FeedDetailData } from './feed-detail-modal';
 import { cn } from '../../lib/utils';
 
-type NewsCategory = 'Fundamentals' | 'News' | 'Sentiment' | 'Filings' | 'Socials' | 'Macro';
+/* ── Unified item type ───────────────────────────────────────────── */
+
+type FeedCategory =
+  | 'Action'
+  | 'Alert'
+  | 'Insight'
+  | 'Fundamentals'
+  | 'News'
+  | 'Sentiment'
+  | 'Filings'
+  | 'Socials'
+  | 'Macro';
 
 interface FeedItemDetail {
   keyPoints: string[];
   analysis: string;
+  recommendation?: string;
   relatedTickers?: string[];
   sentiment?: 'bullish' | 'bearish' | 'neutral';
   impact?: 'high' | 'medium' | 'low';
+  confidence?: number;
 }
 
 export interface FeedItem {
+  category: FeedCategory;
   source: string;
   time: string;
   title: string;
-  tag: NewsCategory;
+  description?: string;
+  urgency?: 'high' | 'medium' | 'low';
   preview: string;
   detail: FeedItemDetail;
 }
 
 /* ── Category config ─────────────────────────────────────────────── */
 
-const categoryConfig: Record<NewsCategory, { variant: BadgeVariant; color: string; iconBg: string }> = {
+const categoryConfig: Record<FeedCategory, { variant: BadgeVariant; color: string; iconBg: string }> = {
+  Action: { variant: 'accent', color: 'text-accent-primary', iconBg: 'bg-accent-primary/10' },
+  Alert: { variant: 'warning', color: 'text-warning', iconBg: 'bg-warning/10' },
+  Insight: { variant: 'success', color: 'text-success', iconBg: 'bg-success/10' },
   Fundamentals: { variant: 'success', color: 'text-success', iconBg: 'bg-success/10' },
   News: { variant: 'info', color: 'text-info', iconBg: 'bg-info/10' },
   Sentiment: { variant: 'market', color: 'text-market', iconBg: 'bg-market/10' },
@@ -36,7 +54,47 @@ const categoryConfig: Record<NewsCategory, { variant: BadgeVariant; color: strin
   Macro: { variant: 'warning', color: 'text-warning', iconBg: 'bg-warning/10' },
 };
 
-/* ── Category icons (16×16 viewBox, stroke-based) ────────────────── */
+/* ── Icons ───────────────────────────────────────────────────────── */
+
+/* Intel icons (24×24 viewBox, Heroicons outline) */
+
+function ActionIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z"
+      />
+    </svg>
+  );
+}
+
+function AlertIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"
+      />
+    </svg>
+  );
+}
+
+function InsightIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"
+      />
+    </svg>
+  );
+}
+
+/* News icons (16×16 viewBox, stroke-based) */
 
 function FundamentalsIcon({ className }: { className?: string }) {
   return (
@@ -94,7 +152,10 @@ function MacroIcon({ className }: { className?: string }) {
   );
 }
 
-const categoryIcon: Record<NewsCategory, React.FC<{ className?: string }>> = {
+const categoryIcon: Record<FeedCategory, React.FC<{ className?: string }>> = {
+  Action: ActionIcon,
+  Alert: AlertIcon,
+  Insight: InsightIcon,
   Fundamentals: FundamentalsIcon,
   News: NewsIcon,
   Sentiment: SentimentIcon,
@@ -103,14 +164,111 @@ const categoryIcon: Record<NewsCategory, React.FC<{ className?: string }>> = {
   Macro: MacroIcon,
 };
 
+/* ── Button icons ────────────────────────────────────────────────── */
+
+function ZapIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z"
+      />
+    </svg>
+  );
+}
+
+function AgentIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"
+      />
+    </svg>
+  );
+}
+
 /* ── Mock data ───────────────────────────────────────────────────── */
 
-const newsItems: FeedItem[] = [
+const feedItems: FeedItem[] = [
+  /* ─ Intel alerts ─ */
   {
+    category: 'Action',
+    source: 'Risk Manager',
+    time: 'Now',
+    title: 'Rebalance Portfolio',
+    description: 'Tech allocation exceeds 45% target. Consider trimming NVDA position.',
+    urgency: 'high',
+    preview:
+      'Your tech allocation has reached 47.3%, exceeding the 45% target. NVDA alone represents 18.2% of the portfolio, breaching the 15% single-stock guideline.',
+    detail: {
+      keyPoints: [
+        'Technology sector weight: 47.3% (target: 45%, hard limit: 50%) — breached soft limit',
+        'Single-stock concentration: NVDA at 18.2% exceeds the 15% guideline',
+        'Portfolio beta to QQQ has risen to 1.24, indicating elevated tech sensitivity',
+      ],
+      analysis:
+        "The portfolio's tech overweight has developed gradually as NVDA and other semiconductor names outperformed. While the positions have been profitable, the concentration creates asymmetric downside risk — a 10% tech correction would impact the portfolio 1.24x. Historical analysis shows that portfolios with sector weights above 45% experience 30% higher drawdowns during sector-specific selloffs. The current market environment of sector rotation makes this rebalancing particularly timely.",
+      recommendation:
+        'Consider trimming NVDA by 50-75 shares ($9,200-$13,800) to bring tech allocation below 42%. Redirect proceeds to underweight sectors: healthcare (current: 8%, target: 12%) and energy (current: 4%, target: 8%). Alternatively, add a QQQ put hedge to reduce effective beta.',
+      relatedTickers: ['NVDA', 'AAPL', 'MSFT', 'QQQ'],
+      confidence: 87,
+    },
+  },
+  {
+    category: 'Alert',
+    source: 'Research Analyst',
+    time: '15m',
+    title: 'Earnings This Week',
+    description: 'AAPL reports earnings Thursday after market close. Current position: 150 shares.',
+    urgency: 'medium',
+    preview:
+      'AAPL reports Q1 earnings Thursday after market close. Consensus expects EPS of $2.11 on revenue of $124.1B. Options imply a ±5.2% post-earnings move.',
+    detail: {
+      keyPoints: [
+        'Street consensus: EPS $2.11 (+6% YoY), Revenue $124.1B (+4.2% YoY)',
+        "Options market implies ±5.2% post-earnings move — above AAPL's 4-quarter average of ±3.8%",
+        'Your position: 150 shares at $182.40 avg cost — current unrealized gain: $5,610 (+20.4%)',
+      ],
+      analysis:
+        "Apple's earnings this week carry elevated importance due to the AI narrative. Investors will focus on iPhone 16 sell-through rates, Services revenue growth (expected 14% YoY), and any updates on Apple Intelligence adoption metrics. The options-implied move of ±5.2% suggests uncertainty is above average. Key risk: China revenue, which has been declining for 3 consecutive quarters. Watch for commentary on enterprise AI partnerships announced last month.",
+      recommendation:
+        'Consider protective puts if position sizing exceeds 10% of portfolio (currently 8.3%). A $215 put expiring Friday would cost approximately $3.20/share ($480 total) and cap downside at -1.8% from current levels. Alternatively, take no action if comfortable with the position size.',
+      relatedTickers: ['AAPL'],
+      confidence: 74,
+    },
+  },
+  {
+    category: 'Action',
+    source: 'Risk Manager',
+    time: '30m',
+    title: 'Stop Loss Approaching',
+    description: 'META approaching -8% drawdown threshold. Review exit strategy.',
+    urgency: 'high',
+    preview:
+      'META has declined 7.8% from recent peak, approaching your -8% drawdown threshold. Current unrealized P&L: -$2,340. Only $1.08 (0.2%) above trigger level.',
+    detail: {
+      keyPoints: [
+        'META down 7.8% from 52-week high of $542 — your threshold is -8% (triggers at $498.64)',
+        'Current price: $499.72 — only $1.08 (0.2%) above trigger level',
+        'Volume has been 1.4x average on down days — institutional distribution pattern',
+      ],
+      analysis:
+        "META's decline coincides with broader concerns about Reality Labs spending ($4.5B/quarter) and ad revenue growth deceleration. The stock has broken below its 50-day moving average ($518) and is testing the 100-day MA ($497). Volume patterns suggest institutional selling, which typically persists for 2-3 weeks. Technical support exists at $485 (200-day MA) and $460 (prior consolidation zone). The risk/reward at current levels is unfavorable with a 2:1 downside-to-upside ratio based on technical levels.",
+      recommendation:
+        'If $498.64 is breached, execute the planned stop: sell 50% of position (approximately $7,500). Hold remaining 50% with a tightened stop at $485 (200-day MA). If the 200-day holds, the risk/reward improves significantly. Consider redeploying proceeds into a high-quality name with better technical setup.',
+      relatedTickers: ['META'],
+      confidence: 91,
+    },
+  },
+  /* ─ News ─ */
+  {
+    category: 'Macro',
     source: 'Reuters',
     time: '2h',
     title: 'Fed signals potential rate adjustment in upcoming meeting',
-    tag: 'Macro',
     preview:
       'Federal Reserve officials indicated growing openness to adjusting interest rates, citing evolving inflation data and labor market conditions that may warrant policy recalibration.',
     detail: {
@@ -127,10 +285,10 @@ const newsItems: FeedItem[] = [
     },
   },
   {
+    category: 'Fundamentals',
     source: 'Bloomberg',
     time: '3h',
     title: 'NVDA reports record quarterly revenue, beats estimates',
-    tag: 'Fundamentals',
     preview:
       'NVIDIA posted $22.1B in quarterly revenue, surpassing analyst estimates by 12%. Data center segment drove 76% of total revenue on unprecedented AI infrastructure demand.',
     detail: {
@@ -147,10 +305,33 @@ const newsItems: FeedItem[] = [
     },
   },
   {
+    category: 'Insight',
+    source: 'Strategist',
+    time: '1h',
+    title: 'Correlation Detected',
+    description: 'MSFT and GOOGL showing 0.92 correlation over 30 days.',
+    urgency: 'low',
+    preview:
+      '30-day rolling correlation between MSFT and GOOGL has risen to 0.92, up from 0.67 a month ago. Combined positions represent 14.8% of portfolio — effectively behaving as one position.',
+    detail: {
+      keyPoints: [
+        'MSFT-GOOGL 30-day correlation: 0.92 (up from 0.67 thirty days ago)',
+        'Both positions combined represent 14.8% of portfolio — effectively behaving as one position',
+        'Historical mean correlation is 0.71 — current level is 1.8 sigma above average',
+      ],
+      analysis:
+        "The spike in MSFT-GOOGL correlation is likely driven by the shared AI narrative — both stocks are moving on the same catalysts (cloud AI revenue, enterprise AI adoption, capex guidance). When correlations spike above 0.85, the diversification benefit of holding both positions drops significantly. Mathematically, at 0.92 correlation, the combined position's risk is 96% of what it would be if they were perfectly correlated — meaning you're getting almost zero diversification benefit. Historical analysis shows such spikes typically mean-revert within 45-60 days.",
+      recommendation:
+        "Monitor for mean reversion over the next 30 days. If correlation sustains above 0.85, consider reducing one position by 30-50% to restore diversification. GOOGL may be the trim candidate given its higher beta (1.15 vs MSFT's 0.98) and upcoming antitrust ruling risk.",
+      relatedTickers: ['MSFT', 'GOOGL'],
+      confidence: 68,
+    },
+  },
+  {
+    category: 'Sentiment',
     source: 'WSJ',
     time: '4h',
     title: 'Tech sector rotation accelerates amid valuation concerns',
-    tag: 'Sentiment',
     preview:
       'Institutional investors are reducing technology exposure amid stretched valuations, rotating into energy and healthcare sectors. Large-cap tech funds saw $4.2B in net outflows over two weeks.',
     detail: {
@@ -167,10 +348,10 @@ const newsItems: FeedItem[] = [
     },
   },
   {
+    category: 'Filings',
     source: 'SEC EDGAR',
     time: '5h',
     title: 'MSFT files 10-K revealing cloud margin expansion',
-    tag: 'Filings',
     preview:
       "Microsoft's annual filing reveals Azure operating margins reached 42%, up from 35% a year ago. Capital expenditure guidance raised to $52B for AI infrastructure build-out.",
     detail: {
@@ -187,10 +368,10 @@ const newsItems: FeedItem[] = [
     },
   },
   {
+    category: 'News',
     source: 'CNBC',
     time: '6h',
     title: 'Apple unveils new AI features for enterprise customers',
-    tag: 'News',
     preview:
       'Apple announced enterprise-focused AI capabilities including on-device document analysis and automated workflow tools, partnering with SAP and Salesforce for integration.',
     detail: {
@@ -207,10 +388,10 @@ const newsItems: FeedItem[] = [
     },
   },
   {
+    category: 'Socials',
     source: 'StockTwits',
     time: '7h',
     title: 'TSLA social sentiment surges to 6-month high ahead of robotaxi reveal',
-    tag: 'Socials',
     preview:
       'Social media mentions of TSLA jumped 340% this week with 78% bullish sentiment. Retail options activity shows heavy call buying at $280-$300 strikes.',
     detail: {
@@ -227,10 +408,10 @@ const newsItems: FeedItem[] = [
     },
   },
   {
+    category: 'Macro',
     source: 'FT',
     time: '8h',
     title: 'European markets rally on improved economic outlook',
-    tag: 'Macro',
     preview:
       'European equity markets posted broad gains as ECB signaled potential easing and manufacturing PMI data showed unexpected improvement, with Euro Stoxx 50 gaining 2.1%.',
     detail: {
@@ -248,7 +429,7 @@ const newsItems: FeedItem[] = [
   },
 ];
 
-/* ── Components ──────────────────────────────────────────────────── */
+/* ── Component ───────────────────────────────────────────────────── */
 
 export default function NewsFeed() {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -260,17 +441,20 @@ export default function NewsFeed() {
   };
 
   const openDetail = (item: FeedItem) => {
-    const config = categoryConfig[item.tag];
+    const config = categoryConfig[item.category];
     setModalData({
       title: item.title,
       source: item.source,
       time: item.time,
-      tag: item.tag,
+      tag: item.category,
       tagVariant: config.variant,
+      urgency: item.urgency,
+      confidence: item.detail.confidence,
       sentiment: item.detail.sentiment,
       impact: item.detail.impact,
       keyPoints: item.detail.keyPoints,
       analysis: item.detail.analysis,
+      recommendation: item.detail.recommendation,
       relatedTickers: item.detail.relatedTickers,
     });
   };
@@ -278,15 +462,15 @@ export default function NewsFeed() {
   return (
     <>
       <div className="space-y-3.5 p-3">
-        {newsItems.map((item) => {
-          const config = categoryConfig[item.tag];
-          const Icon = categoryIcon[item.tag];
+        {feedItems.map((item) => {
+          const config = categoryConfig[item.category];
+          const Icon = categoryIcon[item.category];
           const expanded = expandedKey === item.title;
           return (
             <div
               key={item.title}
               className={cn(
-                'cursor-pointer rounded-xl border border-border bg-bg-tertiary transition-all',
+                'cursor-pointer rounded-xl border border-border-light bg-bg-tertiary transition-all',
                 expanded ? 'ring-1 ring-border-light' : 'hover:bg-bg-tertiary',
               )}
               onClick={() => toggleExpand(item.title)}
@@ -306,10 +490,10 @@ export default function NewsFeed() {
                   <Icon className={cn('h-4.5 w-4.5', config.color)} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <span className={cn('text-3xs font-semibold uppercase tracking-[0.1em]', config.color)}>
-                    {item.tag}
+                  <span className={cn('text-2xs font-semibold uppercase tracking-[0.1em]', config.color)}>
+                    {item.category}
                   </span>
-                  <p className="truncate text-xs font-medium leading-snug text-text-primary">{item.title}</p>
+                  <p className="truncate text-sm font-medium leading-snug text-text-primary">{item.title}</p>
                 </div>
                 <span className="flex-shrink-0 text-2xs text-text-muted">{item.time}</span>
               </div>
@@ -333,6 +517,7 @@ export default function NewsFeed() {
                           openDetail(item);
                         }}
                       >
+                        <ZapIcon />
                         View full analysis
                       </Button>
                       <Button
@@ -342,11 +527,12 @@ export default function NewsFeed() {
                           e.stopPropagation();
                           navigate('/chat', {
                             state: {
-                              preset: `Analyze this news: "${item.title}" — ${item.preview}`,
+                              preset: `Analyze this ${item.category.toLowerCase()}: "${item.title}" — ${item.description ?? item.preview}`,
                             },
                           });
                         }}
                       >
+                        <AgentIcon />
                         Add to Chat
                       </Button>
                     </div>

@@ -4,7 +4,6 @@ import PositionsPreview from '../components/overview/positions-preview';
 import AllocationChart from '../components/charts/allocation-chart';
 import RightPanel from '../components/layout/right-panel';
 import NewsFeed from '../components/overview/news-feed';
-import IntelAlerts from '../components/overview/intel-alerts';
 
 export default function Dashboard() {
   return (
@@ -21,7 +20,6 @@ export default function Dashboard() {
 
       {/* Right panel — unified feed */}
       <RightPanel>
-        <IntelAlerts />
         <NewsFeed />
       </RightPanel>
     </div>

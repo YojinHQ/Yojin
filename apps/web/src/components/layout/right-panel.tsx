@@ -11,7 +11,7 @@ export default function RightPanel({ title, tabs, children }: RightPanelProps) {
   const tabCount = tabs?.length ?? 1;
 
   return (
-    <aside className="flex w-[320px] flex-shrink-0 flex-col overflow-hidden border-l border-border bg-bg-secondary">
+    <aside className="flex w-[360px] flex-shrink-0 flex-col overflow-hidden border-l border-border bg-bg-secondary">
       {(title || tabs) && (
         <div className="border-b border-border px-3 py-2">
           {title && <h2 className="text-sm font-medium text-text-primary">{title}</h2>}

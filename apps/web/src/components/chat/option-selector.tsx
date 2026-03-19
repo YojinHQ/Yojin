@@ -1,14 +1,14 @@
 import type { ReactNode } from 'react';
 import { cn } from '../../lib/utils';
 
-interface Option {
+export interface Option {
   id: string;
   icon?: ReactNode;
   label: string;
   description?: string;
 }
 
-interface OptionSelectorProps {
+export interface OptionSelectorProps {
   title: string;
   subtitle?: string;
   options: Option[];
@@ -65,11 +65,11 @@ export default function OptionSelector({
               key={opt.id}
               onClick={() => onSelect(opt.id)}
               className={cn(
-                'relative cursor-pointer overflow-hidden rounded-2xl border text-left transition-all',
+                'relative cursor-pointer overflow-hidden rounded-xl border text-left transition-all',
                 opt.description ? 'px-5 py-4' : 'px-5 py-4',
                 isSelected
                   ? 'border-accent-primary bg-gradient-to-r from-accent-primary/20 via-accent-primary/8 to-transparent'
-                  : 'border-border/60 bg-bg-secondary hover:border-border-light hover:bg-bg-hover',
+                  : 'border-border-light bg-bg-secondary hover:border-text-muted hover:bg-bg-hover',
               )}
             >
               <div className="flex items-center gap-3.5">

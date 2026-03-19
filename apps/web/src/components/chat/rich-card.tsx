@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 /* ─── RichCard (outer container) ─── */
@@ -9,22 +10,26 @@ interface RichCardRootProps {
 }
 
 function RichCardRoot({ children, className }: RichCardRootProps) {
-  return <div className={cn('overflow-hidden rounded-2xl border border-border bg-bg-card', className)}>{children}</div>;
+  return <div className={cn('overflow-hidden rounded-xl border border-border bg-bg-card', className)}>{children}</div>;
 }
 
 /* ─── Header ─── */
 
 interface HeaderProps {
-  icon?: ReactNode;
+  icon?: LucideIcon;
   title: string;
   badge?: string;
 }
 
-function Header({ icon, title, badge }: HeaderProps) {
+function Header({ icon: Icon, title, badge }: HeaderProps) {
   return (
     <div className="flex items-center justify-between px-6 pt-5 pb-4">
       <div className="flex items-center gap-2.5">
-        {icon && <span className="text-lg">{icon}</span>}
+        {Icon && (
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-glow">
+            <Icon className="h-4 w-4 text-accent-primary" />
+          </div>
+        )}
         <h3 className="text-base font-semibold text-text-primary">{title}</h3>
       </div>
       {badge && (
@@ -67,7 +72,7 @@ function Stats({ items }: StatsProps) {
     <div className="grid gap-3 px-6 pb-5" style={{ gridTemplateColumns: `repeat(${items.length}, 1fr)` }}>
       {items.map((item) => (
         <div key={item.label} className="rounded-xl border border-border bg-bg-secondary px-4 py-4 text-center">
-          <div className={cn('text-2xl font-bold', item.highlight ? 'text-accent-primary' : 'text-text-primary')}>
+          <div className={cn('text-xl font-bold', item.highlight ? 'text-accent-primary' : 'text-text-primary')}>
             {item.value}
           </div>
           <div className="mt-1.5 text-xs text-text-muted">{item.label}</div>
@@ -189,20 +194,21 @@ function Documents({ label = 'Related Documents', items }: DocumentsProps) {
 
 interface ActionsProps {
   label?: string;
-  actions: Array<{ label: string; onClick?: () => void }>;
+  actions: Array<{ label: string; icon?: ReactNode; onClick?: () => void }>;
 }
 
 function Actions({ label = 'Suggested Actions', actions }: ActionsProps) {
   return (
     <div className="px-6 pb-6">
       <div className="mb-3 text-[11px] font-medium uppercase tracking-wider text-text-muted">{label}</div>
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-2">
         {actions.map((action) => (
           <button
             key={action.label}
             onClick={action.onClick}
-            className="cursor-pointer rounded-xl border border-border px-5 py-2.5 text-sm text-text-primary transition-colors hover:border-border-light hover:bg-bg-hover"
+            className="flex cursor-pointer items-center gap-2 rounded-full border border-border bg-bg-tertiary px-3.5 py-1.5 text-xs text-text-secondary transition-colors hover:border-accent-primary hover:bg-bg-hover hover:text-text-primary"
           >
+            {action.icon && <span className="size-4 shrink-0">{action.icon}</span>}
             {action.label}
           </button>
         ))}

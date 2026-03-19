@@ -30,7 +30,7 @@ export default function ChatMessage({ role, content, children, className, piiPro
   if (role === 'user') {
     return (
       <div className={cn('flex justify-end', className)}>
-        <div className="max-w-[80%] rounded-full bg-accent-primary px-5 py-2.5">
+        <div className="max-w-[80%] rounded-xl bg-accent-primary px-5 py-2.5">
           <p className="text-sm leading-relaxed text-white">{content ?? children}</p>
         </div>
       </div>
@@ -43,7 +43,7 @@ export default function ChatMessage({ role, content, children, className, piiPro
       <div className="min-w-0 max-w-[85%]">
         {children ?? (
           <div className="flex flex-col gap-1">
-            <div className="rounded-2xl rounded-tl-sm border border-border bg-bg-card px-4 py-3">
+            <div className="rounded-xl rounded-tl-sm border border-border bg-bg-card px-4 py-3">
               <div className="prose prose-invert prose-sm max-w-none text-sm leading-relaxed text-text-primary">
                 <Markdown>{content ?? ''}</Markdown>
               </div>

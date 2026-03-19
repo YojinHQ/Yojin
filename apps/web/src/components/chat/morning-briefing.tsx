@@ -1,3 +1,5 @@
+import { Sun } from 'lucide-react';
+
 interface BriefingStat {
   value: string;
   label: string;
@@ -22,24 +24,12 @@ export default function MorningBriefing({
   onViewFull,
 }: MorningBriefingProps) {
   return (
-    <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-accent-primary/80 to-accent-dark p-5 text-white">
+    <div className="overflow-hidden rounded-xl bg-gradient-to-br from-accent-primary/80 to-accent-dark p-5 text-white">
       {/* Header row */}
       <div className="mb-1 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="12" r="4" />
-              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-            </svg>
+            <Sun className="h-4 w-4" />
           </div>
           <span className="text-[11px] font-semibold uppercase tracking-widest opacity-90">Morning Briefing</span>
         </div>
@@ -62,7 +52,7 @@ export default function MorningBriefing({
       {/* Stats row */}
       <div className="grid grid-cols-4 gap-2.5">
         {stats.map((stat) => (
-          <div key={stat.label} className="rounded-xl border border-white/20 px-2 py-2.5 text-center">
+          <div key={stat.label} className="rounded-lg border border-white/20 px-2 py-2.5 text-center">
             <div className="text-lg font-bold leading-tight">{stat.value}</div>
             <div className="mt-1 text-[9px] font-medium uppercase leading-tight tracking-wider opacity-50">
               {stat.label}

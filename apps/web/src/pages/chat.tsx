@@ -1,12 +1,12 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import MorningBriefing from '../components/chat/morning-briefing';
+import FullBriefingCard from '../components/chat/full-briefing-card';
 import QueryBuilder from '../components/chat/query-builder';
 import WaterfallFlow from '../components/chat/waterfall-flow';
 import ChatInput from '../components/chat/chat-input';
 import ChatMessage from '../components/chat/chat-message';
 import ChatAvatar from '../components/chat/chat-avatar';
-import RichCard from '../components/chat/rich-card';
 import { useChatContext } from '../lib/chat-context';
 
 /* ─── Message types for local-only UI messages (briefings, rich cards) ─── */
@@ -18,73 +18,6 @@ interface BriefingMessage {
 }
 
 type LocalMessage = BriefingMessage;
-
-/* ─── Mock briefing rich card ─── */
-
-function FullBriefingCard() {
-  return (
-    <RichCard>
-      <RichCard.Header icon="📊" title="Morning Briefing — Full Report" badge="DAILY" />
-      <RichCard.Body>
-        Your portfolio is up 1.2% since yesterday&apos;s close. Three positions need attention: NVDA earnings beat
-        expectations but guidance was mixed, TSLA hit a 52-week low, and your AAPL position crossed the 30%
-        concentration threshold.
-      </RichCard.Body>
-      <RichCard.Stats
-        items={[
-          { value: '$124,500', label: 'Total Value' },
-          { value: '+$1,470', label: 'Day Change', highlight: true },
-          { value: '23.4%', label: 'YTD Return' },
-          { value: '72', label: 'Risk Score' },
-        ]}
-      />
-      <RichCard.Table
-        columns={[
-          { key: 'symbol', header: 'Symbol' },
-          { key: 'price', header: 'Price' },
-          { key: 'change', header: 'Day Change' },
-          { key: 'status', header: 'Status' },
-        ]}
-        rows={[
-          {
-            symbol: 'AAPL',
-            price: '$198.50',
-            change: '+1.8%',
-            status: <span className="text-warning">⚠ Concentrated</span>,
-          },
-          {
-            symbol: 'NVDA',
-            price: '$875.30',
-            change: '+3.2%',
-            status: <span className="text-success">✓ Earnings Beat</span>,
-          },
-          {
-            symbol: 'TSLA',
-            price: '$162.10',
-            change: '-4.1%',
-            status: <span className="text-error">⚠ 52w Low</span>,
-          },
-          {
-            symbol: 'MSFT',
-            price: '$415.80',
-            change: '+0.6%',
-            status: <span className="text-success">✓ Healthy</span>,
-          },
-          {
-            symbol: 'AMZN',
-            price: '$186.20',
-            change: '+1.1%',
-            status: <span className="text-success">✓ Healthy</span>,
-          },
-        ]}
-      />
-      <RichCard.Divider />
-      <RichCard.Actions
-        actions={[{ label: 'Rebalance Portfolio' }, { label: 'View Risk Report' }, { label: 'Set Alerts' }]}
-      />
-    </RichCard>
-  );
-}
 
 /* ─── Page ─── */
 

@@ -41,6 +41,22 @@ function getLogoUrl(symbol: string, assetClass: AssetClass): string {
   return `https://assets.parqet.com/logos/${path}/${symbol}`;
 }
 
+interface SymbolCellProps {
+  symbol: string;
+  assetClass?: AssetClass;
+  size?: 'sm' | 'md';
+  className?: string;
+}
+
+export function SymbolCell({ symbol, assetClass = 'equity', size = 'sm', className }: SymbolCellProps) {
+  return (
+    <span className={cn('flex items-center gap-2', className)}>
+      <SymbolLogo symbol={symbol} assetClass={assetClass} size={size} />
+      {symbol}
+    </span>
+  );
+}
+
 export function SymbolLogo({ symbol, assetClass = 'equity', size = 'sm', className }: SymbolLogoProps) {
   const [imgError, setImgError] = useState(false);
 
