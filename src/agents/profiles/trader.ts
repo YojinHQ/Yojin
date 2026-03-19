@@ -10,7 +10,7 @@ export function createTraderProfile(): AgentProfile {
       // Platform tools
       'connect_platform',
       'disconnect_platform',
-      'list_platforms',
+      'list_connections',
       'fetch_positions',
       'check_platform_health',
       // Portfolio tools

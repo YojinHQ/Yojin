@@ -24,7 +24,40 @@ export interface Position {
 }
 
 export type AssetClass = 'EQUITY' | 'CRYPTO' | 'BOND' | 'COMMODITY' | 'CURRENCY' | 'OTHER';
-export type Platform = 'INTERACTIVE_BROKERS' | 'ROBINHOOD' | 'COINBASE' | 'MANUAL';
+export type Platform = 'INTERACTIVE_BROKERS' | 'ROBINHOOD' | 'COINBASE' | 'POLYMARKET' | 'PHANTOM' | 'MANUAL';
+
+export type IntegrationTier = 'CLI' | 'API' | 'UI' | 'SCREENSHOT';
+export type ConnectionStatus = 'PENDING' | 'VALIDATING' | 'CONNECTED' | 'ERROR' | 'DISCONNECTED';
+
+export interface ConnectionEvent {
+  platform: Platform;
+  step: 'TIER_DETECTED' | 'CREDENTIALS_STORED' | 'VALIDATING' | 'CONNECTED' | 'ERROR';
+  message: string;
+  tier?: IntegrationTier;
+  error?: string;
+}
+
+export interface Connection {
+  platform: Platform;
+  tier: IntegrationTier;
+  status: ConnectionStatus;
+  lastSync: string | null;
+  lastError: string | null;
+  syncInterval: number;
+  autoRefresh: boolean;
+}
+
+export interface ConnectionResult {
+  success: boolean;
+  connection?: Connection;
+  error?: string;
+}
+
+export interface TierAvailability {
+  tier: IntegrationTier;
+  available: boolean;
+  requiresCredentials: string[];
+}
 
 export interface PortfolioSnapshot {
   id: string;

@@ -33,6 +33,20 @@ function prompt(question: string): Promise<string> {
   });
 }
 
+export async function runOAuthFlow(): Promise<{ token: string; refreshToken?: string }> {
+  const result = await loginClaudeOAuth({
+    onAuth: async ({ url }) => {
+      console.log('Open this URL in your browser to authorize:\n');
+      console.log(`  ${url}\n`);
+    },
+    onPrompt: async ({ message }) => {
+      return prompt(`${message}: `);
+    },
+    onProgress: (msg) => console.log(msg),
+  });
+  return { token: result.accessToken, refreshToken: result.refreshToken };
+}
+
 export async function setupToken(args: string[]): Promise<void> {
   const method = parseMethod(args);
 
@@ -43,20 +57,9 @@ export async function setupToken(args: string[]): Promise<void> {
 
   switch (method) {
     case 'oauth': {
-      const result = await loginClaudeOAuth({
-        onAuth: async ({ url }) => {
-          console.log('Open this URL in your browser to authorize:\n');
-          console.log(`  ${url}\n`);
-        },
-        onPrompt: async ({ message }) => {
-          return prompt(`${message}: `);
-        },
-        onProgress: (msg) => console.log(msg),
-      });
-      token = result.accessToken;
-      if (result.refreshToken) {
-        refreshToken = result.refreshToken;
-      }
+      const oauthResult = await runOAuthFlow();
+      token = oauthResult.token;
+      refreshToken = oauthResult.refreshToken;
       break;
     }
 

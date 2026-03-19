@@ -7,13 +7,14 @@
 
 import { createPubSub } from 'graphql-yoga';
 
-import type { Alert, ChatEvent, PortfolioSnapshot, PriceEvent } from './types.js';
+import type { Alert, ChatEvent, ConnectionEvent, PortfolioSnapshot, PriceEvent } from './types.js';
 
 export type PubSubEvents = {
   alert: [Alert];
   portfolioUpdate: [PortfolioSnapshot];
   priceMove: [PriceEvent];
   [key: `chat:${string}`]: [ChatEvent];
+  [key: `connectionStatus:${string}`]: [ConnectionEvent];
 };
 
 export const pubsub = createPubSub<PubSubEvents>();

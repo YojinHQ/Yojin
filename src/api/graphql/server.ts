@@ -9,6 +9,13 @@ import type { Hono } from 'hono';
 
 import { alertsQuery, createAlertMutation, dismissAlertMutation } from './resolvers/alerts.js';
 import { onChatMessageSubscription, sendMessageMutation } from './resolvers/chat.js';
+import {
+  connectPlatformResolver,
+  detectAvailableTiersResolver,
+  disconnectPlatformResolver,
+  listConnectionsResolver,
+  onConnectionStatusSubscription,
+} from './resolvers/connections.js';
 import { onAlertSubscription, onPortfolioUpdateSubscription, onPriceMoveSubscription } from './resolvers/live.js';
 import { newsQuery, quoteQuery, sectorExposureQuery } from './resolvers/market.js';
 import {
@@ -32,18 +39,23 @@ const schema = createSchema({
       news: newsQuery,
       quote: quoteQuery,
       sectorExposure: sectorExposureQuery,
+      listConnections: listConnectionsResolver,
+      detectAvailableTiers: detectAvailableTiersResolver,
     },
     Mutation: {
       refreshPositions: refreshPositionsMutation,
       createAlert: createAlertMutation,
       dismissAlert: dismissAlertMutation,
       sendMessage: sendMessageMutation,
+      connectPlatform: connectPlatformResolver,
+      disconnectPlatform: disconnectPlatformResolver,
     },
     Subscription: {
       onAlert: onAlertSubscription,
       onPortfolioUpdate: onPortfolioUpdateSubscription,
       onPriceMove: onPriceMoveSubscription,
       onChatMessage: onChatMessageSubscription,
+      onConnectionStatus: onConnectionStatusSubscription,
     },
   },
 });

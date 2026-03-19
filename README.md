@@ -142,39 +142,39 @@ yojin/
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `pnpm dev` | Start development server (tsx) |
-| `pnpm chat` | Interactive chat REPL |
-| `pnpm build` | Compile TypeScript |
-| `pnpm start` | Run compiled output |
-| `pnpm test` | Run tests (vitest) |
-| `pnpm lint` | Lint with ESLint |
-| `pnpm clean` | Remove dist/ |
-| `pnpm dev -- secret set <key>` | Store an encrypted secret |
-| `pnpm dev -- secret list` | List stored secret names |
-| `pnpm dev:web` | Start React web app (Vite dev server) |
-| `pnpm dev:all` | Start backend + web app in parallel |
-| `pnpm build:web` | Build React web app |
-| `pnpm build:all` | Build all packages |
-| `pnpm test:all` | Run tests across all packages |
-| `pnpm ci:all` | Full CI check across all packages |
+| Command                        | Description                           |
+|--------------------------------|---------------------------------------|
+| `pnpm dev`                     | Start development server (tsx)        |
+| `pnpm chat`                    | Interactive chat REPL                 |
+| `pnpm build`                   | Compile TypeScript                    |
+| `pnpm start`                   | Run compiled output                   |
+| `pnpm test`                    | Run tests (vitest)                    |
+| `pnpm lint`                    | Lint with ESLint                      |
+| `pnpm clean`                   | Remove dist/                          |
+| `pnpm dev -- secret set <key>` | Store an encrypted secret             |
+| `pnpm dev -- secret list`      | List stored secret names              |
+| `pnpm dev:web`                 | Start React web app (Vite dev server) |
+| `pnpm dev:all`                 | Start backend + web app in parallel   |
+| `pnpm build:web`               | Build React web app                   |
+| `pnpm build:all`               | Build all packages                    |
+| `pnpm test:all`                | Run tests across all packages         |
+| `pnpm ci:all`                  | Full CI check across all packages     |
 
 ## Channels
 
-| Channel | Status |
-|---------|--------|
-| Slack | Working (@slack/bolt) |
-| Telegram | Phase 1 (grammy) |
-| Web UI | Working (Hono + GraphQL + SSE) |
-| MCP | Phase 1 (Claude Desktop / Cursor) |
-| Discord | Future |
+| Channel  | Status                            |
+|----------|-----------------------------------|
+| Slack    | Working (@slack/bolt)             |
+| Telegram | Phase 1 (grammy)                  |
+| Web UI   | Working (Hono + GraphQL + SSE)    |
+| MCP      | Phase 1 (Claude Desktop / Cursor) |
+| Discord  | Future                            |
 
 ## Trust & Security Stack
 
 Yojin is built with security as a first-class concern. Every agent action passes through a deterministic, non-bypassable guard pipeline before execution. No LLM is ever in the security decision loop.
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        Guard Pipeline                               │
 │                                                                     │
@@ -240,7 +240,7 @@ Yojin is built with security as a first-class concern. Every agent action passes
 
 ### Three Operational Postures
 
-```
+```text
 ┌──────────────┬──────────────┬──────────────┐
 │    LOCAL     │   STANDARD   │  UNBOUNDED   │
 │  (default)   │    (dev)     │  (research)  │
@@ -254,7 +254,7 @@ Yojin is built with security as a first-class concern. Every agent action passes
 
 ### Credential Vault
 
-```
+```text
 ┌──────────────────────────────────────────────┐
 │               Encrypted Vault                 │
 │                                               │
@@ -283,7 +283,7 @@ Yojin is built with security as a first-class concern. Every agent action passes
 
 When connecting a platform (e.g. Binance), the LLM never sees your API key. The CLI switches to a secure side-channel for collection:
 
-```
+```text
   LLM Conversation                     Secure Side-Channel (TTY)
   ────────────────                     ─────────────────────────
   "Connect your Binance account"
@@ -317,16 +317,76 @@ When connecting a platform (e.g. Binance), the LLM never sees your API key. The 
 ```
 
 **Key protections:**
+
 - **stderr prompts** — LLM only reads stdout, never sees the input prompt
 - **TTY raw mode, echo disabled** — nothing printed while you type
 - **Non-TTY rejection** — refuses piped input, preventing LLM from feeding secrets programmatically
 - **Transport-layer injection** — credentials go from vault directly into HTTP headers, never into prompts
 
+### Platform Connections
+
+Connect investment platforms via the chat REPL or GraphQL API. The ConnectionManager handles tier detection, credential storage, validation, and first scrape.
+
+**Integration tiers** (best to worst): CLI > API > UI > Screenshot. Each platform supports a subset.
+
+**Chat flow:**
+
+```text
+You:   "Connect my Coinbase"
+Yojin: Calls connect_platform({ platform: 'COINBASE' })
+       → "Available tiers: API (needs API_KEY, API_SECRET), Screenshot (no creds)"
+Yojin: "API is the best option. I'll need your API key and secret."
+       Calls store_credential({ key: 'COINBASE_API_KEY' })
+       → Secure TTY prompt (hidden input) → stored in vault
+       Calls store_credential({ key: 'COINBASE_API_SECRET' })
+       → Same flow
+       Calls connect_platform({ platform: 'COINBASE', tier: 'API' })
+       → Validates connection, runs test scrape
+       → "Connected! Found 12 positions."
+```
+
+**Configuration files** (created automatically, not hand-edited):
+
+| File                               | Purpose                                                    | Created when                  |
+|------------------------------------|------------------------------------------------------------|-------------------------------|
+| `data/config/connections.json`     | Which platforms are connected, with what tier and settings | First `connect_platform` call |
+| `data/cache/connection-state.json` | Runtime state — status, last sync time, last error         | First `connect_platform` call |
+
+**Credential overrides** (optional, hand-edited):
+
+To customize which credentials a platform/tier requires, create `data/config/platform-credentials.json`:
+
+```json
+{
+  "COINBASE": {
+    "API": ["MY_CUSTOM_KEY", "MY_CUSTOM_SECRET"]
+  }
+}
+```
+
+Only specify entries you want to override — everything else falls back to the [hardcoded defaults](src/scraper/platform-credentials.ts).
+
+**GraphQL API:**
+
+```graphql
+# Query available tiers
+query { detectAvailableTiers(platform: COINBASE) { tier, available, requiresCredentials } }
+
+# Connect (async — subscribe to onConnectionStatus for progress)
+mutation { connectPlatform(input: { platform: COINBASE, tier: API }) { success, error } }
+
+# List active connections
+query { listConnections { platform, tier, status, lastSync } }
+
+# Disconnect
+mutation { disconnectPlatform(platform: COINBASE, removeCredentials: true) { success } }
+```
+
 ### PII Protection (Two Layers)
 
 **Layer 1: Chat Pipeline** — Masks PII in user messages before they reach the LLM, powered by [Rehydra](https://github.com/rehydra-ai/rehydra-sdk). Responses are rehydrated so the user sees original values.
 
-```
+```text
 User: "my email is dean@test.com"
         │
         ▼
@@ -346,7 +406,7 @@ Enable NER for name/org detection: `YOJIN_PII_NER=1`
 
 **Layer 2: Structured Data** — Redacts PII in portfolio snapshots before external API calls (Keelson).
 
-```
+```text
 Raw Snapshot                    Redacted Snapshot
 ┌─────────────────┐            ┌─────────────────┐
 │ accountId: 1234 │  ────▶     │ accountId:      │
@@ -367,7 +427,7 @@ Raw Snapshot                    Redacted Snapshot
 
 ### HMAC-Chained Audit Log
 
-```
+```text
 ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
 │ Event 0  │───▶│ Event 1  │───▶│ Event 2  │───▶│ Event 3  │
 │          │    │          │    │          │    │          │
