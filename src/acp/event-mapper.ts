@@ -87,6 +87,8 @@ export function createEventMapper(sessionId: string): (event: AgentLoopEvent) =>
 
       case 'done':
         // Text was already streamed via text_delta or thought events — don't re-emit.
+        // Reset for next iteration (tool call → new LLM response within the same prompt).
+        hasStreamedText = false;
         return [];
 
       case 'max_iterations':

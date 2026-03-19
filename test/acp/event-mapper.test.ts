@@ -166,4 +166,16 @@ describe('createEventMapper', () => {
     const thought1 = mapper1({ type: 'thought', text: 'full text' });
     expect(thought1).toHaveLength(0);
   });
+
+  it('resets streaming flag after done — thought emits in next iteration', () => {
+    const mapper = createEventMapper(SESSION_ID);
+
+    // Iteration 1: streaming
+    mapper({ type: 'text_delta', text: 'streamed' });
+    expect(mapper({ type: 'thought', text: 'streamed' })).toHaveLength(0); // suppressed
+    mapper({ type: 'done', text: 'streamed', iterations: 1 });
+
+    // Iteration 2: tool call, then non-streaming LLM response (no text_delta)
+    expect(mapper({ type: 'thought', text: 'tool result analysis' })).toHaveLength(1); // should emit
+  });
 });
