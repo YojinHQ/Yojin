@@ -80,11 +80,12 @@ describe('PortfolioSnapshotStore', () => {
       platform: 'COINBASE',
     });
 
-    const totalCost = 145.0 * 50 + 42000.0 * 0.5;
     const totalValue = 8925.0 + 33750.0;
-    expect(snapshot.totalCost).toBe(totalCost);
+    const totalPnl = 1675.0 + 12750.0;
+    const totalCost = totalValue - totalPnl;
     expect(snapshot.totalValue).toBe(totalValue);
-    expect(snapshot.totalPnl).toBe(totalValue - totalCost);
+    expect(snapshot.totalPnl).toBe(totalPnl);
+    expect(snapshot.totalCost).toBe(totalCost);
   });
 
   it('getLatest returns the most recent snapshot', async () => {

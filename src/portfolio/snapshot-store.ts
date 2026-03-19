@@ -36,8 +36,8 @@ export class PortfolioSnapshotStore {
 
     const { positions, platform } = params;
     const totalValue = positions.reduce((sum, p) => sum + p.marketValue, 0);
-    const totalCost = positions.reduce((sum, p) => sum + p.costBasis * p.quantity, 0);
-    const totalPnl = totalValue - totalCost;
+    const totalPnl = positions.reduce((sum, p) => sum + p.unrealizedPnl, 0);
+    const totalCost = totalValue - totalPnl;
 
     const snapshot: PortfolioSnapshot = {
       id: `snap-${randomUUID().slice(0, 8)}`,
