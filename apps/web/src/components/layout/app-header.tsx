@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import WorldClock from './world-clock';
 import NotificationsCenter from './notifications-center';
-import UserMenu from './user-menu';
 
 const segmentLabels: Record<string, string> = {
   '': 'Overview',
@@ -80,7 +79,6 @@ export default function AppHeader() {
         <div className="h-4 w-px bg-border" />
 
         <NotificationsCenter />
-        <UserMenu />
       </div>
 
       <WorldClock open={clockOpen} onClose={() => setClockOpen(false)} />

@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router';
 import { useTheme } from '../../lib/theme';
+import UserMenu from './user-menu';
 
 interface NavItem {
   label: string;
@@ -105,6 +106,11 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
+
+      {/* User menu */}
+      <div className="border-t border-border px-3 py-3">
+        <UserMenu />
+      </div>
     </aside>
   );
 }

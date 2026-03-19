@@ -62,20 +62,20 @@ export default function UserMenu() {
       {/* Avatar trigger */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-primary/15 text-2xs font-medium text-accent-primary transition-colors hover:bg-accent-primary/25"
+        className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-bg-hover"
       >
-        DS
+        <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent-primary/15 text-2xs font-medium text-accent-primary">
+          DS
+        </span>
+        <span className="flex-1 text-left">
+          <span className="block text-xs font-medium text-text-primary">Dean</span>
+          <span className="block text-2xs text-text-muted">@dean</span>
+        </span>
       </button>
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-border bg-bg-secondary shadow-lg shadow-black/30">
-          {/* User info */}
-          <div className="border-b border-border px-4 py-3">
-            <div className="text-xs font-medium text-text-primary">Dean</div>
-            <div className="text-2xs text-text-muted">@dean</div>
-          </div>
-
+        <div className="absolute bottom-full left-0 mb-2 w-52 rounded-xl border border-border bg-bg-secondary shadow-lg shadow-black/30">
           {/* Menu items */}
           <div className="p-1.5">
             <button
@@ -151,7 +151,7 @@ export default function UserMenu() {
               </button>
 
               {themeOpen && (
-                <div className="absolute right-full top-0 pr-2">
+                <div className="absolute left-full top-0 pl-2">
                   <div className="w-36 rounded-xl border border-border bg-bg-secondary p-1.5 shadow-lg shadow-black/30">
                     {themeOptions.map((opt) => (
                       <button
