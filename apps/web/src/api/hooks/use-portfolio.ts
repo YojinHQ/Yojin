@@ -1,12 +1,20 @@
 import { useQuery, useMutation } from 'urql';
 
-import { PORTFOLIO_QUERY, POSITIONS_QUERY, ENRICHED_SNAPSHOT_QUERY, REFRESH_POSITIONS_MUTATION } from '../documents.js';
+import {
+  PORTFOLIO_QUERY,
+  POSITIONS_QUERY,
+  ENRICHED_SNAPSHOT_QUERY,
+  REFRESH_POSITIONS_MUTATION,
+  ADD_MANUAL_POSITION_MUTATION,
+} from '../documents.js';
 import type {
   PortfolioQueryResult,
   PositionsQueryResult,
   EnrichedSnapshotQueryResult,
   RefreshPositionsMutationResult,
   RefreshPositionsVariables,
+  AddManualPositionMutationResult,
+  AddManualPositionVariables,
 } from '../types.js';
 
 /** Full portfolio snapshot with positions, totals, and P&L. */
@@ -27,4 +35,9 @@ export function useEnrichedSnapshot() {
 /** Trigger a position refresh from a specific brokerage platform. */
 export function useRefreshPositions() {
   return useMutation<RefreshPositionsMutationResult, RefreshPositionsVariables>(REFRESH_POSITIONS_MUTATION);
+}
+
+/** Add a manual position to the portfolio. */
+export function useAddManualPosition() {
+  return useMutation<AddManualPositionMutationResult, AddManualPositionVariables>(ADD_MANUAL_POSITION_MUTATION);
 }

@@ -1,19 +1,11 @@
 import { Link } from 'react-router';
+import type { Position } from '../../api/types';
+import { cn } from '../../lib/utils';
+import Badge from '../common/badge';
 import EmptyState from '../common/empty-state';
 import { SymbolLogo } from '../common/symbol-logo';
-import StatusBadge from './status-badge';
 
-interface Position {
-  symbol: string;
-  name: string;
-  assetClass: string;
-  shares: number;
-  value: number;
-  date: string;
-  status: 'holding' | 'watching' | 'pending' | 'sold';
-}
-
-const columns = ['Symbol', 'Asset Class', 'Shares', 'Value', 'Date', 'Status'];
+const columns = ['Symbol', 'Asset Class', 'Qty', 'Cost Basis', 'Mkt Value', 'P&L'];
 
 function formatCurrency(value: number): string {
   return value.toLocaleString('en-US', {
@@ -24,13 +16,9 @@ function formatCurrency(value: number): string {
   });
 }
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+function formatPnlPercent(value: number): string {
+  const sign = value >= 0 ? '+' : '';
+  return `${sign}${value.toFixed(2)}%`;
 }
 
 export default function PositionTable({ positions }: { positions: Position[] }) {
@@ -52,7 +40,10 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
         </thead>
         <tbody>
           {positions.map((pos) => (
-            <tr key={pos.symbol} className="border-t border-border transition-colors hover:bg-bg-hover">
+            <tr
+              key={`${pos.symbol}:${pos.platform}`}
+              className="border-t border-border transition-colors hover:bg-bg-hover"
+            >
               <td className="px-4 py-2.5">
                 <div className="flex items-center gap-3">
                   <SymbolLogo
@@ -61,19 +52,29 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
                     size="md"
                   />
                   <div>
-                    <Link to={`/portfolio/${pos.symbol}`} className="font-medium text-text-primary">
-                      {pos.symbol}
-                    </Link>
+                    <div className="flex items-center gap-1.5">
+                      <Link to={`/portfolio/${pos.symbol}`} className="font-medium text-text-primary">
+                        {pos.symbol}
+                      </Link>
+                      {pos.platform === 'MANUAL' && (
+                        <Badge variant="neutral" size="xs">
+                          manual
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-2xs text-text-secondary">{pos.name}</div>
                   </div>
                 </div>
               </td>
-              <td className="px-4 py-2.5 text-text-secondary">{pos.assetClass}</td>
-              <td className="px-4 py-2.5 text-text-secondary">{pos.shares}</td>
-              <td className="px-4 py-2.5 text-text-primary font-medium">{formatCurrency(pos.value)}</td>
-              <td className="px-4 py-2.5 text-text-secondary">{formatDate(pos.date)}</td>
+              <td className="px-4 py-2.5 text-text-secondary capitalize">{pos.assetClass.toLowerCase()}</td>
+              <td className="px-4 py-2.5 text-text-secondary">{pos.quantity}</td>
+              <td className="px-4 py-2.5 text-text-secondary">{formatCurrency(pos.costBasis)}</td>
+              <td className="px-4 py-2.5 text-text-primary font-medium">{formatCurrency(pos.marketValue)}</td>
               <td className="px-4 py-2.5">
-                <StatusBadge status={pos.status} />
+                <div className={cn('font-medium', pos.unrealizedPnl >= 0 ? 'text-success' : 'text-error')}>
+                  {formatCurrency(pos.unrealizedPnl)}
+                  <span className="ml-1 text-2xs">({formatPnlPercent(pos.unrealizedPnlPercent)})</span>
+                </div>
               </td>
             </tr>
           ))}

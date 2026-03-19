@@ -28,6 +28,7 @@ export default function ChatInput({
 }: ChatInputProps) {
   const [value, setValue] = useState(initialValue ?? '');
   const [image, setImage] = useState<ImageAttachment | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -117,17 +118,54 @@ export default function ChatInput({
   return (
     <div onDrop={handleDrop} onDragOver={handleDragOver} onPaste={handlePaste}>
       {image && (
-        <div className="mb-2 flex items-center gap-3 rounded-lg border border-border-light bg-bg-secondary px-3 py-2">
-          <img src={image.preview} alt={image.name} className="h-12 w-12 rounded object-cover" />
-          <span className="flex-1 truncate text-xs text-text-secondary">{image.name}</span>
-          <button
-            type="button"
-            onClick={() => setImage(null)}
-            className="text-sm text-text-muted hover:text-text-primary"
-            aria-label="Remove image"
-          >
-            &times;
-          </button>
+        <div className="mb-1 flex">
+          <div className="group inline-flex items-center rounded-full border border-border-light bg-bg-secondary transition-colors hover:border-text-muted">
+            <button
+              type="button"
+              onClick={() => setShowPreview(true)}
+              className="inline-flex items-center gap-1.5 py-1 pl-1 pr-1.5"
+              aria-label="Preview attached image"
+            >
+              <img src={image.preview} alt={image.name} className="h-5 w-5 rounded-full object-cover" />
+              <span className="max-w-[100px] truncate text-2xs text-text-secondary group-hover:text-text-primary">
+                {image.name}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setImage(null)}
+              className="mr-0.5 flex h-6 w-6 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+              aria-label="Remove image"
+            >
+              <span className="text-base leading-none">&times;</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {image && showPreview && (
+        <div
+          role="dialog"
+          tabIndex={-1}
+          ref={(el) => el?.focus()}
+          className="fixed inset-0 z-50 flex items-center justify-center outline-none"
+          onClick={() => setShowPreview(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setShowPreview(false);
+          }}
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative max-h-[80vh] max-w-[80vw]" onClick={(e) => e.stopPropagation()}>
+            <img src={image.preview} alt={image.name} className="max-h-[80vh] max-w-[80vw] rounded-lg object-contain" />
+            <button
+              type="button"
+              onClick={() => setShowPreview(false)}
+              className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-bg-secondary text-text-muted shadow-lg transition-colors hover:text-text-primary"
+              aria-label="Close preview"
+            >
+              &times;
+            </button>
+          </div>
         </div>
       )}
 

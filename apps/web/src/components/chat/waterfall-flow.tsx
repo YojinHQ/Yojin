@@ -8,6 +8,7 @@ interface WaterfallOption {
   label: string;
   description?: string;
   query?: string;
+  action?: string;
   children?: WaterfallStep;
 }
 
@@ -38,18 +39,21 @@ const TREES: Record<string, WaterfallStep> = {
               id: 'today',
               label: 'Today',
               description: "Today's performance snapshot",
+              action: 'tool:portfolio-overview:today',
               query: 'How is my portfolio performing today?',
             },
             {
               id: 'week',
               label: 'This week',
               description: 'Weekly performance summary',
+              action: 'tool:portfolio-overview:week',
               query: 'How has my portfolio performed this week?',
             },
             {
               id: 'ytd',
               label: 'Year to date',
               description: 'Full year performance review',
+              action: 'tool:portfolio-overview:ytd',
               query: 'Show me my portfolio YTD performance',
             },
           ],
@@ -58,6 +62,7 @@ const TREES: Record<string, WaterfallStep> = {
       {
         id: 'alloc',
         label: 'Allocation breakdown',
+        action: 'tool:allocation',
         query: 'Show me my portfolio allocation by sector and asset class',
       },
       {
@@ -69,6 +74,12 @@ const TREES: Record<string, WaterfallStep> = {
         id: 'benchmark',
         label: 'Benchmark comparison',
         query: 'How does my portfolio compare to the S&P 500?',
+      },
+      {
+        id: 'add-asset',
+        label: 'Add asset',
+        description: 'Manually add a position',
+        action: 'add-asset',
       },
     ],
   },
@@ -107,21 +118,25 @@ const TREES: Record<string, WaterfallStep> = {
       {
         id: 'top',
         label: 'Top performers',
+        action: 'tool:positions-list:top',
         query: 'Show me my top performing positions',
       },
       {
         id: 'worst',
         label: 'Underperformers',
+        action: 'tool:positions-list:worst',
         query: 'Which positions are underperforming?',
       },
       {
         id: 'movers',
         label: "Today's movers",
+        action: 'tool:positions-list:movers',
         query: 'What moved most in my portfolio today?',
       },
       {
         id: 'all',
         label: 'All positions',
+        action: 'tool:positions-list:all',
         query: 'List all my current positions with key metrics',
       },
     ],
@@ -160,10 +175,11 @@ const TREES: Record<string, WaterfallStep> = {
 interface WaterfallFlowProps {
   categoryId: string;
   onComplete: (query: string) => void;
+  onAction?: (action: string, displayLabel: string) => void;
   onCancel: () => void;
 }
 
-export default function WaterfallFlow({ categoryId, onComplete, onCancel }: WaterfallFlowProps) {
+export default function WaterfallFlow({ categoryId, onComplete, onAction, onCancel }: WaterfallFlowProps) {
   const tree = TREES[categoryId];
   const [path, setPath] = useState<WaterfallStep[]>([tree]);
   const [selectedId, setSelectedId] = useState<string | undefined>();
@@ -180,7 +196,9 @@ export default function WaterfallFlow({ categoryId, onComplete, onCancel }: Wate
 
       // Brief pause to show the selection highlight before transitioning
       setTimeout(() => {
-        if (option.query) {
+        if (option.action) {
+          onAction?.(option.action, option.query ?? option.label);
+        } else if (option.query) {
           onComplete(option.query);
         } else if (option.children) {
           const next = option.children;
@@ -190,7 +208,7 @@ export default function WaterfallFlow({ categoryId, onComplete, onCancel }: Wate
         }
       }, 250);
     },
-    [currentStep, onComplete],
+    [currentStep, onComplete, onAction],
   );
 
   const handleBack = useCallback(() => {

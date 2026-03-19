@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router';
+import type { Position } from '../../api/types';
 import PositionTable from './position-table';
 
 const meta: Meta<typeof PositionTable> = {
@@ -20,51 +21,45 @@ const meta: Meta<typeof PositionTable> = {
 export default meta;
 type Story = StoryObj<typeof PositionTable>;
 
-const mockPositions = [
+const mockPositions: Position[] = [
   {
     symbol: 'AAPL',
     name: 'Apple Inc.',
-    assetClass: 'Equity',
-    shares: 150,
-    value: 28432.5,
-    date: '2025-06-15',
-    status: 'holding' as const,
+    quantity: 150,
+    costBasis: 145.0,
+    currentPrice: 189.55,
+    marketValue: 28432.5,
+    unrealizedPnl: 6682.5,
+    unrealizedPnlPercent: 30.71,
+    sector: 'Technology',
+    assetClass: 'EQUITY',
+    platform: 'MANUAL',
   },
   {
     symbol: 'NVDA',
     name: 'NVIDIA Corp.',
-    assetClass: 'Equity',
-    shares: 45,
-    value: 22150.75,
-    date: '2025-03-22',
-    status: 'holding' as const,
+    quantity: 45,
+    costBasis: 380.0,
+    currentPrice: 492.24,
+    marketValue: 22150.75,
+    unrealizedPnl: 5050.75,
+    unrealizedPnlPercent: 29.53,
+    sector: 'Technology',
+    assetClass: 'EQUITY',
+    platform: 'MANUAL',
   },
   {
-    symbol: 'MSFT',
-    name: 'Microsoft Corp.',
-    assetClass: 'Equity',
-    shares: 80,
-    value: 15221.8,
-    date: '2025-01-10',
-    status: 'watching' as const,
-  },
-  {
-    symbol: 'GOOGL',
-    name: 'Alphabet Inc.',
-    assetClass: 'Equity',
-    shares: 60,
-    value: 12845.2,
-    date: '2025-08-05',
-    status: 'pending' as const,
-  },
-  {
-    symbol: 'META',
-    name: 'Meta Platforms',
-    assetClass: 'Equity',
-    shares: 30,
-    value: 8920.0,
-    date: '2024-11-20',
-    status: 'sold' as const,
+    symbol: 'BTC',
+    name: 'Bitcoin',
+    quantity: 0.45,
+    costBasis: 35000.0,
+    currentPrice: 41600.0,
+    marketValue: 18720.0,
+    unrealizedPnl: 2970.0,
+    unrealizedPnlPercent: 18.86,
+    sector: null,
+    assetClass: 'CRYPTO',
+    platform: 'MANUAL',
   },
 ];
 
