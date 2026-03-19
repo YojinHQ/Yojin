@@ -5,7 +5,7 @@ import EmptyState from '../common/empty-state';
 import { SymbolLogo } from '../common/symbol-logo';
 import type { Position } from '../../api';
 
-const columns = ['Symbol', 'Platform', 'Class', 'Quantity', 'Price', 'Value', '% of Total', 'P&L'];
+const columns = ['Symbol', 'Platform', 'Class', 'Quantity', 'Price', 'Value', '% of Total', '% of Class', 'P&L'];
 
 const PLATFORM_LABELS: Record<string, string> = {
   INTERACTIVE_BROKERS: 'IBKR',
@@ -30,6 +30,14 @@ function formatPercent(n: number): string {
 
 export default function PositionTable({ positions }: { positions: Position[] }) {
   const totalValue = useMemo(() => positions.reduce((sum, p) => sum + p.marketValue, 0), [positions]);
+
+  const classTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const p of positions) {
+      totals[p.assetClass] = (totals[p.assetClass] ?? 0) + p.marketValue;
+    }
+    return totals;
+  }, [positions]);
 
   if (positions.length === 0) {
     return <EmptyState title="No positions found" description="Import a portfolio to see your positions." />;
@@ -74,6 +82,11 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
               <td className="px-4 py-2.5 font-medium text-text-primary">{formatCurrency(pos.marketValue)}</td>
               <td className="px-4 py-2.5 text-text-secondary">
                 {totalValue > 0 ? `${((pos.marketValue / totalValue) * 100).toFixed(1)}%` : '-'}
+              </td>
+              <td className="px-4 py-2.5 text-text-secondary">
+                {(classTotals[pos.assetClass] ?? 0) > 0
+                  ? `${((pos.marketValue / classTotals[pos.assetClass]) * 100).toFixed(1)}%`
+                  : '-'}
               </td>
               <td className="px-4 py-2.5">
                 <span className={cn('font-medium', pos.unrealizedPnlPercent >= 0 ? 'text-success' : 'text-error')}>
