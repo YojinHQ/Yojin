@@ -7,7 +7,7 @@ interface RightPanelProps {
 }
 
 export default function RightPanel({ title, tabs, children }: RightPanelProps) {
-  const activeIndex = tabs?.findIndex((t) => t.active) ?? 0;
+  const activeIndex = Math.max(0, tabs?.findIndex((t) => t.active) ?? 0);
   const tabCount = tabs?.length ?? 1;
 
   return (
@@ -19,7 +19,7 @@ export default function RightPanel({ title, tabs, children }: RightPanelProps) {
             <div className="relative flex rounded-lg bg-bg-tertiary p-1">
               {/* Sliding indicator */}
               <div
-                className="absolute inset-y-1 rounded-md bg-bg-hover shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                className="absolute inset-y-1 left-1 rounded-md bg-bg-hover shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
                 style={{
                   width: `calc((100% - 8px) / ${tabCount})`,
                   transform: `translateX(${activeIndex * 100}%)`,

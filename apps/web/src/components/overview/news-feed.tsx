@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FC } from 'react';
 import { useNavigate } from 'react-router';
 import type { BadgeVariant } from '../common/badge';
 import Button from '../common/button';
@@ -152,7 +152,7 @@ function MacroIcon({ className }: { className?: string }) {
   );
 }
 
-const categoryIcon: Record<FeedCategory, React.FC<{ className?: string }>> = {
+const categoryIcon: Record<FeedCategory, FC<{ className?: string }>> = {
   Action: ActionIcon,
   Alert: AlertIcon,
   Insight: InsightIcon,
@@ -465,22 +465,23 @@ export default function NewsFeed() {
         {feedItems.map((item) => {
           const config = categoryConfig[item.category];
           const Icon = categoryIcon[item.category];
-          const expanded = expandedKey === item.title;
+          const itemKey = `${item.category}-${item.source}-${item.time}`;
+          const expanded = expandedKey === itemKey;
           return (
             <div
-              key={item.title}
+              key={itemKey}
               className={cn(
                 'cursor-pointer rounded-xl border border-border-light bg-bg-tertiary transition-all',
                 expanded ? 'ring-1 ring-border-light' : 'hover:bg-bg-tertiary',
               )}
-              onClick={() => toggleExpand(item.title)}
+              onClick={() => toggleExpand(itemKey)}
               role="button"
               tabIndex={0}
               aria-expanded={expanded}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  toggleExpand(item.title);
+                  toggleExpand(itemKey);
                 }
               }}
             >

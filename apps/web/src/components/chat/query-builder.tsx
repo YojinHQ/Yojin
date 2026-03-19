@@ -53,7 +53,7 @@ export default function QueryBuilder({ suggestions = defaultSuggestions, onSelec
       <div className="grid grid-cols-2 gap-2">
         {suggestions.map((s) => (
           <button
-            key={s.label}
+            key={s.id}
             onClick={() => onSelect(s.id)}
             className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-border/60 bg-bg-secondary px-3.5 py-2.5 text-left transition-all hover:border-border-light hover:bg-bg-hover"
           >

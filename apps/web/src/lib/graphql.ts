@@ -25,8 +25,8 @@ const sseClient = createSSEClient({
  */
 const cache = cacheExchange({
   keys: {
-    Position: (data) => data.symbol as string,
-    EnrichedPosition: (data) => data.symbol as string,
+    Position: (data) => `${data.symbol as string}:${data.platform as string}`,
+    EnrichedPosition: (data) => `${data.symbol as string}:${data.platform as string}`,
     AlertRule: () => null, // embedded, not an entity
     SectorWeight: () => null,
     Concentration: () => null,

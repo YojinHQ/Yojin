@@ -91,7 +91,7 @@ export default function PositionsPreview() {
                 <td className="px-3 py-1.5">
                   <div className="flex items-center gap-2">
                     <SymbolLogo symbol={pos.symbol} size="sm" />
-                    <span className="text-xs font-medium text-primary">{pos.symbol}</span>
+                    <span className="text-xs font-medium text-text-primary">{pos.symbol}</span>
                   </div>
                 </td>
                 <td className="px-3 py-1.5 text-xs text-text-secondary">{pos.name}</td>

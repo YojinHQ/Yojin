@@ -61,7 +61,7 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
                     size="md"
                   />
                   <div>
-                    <Link to={`/portfolio/${pos.symbol}`} className="font-medium text-primary">
+                    <Link to={`/portfolio/${pos.symbol}`} className="font-medium text-text-primary">
                       {pos.symbol}
                     </Link>
                     <div className="text-2xs text-text-secondary">{pos.name}</div>

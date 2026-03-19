@@ -89,7 +89,11 @@ export default function Chat() {
         <div className="mx-auto max-w-3xl space-y-6">
           {/* Morning briefing — always shown as first AI message */}
           <ChatMessage role="assistant">
-            <MorningBriefing onViewFull={handleViewFullBriefing} />
+            <MorningBriefing
+              date={new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              updatedAt={`Updated ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`}
+              onViewFull={handleViewFullBriefing}
+            />
           </ChatMessage>
 
           {/* Server messages (from chat context) */}

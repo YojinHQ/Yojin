@@ -34,7 +34,7 @@ function buildStats(
       change: null,
     },
     {
-      label: "Today's P&L",
+      label: 'Unrealized P&L',
       value: formatCurrency(totalPnl),
       change: formatPercent(totalPnlPercent),
       positive: totalPnl >= 0,
@@ -70,7 +70,7 @@ export default function PortfolioValueStrip() {
   if (error || !data?.portfolio) {
     const placeholders: StatCard[] = [
       { label: 'Total Value', value: 'N/A', change: null },
-      { label: "Today's P&L", value: 'N/A', change: null },
+      { label: 'Unrealized P&L', value: 'N/A', change: null },
       { label: 'Total Return', value: 'N/A', change: null },
       { label: 'Positions', value: 'N/A', change: null },
     ];
