@@ -7,7 +7,14 @@
 
 import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import { pubsub } from '../pubsub.js';
-import type { EnrichedPosition, EnrichedSnapshot, Platform, PortfolioSnapshot, Position } from '../types.js';
+import type {
+  EnrichedPosition,
+  EnrichedSnapshot,
+  Platform,
+  PortfolioHistoryPoint,
+  PortfolioSnapshot,
+  Position,
+} from '../types.js';
 
 let snapshotStore: PortfolioSnapshotStore | undefined;
 
@@ -47,6 +54,18 @@ export async function portfolioQuery(): Promise<PortfolioSnapshot> {
 export async function positionsQuery(): Promise<Position[]> {
   const snapshot = await getSnapshot();
   return snapshot.positions;
+}
+
+export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> {
+  if (!snapshotStore) return [];
+  const snapshots = await snapshotStore.getAll();
+  return snapshots.map((s) => ({
+    timestamp: s.timestamp,
+    totalValue: s.totalValue,
+    totalCost: s.totalCost,
+    totalPnl: s.totalPnl,
+    totalPnlPercent: s.totalPnlPercent,
+  }));
 }
 
 export async function enrichedSnapshotQuery(): Promise<EnrichedSnapshot> {

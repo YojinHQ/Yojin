@@ -37,6 +37,14 @@ export interface PortfolioSnapshot {
   platform: Platform | null;
 }
 
+export interface PortfolioHistoryPoint {
+  timestamp: string;
+  totalValue: number;
+  totalCost: number;
+  totalPnl: number;
+  totalPnlPercent: number;
+}
+
 // ---------------------------------------------------------------------------
 // Enriched
 // ---------------------------------------------------------------------------

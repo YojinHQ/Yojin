@@ -2,6 +2,7 @@
 export {
   usePortfolio,
   usePositions,
+  usePortfolioHistory,
   useEnrichedSnapshot,
   useRefreshPositions,
   useRiskReport,
@@ -19,6 +20,7 @@ export {
 export type {
   Position,
   PortfolioSnapshot,
+  PortfolioHistoryPoint,
   EnrichedPosition,
   EnrichedSnapshot,
   SectorWeight,
@@ -42,6 +44,7 @@ export type {
 export {
   PORTFOLIO_QUERY,
   POSITIONS_QUERY,
+  PORTFOLIO_HISTORY_QUERY,
   ENRICHED_SNAPSHOT_QUERY,
   RISK_REPORT_QUERY,
   SECTOR_EXPOSURE_QUERY,

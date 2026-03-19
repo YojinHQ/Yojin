@@ -100,6 +100,18 @@ export const POSITIONS_QUERY = gql`
   ${POSITION_FIELDS}
 `;
 
+export const PORTFOLIO_HISTORY_QUERY = gql`
+  query PortfolioHistory {
+    portfolioHistory {
+      timestamp
+      totalValue
+      totalCost
+      totalPnl
+      totalPnlPercent
+    }
+  }
+`;
+
 export const ENRICHED_SNAPSHOT_QUERY = gql`
   query EnrichedSnapshot {
     enrichedSnapshot {

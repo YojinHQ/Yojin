@@ -260,9 +260,18 @@ export const typeDefs = /* GraphQL */ `
   # Root types
   # ---------------------------------------------------------------------------
 
+  type PortfolioHistoryPoint {
+    timestamp: String!
+    totalValue: Float!
+    totalCost: Float!
+    totalPnl: Float!
+    totalPnlPercent: Float!
+  }
+
   type Query {
     portfolio: PortfolioSnapshot
     positions: [Position!]!
+    portfolioHistory: [PortfolioHistoryPoint!]!
     enrichedSnapshot: EnrichedSnapshot
     riskReport: RiskReport
     alerts(status: AlertStatus): [Alert!]!
