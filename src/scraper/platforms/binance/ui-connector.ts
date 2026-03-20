@@ -124,7 +124,9 @@ export class BinanceUiConnector implements TieredPlatformConnector {
         return { success: false, error: 'Portfolio page did not load — may need re-authentication' };
       }
 
-      const positions = await this.parsePositions();
+      const allPositions = await this.parsePositions();
+      // Only keep positions with value > 0
+      const positions = allPositions.filter((p) => (p.marketValue ?? 0) > 0 || (p.quantity ?? 0) > 0);
 
       // Save session for next time
       const cookies = await this.page.context().cookies();
