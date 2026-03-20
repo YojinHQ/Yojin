@@ -26,6 +26,7 @@ import {
   positionsQuery,
   refreshPositionsMutation,
 } from './resolvers/portfolio.js';
+import { deviceInfoResolver } from './resolvers/profile.js';
 import { riskReportQuery } from './resolvers/risk.js';
 import { typeDefs } from './schema.js';
 
@@ -44,6 +45,7 @@ const schema = createSchema({
       sectorExposure: sectorExposureQuery,
       listConnections: listConnectionsResolver,
       detectAvailableTiers: detectAvailableTiersResolver,
+      deviceInfo: deviceInfoResolver,
     },
     Mutation: {
       refreshPositions: refreshPositionsMutation,

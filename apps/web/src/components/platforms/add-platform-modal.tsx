@@ -1,153 +1,83 @@
-import { useState } from 'react';
+import { useNavigate } from 'react-router';
 
-import { cn } from '../../lib/utils';
-import type { Platform, ConnectionEvent } from '../../api/types';
+import type { Platform } from '../../api/types';
 import { KNOWN_PLATFORMS } from '../../api/types';
-import { useDetectAvailableTiers } from '../../api/hooks';
+import Badge from '../common/badge';
 import Button from '../common/button';
 import Modal from '../common/modal';
-import Spinner from '../common/spinner';
-import { getPlatformMeta } from './platform-meta';
 import { PlatformLogo } from './platform-logos';
 
 interface AddPlatformModalProps {
   open: boolean;
   onClose: () => void;
-  onConnect: (platform: Platform) => void;
-  connecting?: boolean;
   /** Platforms already connected — hidden from the selector. */
   connectedPlatforms: readonly Platform[];
-  /** Real-time connection status events from subscription. */
-  connectionStatus?: ConnectionEvent | null;
 }
 
-/** Platforms shown in the Add modal (exclude MANUAL — that's for CSV upload). */
-const CONNECTABLE_PLATFORMS = KNOWN_PLATFORMS.filter((p) => p !== 'MANUAL');
+/** Platforms shown in the modal (exclude MANUAL). */
+const DISPLAY_PLATFORMS = KNOWN_PLATFORMS.filter((p) => p !== 'MANUAL');
 
-export function AddPlatformModal({
-  open,
-  onClose,
-  onConnect,
-  connecting = false,
-  connectedPlatforms,
-  connectionStatus = null,
-}: AddPlatformModalProps) {
-  const [selected, setSelected] = useState<Platform | null>(null);
-  const [{ data: tierData, fetching: tierFetching }] = useDetectAvailableTiers(selected ?? '');
+export function AddPlatformModal({ open, onClose, connectedPlatforms }: AddPlatformModalProps) {
+  const navigate = useNavigate();
 
-  const available = CONNECTABLE_PLATFORMS.filter((p) => !connectedPlatforms.includes(p));
+  const available = DISPLAY_PLATFORMS.filter((p) => !connectedPlatforms.includes(p));
 
-  function handleClose() {
-    setSelected(null);
+  function handleGoToChat() {
     onClose();
+    navigate('/chat');
   }
-
-  function handleConnect() {
-    if (!selected) return;
-    onConnect(selected);
-  }
-
-  // Phase 1: platform selector grid
-  if (!selected) {
-    return (
-      <Modal open={open} onClose={handleClose} title="Connect Platform" maxWidth="max-w-md">
-        <p className="text-sm text-text-muted mb-4">Select your investment platform:</p>
-
-        {available.length === 0 ? (
-          <p className="text-sm text-text-muted text-center py-8">All supported platforms are already connected.</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {available.map((platform) => {
-              const meta = getPlatformMeta(platform);
-              return (
-                <button
-                  key={platform}
-                  onClick={() => setSelected(platform)}
-                  className={cn(
-                    'flex flex-col items-center gap-2 rounded-xl border border-border p-4',
-                    'hover:border-accent-primary/50 hover:bg-bg-hover transition-colors',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/30',
-                  )}
-                >
-                  <PlatformLogo platform={platform} size="lg" />
-                  <span className="text-sm font-medium text-text-primary">{meta.label}</span>
-                  <span className="text-2xs text-text-muted">{meta.description}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </Modal>
-    );
-  }
-
-  // Phase 2: platform-specific instructions + tier detection
-  const meta = getPlatformMeta(selected);
-  const tiers = tierData?.detectAvailableTiers ?? [];
-  const missingCredentials = tiers.filter((t) => t.available && t.requiresCredentials.length > 0);
 
   return (
-    <Modal open={open} onClose={handleClose} title={`Connect ${meta.label}`} maxWidth="max-w-sm">
-      <div className="space-y-4">
-        <p className="text-sm text-text-secondary">Yojin will connect to {meta.label} and import your positions.</p>
-
-        {tierFetching ? (
-          <div className="flex justify-center py-2">
-            <Spinner size="sm" />
+    <Modal open={open} onClose={onClose} title="Import Positions" maxWidth="max-w-sm">
+      <div className="space-y-5">
+        {/* Primary action — screenshot import */}
+        <div className="rounded-xl border border-border bg-bg-tertiary/20 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <svg
+              className="h-5 w-5 text-accent-primary"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z"
+              />
+            </svg>
+            <span className="text-sm font-medium text-text-primary">Screenshot Import</span>
           </div>
-        ) : (
-          missingCredentials.length > 0 && (
-            <div className="rounded-lg bg-warning/10 px-3 py-2">
-              <p className="text-xs text-warning">
-                Requires credentials: {missingCredentials.flatMap((t) => t.requiresCredentials).join(', ')}
-              </p>
-            </div>
-          )
-        )}
-
-        <div className="space-y-2">
-          <InfoRow text="Your credentials are encrypted and never stored in plaintext." />
-          <InfoRow text="Only position data is read — no trades are executed." />
+          <p className="text-xs text-text-muted leading-relaxed">
+            Paste a screenshot of your portfolio in the chat. Yojin&apos;s AI will extract your positions automatically
+            — works with any platform.
+          </p>
+          <Button size="sm" onClick={handleGoToChat} className="w-full">
+            Open Chat
+          </Button>
         </div>
 
-        {connecting && connectionStatus && (
-          <div className="rounded-lg bg-bg-tertiary/50 px-3 py-2">
-            <p className="text-xs text-text-secondary">{connectionStatus.message}</p>
-            {connectionStatus.error && <p className="mt-1 text-xs text-error">{connectionStatus.error}</p>}
+        {/* Supported platforms row */}
+        {available.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-2xs text-text-muted uppercase tracking-wider">Supported platforms</p>
+            <div className="flex flex-wrap gap-2">
+              {available.map((platform) => (
+                <PlatformLogo key={platform} platform={platform} size="sm" />
+              ))}
+            </div>
           </div>
         )}
 
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="secondary" size="sm" onClick={handleClose}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={handleConnect} loading={connecting}>
-            Start Import
-          </Button>
+        {/* Coming soon hint */}
+        <div className="flex items-center gap-2 pt-1">
+          <Badge variant="neutral" size="xs">
+            Coming Soon
+          </Badge>
+          <span className="text-2xs text-text-muted">Direct API connections &amp; auto-sync</span>
         </div>
       </div>
     </Modal>
-  );
-}
-
-function InfoRow({ text }: { text: string }) {
-  return (
-    <div className="flex items-start gap-2 rounded-lg bg-bg-tertiary/50 px-3 py-2">
-      <svg
-        className="mt-0.5 h-4 w-4 shrink-0 text-info"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-        aria-hidden="true"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-        />
-      </svg>
-      <span className="text-xs text-text-muted">{text}</span>
-    </div>
   );
 }

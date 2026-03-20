@@ -195,6 +195,20 @@ export interface Article {
 }
 
 // ---------------------------------------------------------------------------
+// Device Identity
+// ---------------------------------------------------------------------------
+
+export interface DeviceInfo {
+  deviceId: string;
+  shortId: string;
+  createdAt: string;
+}
+
+export interface DeviceInfoQueryResult {
+  deviceInfo: DeviceInfo;
+}
+
+// ---------------------------------------------------------------------------
 // Connections / Onboarding
 // ---------------------------------------------------------------------------
 

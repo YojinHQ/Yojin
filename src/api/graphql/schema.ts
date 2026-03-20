@@ -328,7 +328,14 @@ export const typeDefs = /* GraphQL */ `
     totalPnlPercent: Float!
   }
 
+  type DeviceInfo {
+    deviceId: String!
+    shortId: String!
+    createdAt: String!
+  }
+
   type Query {
+    deviceInfo: DeviceInfo!
     portfolio: PortfolioSnapshot
     positions: [Position!]!
     portfolioHistory: [PortfolioHistoryPoint!]!
