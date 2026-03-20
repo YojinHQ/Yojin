@@ -6,6 +6,7 @@
  */
 
 import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
+import type { ConnectionManager } from '../../../scraper/connection-manager.js';
 import { pubsub } from '../pubsub.js';
 import type {
   AssetClass,
@@ -18,10 +19,16 @@ import type {
 } from '../types.js';
 
 let snapshotStore: PortfolioSnapshotStore | undefined;
+let connectionManager: ConnectionManager | undefined;
 
 /** Called once during server startup to inject the store. */
 export function setSnapshotStore(store: PortfolioSnapshotStore): void {
   snapshotStore = store;
+}
+
+/** Called once during server startup to inject the connection manager. */
+export function setPortfolioConnectionManager(manager: ConnectionManager): void {
+  connectionManager = manager;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,26 +155,21 @@ export async function refreshPositionsMutation(
   _parent: unknown,
   args: { platform: Platform },
 ): Promise<PortfolioSnapshot> {
-  const snapshot = await getSnapshot();
-  // Filter by platform if specified and we have data
-  if (args.platform && snapshot.positions.length > 0) {
-    const filtered = snapshot.positions.filter((p) => p.platform === args.platform);
-    const totalValue = filtered.reduce((sum, p) => sum + p.marketValue, 0);
-    const totalCost = filtered.reduce((sum, p) => sum + p.costBasis * p.quantity, 0);
-    const totalPnl = totalValue - totalCost;
-    const result: PortfolioSnapshot = {
-      ...snapshot,
-      id: `snap-${Date.now()}`,
-      positions: filtered,
-      totalValue,
-      totalCost,
-      totalPnl,
-      totalPnlPercent: totalCost > 0 ? (totalPnl / totalCost) * 100 : 0,
-      platform: args.platform,
-    };
-    pubsub.publish('portfolioUpdate', result);
-    return result;
+  // If a connection manager is available and the platform is connected,
+  // trigger a live re-scrape via the connector.
+  if (connectionManager && args.platform) {
+    const syncResult = await connectionManager.syncPlatform(args.platform);
+    if (syncResult.success) {
+      // Return the freshly saved snapshot
+      const snapshot = await getSnapshot();
+      pubsub.publish('portfolioUpdate', snapshot);
+      return snapshot;
+    }
+    // If sync failed (e.g. no connector for this platform), fall through to
+    // returning the cached snapshot so the UI still gets data.
   }
+
+  const snapshot = await getSnapshot();
   pubsub.publish('portfolioUpdate', snapshot);
   return snapshot;
 }

@@ -365,6 +365,93 @@ export class ConnectionManager {
   }
 
   // -------------------------------------------------------------------------
+  // Sync (re-fetch positions for a connected platform)
+  // -------------------------------------------------------------------------
+
+  async syncPlatform(platform: Platform): Promise<ConnectionResult> {
+    // Concurrency guard
+    if (this.inProgress.has(platform)) {
+      return { success: false, error: `Operation already in progress for ${platform}` };
+    }
+    this.inProgress.add(platform);
+
+    try {
+      // Look up the connected tier
+      const configs = await this.readConfig();
+      const configEntry = configs.find((c) => c.platform === platform);
+      if (!configEntry) {
+        return { success: false, error: `${platform} is not connected` };
+      }
+
+      const key = `${platform}:${configEntry.tier}`;
+      const connector = this.connectors.get(key);
+      if (!connector) {
+        return { success: false, error: `No connector registered for ${platform}:${configEntry.tier}` };
+      }
+
+      // Re-connect if needed (e.g. browser session expired)
+      const connectResult = await connector.connect(configEntry.credentialRefs);
+      if (!connectResult.success) {
+        await this.upsertState({
+          platform,
+          tier: configEntry.tier,
+          status: 'ERROR',
+          lastSync: null,
+          lastError: connectResult.error ?? 'Reconnect failed',
+        });
+        return { success: false, error: connectResult.error ?? 'Reconnect failed' };
+      }
+
+      // Fetch positions
+      const fetchResult = await connector.fetchPositions();
+      if (!fetchResult.success) {
+        await this.upsertState({
+          platform,
+          tier: configEntry.tier,
+          status: 'ERROR',
+          lastSync: null,
+          lastError: fetchResult.error,
+        });
+        return { success: false, error: fetchResult.error };
+      }
+
+      // Save to snapshot store
+      if (this.snapshotStore && fetchResult.positions.length > 0) {
+        const positions: Position[] = fetchResult.positions.map((ep) => ({
+          symbol: ep.symbol,
+          name: ep.symbol,
+          quantity: ep.quantity ?? 0,
+          costBasis: 0,
+          currentPrice: 0,
+          marketValue: ep.marketValue ?? 0,
+          unrealizedPnl: 0,
+          unrealizedPnlPercent: 0,
+          assetClass: ep.assetClass ?? 'CRYPTO',
+          platform,
+        }));
+        await this.snapshotStore.save({ positions, platform });
+      }
+
+      const now = new Date().toISOString();
+      await this.upsertState({ platform, tier: configEntry.tier, status: 'CONNECTED', lastSync: now, lastError: null });
+
+      const connection: Connection = {
+        platform,
+        tier: configEntry.tier,
+        status: 'CONNECTED',
+        lastSync: now,
+        lastError: null,
+        syncInterval: configEntry.syncInterval,
+        autoRefresh: configEntry.autoRefresh,
+      };
+
+      return { success: true, connection };
+    } finally {
+      this.inProgress.delete(platform);
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // List connections
   // -------------------------------------------------------------------------
 

@@ -10,13 +10,14 @@ import { slackPlugin } from '../../channels/slack/index.js';
 import { webPlugin } from '../../channels/web/index.js';
 import { anthropicPlugin } from '../../providers/anthropic/index.js';
 import { setChatAgentRuntime } from '../api/graphql/resolvers/chat.js';
-import { setSnapshotStore } from '../api/graphql/resolvers/portfolio.js';
+import { setPortfolioConnectionManager, setSnapshotStore } from '../api/graphql/resolvers/portfolio.js';
 import type { YojinConfig } from '../config/config.js';
 import type { AgentRuntime } from '../core/agent-runtime.js';
 import { getLogger } from '../logging/index.js';
 import { PluginRegistry } from '../plugins/registry.js';
 import type { IncomingMessage } from '../plugins/types.js';
 import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
+import type { ConnectionManager } from '../scraper/connection-manager.js';
 
 export class Gateway {
   private readonly registry: PluginRegistry;
@@ -24,7 +25,11 @@ export class Gateway {
   private readonly agentRuntime: AgentRuntime;
   private readonly log = getLogger().sub('gateway');
 
-  constructor(config: YojinConfig, agentRuntime: AgentRuntime, options?: { snapshotStore?: PortfolioSnapshotStore }) {
+  constructor(
+    config: YojinConfig,
+    agentRuntime: AgentRuntime,
+    options?: { snapshotStore?: PortfolioSnapshotStore; connectionManager?: ConnectionManager },
+  ) {
     this.config = config;
     this.registry = new PluginRegistry();
     this.agentRuntime = agentRuntime;
@@ -35,6 +40,11 @@ export class Gateway {
     // Inject snapshot store into portfolio resolver
     if (options?.snapshotStore) {
       setSnapshotStore(options.snapshotStore);
+    }
+
+    // Inject connection manager into portfolio resolver for sync
+    if (options?.connectionManager) {
+      setPortfolioConnectionManager(options.connectionManager);
     }
   }
 
