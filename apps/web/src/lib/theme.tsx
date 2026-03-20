@@ -10,7 +10,7 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: 'dark',
+  theme: 'system',
   resolved: 'dark',
   setTheme: () => {},
 });
@@ -37,7 +37,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeChoice>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === 'light' || stored === 'system' || stored === 'dark') return stored;
-    return 'dark';
+    return 'system';
   });
 
   const [resolved, setResolved] = useState<'light' | 'dark'>(() => resolve(theme));
@@ -53,7 +53,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Apply on mount
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    const initial: ThemeChoice = stored === 'light' || stored === 'system' || stored === 'dark' ? stored : 'dark';
+    const initial: ThemeChoice = stored === 'light' || stored === 'system' || stored === 'dark' ? stored : 'system';
     applyTheme(resolve(initial));
   }, []);
 

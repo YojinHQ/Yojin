@@ -3,42 +3,47 @@ import { useState } from 'react';
 import Card from '../components/common/card';
 import Spinner from '../components/common/spinner';
 import Button from '../components/common/button';
+import Badge from '../components/common/badge';
 import { PlatformCard } from '../components/platforms/platform-card';
 import { AddPlatformModal } from '../components/platforms/add-platform-modal';
-import {
-  useListConnections,
-  useConnectPlatform,
-  useDisconnectPlatform,
-  useRefreshPositions,
-  useOnConnectionStatus,
-} from '../api/hooks';
+import { useListConnections, useDisconnectPlatform, useRefreshPositions, useDeviceInfo } from '../api/hooks';
 
 export default function Profile() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addModalKey, setAddModalKey] = useState(0);
   const [syncingPlatform, setSyncingPlatform] = useState<string | null>(null);
+  const [syncResult, setSyncResult] = useState<{ platform: string; success: boolean; error?: string } | null>(null);
   const [disconnectingPlatform, setDisconnectingPlatform] = useState<string | null>(null);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
-  const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
 
+  const [{ data: deviceData, fetching: deviceFetching }] = useDeviceInfo();
   const [{ data, fetching, error }] = useListConnections();
-  const [{ fetching: connecting }, connectPlatform] = useConnectPlatform();
   const [, disconnectPlatform] = useDisconnectPlatform();
   const [, refreshPositions] = useRefreshPositions();
-  const [{ data: connectionStatus }] = useOnConnectionStatus(connectingPlatform ?? '');
 
   function openAddModal() {
-    setAddModalKey((k) => k + 1);
+    setAddModalKey((k: number) => k + 1);
     setAddModalOpen(true);
   }
 
+  const device = deviceData?.deviceInfo;
   const connections = data?.listConnections ?? [];
   const connectedPlatforms = connections.map((c) => c.platform);
 
   async function handleSyncNow(platform: string) {
     setSyncingPlatform(platform);
+    setSyncResult(null);
     try {
-      await refreshPositions({ platform });
+      const result = await refreshPositions({ platform });
+      if (result.error) {
+        setSyncResult({ platform, success: false, error: result.error.message });
+      } else {
+        setSyncResult({ platform, success: true });
+        // Auto-dismiss success after 3 seconds
+        setTimeout(() => setSyncResult(null), 3000);
+      }
+    } catch {
+      setSyncResult({ platform, success: false, error: 'Sync failed' });
     } finally {
       setSyncingPlatform(null);
     }
@@ -57,41 +62,51 @@ export default function Profile() {
     }
   }
 
-  async function handleConnect(platform: string) {
-    setConnectingPlatform(platform);
-    try {
-      const result = await connectPlatform({ input: { platform } });
-      if (!result.error && result.data?.connectPlatform.success) {
-        setAddModalOpen(false);
-      }
-    } finally {
-      setConnectingPlatform(null);
-    }
-  }
-
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6">
+      {/* Device Identity */}
       <Card className="p-6">
-        <div className="flex items-center gap-5">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent-primary/20 text-xl font-semibold text-accent-primary">
-            DS
+        {deviceFetching ? (
+          <div className="flex justify-center py-4">
+            <Spinner />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-text-primary">Dean Shaked</h2>
-            <p className="text-sm text-text-muted">@dean</p>
+        ) : device ? (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent-primary/15">
+                <svg
+                  className="h-5 w-5 text-accent-primary"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25Z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-text-primary">This Device</p>
+                <p className="text-xs text-text-muted font-mono">
+                  {device.deviceId.slice(0, 16)}...{device.deviceId.slice(-8)}
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <Badge variant="success" size="xs">
+                Active
+              </Badge>
+              <p className="text-2xs text-text-muted mt-1">Since {new Date(device.createdAt).toLocaleDateString()}</p>
+            </div>
           </div>
-        </div>
+        ) : null}
       </Card>
 
-      <Card title="Account Information" section>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <Field label="Display Name" value="Dean Shaked" />
-          <Field label="Username" value="@dean" />
-          <Field label="Email" value="dean@yojin.ai" />
-          <Field label="Role" value="Owner" />
-        </div>
-      </Card>
-
+      {/* Connected Platforms */}
       <Card title="Connected Platforms" section className="relative">
         <div className="absolute right-5 top-5">
           <Button size="sm" onClick={openAddModal}>
@@ -114,6 +129,13 @@ export default function Profile() {
           </div>
         ) : (
           <div className="space-y-3">
+            {syncResult && (
+              <p
+                className={`text-sm rounded-lg px-3 py-2 ${syncResult.success ? 'text-success bg-success/10' : 'text-error bg-error/10'}`}
+              >
+                {syncResult.success ? `Synced ${syncResult.platform} successfully` : `Sync failed: ${syncResult.error}`}
+              </p>
+            )}
             {disconnectError && (
               <p className="text-sm text-error bg-error/10 rounded-lg px-3 py-2">{disconnectError}</p>
             )}
@@ -135,20 +157,8 @@ export default function Profile() {
         key={addModalKey}
         open={addModalOpen}
         onClose={() => setAddModalOpen(false)}
-        onConnect={handleConnect}
-        connecting={connecting}
         connectedPlatforms={connectedPlatforms}
-        connectionStatus={connectionStatus?.onConnectionStatus ?? null}
       />
-    </div>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-text-muted mb-1">{label}</p>
-      <p className="text-sm text-text-primary">{value}</p>
     </div>
   );
 }

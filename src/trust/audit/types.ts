@@ -21,6 +21,10 @@ export const AuditEventTypeSchema = z.enum([
   'approval.request',
   'approval.result',
   'posture.change',
+  'connection.attempt',
+  'connection.success',
+  'connection.failure',
+  'connection.removed',
 ]);
 export type AuditEventType = z.infer<typeof AuditEventTypeSchema>;
 

@@ -305,6 +305,20 @@ export const ADD_MANUAL_POSITION_MUTATION = gql`
   ${POSITION_FIELDS}
 `;
 
+// ---------------------------------------------------------------------------
+// Device Identity
+// ---------------------------------------------------------------------------
+
+export const DEVICE_INFO_QUERY = gql`
+  query DeviceInfo {
+    deviceInfo {
+      deviceId
+      shortId
+      createdAt
+    }
+  }
+`;
+
 export const CONNECT_PLATFORM_MUTATION = gql`
   mutation ConnectPlatform($input: ConnectPlatformInput!) {
     connectPlatform(input: $input) {

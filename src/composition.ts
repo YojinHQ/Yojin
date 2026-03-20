@@ -12,6 +12,7 @@ import { createDefaultProfiles } from './agents/defaults.js';
 import { AgentRegistry } from './agents/registry.js';
 import { pubsub } from './api/graphql/pubsub.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
+import { setPortfolioConnectionManager } from './api/graphql/resolvers/portfolio.js';
 import { BrainStore } from './brain/brain.js';
 import { EmotionTracker } from './brain/emotion.js';
 import { FrontalLobe } from './brain/frontal-lobe.js';
@@ -33,6 +34,7 @@ import { PortfolioSnapshotStore } from './portfolio/snapshot-store.js';
 import { createPlatformTools } from './scraper/adapter.js';
 import { ConnectionManager } from './scraper/connection-manager.js';
 import { loadCredentialLookup } from './scraper/platform-credentials.js';
+import { registerAllConnectors } from './scraper/platforms/index.js';
 import { createApiHealthTools } from './tools/api-health.js';
 import { createBrainTools } from './tools/brain-tools.js';
 import { createErrorAnalysisTools } from './tools/error-analysis.js';
@@ -193,7 +195,10 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     }
   }
 
-  // 4b. ConnectionManager (requires vault)
+  // 4b. Portfolio snapshot store (created early — ConnectionManager needs it)
+  const snapshotStore = new PortfolioSnapshotStore(dataRoot);
+
+  // 4c. ConnectionManager (requires vault)
   let connectionManager: ConnectionManager | undefined;
   if (vault) {
     const credentialLookup = await loadCredentialLookup(`${dataRoot}/data/config/platform-credentials.json`);
@@ -204,8 +209,11 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
       configPath: `${dataRoot}/data/config/connections.json`,
       statePath: `${dataRoot}/data/cache/connection-state.json`,
       credentialLookup,
+      snapshotStore,
     });
+    registerAllConnectors({ manager: connectionManager, vault });
     setConnectionManager(connectionManager);
+    setPortfolioConnectionManager(connectionManager);
     log.info('ConnectionManager ready');
   }
 
@@ -217,9 +225,6 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
 
   // 6. DataSourceRegistry (empty — no sources registered yet)
   const dataSourceRegistry = new DataSourceRegistry();
-
-  // 6b. Portfolio snapshot store
-  const snapshotStore = new PortfolioSnapshotStore(dataRoot);
 
   // 7. ToolRegistry — register all tools
   const toolRegistry = new ToolRegistry();

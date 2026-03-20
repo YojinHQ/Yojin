@@ -281,9 +281,15 @@ export const typeDefs = /* GraphQL */ `
     DISCONNECTED
   }
 
+  input CredentialInput {
+    key: String!
+    value: String!
+  }
+
   input ConnectPlatformInput {
     platform: String!
     tier: IntegrationTier
+    credentials: [CredentialInput!]
   }
 
   type ConnectionResult {
@@ -328,7 +334,14 @@ export const typeDefs = /* GraphQL */ `
     totalPnlPercent: Float!
   }
 
+  type DeviceInfo {
+    deviceId: String!
+    shortId: String!
+    createdAt: String!
+  }
+
   type Query {
+    deviceInfo: DeviceInfo!
     portfolio: PortfolioSnapshot
     positions: [Position!]!
     portfolioHistory: [PortfolioHistoryPoint!]!

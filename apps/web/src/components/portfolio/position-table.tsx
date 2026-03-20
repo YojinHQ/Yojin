@@ -15,6 +15,37 @@ function formatCurrency(value: number): string {
   });
 }
 
+/** Show enough decimals so the price is never misleadingly $0. */
+function formatPrice(value: number): string {
+  if (value === 0) return '$0';
+  const abs = Math.abs(value);
+  // >= $1: no decimals needed
+  if (abs >= 1) return formatCurrency(value);
+  // >= $0.01: 2 decimals (e.g. $0.21)
+  if (abs >= 0.01)
+    return value.toLocaleString('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  // >= $0.0001: 4 decimals
+  if (abs >= 0.0001)
+    return value.toLocaleString('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4,
+    });
+  // Tiny prices (memecoins): up to 8 decimals
+  return value.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 6,
+    maximumFractionDigits: 8,
+  });
+}
+
 function formatPnl(value: number): string {
   const sign = value >= 0 ? '+' : '';
   return `${sign}${formatCurrency(value)}`;
@@ -97,11 +128,9 @@ export default function PositionTable({ positions }: { positions: Position[] }) 
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums text-text-secondary">{pos.quantity}</td>
-                <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
-                  {formatCurrency(pos.costBasis)}
-                </td>
+                <td className="px-4 py-3 text-right tabular-nums text-text-secondary">{formatPrice(pos.costBasis)}</td>
                 <td className="px-4 py-3 text-right tabular-nums font-medium text-text-primary">
-                  {formatCurrency(pos.currentPrice)}
+                  {formatPrice(pos.currentPrice)}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums font-medium text-text-primary">
                   {formatCurrency(pos.marketValue)}

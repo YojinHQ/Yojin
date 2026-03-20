@@ -43,6 +43,7 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'portfolio');
         cache.invalidate('Query', 'positions');
         cache.invalidate('Query', 'enrichedSnapshot');
+        cache.invalidate('Query', 'listConnections');
       },
       addManualPosition(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');

@@ -41,11 +41,17 @@ export async function detectAvailableTiersResolver(
 
 export async function connectPlatformResolver(
   _parent: unknown,
-  args: { input: { platform: Platform; tier?: IntegrationTier } },
+  args: { input: { platform: Platform; tier?: IntegrationTier; credentials?: { key: string; value: string }[] } },
 ): Promise<ConnectionResult> {
   if (!connectionManager) throw new Error('ConnectionManager not initialized');
-  const { platform, tier } = args.input;
-  return connectionManager.connectPlatform({ platform, tier });
+  const { platform, tier, credentials: credentialList } = args.input;
+
+  // Convert [{ key, value }] array to Record<string, string> for ConnectionManager
+  const credentials: Record<string, string> | undefined = credentialList?.length
+    ? Object.fromEntries(credentialList.map((c) => [c.key, c.value]))
+    : undefined;
+
+  return connectionManager.connectPlatform({ platform, tier, credentials });
 }
 
 export async function disconnectPlatformResolver(

@@ -32,7 +32,7 @@ describe('mergeCredentialOverrides', () => {
     };
     const merged = mergeCredentialOverrides(overrides);
     expect(merged('COINBASE', 'API')).toEqual(['CUSTOM_KEY']);
-    expect(merged('COINBASE', 'UI')).toEqual(['COINBASE_USERNAME', 'COINBASE_PASSWORD']);
+    expect(merged('COINBASE', 'UI')).toEqual([]);
   });
 
   it('returns defaults when no overrides', () => {
