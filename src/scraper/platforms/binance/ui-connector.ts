@@ -5,11 +5,11 @@
  * Login: email/password → 2FA → portfolio page.
  */
 
-import type { Browser, Page } from 'playwright';
+import type { Page } from 'playwright';
 
 import { screenshotOnFailure, stealthDelay } from '../../pw-helpers.js';
 import type { SessionStore } from '../../session-store.js';
-import type { ExtractedPosition, PlatformConnectorResult, TieredPlatformConnector } from '../../types.js';
+import type { BrowserLike, ExtractedPosition, PlatformConnectorResult, TieredPlatformConnector } from '../../types.js';
 
 // ---------------------------------------------------------------------------
 // BinanceUiConnector
@@ -23,7 +23,7 @@ export class BinanceUiConnector implements TieredPlatformConnector {
   private page: Page | null = null;
 
   constructor(
-    private readonly browser: Browser,
+    private readonly browser: BrowserLike,
     private readonly sessionStore: SessionStore,
     private readonly cacheDir: string,
   ) {}

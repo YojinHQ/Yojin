@@ -12,6 +12,7 @@ import { createDefaultProfiles } from './agents/defaults.js';
 import { AgentRegistry } from './agents/registry.js';
 import { pubsub } from './api/graphql/pubsub.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
+import { setPortfolioConnectionManager } from './api/graphql/resolvers/portfolio.js';
 import { BrainStore } from './brain/brain.js';
 import { EmotionTracker } from './brain/emotion.js';
 import { FrontalLobe } from './brain/frontal-lobe.js';
@@ -212,6 +213,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     });
     registerAllConnectors({ manager: connectionManager, vault });
     setConnectionManager(connectionManager);
+    setPortfolioConnectionManager(connectionManager);
     log.info('ConnectionManager ready');
   }
 

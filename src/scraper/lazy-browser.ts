@@ -8,7 +8,9 @@
 
 import type { Browser, BrowserContext } from 'playwright';
 
-export class LazyBrowser {
+import type { BrowserLike } from './types.js';
+
+export class LazyBrowser implements BrowserLike {
   private browser: Browser | null = null;
   private launching: Promise<Browser> | null = null;
 

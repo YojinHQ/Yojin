@@ -5,12 +5,12 @@
  * Login: email/password → 2FA challenge → verify.
  */
 
-import type { Browser, Page } from 'playwright';
+import type { Page } from 'playwright';
 
 import type { SecretVault } from '../../../trust/vault/types.js';
 import { screenshotOnFailure, stealthDelay, waitForSelector } from '../../pw-helpers.js';
 import type { SessionStore } from '../../session-store.js';
-import type { ExtractedPosition, PlatformConnectorResult, TieredPlatformConnector } from '../../types.js';
+import type { BrowserLike, ExtractedPosition, PlatformConnectorResult, TieredPlatformConnector } from '../../types.js';
 
 // ---------------------------------------------------------------------------
 // RobinhoodUiConnector
@@ -27,7 +27,7 @@ export class RobinhoodUiConnector implements TieredPlatformConnector {
 
   constructor(
     private readonly vault: SecretVault,
-    private readonly browser: Browser,
+    private readonly browser: BrowserLike,
     private readonly sessionStore: SessionStore,
     private readonly cacheDir: string,
   ) {}

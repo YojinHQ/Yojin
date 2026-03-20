@@ -3,6 +3,7 @@
  * tiered connector framework, and screenshot extraction results.
  */
 
+import type { BrowserContext } from 'playwright';
 import { z } from 'zod';
 
 import { AssetClassSchema } from '../api/graphql/types.js';
@@ -105,6 +106,14 @@ export const ExtractionResponseSchema = z.object({
 });
 
 export type ExtractionResponse = z.infer<typeof ExtractionResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// BrowserLike — narrow interface for UI connectors (avoids unsafe Browser cast)
+// ---------------------------------------------------------------------------
+
+export interface BrowserLike {
+  newContext(options?: Record<string, unknown>): Promise<BrowserContext>;
+}
 
 // ---------------------------------------------------------------------------
 // Platform connector interfaces

@@ -135,7 +135,7 @@ export function AddPlatformModal({ open, onClose, connectedPlatforms }: AddPlatf
 
     if (result.error || !result.data?.connectPlatform.success) {
       setConnectError(result.data?.connectPlatform.error ?? result.error?.message ?? 'Connection failed');
-      setStep('enter-credentials');
+      setStep(Object.keys(credentials).length > 0 ? 'enter-credentials' : 'select-tier');
       return;
     }
 

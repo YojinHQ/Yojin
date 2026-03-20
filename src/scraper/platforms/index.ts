@@ -5,12 +5,11 @@
  * Called from the composition root (src/main.ts).
  */
 
-import type { Browser } from 'playwright';
-
 import type { SecretVault } from '../../trust/vault/types.js';
 import type { ConnectionManager } from '../connection-manager.js';
 import { LazyBrowser } from '../lazy-browser.js';
 import { SessionStore } from '../session-store.js';
+import type { BrowserLike } from '../types.js';
 import { BinanceApiConnector } from './binance/api-connector.js';
 import { BinanceUiConnector } from './binance/ui-connector.js';
 import { CoinbaseApiConnector } from './coinbase/api-connector.js';
@@ -28,8 +27,8 @@ import { RobinhoodUiConnector } from './robinhood/ui-connector.js';
 export interface RegisterConnectorsOptions {
   manager: ConnectionManager;
   vault: SecretVault;
-  /** Playwright Browser instance — overrides the default lazy browser. */
-  browser?: Browser;
+  /** BrowserLike instance — overrides the default lazy browser. */
+  browser?: BrowserLike;
   /** Path to sessions directory (default: data/cache/sessions). */
   sessionsDir?: string;
   /** Path to cache directory for screenshots (default: data/cache). */
@@ -65,9 +64,7 @@ export function registerAllConnectors(opts: RegisterConnectorsOptions): void {
   // UI tier — uses lazy browser (launches Playwright on first connect)
   // -------------------------------------------------------------------------
 
-  // LazyBrowser implements newContext() which is the only Browser method
-  // the UI connectors use. Cast is safe at runtime.
-  const browser = (opts.browser ?? new LazyBrowser()) as Browser;
+  const browser: BrowserLike = opts.browser ?? new LazyBrowser();
   const sessionStore = new SessionStore({ vault, sessionsDir });
 
   manager.registerConnector(new RobinhoodUiConnector(vault, browser, sessionStore, cacheDir));
