@@ -248,18 +248,23 @@ export class ConnectionManager {
 
       // Save fetched positions to snapshot store
       if (this.snapshotStore && fetchResult.positions.length > 0) {
-        const positions: Position[] = fetchResult.positions.map((ep) => ({
-          symbol: ep.symbol,
-          name: ep.symbol,
-          quantity: ep.quantity ?? 0,
-          costBasis: 0,
-          currentPrice: 0,
-          marketValue: ep.marketValue ?? 0,
-          unrealizedPnl: 0,
-          unrealizedPnlPercent: 0,
-          assetClass: ep.assetClass ?? 'CRYPTO',
-          platform,
-        }));
+        const positions: Position[] = fetchResult.positions.map((ep) => {
+          const qty = ep.quantity ?? 0;
+          const mv = ep.marketValue ?? 0;
+          const price = qty > 0 ? mv / qty : 0;
+          return {
+            symbol: ep.symbol,
+            name: ep.symbol,
+            quantity: qty,
+            costBasis: 0,
+            currentPrice: price,
+            marketValue: mv,
+            unrealizedPnl: 0,
+            unrealizedPnlPercent: 0,
+            assetClass: ep.assetClass ?? 'CRYPTO',
+            platform,
+          };
+        });
         await this.snapshotStore.save({ positions, platform });
       }
 
@@ -417,18 +422,23 @@ export class ConnectionManager {
 
       // Save to snapshot store
       if (this.snapshotStore && fetchResult.positions.length > 0) {
-        const positions: Position[] = fetchResult.positions.map((ep) => ({
-          symbol: ep.symbol,
-          name: ep.symbol,
-          quantity: ep.quantity ?? 0,
-          costBasis: 0,
-          currentPrice: 0,
-          marketValue: ep.marketValue ?? 0,
-          unrealizedPnl: 0,
-          unrealizedPnlPercent: 0,
-          assetClass: ep.assetClass ?? 'CRYPTO',
-          platform,
-        }));
+        const positions: Position[] = fetchResult.positions.map((ep) => {
+          const qty = ep.quantity ?? 0;
+          const mv = ep.marketValue ?? 0;
+          const price = qty > 0 ? mv / qty : 0;
+          return {
+            symbol: ep.symbol,
+            name: ep.symbol,
+            quantity: qty,
+            costBasis: 0,
+            currentPrice: price,
+            marketValue: mv,
+            unrealizedPnl: 0,
+            unrealizedPnlPercent: 0,
+            assetClass: ep.assetClass ?? 'CRYPTO',
+            platform,
+          };
+        });
         await this.snapshotStore.save({ positions, platform });
       }
 

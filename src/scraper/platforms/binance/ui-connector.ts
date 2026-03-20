@@ -218,37 +218,51 @@ export class BinanceUiConnector implements TieredPlatformConnector {
     // Instead of a hardcoded ticker list, we accept any uppercase word that
     // matches a crypto ticker pattern (1-10 alphanumeric chars, starts with a
     // letter or digit). We exclude common UI words to avoid false positives.
+    // Use a curated ticker allowlist instead of pattern matching.
+    // Pattern-based matching picks up UI labels (SETTINGS, DELISTED, SWAPPED)
+    // and full coin names (TETHERUS, ZCASH) as false positives.
     const raw = await this.page.evaluate(`(() => {
       var positions = [];
 
-      // Words that look like tickers but are UI labels
-      var EXCLUDE = new Set([
-        'USD','BRL','EUR','GBP','AUD','CAD','TRY','NGN','INR','JPY','KRW','RUB',
-        'BUY','SELL','ALL','PNL','AVG','EST','MAX','MIN','NEW','TOP','LOW','HIGH',
-        'COIN','SPOT','EARN','POOL','COPY','AUTO','SWAP','P2P','NFT','API','FAQ',
-        'VIP','APR','APY','FEE','GAS','NET','DAY','WEEK','MONTH','YEAR','TOTAL',
-        'MY','IN','ON','AT','TO','OF','OR','AN','NO','DO','IF','UP','GO','OK','AM',
-        'THE','AND','FOR','NOT','ARE','BUT','HAS','WAS','HAD','GET','SET','ADD',
-        'HIDE','SHOW','SORT','VIEW','MORE','LESS','BACK','NEXT','OPEN','CLOSE',
-        'TYPE','NAME','DATE','TIME','SIZE','EDIT','SAVE','SEND','STOP','MOVE',
-        'FREE','LOCKED','FROZEN','ORDER','TRADE','MARGIN','FUTURE','FUTURES',
-        'DEPOSIT','WITHDRAW','TRANSFER','BALANCE','AVAILABLE','OVERVIEW','ASSETS',
-        'ESTIMATED','ACCOUNT','WALLET','FUNDING','ISOLATED','CROSS','CONVERT',
-        'TODAY','YESTERDAY','CHANGE','PRICE','VALUE','AMOUNT','ACTION','STATUS'
-      ]);
-
-      // Match: 1-10 uppercase alphanumeric characters, must contain at least
-      // one letter, optionally prefixed with digits (e.g., "1000SATS")
-      var TICKER_RE = /^[A-Z0-9]{1,10}$/;
-
-      function isTicker(word) {
-        var upper = word.toUpperCase();
-        if (!TICKER_RE.test(upper)) return false;
-        if (EXCLUDE.has(upper)) return false;
-        // Must contain at least one letter
-        if (!/[A-Z]/.test(upper)) return false;
-        return true;
-      }
+      var TICKERS = [
+        'BTC','ETH','BNB','SOL','XRP','ADA','DOGE','DOT','AVAX','MATIC','POL',
+        'LINK','UNI','ATOM','LTC','NEAR','TRX','ARB','OP','APT','SUI','SEI',
+        'PEPE','SHIB','FLOKI','BONK','WIF','USDT','USDC','BUSD','DAI','FDUSD','TUSD',
+        'FIL','ICP','IMX','RENDER','INJ','FET','OCEAN','AGIX','LDO','MKR','AAVE',
+        'CRV','SNX','COMP','GRT','FTM','SAND','MANA','AXS','GALA','ENJ','APE',
+        'XLM','ALGO','VET','EGLD','HBAR','QNT','ZEC','EOS','FLOW','THETA','IOTA',
+        'NEO','KAVA','ONE','ZIL','TIA','JTO','JUP','PYTH','WLD','STRK','DYM',
+        'ORDI','SATS','1000SATS','RATS','RUNE','STX','TON','NOT','KAS','TAO','AR',
+        'CFX','ACH','PENDLE','W','ENA','ETHFI','BOME','WEN','TNSR','KMNO',
+        'IO','ZRO','LISTA','BB','REZ','AEVO','SAGA','OMNI','PIXEL','PORTAL',
+        'MANTA','ALT','XAI','NFP','ACE','LQTY','BLUR','ID','EDU','SUI','CYBER',
+        'MAV','ARKM','YGG','SEI','WBETH','CAKE','GMT','MASK','CHZ','CELR',
+        'DYDX','TWT','SSV','COTI','RSR','ANKR','BAND','BAL','KNC','LRC','SKL',
+        'AUDIO','ENS','API3','PERP','REN','SXP','ALPHA','BADGER','REEF','POLS',
+        'SUPER','CHESS','RARE','HIGH','HOOK','LEVER','KEY','VOXEL','SPELL',
+        'ARP','RAD','JASMY','ROSE','GAS','STORJ','CTSI','POWR','REQ','WING',
+        'TROY','SCRT','PIVX','DOCK','STEEM','HARD','SYS','PROM','WRX','OGN',
+        'MDT','DREP','SUN','BTT','WIN','BTTC','JST','ASTR','GLMR','MOVR',
+        'BEAM','RONIN','RON','AXL','DIA','CLV','KDA','FLUX','ZEN','SC','DCR',
+        'RVN','XEC','CELO','MINA','ICX','ONT','QTUM','WAVES','DASH','XMR',
+        'BSV','BCH','ETC','FTT','LUNA','LUNC','UST','USTC','CKB','AGLD',
+        'NTRN','OSMO','INJ','BICO','OMG','ZRX','1INCH','SUSHI','YFI','DODO',
+        'SFP','PEOPLE','LOOM','ALICE','TLM','SANTOS','LAZIO','CITY','BAR',
+        'JUV','PSG','OG','ATM','ASR','PHA','BEL','FOR','IDEX','POND',
+        'ACA','XNO','MBOX','DEGO','BETA','FORTH','FARM','QUICK','GHST',
+        'FIDA','ORCA','MNGO','STEP','SBR','PORT','COPE','MAPS','SLIM','OXY',
+        'RAY','SRM','ATLAS','POLIS','GST','GMT','FITFI','VELO','DF','MULTI',
+        'PHB','PROS','QI','BURGER','NULS','NKN','ARDR','STMX','VITE','XVS',
+        'TKO','BAKE','ALPACA','ELF','IRIS','COCOS','MFT','DENT','HOT','FUN',
+        'CVC','MTL','OXT','NMR','DNT','RLC','IOTX','LSK','POLY','CTXC',
+        'PERL','TOMO','DATA','SC','SNT','ADX','AERGO','AMB','ARNM','WAXP',
+        'HIFI','COMBO','MAV','ARK','BOND','FRONT','TRU','LIT','UNFI','DAR',
+        'FIRO','KMD','STRAX','XVG','VIB','SLP','C98','DUSK','MBL','MOVEZ',
+        'T','LOKA','BSW','GMX','STG','RDNT','JOE','GNS','GRAIL','PENDLE',
+        'RPL','FXS','SD','ANKR','SSV','SSVETH','RETH','CBETH','STETH','WSTETH',
+        'LQO','SHR','LQR','LQT','SHI','DEC','SHB'
+      ];
+      var knownTickers = new Set(TICKERS);
 
       function pn(text) {
         if (!text) return undefined;
@@ -266,7 +280,7 @@ export class BinanceUiConnector implements TieredPlatformConnector {
         var words = firstText.split(/\\s+/);
         var ticker = null;
         for (var w = 0; w < words.length; w++) {
-          if (isTicker(words[w])) { ticker = words[w].toUpperCase(); break; }
+          if (knownTickers.has(words[w].toUpperCase())) { ticker = words[w].toUpperCase(); break; }
         }
         if (!ticker) continue;
         var nums = [];
@@ -291,7 +305,7 @@ export class BinanceUiConnector implements TieredPlatformConnector {
           var lwords = lines[i].split(/\\s+/);
           var lticker = null;
           for (var lw = 0; lw < lwords.length; lw++) {
-            if (isTicker(lwords[lw])) { lticker = lwords[lw].toUpperCase(); break; }
+            if (knownTickers.has(lwords[lw].toUpperCase())) { lticker = lwords[lw].toUpperCase(); break; }
           }
           if (!lticker) continue;
           var lnums = [];
@@ -310,7 +324,7 @@ export class BinanceUiConnector implements TieredPlatformConnector {
         }
       }
 
-      // Deduplicate
+      // Deduplicate by symbol
       var seen = {};
       return positions.filter(function(p) {
         if (seen[p.symbol]) return false;
