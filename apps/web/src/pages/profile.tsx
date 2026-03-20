@@ -5,18 +5,27 @@ import Spinner from '../components/common/spinner';
 import Button from '../components/common/button';
 import { PlatformCard } from '../components/platforms/platform-card';
 import { AddPlatformModal } from '../components/platforms/add-platform-modal';
-import { useListConnections, useConnectPlatform, useDisconnectPlatform, useRefreshPositions } from '../api/hooks';
+import {
+  useListConnections,
+  useConnectPlatform,
+  useDisconnectPlatform,
+  useRefreshPositions,
+  useOnConnectionStatus,
+} from '../api/hooks';
 
 export default function Profile() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addModalKey, setAddModalKey] = useState(0);
   const [syncingPlatform, setSyncingPlatform] = useState<string | null>(null);
   const [disconnectingPlatform, setDisconnectingPlatform] = useState<string | null>(null);
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
+  const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
 
   const [{ data, fetching, error }] = useListConnections();
   const [{ fetching: connecting }, connectPlatform] = useConnectPlatform();
   const [, disconnectPlatform] = useDisconnectPlatform();
   const [, refreshPositions] = useRefreshPositions();
+  const [{ data: connectionStatus }] = useOnConnectionStatus(connectingPlatform ?? '');
 
   function openAddModal() {
     setAddModalKey((k) => k + 1);
@@ -37,17 +46,26 @@ export default function Profile() {
 
   async function handleDisconnect(platform: string) {
     setDisconnectingPlatform(platform);
+    setDisconnectError(null);
     try {
-      await disconnectPlatform({ platform, removeCredentials: true });
+      const result = await disconnectPlatform({ platform, removeCredentials: true });
+      if (result.error || !result.data?.disconnectPlatform.success) {
+        setDisconnectError(result.data?.disconnectPlatform.error ?? result.error?.message ?? 'Disconnect failed');
+      }
     } finally {
       setDisconnectingPlatform(null);
     }
   }
 
   async function handleConnect(platform: string) {
-    const result = await connectPlatform({ input: { platform } });
-    if (!result.error && result.data?.connectPlatform.success) {
-      setAddModalOpen(false);
+    setConnectingPlatform(platform);
+    try {
+      const result = await connectPlatform({ input: { platform } });
+      if (!result.error && result.data?.connectPlatform.success) {
+        setAddModalOpen(false);
+      }
+    } finally {
+      setConnectingPlatform(null);
     }
   }
 
@@ -96,6 +114,9 @@ export default function Profile() {
           </div>
         ) : (
           <div className="space-y-3">
+            {disconnectError && (
+              <p className="text-sm text-error bg-error/10 rounded-lg px-3 py-2">{disconnectError}</p>
+            )}
             {connections.map((connection) => (
               <PlatformCard
                 key={connection.platform}
@@ -117,6 +138,7 @@ export default function Profile() {
         onConnect={handleConnect}
         connecting={connecting}
         connectedPlatforms={connectedPlatforms}
+        connectionStatus={connectionStatus?.onConnectionStatus ?? null}
       />
     </div>
   );

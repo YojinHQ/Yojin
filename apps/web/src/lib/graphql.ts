@@ -55,11 +55,15 @@ const cache = cacheExchange({
       dismissAlert(_result, _args, cache) {
         cache.invalidate('Query', 'alerts');
       },
-      connectPlatform(_result, _args, cache) {
-        cache.invalidate('Query', 'listConnections');
+      connectPlatform(result: { connectPlatform?: { success?: boolean } }, _args, cache) {
+        if (result.connectPlatform?.success) {
+          cache.invalidate('Query', 'listConnections');
+        }
       },
-      disconnectPlatform(_result, _args, cache) {
-        cache.invalidate('Query', 'listConnections');
+      disconnectPlatform(result: { disconnectPlatform?: { success?: boolean } }, _args, cache) {
+        if (result.disconnectPlatform?.success) {
+          cache.invalidate('Query', 'listConnections');
+        }
       },
     },
   },

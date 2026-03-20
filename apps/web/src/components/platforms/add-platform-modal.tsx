@@ -1,10 +1,12 @@
 import { useState } from 'react';
 
 import { cn } from '../../lib/utils';
-import type { Platform } from '../../api/types';
+import type { Platform, ConnectionEvent } from '../../api/types';
 import { KNOWN_PLATFORMS } from '../../api/types';
+import { useDetectAvailableTiers } from '../../api/hooks';
 import Button from '../common/button';
 import Modal from '../common/modal';
+import Spinner from '../common/spinner';
 import { getPlatformMeta } from './platform-meta';
 import { PlatformLogo } from './platform-logos';
 
@@ -15,6 +17,8 @@ interface AddPlatformModalProps {
   connecting?: boolean;
   /** Platforms already connected — hidden from the selector. */
   connectedPlatforms: readonly Platform[];
+  /** Real-time connection status events from subscription. */
+  connectionStatus?: ConnectionEvent | null;
 }
 
 /** Platforms shown in the Add modal (exclude MANUAL — that's for CSV upload). */
@@ -26,8 +30,10 @@ export function AddPlatformModal({
   onConnect,
   connecting = false,
   connectedPlatforms,
+  connectionStatus = null,
 }: AddPlatformModalProps) {
   const [selected, setSelected] = useState<Platform | null>(null);
+  const [{ data: tierData, fetching: tierFetching }] = useDetectAvailableTiers(selected ?? '');
 
   const available = CONNECTABLE_PLATFORMS.filter((p) => !connectedPlatforms.includes(p));
 
@@ -75,18 +81,41 @@ export function AddPlatformModal({
     );
   }
 
-  // Phase 2: platform-specific instructions
+  // Phase 2: platform-specific instructions + tier detection
   const meta = getPlatformMeta(selected);
+  const tiers = tierData?.detectAvailableTiers ?? [];
+  const missingCredentials = tiers.filter((t) => t.available && t.requiresCredentials.length > 0);
 
   return (
     <Modal open={open} onClose={handleClose} title={`Connect ${meta.label}`} maxWidth="max-w-sm">
       <div className="space-y-4">
         <p className="text-sm text-text-secondary">Yojin will connect to {meta.label} and import your positions.</p>
 
+        {tierFetching ? (
+          <div className="flex justify-center py-2">
+            <Spinner size="sm" />
+          </div>
+        ) : (
+          missingCredentials.length > 0 && (
+            <div className="rounded-lg bg-warning/10 px-3 py-2">
+              <p className="text-xs text-warning">
+                Requires credentials: {missingCredentials.flatMap((t) => t.requiresCredentials).join(', ')}
+              </p>
+            </div>
+          )
+        )}
+
         <div className="space-y-2">
           <InfoRow text="Your credentials are encrypted and never stored in plaintext." />
           <InfoRow text="Only position data is read — no trades are executed." />
         </div>
+
+        {connecting && connectionStatus && (
+          <div className="rounded-lg bg-bg-tertiary/50 px-3 py-2">
+            <p className="text-xs text-text-secondary">{connectionStatus.message}</p>
+            {connectionStatus.error && <p className="mt-1 text-xs text-error">{connectionStatus.error}</p>}
+          </div>
+        )}
 
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" size="sm" onClick={handleClose}>
