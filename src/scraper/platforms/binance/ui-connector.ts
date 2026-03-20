@@ -124,9 +124,12 @@ export class BinanceUiConnector implements TieredPlatformConnector {
         return { success: false, error: 'Portfolio page did not load — may need re-authentication' };
       }
 
+      // Save debug screenshot so we can see what the page actually shows
+      await this.page.screenshot({ path: `${this.cacheDir}/binance-debug.png`, fullPage: true });
+
       const allPositions = await this.parsePositions();
-      // Only keep positions with value > 0
-      const positions = allPositions.filter((p) => (p.marketValue ?? 0) > 0 || (p.quantity ?? 0) > 0);
+      // Only keep positions with positive quantity
+      const positions = allPositions.filter((p) => (p.quantity ?? 0) > 0);
 
       // Save session for next time
       const cookies = await this.page.context().cookies();
@@ -271,68 +274,88 @@ export class BinanceUiConnector implements TieredPlatformConnector {
         return isNaN(num) ? undefined : num;
       }
 
-      // Strategy 1: table rows
-      var rows = document.querySelectorAll('tr');
-      for (var r = 0; r < rows.length; r++) {
-        var cells = rows[r].querySelectorAll('td');
-        if (cells.length < 2) continue;
-        var firstText = (cells[0].textContent || '').trim();
-        var words = firstText.split(/\\s+/);
+      // Binance uses div-based layouts, not HTML tables.
+      // Each asset is a block of lines in the page text:
+      //   TICKER            ← known ticker (e.g., "MATIC")
+      //   Name/Status       ← full name or status labels (skip)
+      //   1,173.01301865    ← quantity (plain number with commas)
+      //   $249.78           ← USD market value (starts with $)
+      //   ...               ← price, cost, PnL lines (skip)
+      var allText = document.body.innerText;
+      var lines = allText.split('\\n').map(function(l) { return l.trim(); }).filter(Boolean);
+
+      for (var i = 0; i < lines.length; i++) {
+        // A ticker line is a single known ticker word (possibly with status text)
+        var lineUpper = lines[i].toUpperCase();
+        var lineWords = lineUpper.split(/\\s+/);
+        if (lineWords.length > 3) continue; // skip long lines (not a ticker line)
+
         var ticker = null;
-        for (var w = 0; w < words.length; w++) {
-          if (knownTickers.has(words[w].toUpperCase())) { ticker = words[w].toUpperCase(); break; }
+        for (var w = 0; w < lineWords.length; w++) {
+          if (knownTickers.has(lineWords[w])) { ticker = lineWords[w]; break; }
         }
         if (!ticker) continue;
-        var nums = [];
-        for (var c = 1; c < cells.length; c++) {
-          var n = pn(cells[c].textContent);
-          if (n !== undefined) nums.push(n);
+
+        // Look ahead for quantity (plain number) and value ($xxx)
+        var quantity = undefined;
+        var marketValue = undefined;
+        for (var j = i + 1; j < Math.min(i + 8, lines.length); j++) {
+          var ahead = lines[j];
+
+          // Stop if we hit another ticker (start of next asset)
+          var aheadWords = ahead.toUpperCase().split(/\\s+/);
+          if (aheadWords.length <= 3) {
+            var nextTicker = false;
+            for (var aw = 0; aw < aheadWords.length; aw++) {
+              if (knownTickers.has(aheadWords[aw])) { nextTicker = true; break; }
+            }
+            if (nextTicker && j > i + 1) break;
+          }
+
+          // Match quantity: plain number with optional commas (e.g., "1,173.01301865")
+          if (quantity === undefined && /^[0-9][0-9,.]*$/.test(ahead)) {
+            quantity = parseFloat(ahead.replace(/,/g, ''));
+          }
+
+          // Match USD value: starts with $ (e.g., "$249.78")
+          if (marketValue === undefined && /^\\$[0-9,.]+$/.test(ahead)) {
+            marketValue = parseFloat(ahead.replace(/[\\$,]/g, ''));
+          }
+
+          // If we found both, stop looking
+          if (quantity !== undefined && marketValue !== undefined) break;
         }
-        if (nums.length === 0) continue;
+
+        if (quantity === undefined || quantity <= 0) continue;
+
         positions.push({
           symbol: ticker,
-          quantity: nums[0],
-          marketValue: nums.length > 1 ? nums[nums.length - 1] : undefined,
+          quantity: quantity,
+          marketValue: marketValue || 0,
           assetClass: 'CRYPTO'
         });
       }
 
-      // Strategy 2: text-based fallback
-      if (positions.length === 0) {
-        var allText = document.body.innerText;
-        var lines = allText.split('\\n').map(function(l) { return l.trim(); }).filter(Boolean);
-        for (var i = 0; i < lines.length; i++) {
-          var lwords = lines[i].split(/\\s+/);
-          var lticker = null;
-          for (var lw = 0; lw < lwords.length; lw++) {
-            if (knownTickers.has(lwords[lw].toUpperCase())) { lticker = lwords[lw].toUpperCase(); break; }
-          }
-          if (!lticker) continue;
-          var lnums = [];
-          for (var j = i; j < Math.min(i + 5, lines.length); j++) {
-            var ln = pn(lines[j]);
-            if (ln !== undefined) lnums.push(ln);
-          }
-          if (lnums.length > 0) {
-            positions.push({
-              symbol: lticker,
-              quantity: lnums[0],
-              marketValue: lnums.length > 1 ? lnums[lnums.length - 1] : undefined,
-              assetClass: 'CRYPTO'
-            });
-          }
-        }
-      }
-
-      // Deduplicate by symbol
+      // Deduplicate by symbol — keep first occurrence
       var seen = {};
-      return positions.filter(function(p) {
+      var deduped = positions.filter(function(p) {
         if (seen[p.symbol]) return false;
         seen[p.symbol] = true;
         return true;
       });
+      return { positions: deduped, debug: lines.slice(0, 120) };
     })()`);
 
-    return raw as ExtractedPosition[];
+    const result = raw as { positions: ExtractedPosition[]; debug: unknown[] };
+
+    // Write debug data for troubleshooting
+    try {
+      const { writeFile } = await import('node:fs/promises');
+      await writeFile(`${this.cacheDir}/binance-parse-debug.json`, JSON.stringify(result.debug, null, 2), 'utf-8');
+    } catch {
+      // Ignore debug write failures
+    }
+
+    return result.positions;
   }
 }
