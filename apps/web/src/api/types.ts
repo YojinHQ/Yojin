@@ -27,7 +27,6 @@ export const KNOWN_PLATFORMS = [
 export type KnownPlatform = (typeof KNOWN_PLATFORMS)[number];
 
 /** A known platform or any custom string (e.g. "Alpaca", "OKX"). */
- 
 export type Platform = KnownPlatform | (string & {});
 
 /** Type guard — true for first-class platforms, false for custom strings. */

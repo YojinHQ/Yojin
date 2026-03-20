@@ -3,27 +3,23 @@
  *
  * These are the TypeScript representations of the GraphQL schema types.
  * Resolvers return these shapes; future services will produce them.
+ *
+ * AssetClassSchema is the canonical Zod enum — all other modules re-export from here.
+ * Platform is an open type (KnownPlatform | string) to support custom platforms.
  */
 
+import { z } from 'zod';
+
 // ---------------------------------------------------------------------------
-// Portfolio
+// Canonical Zod schema for AssetClass
 // ---------------------------------------------------------------------------
 
-export interface Position {
-  symbol: string;
-  name: string;
-  quantity: number;
-  costBasis: number;
-  currentPrice: number;
-  marketValue: number;
-  unrealizedPnl: number;
-  unrealizedPnlPercent: number;
-  sector?: string;
-  assetClass: AssetClass;
-  platform: Platform;
-}
+export const AssetClassSchema = z.enum(['EQUITY', 'CRYPTO', 'BOND', 'COMMODITY', 'CURRENCY', 'OTHER']);
+export type AssetClass = z.infer<typeof AssetClassSchema>;
 
-export type AssetClass = 'EQUITY' | 'CRYPTO' | 'BOND' | 'COMMODITY' | 'CURRENCY' | 'OTHER';
+// ---------------------------------------------------------------------------
+// Platform — open type supporting custom platforms
+// ---------------------------------------------------------------------------
 
 /** Platforms with first-class support (branding, credentials, connectors). */
 export const KNOWN_PLATFORMS = [
@@ -41,12 +37,29 @@ export const KNOWN_PLATFORMS = [
 export type KnownPlatform = (typeof KNOWN_PLATFORMS)[number];
 
 /** A known platform or any custom string (e.g. "Alpaca", "OKX"). */
- 
 export type Platform = KnownPlatform | (string & {});
 
 /** Type guard — true for first-class platforms, false for custom strings. */
 export function isKnownPlatform(value: string): value is KnownPlatform {
   return (KNOWN_PLATFORMS as readonly string[]).includes(value);
+}
+
+// ---------------------------------------------------------------------------
+// Portfolio
+// ---------------------------------------------------------------------------
+
+export interface Position {
+  symbol: string;
+  name: string;
+  quantity: number;
+  costBasis: number;
+  currentPrice: number;
+  marketValue: number;
+  unrealizedPnl: number;
+  unrealizedPnlPercent: number;
+  sector?: string;
+  assetClass: AssetClass;
+  platform: Platform;
 }
 
 export interface PortfolioSnapshot {

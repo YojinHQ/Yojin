@@ -241,7 +241,7 @@ describe('parsePortfolioScreenshot', () => {
     expect(result.positions[0].symbol).toBe('BTC');
     expect(result.positions[1].symbol).toBe('ETH');
     expect(result.metadata.platform).toBe('COINBASE');
-    expect(result.metadata.source).toBe('screenshot');
+    expect(result.metadata.source).toBe('SCREENSHOT');
     expect(result.metadata.confidence).toBeGreaterThan(0);
     expect(result.metadata.usage).toEqual({ inputTokens: 1000, outputTokens: 500 });
   });
@@ -400,8 +400,8 @@ describe('ScreenshotConnector', () => {
       model: 'claude-sonnet-4-6',
     });
 
-    expect(connector.platformId).toBe('screenshot');
-    expect(connector.platformName).toBe('Screenshot Import');
+    expect(connector.platformId).toBe('MANUAL');
+    expect(connector.platformName).toBe('MANUAL Screenshot Import');
 
     const result = await connector.fetchPositions();
     expect(result.success).toBe(true);
@@ -439,6 +439,47 @@ describe('ScreenshotConnector', () => {
     const textBlock = blocks.find((b) => b.type === 'text');
     expect(textBlock?.text).toContain('ROBINHOOD');
   });
+
+  it('implements TieredPlatformConnector — tier is SCREENSHOT', () => {
+    const connector = new ScreenshotConnector({
+      imageData: DUMMY_IMAGE,
+      mediaType: 'image/png',
+      provider: mockProvider(VALID_RESPONSE),
+      model: 'claude-sonnet-4-6',
+    });
+    expect(connector.tier).toBe('SCREENSHOT');
+  });
+
+  it('isAvailable always returns true', async () => {
+    const connector = new ScreenshotConnector({
+      imageData: DUMMY_IMAGE,
+      mediaType: 'image/png',
+      provider: mockProvider(VALID_RESPONSE),
+      model: 'claude-sonnet-4-6',
+    });
+    expect(await connector.isAvailable()).toBe(true);
+  });
+
+  it('connect returns success', async () => {
+    const connector = new ScreenshotConnector({
+      imageData: DUMMY_IMAGE,
+      mediaType: 'image/png',
+      provider: mockProvider(VALID_RESPONSE),
+      model: 'claude-sonnet-4-6',
+    });
+    const result = await connector.connect([]);
+    expect(result).toEqual({ success: true });
+  });
+
+  it('disconnect is a no-op', async () => {
+    const connector = new ScreenshotConnector({
+      imageData: DUMMY_IMAGE,
+      mediaType: 'image/png',
+      provider: mockProvider(VALID_RESPONSE),
+      model: 'claude-sonnet-4-6',
+    });
+    await expect(connector.disconnect()).resolves.toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -448,10 +489,19 @@ describe('ScreenshotConnector', () => {
 describe('Zod schemas', () => {
   describe('PlatformSchema', () => {
     it('accepts valid platforms', () => {
-      expect(PlatformSchema.parse('COINBASE')).toBe('COINBASE');
-      expect(PlatformSchema.parse('ROBINHOOD')).toBe('ROBINHOOD');
-      expect(PlatformSchema.parse('INTERACTIVE_BROKERS')).toBe('INTERACTIVE_BROKERS');
-      expect(PlatformSchema.parse('MANUAL')).toBe('MANUAL');
+      for (const p of [
+        'COINBASE',
+        'ROBINHOOD',
+        'INTERACTIVE_BROKERS',
+        'SCHWAB',
+        'BINANCE',
+        'FIDELITY',
+        'POLYMARKET',
+        'PHANTOM',
+        'MANUAL',
+      ]) {
+        expect(PlatformSchema.parse(p)).toBe(p);
+      }
     });
 
     it('accepts custom platform strings', () => {

@@ -194,6 +194,7 @@ export function buildWebChannel(): ChannelPlugin {
   const capabilities: ChannelCapabilities = {
     supportsThreading: true,
     supportsReactions: false,
+    supportsTyping: false,
     supportsFiles: false,
     supportsEditing: false,
   };
