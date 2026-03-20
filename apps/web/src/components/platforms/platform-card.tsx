@@ -39,8 +39,9 @@ function formatLastSync(lastSync: string | null): string {
 export default function PlatformCard({ connection, onSyncNow, onDisconnect, syncing = false }: PlatformCardProps) {
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const meta = getPlatformMeta(connection.platform);
-  const { variant, label } = statusConfig[connection.status] ?? statusConfig.DISCONNECTED;
+  const { variant, label } = statusConfig[connection.status];
   const isConnected = connection.status === 'CONNECTED';
+  const isDisconnected = connection.status === 'DISCONNECTED';
 
   return (
     <>
@@ -68,17 +69,24 @@ export default function PlatformCard({ connection, onSyncNow, onDisconnect, sync
               {syncing ? <Spinner size="sm" className="text-current" /> : 'Sync Now'}
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={() => setConfirmDisconnect(true)}>
-            <svg
-              className="h-4 w-4 text-text-muted"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
+          {!isDisconnected && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Disconnect ${meta.label}`}
+              onClick={() => setConfirmDisconnect(true)}
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </Button>
+              <svg
+                className="h-4 w-4 text-text-muted"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </Button>
+          )}
         </div>
       </div>
 

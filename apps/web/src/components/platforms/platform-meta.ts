@@ -1,4 +1,5 @@
-import type { Platform } from '../../api/types';
+import type { KnownPlatform, Platform } from '../../api/types';
+import { isKnownPlatform } from '../../api/types';
 
 /**
  * Platform display metadata — names, descriptions, and placeholder initials.
@@ -12,7 +13,7 @@ export interface PlatformMeta {
   description: string;
 }
 
-const PLATFORM_META: Record<string, PlatformMeta> = {
+const PLATFORM_META: Record<KnownPlatform, PlatformMeta> = {
   INTERACTIVE_BROKERS: {
     label: 'Interactive Brokers',
     initials: 'IB',
@@ -77,5 +78,6 @@ const DEFAULT_META: PlatformMeta = {
 };
 
 export function getPlatformMeta(platform: Platform): PlatformMeta {
-  return PLATFORM_META[platform] ?? { ...DEFAULT_META, label: platform, initials: platform.slice(0, 2).toUpperCase() };
+  if (isKnownPlatform(platform)) return PLATFORM_META[platform];
+  return { ...DEFAULT_META, label: platform, initials: platform.slice(0, 2).toUpperCase() };
 }

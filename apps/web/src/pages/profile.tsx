@@ -9,20 +9,29 @@ import { useListConnections, useConnectPlatform, useDisconnectPlatform, useRefre
 
 export default function Profile() {
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addModalKey, setAddModalKey] = useState(0);
   const [syncingPlatform, setSyncingPlatform] = useState<string | null>(null);
 
-  const [{ data, fetching }] = useListConnections();
+  const [{ data, fetching, error }] = useListConnections();
   const [{ fetching: connecting }, connectPlatform] = useConnectPlatform();
   const [, disconnectPlatform] = useDisconnectPlatform();
   const [, refreshPositions] = useRefreshPositions();
+
+  function openAddModal() {
+    setAddModalKey((k) => k + 1);
+    setAddModalOpen(true);
+  }
 
   const connections = data?.listConnections ?? [];
   const connectedPlatforms = connections.map((c) => c.platform);
 
   async function handleSyncNow(platform: string) {
     setSyncingPlatform(platform);
-    await refreshPositions({ platform });
-    setSyncingPlatform(null);
+    try {
+      await refreshPositions({ platform });
+    } finally {
+      setSyncingPlatform(null);
+    }
   }
 
   async function handleDisconnect(platform: string) {
@@ -30,8 +39,10 @@ export default function Profile() {
   }
 
   async function handleConnect(platform: string) {
-    await connectPlatform({ input: { platform } });
-    setAddModalOpen(false);
+    const result = await connectPlatform({ input: { platform } });
+    if (!result.error && result.data?.connectPlatform.success) {
+      setAddModalOpen(false);
+    }
   }
 
   return (
@@ -59,7 +70,7 @@ export default function Profile() {
 
       <Card title="Connected Platforms" section className="relative">
         <div className="absolute right-5 top-5">
-          <Button size="sm" onClick={() => setAddModalOpen(true)}>
+          <Button size="sm" onClick={openAddModal}>
             + Connect New
           </Button>
         </div>
@@ -68,10 +79,12 @@ export default function Profile() {
           <div className="flex justify-center py-8">
             <Spinner />
           </div>
+        ) : error ? (
+          <p className="py-8 text-center text-sm text-error">Failed to load connections.</p>
         ) : connections.length === 0 ? (
           <div className="flex flex-col items-center py-8 text-center">
             <p className="text-sm text-text-muted mb-3">No platforms connected yet.</p>
-            <Button size="sm" onClick={() => setAddModalOpen(true)}>
+            <Button size="sm" onClick={openAddModal}>
               Connect your first platform
             </Button>
           </div>
@@ -91,6 +104,7 @@ export default function Profile() {
       </Card>
 
       <AddPlatformModal
+        key={addModalKey}
         open={addModalOpen}
         onClose={() => setAddModalOpen(false)}
         onConnect={handleConnect}

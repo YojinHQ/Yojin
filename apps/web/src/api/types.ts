@@ -313,7 +313,7 @@ export interface ConnectPlatformVariables {
 }
 
 export interface DisconnectPlatformMutationResult {
-  disconnectPlatform: ConnectionResult;
+  disconnectPlatform: Pick<ConnectionResult, 'success' | 'error'>;
 }
 
 export interface DisconnectPlatformVariables {

@@ -14,7 +14,7 @@ interface AddPlatformModalProps {
   onConnect: (platform: Platform) => void;
   connecting?: boolean;
   /** Platforms already connected — hidden from the selector. */
-  connectedPlatforms: string[];
+  connectedPlatforms: readonly Platform[];
 }
 
 /** Platforms shown in the Add modal (exclude MANUAL — that's for CSV upload). */
@@ -110,6 +110,7 @@ function InfoRow({ text }: { text: string }) {
         viewBox="0 0 24 24"
         stroke="currentColor"
         strokeWidth={2}
+        aria-hidden="true"
       >
         <path
           strokeLinecap="round"

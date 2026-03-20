@@ -74,7 +74,7 @@ All state is file-driven — JSONL sessions, JSON configs, Markdown personas. No
 
 ### Prerequisites
 
-- Node.js >= 20
+- Node.js >= 22
 - pnpm 10+
 
 ### Install
@@ -104,8 +104,11 @@ No manual config files needed — credentials are stored in the encrypted vault 
 # Interactive chat (recommended starting point)
 pnpm chat
 
-# Start server + web dashboard
+# Start backend + web dashboard (development)
 pnpm dev
+
+# Backend server only
+pnpm dev:be
 
 # Production
 pnpm build && pnpm start
@@ -116,7 +119,7 @@ pnpm build && pnpm start
 Yojin ships a CLI entry point (`yojin`) with the following commands:
 
 ```
-yojin                Start Yojin (server + dashboard)
+yojin                Start the backend server (API + GraphQL)
 yojin chat           Chat with Yojin in your terminal
 yojin setup          Connect your Claude account (OAuth flow)
 yojin web            Start the web dashboard only
@@ -144,10 +147,10 @@ pnpm chat -- --system "Be concise"     # Custom system prompt
 Manage credentials in the encrypted vault (AES-256-GCM). Requires `YOJIN_VAULT_PASSPHRASE` env var and an interactive terminal.
 
 ```bash
-pnpm dev -- secret set ANTHROPIC_API_KEY   # Store a secret (hidden input)
-pnpm dev -- secret list                    # List stored secret names
-pnpm dev -- secret show ANTHROPIC_API_KEY  # Reveal a secret (TTY only)
-pnpm dev -- secret delete ANTHROPIC_API_KEY # Remove a secret
+pnpm dev:be -- secret set ANTHROPIC_API_KEY   # Store a secret (hidden input)
+pnpm dev:be -- secret list                    # List stored secret names
+pnpm dev:be -- secret show ANTHROPIC_API_KEY  # Reveal a secret (TTY only)
+pnpm dev:be -- secret delete ANTHROPIC_API_KEY # Remove a secret
 ```
 
 ### `yojin setup`
@@ -164,7 +167,7 @@ pnpm setup
 |---------------------------|----------------------------------------------|----------|
 | `ANTHROPIC_API_KEY`       | Anthropic API key (alternative to OAuth)     | One of these |
 | `CLAUDE_CODE_OAUTH_TOKEN` | OAuth token from `yojin setup`               | One of these |
-| `YOJIN_VAULT_PASSPHRASE`  | Passphrase for the encrypted credential vault | For `secret` commands |
+| `YOJIN_VAULT_PASSPHRASE`  | Passphrase for the encrypted credential vault | Yes (or TTY prompt) |
 | `YOJIN_PII_NER`           | Set to `1` to enable NER-based PII detection | No |
 
 ## Project Structure
@@ -198,23 +201,22 @@ yojin/
 
 ## Commands
 
-| Command                        | Description                           |
-|--------------------------------|---------------------------------------|
-| `pnpm dev`                     | Start development server (tsx)        |
-| `pnpm chat`                    | Interactive chat REPL                 |
-| `pnpm build`                   | Compile TypeScript                    |
-| `pnpm start`                   | Run compiled output                   |
-| `pnpm test`                    | Run tests (vitest)                    |
-| `pnpm lint`                    | Lint with ESLint                      |
-| `pnpm clean`                   | Remove dist/                          |
-| `pnpm dev -- secret set <key>` | Store an encrypted secret             |
-| `pnpm dev -- secret list`      | List stored secret names              |
-| `pnpm dev:web`                 | Start React web app (Vite dev server) |
-| `pnpm dev:all`                 | Start backend + web app in parallel   |
-| `pnpm build:web`               | Build React web app                   |
-| `pnpm build:all`               | Build all packages                    |
-| `pnpm test:all`                | Run tests across all packages         |
-| `pnpm ci:all`                  | Full CI check across all packages     |
+| Command          | Description                           |
+|------------------|---------------------------------------|
+| `pnpm dev`       | Start backend + web app (development) |
+| `pnpm dev:be`    | Start backend only (tsx)              |
+| `pnpm dev:web`   | Start React web app (Vite dev server) |
+| `pnpm chat`      | Interactive chat REPL                 |
+| `pnpm setup`     | OAuth setup flow                      |
+| `pnpm build`     | Compile TypeScript                    |
+| `pnpm start`     | Run compiled output                   |
+| `pnpm test`      | Run tests (vitest)                    |
+| `pnpm lint`      | Lint with ESLint                      |
+| `pnpm clean`     | Remove dist/                          |
+| `pnpm build:web` | Build React web app                   |
+| `pnpm build:all` | Build all packages                    |
+| `pnpm test:all`  | Run tests across all packages         |
+| `pnpm ci:all`    | Full CI check across all packages     |
 
 ## Channels
 
