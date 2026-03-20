@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useTheme } from '../../lib/theme';
 import type { ThemeChoice } from '../../lib/theme';
 import { cn } from '../../lib/utils';
+import { useDeviceInfo } from '../../api/hooks';
 
 const themeOptions: { value: ThemeChoice; label: string; icon: string }[] = [
   {
@@ -28,6 +29,8 @@ export default function UserMenu() {
   const { theme, setTheme } = useTheme();
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const [{ data: deviceData }] = useDeviceInfo();
+  const shortId = deviceData?.deviceInfo.shortId ?? '...';
 
   useEffect(() => {
     if (!open) return;
@@ -64,12 +67,25 @@ export default function UserMenu() {
         onClick={() => setOpen(!open)}
         className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-bg-hover"
       >
-        <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent-primary/15 text-2xs font-medium text-accent-primary">
-          DS
+        <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent-primary/15">
+          <svg
+            className="h-3.5 w-3.5 text-accent-primary"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25Z"
+            />
+          </svg>
         </span>
         <span className="flex-1 text-left">
-          <span className="block text-xs font-medium text-text-primary">Dean</span>
-          <span className="block text-2xs text-text-muted">@dean</span>
+          <span className="block text-xs font-medium text-text-primary font-mono">{shortId}</span>
+          <span className="block text-2xs text-text-muted">This Device</span>
         </span>
       </button>
 
@@ -183,31 +199,6 @@ export default function UserMenu() {
                 </div>
               )}
             </div>
-          </div>
-
-          {/* Log out */}
-          <div className="border-t border-border p-1.5">
-            <button
-              onClick={() => {
-                /* TODO: call signOut() */
-              }}
-              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-error transition-colors hover:bg-error/10"
-            >
-              <svg
-                className="h-4 w-4 flex-shrink-0"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9"
-                />
-              </svg>
-              Log out
-            </button>
           </div>
         </div>
       )}

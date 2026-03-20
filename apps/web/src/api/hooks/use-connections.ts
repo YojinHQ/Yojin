@@ -45,11 +45,7 @@ export function useDisconnectPlatform() {
 
 /** Subscribe to connection status events for a platform. */
 export function useOnConnectionStatus(platform: string) {
-  return useSubscription<
-    OnConnectionStatusSubscriptionResult,
-    OnConnectionStatusSubscriptionResult,
-    OnConnectionStatusVariables
-  >({
+  return useSubscription<OnConnectionStatusSubscriptionResult, OnConnectionStatusVariables>({
     query: ON_CONNECTION_STATUS_SUBSCRIPTION,
     variables: { platform },
     pause: !platform,

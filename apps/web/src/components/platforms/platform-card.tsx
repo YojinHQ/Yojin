@@ -12,7 +12,7 @@ import { PlatformLogo } from './platform-logos';
 interface PlatformCardProps {
   connection: Connection;
   onSyncNow: (platform: string) => void;
-  onDisconnect: (platform: string) => void;
+  onDisconnect: (platform: string) => void | Promise<void>;
   syncing?: boolean;
   disconnecting?: boolean;
 }
@@ -27,7 +27,9 @@ const statusConfig: Record<ConnectionStatus, { variant: BadgeVariant; label: str
 
 function formatLastSync(lastSync: string | null): string {
   if (!lastSync) return 'Never synced';
-  const diff = Date.now() - new Date(lastSync).getTime();
+  const ts = new Date(lastSync).getTime();
+  if (isNaN(ts)) return 'Never synced';
+  const diff = Date.now() - ts;
   const minutes = Math.floor(diff / 60_000);
   if (minutes < 1) return 'Just now';
   if (minutes < 60) return `${minutes}m ago`;
@@ -110,8 +112,9 @@ export function PlatformCard({
             variant="danger"
             size="sm"
             loading={disconnecting}
-            onClick={() => {
-              onDisconnect(connection.platform);
+            onClick={async () => {
+              await onDisconnect(connection.platform);
+              setConfirmDisconnect(false);
             }}
           >
             Disconnect
