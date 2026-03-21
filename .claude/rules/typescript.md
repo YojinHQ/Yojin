@@ -15,12 +15,16 @@ globs: ["**/*.ts"]
 - Use Zod schemas for all external data: config files, API responses, user input.
 - Define interfaces for module boundaries (e.g., `IPortfolioScraper`, `Guard`, `RiskManager`).
 - Prefer `interface` over `type` for object shapes that will be implemented.
+- **Types must match runtime shape.** If a field is stripped at runtime (destructured out, deleted), `Omit` it from the type. Never use `as unknown as T` to hide a mismatch — create a purpose-built type instead.
+- **No unreachable union branches.** If a type says `string | number` but only `number` is reachable at runtime, use `number`. Dead branches mislead consumers and create dead defensive code.
 
 ## Patterns
 - Async/await everywhere — no raw Promise chains or callbacks.
 - Use `Result`-style returns (`{ success: true, data } | { success: false, error }`) over thrown exceptions for expected failures.
 - Thrown errors are for unexpected/programmer errors only.
 - Use tslog for structured logging (already configured in `src/logging/`).
+- **Best-effort symmetry.** If cleanup is wrapped in try/catch (best-effort), the setup/injection should be too — unless you intentionally want setup failure to abort. Document the choice.
+- **Preserve original exceptions in `finally`.** Wrap cleanup calls in `finally` blocks with their own try/catch so a cleanup failure doesn't suppress the original error.
 
 ## Naming
 - Files: kebab-case (`agent-runtime.ts`, `guard-runner.ts`).
