@@ -21,7 +21,7 @@ export interface RedactedSnapshot {
   totalValue: string;
   totalCost: string;
   totalPnl: string;
-  totalPnlPercent: string | number;
+  totalPnlPercent: number;
   timestamp: string;
   platform: Platform | null;
 }
