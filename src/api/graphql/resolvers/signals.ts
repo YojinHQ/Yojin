@@ -47,9 +47,9 @@ function toGql(signal: Signal): SignalGql {
     confidence: signal.confidence,
     contentHash: signal.contentHash,
     tickers: signal.assets.map((a) => a.ticker),
-    sourceId: signal.sources[0]?.id ?? '',
-    sourceName: signal.sources[0]?.name ?? '',
-    link: (signal.metadata?.link as string) ?? null,
+    sourceId: signal.sources.map((s) => s.id).join(', '),
+    sourceName: signal.sources.map((s) => s.name).join(', '),
+    link: typeof signal.metadata?.link === 'string' ? signal.metadata.link : null,
   };
 }
 

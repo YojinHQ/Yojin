@@ -32,8 +32,10 @@ describe('extractTickers', () => {
     expect(extractTickers('BTC-USD broke $70k resistance')).toEqual(['BTC-USD']);
   });
 
-  it('normalizes crypto pairs to -USD', () => {
-    expect(extractTickers('ETH-USDT trading at $3500')).toEqual(['ETH-USD']);
+  it('preserves crypto pair quote currency', () => {
+    expect(extractTickers('ETH-USDT trading at $3500')).toEqual(['ETH-USDT']);
+    expect(extractTickers('BTC-EUR trading at 50000')).toEqual(['BTC-EUR']);
+    expect(extractTickers('SOL-USD price update')).toEqual(['SOL-USD']);
   });
 
   it('combines cashtags, exchange-prefixed, and crypto pairs', () => {

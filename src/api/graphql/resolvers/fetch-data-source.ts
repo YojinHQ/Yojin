@@ -2,19 +2,20 @@
  * fetchDataSource resolver — triggers a CLI data source to fetch data,
  * parses the output, and ingests results as signals.
  *
- * Uses execFile (not exec) — no shell, no injection risk.
+ * Uses spawn with detached stdin — no shell, no injection risk.
  * Currently supports CLI sources. API/MCP adapters are future work.
  */
 
-import { execFile as nodeExecFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { promisify } from 'node:util';
 
+import { z } from 'zod';
+
+import { runCli } from '../../../core/run-cli.js';
 import { createSubsystemLogger } from '../../../logging/logger.js';
 import type { RawSignalInput, SignalIngestor } from '../../../signals/ingestor.js';
+import type { EncryptedVault } from '../../../trust/vault/vault.js';
 
 const logger = createSubsystemLogger('fetch-data-source');
-const runCommand = promisify(nodeExecFile);
 
 // ---------------------------------------------------------------------------
 // State
@@ -22,26 +23,31 @@ const runCommand = promisify(nodeExecFile);
 
 let configPath = 'data/config/data-sources.json';
 let ingestor: SignalIngestor | null = null;
+let vault: EncryptedVault | undefined;
 
-export function setFetchDeps(opts: { configPath: string; ingestor: SignalIngestor }): void {
+export function setFetchDeps(opts: { configPath: string; ingestor: SignalIngestor; vault?: EncryptedVault }): void {
   configPath = opts.configPath;
   ingestor = opts.ingestor;
+  vault = opts.vault;
 }
 
 // ---------------------------------------------------------------------------
 // Config types (matches data-sources.ts resolver)
 // ---------------------------------------------------------------------------
 
-interface DataSourceConfig {
-  id: string;
-  name: string;
-  type: 'CLI' | 'MCP' | 'API';
-  capabilities: string[];
-  enabled: boolean;
-  command?: string;
-  args?: string[];
-  baseUrl?: string;
-}
+const DataSourceConfigSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  type: z.enum(['CLI', 'MCP', 'API']),
+  capabilities: z.array(z.string()),
+  enabled: z.boolean(),
+  command: z.string().optional(),
+  args: z.array(z.string()).optional(),
+  baseUrl: z.string().optional(),
+  secretRef: z.string().optional(),
+});
+
+type DataSourceConfig = z.infer<typeof DataSourceConfigSchema>;
 
 interface FetchResult {
   success: boolean;
@@ -126,12 +132,24 @@ function rssToSignals(items: RssItem[], config: DataSourceConfig): RawSignalInpu
 }
 
 function jsonToSignals(stdout: string, config: DataSourceConfig): RawSignalInput[] {
-  const data = JSON.parse(stdout);
-  const items = Array.isArray(data) ? data : [data];
+  const data: unknown = JSON.parse(stdout);
+  if (data == null || typeof data !== 'object') return [];
+
+  // Unwrap common response wrappers (e.g. Nimble's { results: [...] })
+  const unwrapped = Array.isArray(data)
+    ? data
+    : Array.isArray((data as Record<string, unknown>).results)
+      ? ((data as Record<string, unknown>).results as unknown[])
+      : [data];
+
+  // Filter out non-object/null entries
+  const items = unwrapped.filter(
+    (item): item is Record<string, unknown> => item != null && typeof item === 'object' && !Array.isArray(item),
+  );
 
   return items
-    .filter((item: Record<string, unknown>) => item.title || item.headline || item.name)
-    .map((item: Record<string, unknown>) => ({
+    .filter((item) => item.title || item.headline || item.name)
+    .map((item) => ({
       sourceId: config.id,
       sourceName: config.name,
       sourceType: 'API' as const,
@@ -159,11 +177,17 @@ export async function fetchDataSourceResolver(
     return { success: false, signalsIngested: 0, duplicates: 0, error: 'Signal ingestor not initialized' };
   }
 
-  // Load config
+  // Load config with Zod validation
   let configs: DataSourceConfig[];
   try {
     const content = await readFile(configPath, 'utf-8');
-    configs = JSON.parse(content) as DataSourceConfig[];
+    const raw: unknown = JSON.parse(content);
+    const result = z.array(DataSourceConfigSchema).safeParse(raw);
+    if (!result.success) {
+      logger.warn(`Invalid data-sources.json: ${result.error.message}`);
+      return { success: false, signalsIngested: 0, duplicates: 0, error: 'Invalid data source config file' };
+    }
+    configs = result.data;
   } catch {
     return { success: false, signalsIngested: 0, duplicates: 0, error: 'Failed to load data source configs' };
   }
@@ -189,17 +213,58 @@ export async function fetchDataSourceResolver(
     return { success: false, signalsIngested: 0, duplicates: 0, error: `Data source "${args.id}" has no command` };
   }
 
-  // Build the command args — append the URL if provided
+  // Build the command args
   const cmdArgs = [...(config.args ?? [])];
-  if (args.url) cmdArgs.push(args.url);
+
+  // For Nimble-style sources: if args include "search" subcommand, pass url as --query
+  // For curl-style sources: append url directly
+  if (args.url) {
+    if (cmdArgs.includes('search')) {
+      cmdArgs.push('--query', args.url);
+    } else {
+      cmdArgs.push(args.url);
+    }
+  }
+
+  // Resolve API key from vault if secretRef is configured
+  const env: Record<string, string> = { ...process.env } as Record<string, string>;
+  if (config.secretRef && vault?.isUnlocked) {
+    try {
+      const secret = await vault.get(config.secretRef);
+      if (secret) {
+        env[config.secretRef] = secret;
+      } else {
+        return {
+          success: false,
+          signalsIngested: 0,
+          duplicates: 0,
+          error: `API key "${config.secretRef}" not found in vault. Add it in Settings → Vault.`,
+        };
+      }
+    } catch {
+      return {
+        success: false,
+        signalsIngested: 0,
+        duplicates: 0,
+        error: `Failed to read "${config.secretRef}" from vault. Make sure the vault is unlocked.`,
+      };
+    }
+  } else if (config.secretRef && (!vault || !vault.isUnlocked)) {
+    return {
+      success: false,
+      signalsIngested: 0,
+      duplicates: 0,
+      error: 'Vault is locked. Unlock it first to use data sources that require API keys.',
+    };
+  }
 
   try {
     logger.info(`Fetching from ${config.id}: ${config.command} ${cmdArgs.join(' ')}`);
 
-    // execFile (not exec) — no shell, no injection risk
-    const { stdout } = await runCommand(config.command, cmdArgs, {
+    const { stdout } = await runCli(config.command, cmdArgs, {
       timeout: 30_000,
       maxBuffer: 10 * 1024 * 1024,
+      env,
     });
 
     if (!stdout.trim()) {
@@ -239,18 +304,27 @@ export async function fetchDataSourceResolver(
     };
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);
+    const stderr = (err as { stderr?: string }).stderr?.trim();
 
     // Friendly error messages for common failures
     let message = raw;
     if (raw.includes('ENOENT')) {
       message = `"${config.command}" is not installed. Install it and try again.`;
+    } else if (raw.includes('401') || stderr?.includes('401')) {
+      message = `API key "${config.secretRef ?? 'unknown'}" is invalid or expired. Update it in Settings → Vault.`;
     } else if (raw.includes('No module named')) {
       const mod = raw.match(/No module named (\S+)/)?.[1] ?? 'the module';
       message = `Python module "${mod}" is not installed. Run: pip install ${mod}`;
     } else if (raw.includes('Command failed')) {
-      // Strip the full command echo, keep just the error output
-      const lines = raw.split('\n').filter((l) => !l.startsWith('Command failed:'));
-      message = lines.join(' ').trim() || raw;
+      // Prefer stderr if available
+      message =
+        stderr ||
+        raw
+          .split('\n')
+          .filter((l) => !l.startsWith('Command failed:'))
+          .join(' ')
+          .trim() ||
+        raw;
     }
 
     logger.error(`Fetch failed for ${config.id}: ${message}`);

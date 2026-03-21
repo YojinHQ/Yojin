@@ -105,6 +105,20 @@ export class SignalArchive {
     return results;
   }
 
+  /** Find a single signal by ID (returns early on first match). */
+  async getById(id: string): Promise<Signal | null> {
+    const files = await this.listFiles();
+
+    for (const file of files) {
+      const signals = await this.readFile(file);
+      for (const signal of signals) {
+        if (signal.id === id) return signal;
+      }
+    }
+
+    return null;
+  }
+
   /** List all available date keys (YYYY-MM-DD). */
   async listDates(): Promise<string[]> {
     try {
@@ -187,8 +201,16 @@ export class SignalArchive {
     if (filter.type && signal.type !== filter.type) return false;
     if (filter.ticker && !signal.assets.some((a) => a.ticker === filter.ticker)) return false;
     if (filter.sourceId && !signal.sources.some((s) => s.id === filter.sourceId)) return false;
-    if (filter.since && signal.publishedAt.slice(0, 10) < filter.since.slice(0, 10)) return false;
-    if (filter.until && signal.publishedAt.slice(0, 10) > filter.until.slice(0, 10)) return false;
+    if (filter.since) {
+      // When since is a date-only string (no 'T'), match from start of day
+      const bound = filter.since.includes('T') ? filter.since : `${filter.since}T00:00:00.000Z`;
+      if (signal.publishedAt < bound) return false;
+    }
+    if (filter.until) {
+      // When until is a date-only string (no 'T'), include the entire day
+      const bound = filter.until.includes('T') ? filter.until : `${filter.until}T23:59:59.999Z`;
+      if (signal.publishedAt > bound) return false;
+    }
     if (filter.search) {
       const term = filter.search.toLowerCase();
       const haystack = `${signal.title} ${signal.content ?? ''}`.toLowerCase();

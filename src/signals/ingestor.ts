@@ -18,7 +18,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { SignalArchive } from './archive.js';
 import { extractTickers } from './ticker-extractor.js';
 import type { SymbolResolver } from './ticker-extractor.js';
-import type { Signal, SignalType } from './types.js';
+import type { SignalType } from './types.js';
+import { SignalSchema } from './types.js';
+import type { Signal } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 
 const logger = createSubsystemLogger('signal-ingestor');
@@ -132,8 +134,11 @@ export class SignalIngestor {
 
     const confidence = input.confidence ?? this.scoreConfidence(input, title, tickers, type);
 
-    return {
-      id: randomUUID().slice(0, 12),
+    const metadata: Record<string, unknown> = { ...input.metadata };
+    if (input.link) metadata.link = input.link;
+
+    const raw = {
+      id: `sig-${randomUUID()}`,
       contentHash,
       type,
       title,
@@ -154,15 +159,17 @@ export class SignalIngestor {
       publishedAt,
       ingestedAt: new Date().toISOString(),
       confidence,
-      ...(input.metadata || input.link
-        ? {
-            metadata: {
-              ...input.metadata,
-              ...(input.link ? { link: input.link } : {}),
-            },
-          }
-        : {}),
+      ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
     };
+
+    // Validate before archiving — ensures write/read symmetry
+    const result = SignalSchema.safeParse(raw);
+    if (!result.success) {
+      logger.warn(`Signal validation failed for "${title}": ${result.error.message}`);
+      return null;
+    }
+
+    return result.data;
   }
 
   /**

@@ -83,19 +83,10 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
     name: 'read_signal',
     description: 'Read the full content of a specific signal by ID. ' + 'Use grep_signals first to find signal IDs.',
     parameters: z.object({
-      id: z.string().describe('Signal ID from grep_signals results'),
-      since: z.string().optional().describe('Narrow the date range to search (ISO date)'),
-      until: z.string().optional().describe('Narrow the date range to search (ISO date)'),
+      id: z.string().min(1).describe('Signal ID from grep_signals results'),
     }),
-    async execute(params: { id: string; since?: string; until?: string }): Promise<ToolResult> {
-      const results = await archive.query({
-        id: params.id,
-        since: params.since,
-        until: params.until,
-        limit: 1,
-      });
-
-      const signal = results[0];
+    async execute(params: { id: string }): Promise<ToolResult> {
+      const signal = await archive.getById(params.id);
       if (!signal) {
         return { content: `Signal not found: ${params.id}`, isError: true };
       }

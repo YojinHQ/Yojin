@@ -11,6 +11,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { promisify } from 'node:util';
 
+import { z } from 'zod';
+
 import { createSubsystemLogger } from '../../../logging/logger.js';
 
 const runExec = promisify(execFile);
@@ -38,18 +40,20 @@ interface DataSource {
   priority: number;
 }
 
-interface DataSourceConfig {
-  id: string;
-  name: string;
-  type: 'CLI' | 'MCP' | 'API';
-  capabilities: string[];
-  enabled: boolean;
-  priority: number;
-  baseUrl?: string;
-  secretRef?: string;
-  command?: string;
-  args?: string[];
-}
+const DataSourceConfigSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  type: z.enum(['CLI', 'MCP', 'API']),
+  capabilities: z.array(z.string()),
+  enabled: z.boolean(),
+  priority: z.number(),
+  baseUrl: z.string().optional(),
+  secretRef: z.string().optional(),
+  command: z.string().optional(),
+  args: z.array(z.string()).optional(),
+});
+
+type DataSourceConfig = z.infer<typeof DataSourceConfigSchema>;
 
 interface DataSourceResult {
   success: boolean;
@@ -74,7 +78,13 @@ export function setDataSourceConfigPath(path: string): void {
 async function loadConfigs(): Promise<DataSourceConfig[]> {
   try {
     const content = await readFile(configPath, 'utf-8');
-    return JSON.parse(content) as DataSourceConfig[];
+    const raw: unknown = JSON.parse(content);
+    const result = z.array(DataSourceConfigSchema).safeParse(raw);
+    if (!result.success) {
+      logger.warn(`Invalid data-sources.json: ${result.error.message}`);
+      return [];
+    }
+    return result.data;
   } catch {
     return [];
   }
@@ -85,14 +95,19 @@ async function saveConfigs(configs: DataSourceConfig[]): Promise<void> {
   await writeFile(configPath, JSON.stringify(configs, null, 2) + '\n', 'utf-8');
 }
 
+/** In-memory health status — populated by runHealthChecks on startup. */
+const healthStatus = new Map<string, { status: 'ACTIVE' | 'ERROR'; lastError?: string }>();
+
 function configToDataSource(config: DataSourceConfig): DataSource {
+  const health = healthStatus.get(config.id);
   return {
     id: config.id,
     name: config.name,
     type: config.type,
     capabilities: config.capabilities.map((id) => ({ id })),
     enabled: config.enabled,
-    status: config.enabled ? 'ACTIVE' : 'DISABLED',
+    status: !config.enabled ? 'DISABLED' : (health?.status ?? 'ACTIVE'),
+    lastError: health?.lastError,
     priority: config.priority,
   };
 }
@@ -180,5 +195,82 @@ export async function toggleDataSourceResolver(
   await saveConfigs(configs);
   logger.info(`${args.enabled ? 'Enabled' : 'Disabled'} data source: ${args.id}`);
 
+  // Re-check health when enabling
+  if (args.enabled) {
+    const error = await checkSource(config);
+    healthStatus.set(config.id, error ? { status: 'ERROR', lastError: error } : { status: 'ACTIVE' });
+  }
+
   return { success: true, dataSource: configToDataSource(config) };
+}
+
+// ---------------------------------------------------------------------------
+// Health checks
+// ---------------------------------------------------------------------------
+
+/** Check a single data source's prerequisites. Returns error string or null if healthy. */
+async function checkSource(config: DataSourceConfig): Promise<string | null> {
+  if (config.type === 'CLI') {
+    if (!config.command) return 'No command configured';
+    try {
+      await runExec('which', [config.command]);
+    } catch {
+      return `"${config.command}" is not installed`;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Run health checks on all configured data sources.
+ * Called on server startup and on-demand via GraphQL.
+ * Updates in-memory status — doesn't mutate the config file.
+ */
+export async function runHealthChecks(): Promise<void> {
+  const configs = await loadConfigs();
+  let healthy = 0;
+  let errors = 0;
+
+  for (const config of configs) {
+    if (!config.enabled) {
+      healthStatus.set(config.id, { status: 'ACTIVE' });
+      continue;
+    }
+
+    const error = await checkSource(config);
+    if (error) {
+      healthStatus.set(config.id, { status: 'ERROR', lastError: error });
+      errors++;
+    } else {
+      healthStatus.set(config.id, { status: 'ACTIVE' });
+      healthy++;
+    }
+  }
+
+  logger.info(`Health check complete: ${healthy} healthy, ${errors} error(s)`);
+}
+
+/** GraphQL resolver — re-run health checks on demand. */
+export async function checkDataSourceHealthResolver(): Promise<DataSource[]> {
+  await runHealthChecks();
+  const configs = await loadConfigs();
+  return configs.map(configToDataSource);
+}
+
+/** GraphQL resolver — check if CLI commands are available on the system. */
+export async function checkCliCommandsResolver(
+  _parent: unknown,
+  args: { commands: string[] },
+): Promise<{ command: string; available: boolean }[]> {
+  return Promise.all(
+    args.commands.map(async (command) => {
+      try {
+        await runExec('which', [command]);
+        return { command, available: true };
+      } catch {
+        return { command, available: false };
+      }
+    }),
+  );
 }

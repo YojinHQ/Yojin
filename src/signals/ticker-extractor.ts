@@ -239,7 +239,7 @@ const CASHTAG_RE = /\$([A-Z]{1,5})\b/g;
 const EXCHANGE_RE = /\b(?:NASDAQ|NYSE|AMEX|LSE|TSE|ASX):([A-Z]{1,5})\b/g;
 
 // Crypto pairs: BTC-USD, ETH-USDT
-const CRYPTO_PAIR_RE = /\b([A-Z]{2,5})-(?:USD|USDT|EUR|GBP|BTC|ETH)\b/g;
+const CRYPTO_PAIR_RE = /\b([A-Z]{2,5})-(USD|USDT|EUR|GBP|BTC|ETH)\b/g;
 
 /**
  * Interface for pluggable symbol resolution (future SymbolIndex integration).
@@ -270,9 +270,9 @@ export function extractTickers(text: string, resolver?: SymbolResolver): string[
     tickers.add(match[1]);
   }
 
-  // Crypto pairs
+  // Crypto pairs — preserve the actual quote currency
   for (const match of text.matchAll(CRYPTO_PAIR_RE)) {
-    tickers.add(`${match[1]}-USD`);
+    tickers.add(`${match[1]}-${match[2]}`);
   }
 
   // If a SymbolResolver is available, validate ambiguous matches
