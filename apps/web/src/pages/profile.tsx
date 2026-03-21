@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import Card from '../components/common/card';
 import Spinner from '../components/common/spinner';
@@ -37,7 +37,7 @@ export default function Profile() {
   const [{ data, fetching, error }] = useListConnections();
   const [, disconnectPlatform] = useDisconnectPlatform();
   const [, refreshPositions] = useRefreshPositions();
-  const [{ data: dsData, fetching: dsFetching, error: dsQueryError }] = useListDataSources();
+  const [{ data: dsData, fetching: dsFetching, error: dsQueryError }, reexecuteDs] = useListDataSources();
   const [, removeDataSource] = useRemoveDataSource();
   const [, toggleDataSource] = useToggleDataSource();
 
@@ -56,6 +56,10 @@ export default function Profile() {
   const connectedPlatforms = connections.map((c) => c.platform);
   const dataSources = dsData?.listDataSources ?? [];
 
+  const refreshDs = useCallback(() => {
+    reexecuteDs({ requestPolicy: 'network-only' });
+  }, [reexecuteDs]);
+
   async function handleToggleDs(id: string, enabled: boolean) {
     setTogglingDs(id);
     setDsError(null);
@@ -66,6 +70,7 @@ export default function Profile() {
       }
     } finally {
       setTogglingDs(null);
+      refreshDs();
     }
   }
 
@@ -79,6 +84,7 @@ export default function Profile() {
       }
     } finally {
       setRemovingDs(null);
+      refreshDs();
     }
   }
 
@@ -250,7 +256,14 @@ export default function Profile() {
         )}
       </Card>
 
-      <AddDataSourceModal key={addDsModalKey} open={addDsModalOpen} onClose={() => setAddDsModalOpen(false)} />
+      <AddDataSourceModal
+        key={addDsModalKey}
+        open={addDsModalOpen}
+        onClose={() => {
+          setAddDsModalOpen(false);
+          refreshDs();
+        }}
+      />
 
       {/* Credential Vault */}
       <VaultSection />
