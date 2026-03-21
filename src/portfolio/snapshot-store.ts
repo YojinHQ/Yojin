@@ -15,7 +15,7 @@ import { join } from 'node:path';
 
 import type { Platform, PortfolioSnapshot, Position } from '../api/graphql/types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
-import type { PiiRedactor } from '../trust/pii/types.js';
+import type { PiiRedactor, RedactedSnapshot } from '../trust/pii/types.js';
 
 const logger = createSubsystemLogger('snapshot-store');
 
@@ -82,11 +82,11 @@ export class PortfolioSnapshotStore {
    * ranges, account IDs hashed. Use this before sending data to external
    * services (Keelson enrichment, etc.).
    */
-  async getLatestRedacted(redactor: PiiRedactor): Promise<PortfolioSnapshot | null> {
+  async getLatestRedacted(redactor: PiiRedactor): Promise<RedactedSnapshot | null> {
     const snapshot = await this.getLatest();
     if (!snapshot) return null;
     const { data } = redactor.redact(snapshot as unknown as Record<string, unknown>);
-    return data as unknown as PortfolioSnapshot;
+    return data as unknown as RedactedSnapshot;
   }
 
   /** Read all snapshots (for history). */

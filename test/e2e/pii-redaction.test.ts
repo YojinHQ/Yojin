@@ -35,7 +35,7 @@ describe('PII Redaction E2E', () => {
 
   it('server is running', ({ skip }) => {
     if (!serverAvailable) {
-      skip();
+      return skip();
     }
     expect(serverAvailable).toBe(true);
   });

@@ -77,7 +77,7 @@ export function createPortfolioTools(options: PortfolioToolsOptions): ToolDefini
           `Platform: ${params.platform}\n` +
           `Positions: ${positions.length}\n` +
           `Total Value: ${balanceToRange(snapshot.totalValue)}\n` +
-          `Total P&L: ${balanceToRange(snapshot.totalPnl)}`,
+          `Total P&L: ${snapshot.totalPnl < 0 ? '-' : '+'}${balanceToRange(snapshot.totalPnl)}`,
       };
     },
   };

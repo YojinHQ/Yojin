@@ -2,6 +2,27 @@
  * PII redaction types.
  */
 
+import type { Platform, Position } from '../../api/graphql/types.js';
+
+/** Position with balance fields converted to range strings by PII redaction. */
+export type RedactedPosition = Omit<Position, 'costBasis' | 'marketValue' | 'unrealizedPnl'> & {
+  costBasis: string;
+  marketValue: string;
+  unrealizedPnl: string;
+};
+
+/** Snapshot with balance fields converted to range strings by PII redaction. */
+export interface RedactedSnapshot {
+  id: string;
+  positions: RedactedPosition[];
+  totalValue: string;
+  totalCost: string;
+  totalPnl: string;
+  totalPnlPercent: string | number;
+  timestamp: string;
+  platform: Platform | null;
+}
+
 export interface RedactionRule {
   /** Rule identifier. */
   name: string;

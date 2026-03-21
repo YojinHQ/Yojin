@@ -118,10 +118,10 @@ export async function waitForSelector(page: Page, selector: string, opts?: WaitF
 /**
  * Save a debug screenshot when a scrape fails.
  *
- * Before capturing, injects a CSS overlay that hides text content likely to
+ * Before capturing, injects a CSS overlay that blurs text content likely to
  * contain PII (balances, account numbers, names). This is defense-in-depth —
  * screenshots are already saved to a gitignored directory, but this prevents
- * sensitive data from being captured in the image at all.
+ * sensitive data from being readable in the image.
  */
 export async function screenshotOnFailure(page: Page, platform: string, cacheDir: string): Promise<string> {
   const screenshotDir = path.join(cacheDir, 'screenshots');
@@ -129,9 +129,8 @@ export async function screenshotOnFailure(page: Page, platform: string, cacheDir
   const filename = `${platform.toLowerCase()}-${Date.now()}.png`;
   const filepath = path.join(screenshotDir, filename);
 
-  // Inject a style that obscures text content containing sensitive data.
-  // We blur all text nodes and overlay a "REDACTED" banner so the screenshot
-  // captures page structure (useful for debugging selectors) without PII.
+  // Inject a style that blurs text content containing sensitive data so the
+  // screenshot captures page structure (useful for debugging selectors) without PII.
   await page.evaluate(`(() => {
     var style = document.createElement('style');
     style.id = '__yojin_pii_mask';
@@ -146,13 +145,15 @@ export async function screenshotOnFailure(page: Page, platform: string, cacheDir
     document.head.appendChild(style);
   })()`);
 
-  await page.screenshot({ path: filepath, fullPage: true });
-
-  // Remove the mask so the page is usable if the browser stays open
-  await page.evaluate(`(() => {
-    var mask = document.getElementById('__yojin_pii_mask');
-    if (mask) mask.remove();
-  })()`);
+  try {
+    await page.screenshot({ path: filepath, fullPage: true });
+  } finally {
+    // Remove the mask so the page is usable if the browser stays open
+    await page.evaluate(`(() => {
+      var mask = document.getElementById('__yojin_pii_mask');
+      if (mask) mask.remove();
+    })()`);
+  }
 
   return filepath;
 }

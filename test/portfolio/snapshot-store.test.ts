@@ -119,6 +119,10 @@ describe('PortfolioSnapshotStore', () => {
     // Balance fields should be converted to range strings, not exact numbers
     expect(typeof redacted!.totalValue).toBe('string');
     expect(redacted!.totalValue).toMatch(/^\$/); // e.g. "$10k-$50k"
+    expect(typeof redacted!.totalCost).toBe('string');
+    expect(redacted!.totalCost).toMatch(/^\$/);
+    expect(typeof redacted!.totalPnl).toBe('string');
+    expect(redacted!.totalPnl).toMatch(/^\$/);
     // Position-level balances should also be redacted
     const pos = redacted!.positions[0];
     expect(typeof pos.marketValue).toBe('string');
