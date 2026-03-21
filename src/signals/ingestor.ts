@@ -18,9 +18,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { SignalArchive } from './archive.js';
 import { extractTickers } from './ticker-extractor.js';
 import type { SymbolResolver } from './ticker-extractor.js';
-import type { SignalType } from './types.js';
 import { SignalSchema } from './types.js';
-import type { Signal } from './types.js';
+import type { Signal, SignalType } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 
 const logger = createSubsystemLogger('signal-ingestor');
