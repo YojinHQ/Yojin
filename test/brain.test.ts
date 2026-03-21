@@ -14,7 +14,7 @@ vi.mock('../src/paths.js', () => ({
   resolveDefaultsRoot: () => defaultsRoot,
 }));
 
-let defaultsRoot: string;
+let defaultsRoot: string = '';
 
 let tmpDir: string;
 
