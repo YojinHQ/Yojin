@@ -127,6 +127,7 @@ describe('PortfolioSnapshotStore', () => {
     const pos = redacted!.positions[0];
     expect(typeof pos.marketValue).toBe('string');
     expect(typeof pos.costBasis).toBe('string');
+    expect(typeof pos.unrealizedPnl).toBe('string');
     // currentPrice and quantity should be stripped to prevent balance reconstruction
     expect(pos).not.toHaveProperty('currentPrice');
     expect(pos).not.toHaveProperty('quantity');
