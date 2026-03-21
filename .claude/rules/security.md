@@ -14,6 +14,7 @@ The trust layer is Yojin's core differentiator. Every component must be determin
 - The MCP server exposes credentials to AI tools without revealing raw values.
 - Never log credentials, tokens, or API keys — even at debug level.
 - Never commit `.env` files, browser session data, or `data/cache/` contents.
+- **Rate-limit auth endpoints.** Any GraphQL mutation or API endpoint that accepts a passphrase/password/token must have brute-force protection (attempt counter + exponential backoff/lockout). CLI TTY access is an implicit rate limit; network-exposed APIs are not.
 
 ## Layer 2: Guard Pipeline (Deterministic Pre-Execution)
 - Every agent action must pass through the guard pipeline before execution.
