@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import type { Platform, PortfolioSnapshot, Position } from '../api/graphql/types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { PiiRedactor, RedactedSnapshot } from '../trust/pii/types.js';
+import { RedactedSnapshotSchema } from '../trust/pii/types.js';
 
 const logger = createSubsystemLogger('snapshot-store');
 
@@ -90,8 +91,8 @@ export class PortfolioSnapshotStore {
       ...snapshot,
       positions: snapshot.positions.map(({ currentPrice: _price, quantity: _qty, ...p }) => p),
     };
-    const { data } = redactor.redact(sanitized as unknown as Record<string, unknown>);
-    return data as unknown as RedactedSnapshot;
+    const { data } = redactor.redact(sanitized as Record<string, unknown>);
+    return RedactedSnapshotSchema.parse(data) as RedactedSnapshot;
   }
 
   /** Read all snapshots (for history). */

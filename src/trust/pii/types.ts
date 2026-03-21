@@ -2,6 +2,8 @@
  * PII redaction types.
  */
 
+import { z } from 'zod';
+
 import type { Platform, Position } from '../../api/graphql/types.js';
 
 /** Position with balance fields converted to range strings by PII redaction. */
@@ -25,6 +27,30 @@ export interface RedactedSnapshot {
   timestamp: string;
   platform: Platform | null;
 }
+
+/** Zod schema for runtime validation of redacted snapshots — replaces unsafe `as unknown as` casts. */
+export const RedactedSnapshotSchema = z.object({
+  id: z.string(),
+  positions: z.array(
+    z.object({
+      symbol: z.string(),
+      name: z.string(),
+      costBasis: z.string(),
+      marketValue: z.string(),
+      unrealizedPnl: z.string(),
+      unrealizedPnlPercent: z.number(),
+      sector: z.string().optional(),
+      assetClass: z.string(),
+      platform: z.string(),
+    }),
+  ),
+  totalValue: z.string(),
+  totalCost: z.string(),
+  totalPnl: z.string(),
+  totalPnlPercent: z.number(),
+  timestamp: z.string(),
+  platform: z.string().nullable(),
+});
 
 export interface RedactionRule {
   /** Rule identifier. */
