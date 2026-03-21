@@ -5,7 +5,7 @@ import type { BadgeVariant } from '../components/common/badge';
 import Badge from '../components/common/badge';
 import Card from '../components/common/card';
 import Spinner from '../components/common/spinner';
-import { useSignals } from '../api/hooks';
+import { usePositions, useSignals } from '../api/hooks';
 
 const signalTypeBadge: Record<string, { variant: BadgeVariant; label: string }> = {
   MACRO: { variant: 'info', label: 'Macro' },
@@ -15,20 +15,26 @@ const signalTypeBadge: Record<string, { variant: BadgeVariant; label: string }> 
   NEWS: { variant: 'neutral', label: 'News' },
 };
 
-const TYPE_OPTIONS = ['ALL', 'MACRO', 'FUNDAMENTAL', 'SENTIMENT', 'TECHNICAL', 'NEWS'] as const;
+const TYPE_OPTIONS = ['ALL', 'PORTFOLIO', 'MACRO', 'FUNDAMENTAL', 'SENTIMENT', 'TECHNICAL', 'NEWS'] as const;
 
 export default function Signals() {
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
 
+  const isPortfolioFilter = typeFilter === 'PORTFOLIO';
   const [{ data, fetching }] = useSignals({
-    type: typeFilter === 'ALL' ? undefined : typeFilter,
+    type: typeFilter === 'ALL' || isPortfolioFilter ? undefined : typeFilter,
     search: search || undefined,
     limit: 100,
   });
+  const [{ data: posData }] = usePositions();
 
-  const signals = data?.signals ?? [];
+  const heldSymbols = new Set((posData?.positions ?? []).map((p) => p.symbol.toUpperCase()));
+  const allSignals = data?.signals ?? [];
+  const signals = isPortfolioFilter
+    ? allSignals.filter((s) => s.tickers.some((t) => heldSymbols.has(t.toUpperCase())))
+    : allSignals;
 
   function handleSearch(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -50,7 +56,7 @@ export default function Signals() {
                   : 'bg-bg-tertiary text-text-muted hover:text-text-primary'
               }`}
             >
-              {t === 'ALL' ? 'All' : (signalTypeBadge[t]?.label ?? t)}
+              {t === 'ALL' ? 'All' : t === 'PORTFOLIO' ? 'My Portfolio' : (signalTypeBadge[t]?.label ?? t)}
             </button>
           ))}
         </div>
@@ -94,7 +100,10 @@ export default function Signals() {
           <div className="space-y-2">
             <p className="text-xs text-text-muted mb-3">
               {signals.length} signal{signals.length !== 1 ? 's' : ''}
-              {typeFilter !== 'ALL' && ` of type ${signalTypeBadge[typeFilter]?.label ?? typeFilter}`}
+              {isPortfolioFilter && ' relevant to your portfolio'}
+              {!isPortfolioFilter &&
+                typeFilter !== 'ALL' &&
+                ` of type ${signalTypeBadge[typeFilter]?.label ?? typeFilter}`}
               {search && ` matching "${search}"`}
             </p>
             {signals.map((signal: Signal) => {
@@ -128,15 +137,24 @@ export default function Signals() {
                         <p className="text-sm font-medium text-text-primary line-clamp-2">{signal.title}</p>
                       )}
                       {signal.tickers.length > 0 && (
-                        <div className="flex gap-1 mt-1">
-                          {signal.tickers.map((t: string) => (
-                            <span
-                              key={t}
-                              className="text-2xs font-mono text-accent-primary bg-accent-primary/10 px-1.5 py-0.5 rounded"
-                            >
-                              {t}
-                            </span>
-                          ))}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {signal.tickers.map((t: string) => {
+                            const held = heldSymbols.has(t.toUpperCase());
+                            return (
+                              <span
+                                key={t}
+                                className={`text-2xs font-mono px-1.5 py-0.5 rounded ${
+                                  held
+                                    ? 'text-success bg-success/10 ring-1 ring-success/30'
+                                    : 'text-accent-primary bg-accent-primary/10'
+                                }`}
+                                title={held ? `${t} — in your portfolio` : t}
+                              >
+                                {t}
+                                {held && ' \u2713'}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
