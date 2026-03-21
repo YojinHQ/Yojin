@@ -24,6 +24,7 @@ export {
   useToggleDataSource,
   useFetchDataSource,
   useSignals,
+  useCheckCliCommands,
 } from './use-data-sources.js';
 export {
   useVaultStatus,

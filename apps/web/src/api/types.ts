@@ -406,6 +406,15 @@ export interface ToggleDataSourceVariables {
   enabled: boolean;
 }
 
+export interface CliCommandStatus {
+  command: string;
+  available: boolean;
+}
+
+export interface CheckCliCommandsQueryResult {
+  checkCliCommands: CliCommandStatus[];
+}
+
 // ---------------------------------------------------------------------------
 // Fetch Data Source
 // ---------------------------------------------------------------------------

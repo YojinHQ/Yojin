@@ -38,7 +38,7 @@ export type LinkType = z.infer<typeof LinkTypeSchema>;
 
 export const SignalDataSourceSchema = z.object({
   id: z.string().min(1), // e.g. 'openbb-fmp', 'rss-reuters', 'keelson'
-  name: z.string(),
+  name: z.string().min(1),
   type: SourceTypeSchema,
   reliability: z.number().min(0).max(1),
 });

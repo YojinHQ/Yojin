@@ -12,5 +12,37 @@
     "args": [
       "-s"
     ]
+  },
+  {
+    "id": "nimble-cli",
+    "name": "Nimble",
+    "type": "CLI",
+    "capabilities": [
+      "web-scrape",
+      "social",
+      "search"
+    ],
+    "enabled": true,
+    "priority": 10,
+    "command": "nimble",
+    "args": [
+      "search",
+      "--max-results",
+      "10"
+    ],
+    "secretRef": "NIMBLE_API_KEY"
+  },
+  {
+    "id": "exa-search",
+    "name": "Exa Search",
+    "type": "API",
+    "capabilities": [
+      "web-search",
+      "news"
+    ],
+    "enabled": true,
+    "priority": 10,
+    "baseUrl": "https://api.exa.ai",
+    "secretRef": "EXA_API_KEY"
   }
 ]

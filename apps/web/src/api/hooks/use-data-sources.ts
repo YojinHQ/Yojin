@@ -2,6 +2,7 @@ import { useMutation, useQuery } from 'urql';
 
 import {
   ADD_DATA_SOURCE_MUTATION,
+  CHECK_CLI_COMMANDS_QUERY,
   FETCH_DATA_SOURCE_MUTATION,
   LIST_DATA_SOURCES_QUERY,
   REMOVE_DATA_SOURCE_MUTATION,
@@ -11,6 +12,7 @@ import {
 import type {
   AddDataSourceMutationResult,
   AddDataSourceVariables,
+  CheckCliCommandsQueryResult,
   FetchDataSourceMutationResult,
   FetchDataSourceVariables,
   ListDataSourcesQueryResult,
@@ -50,4 +52,13 @@ export function useFetchDataSource() {
 /** Query stored signals. */
 export function useSignals(variables: SignalsVariables = {}) {
   return useQuery<SignalsQueryResult, SignalsVariables>({ query: SIGNALS_QUERY, variables });
+}
+
+/** Check which CLI commands are available on the system. */
+export function useCheckCliCommands(commands: string[]) {
+  return useQuery<CheckCliCommandsQueryResult>({
+    query: CHECK_CLI_COMMANDS_QUERY,
+    variables: { commands },
+    pause: commands.length === 0,
+  });
 }

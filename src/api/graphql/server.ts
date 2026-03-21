@@ -18,6 +18,8 @@ import {
 } from './resolvers/connections.js';
 import {
   addDataSourceResolver,
+  checkCliCommandsResolver,
+  checkDataSourceHealthResolver,
   listDataSourcesResolver,
   removeDataSourceResolver,
   toggleDataSourceResolver,
@@ -62,6 +64,8 @@ const schema = createSchema({
       quote: quoteQuery,
       sectorExposure: sectorExposureQuery,
       listDataSources: listDataSourcesResolver,
+      checkDataSourceHealth: checkDataSourceHealthResolver,
+      checkCliCommands: checkCliCommandsResolver,
       signals: signalsResolver,
       listConnections: listConnectionsResolver,
       detectAvailableTiers: detectAvailableTiersResolver,

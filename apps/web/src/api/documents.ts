@@ -422,6 +422,15 @@ export const FETCH_DATA_SOURCE_MUTATION = gql`
   }
 `;
 
+export const CHECK_CLI_COMMANDS_QUERY = gql`
+  query CheckCliCommands($commands: [String!]!) {
+    checkCliCommands(commands: $commands) {
+      command
+      available
+    }
+  }
+`;
+
 // ---------------------------------------------------------------------------
 // Queries — Signals
 // ---------------------------------------------------------------------------

@@ -27,6 +27,7 @@ export function createResearchAnalystProfile(): AgentProfile {
       'enrich_snapshot',
       // Data source
       'query_data_source',
+      'list_data_sources',
       // Health
       'check_api_health',
       // Utility

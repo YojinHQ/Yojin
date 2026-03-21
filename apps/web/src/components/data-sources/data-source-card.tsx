@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import type { DataSource, DataSourceStatus } from '../../api/types';
+import { useChatPanel } from '../../lib/chat-panel-context';
 import type { BadgeVariant } from '../common/badge';
 import Badge from '../common/badge';
 import Button from '../common/button';
@@ -37,19 +38,24 @@ export function DataSourceCard({
   removing = false,
 }: DataSourceCardProps) {
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [fetchUrl, setFetchUrl] = useState('');
   const [fetching, setFetching] = useState(false);
   const [fetchResult, setFetchResult] = useState<{ ingested: number; duplicates: number; error?: string } | null>(null);
-  const [showFetch, setShowFetch] = useState(false);
+  const { openChatWith } = useChatPanel();
   const { variant, label } = statusConfig[source.status];
 
   const isCli = source.type === 'CLI';
+  const hasSearchCapability = source.capabilities.some((c) => c.id === 'search' || c.id === 'web-search');
 
   async function handleFetch() {
+    if (hasSearchCapability) {
+      // Let the LLM decide what to search for
+      openChatWith(`Use ${source.name} to search for relevant data about my portfolio positions.`);
+      return;
+    }
     setFetching(true);
     setFetchResult(null);
     try {
-      const result = await onFetch(source.id, fetchUrl.trim() || undefined);
+      const result = await onFetch(source.id);
       setFetchResult(result);
     } finally {
       setFetching(false);
@@ -103,9 +109,15 @@ export function DataSourceCard({
 
           {/* Actions */}
           <div className="flex items-center gap-2 shrink-0">
-            {source.enabled && (
-              <Button variant="secondary" size="sm" onClick={() => setShowFetch(!showFetch)}>
-                Fetch
+            {source.enabled && (isCli || hasSearchCapability) && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleFetch()}
+                disabled={fetching}
+                loading={fetching}
+              >
+                {hasSearchCapability ? 'Search' : fetching ? 'Fetching...' : 'Fetch'}
               </Button>
             )}
             <Button
@@ -135,40 +147,26 @@ export function DataSourceCard({
           </div>
         </div>
 
-        {/* Fetch panel */}
-        {showFetch && (
-          <div className="border-t border-border px-4 py-3 space-y-2">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={fetchUrl}
-                onChange={(e) => setFetchUrl(e.target.value)}
-                placeholder="URL or search query"
-                className="flex-1 rounded-lg border border-border bg-bg-primary px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none"
-              />
-              <Button size="sm" onClick={handleFetch} disabled={fetching} loading={fetching}>
-                {fetching ? 'Fetching...' : 'Go'}
-              </Button>
-            </div>
-            {fetchResult && (
-              <p className="text-xs text-text-secondary">
-                {fetchResult.error ? (
-                  <span className="text-error">{fetchResult.error}</span>
-                ) : fetchResult.ingested > 0 ? (
-                  <span className="text-success">
-                    {fetchResult.ingested} signal{fetchResult.ingested !== 1 ? 's' : ''} ingested
-                  </span>
-                ) : (
-                  <span className="text-text-muted">No new signals</span>
-                )}
-                {!fetchResult.error && fetchResult.duplicates > 0 && (
-                  <span className="text-text-muted">
-                    {' '}
-                    ({fetchResult.duplicates} duplicate{fetchResult.duplicates !== 1 ? 's' : ''} skipped)
-                  </span>
-                )}
-              </p>
-            )}
+        {/* Fetch result */}
+        {fetchResult && (
+          <div className="border-t border-border px-4 py-3">
+            <p className="text-xs text-text-secondary">
+              {fetchResult.error ? (
+                <span className="text-error">{fetchResult.error}</span>
+              ) : fetchResult.ingested > 0 ? (
+                <span className="text-success">
+                  {fetchResult.ingested} signal{fetchResult.ingested !== 1 ? 's' : ''} ingested
+                </span>
+              ) : (
+                <span className="text-text-muted">No new signals</span>
+              )}
+              {!fetchResult.error && fetchResult.duplicates > 0 && (
+                <span className="text-text-muted">
+                  {' '}
+                  ({fetchResult.duplicates} duplicate{fetchResult.duplicates !== 1 ? 's' : ''} skipped)
+                </span>
+              )}
+            </p>
           </div>
         )}
       </div>

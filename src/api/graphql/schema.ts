@@ -444,6 +444,11 @@ export const typeDefs = /* GraphQL */ `
     createdAt: String!
   }
 
+  type CliCommandStatus {
+    command: String!
+    available: Boolean!
+  }
+
   type Query {
     deviceInfo: DeviceInfo!
     portfolio: PortfolioSnapshot
@@ -458,6 +463,8 @@ export const typeDefs = /* GraphQL */ `
     listConnections: [Connection!]!
     detectAvailableTiers(platform: String!): [TierAvailability!]!
     listDataSources: [DataSource!]!
+    checkDataSourceHealth: [DataSource!]!
+    checkCliCommands(commands: [String!]!): [CliCommandStatus!]!
     signals(
       type: String
       ticker: String

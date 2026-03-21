@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router';
+import { useChatPanel } from '../../lib/chat-panel-context';
 import WorldClock from './world-clock';
 import NotificationsCenter from './notifications-center';
 
@@ -14,6 +15,7 @@ const segmentLabels: Record<string, string> = {
 
 export default function AppHeader() {
   const { pathname } = useLocation();
+  const { isOpen, toggleChat } = useChatPanel();
   const [clockOpen, setClockOpen] = useState(false);
 
   // Build breadcrumbs from path segments
@@ -79,6 +81,32 @@ export default function AppHeader() {
         <div className="h-4 w-px bg-border" />
 
         <NotificationsCenter />
+
+        {/* Chat toggle — shows when chat is collapsed */}
+        {!isOpen && (
+          <>
+            <div className="h-4 w-px bg-border" />
+            <button
+              onClick={toggleChat}
+              className="relative flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-hover hover:text-text-secondary"
+              title="Open chat"
+            >
+              <svg
+                className="h-[18px] w-[18px]"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z"
+                />
+              </svg>
+            </button>
+          </>
+        )}
       </div>
 
       <WorldClock open={clockOpen} onClose={() => setClockOpen(false)} />
