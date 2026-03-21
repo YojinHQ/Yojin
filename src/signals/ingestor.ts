@@ -152,10 +152,14 @@ export class SignalIngestor {
       publishedAt,
       ingestedAt: new Date().toISOString(),
       confidence: input.confidence ?? input.reliability,
-      metadata: {
-        ...input.metadata,
-        ...(input.link ? { link: input.link } : {}),
-      },
+      ...(input.metadata || input.link
+        ? {
+            metadata: {
+              ...input.metadata,
+              ...(input.link ? { link: input.link } : {}),
+            },
+          }
+        : {}),
     };
   }
 

@@ -335,6 +335,78 @@ export interface DeleteVaultSecretVariables {
 }
 
 // ---------------------------------------------------------------------------
+// Data Sources
+// ---------------------------------------------------------------------------
+
+export type DataSourceType = 'CLI' | 'MCP' | 'API';
+export type DataSourceStatus = 'ACTIVE' | 'ERROR' | 'DISABLED';
+
+export interface DataSourceCapability {
+  id: string;
+  description: string | null;
+}
+
+export interface DataSource {
+  id: string;
+  name: string;
+  type: DataSourceType;
+  capabilities: DataSourceCapability[];
+  enabled: boolean;
+  status: DataSourceStatus;
+  lastError: string | null;
+  lastFetchedAt: string | null;
+  priority: number;
+}
+
+export interface DataSourceResult {
+  success: boolean;
+  dataSource: DataSource | null;
+  error: string | null;
+}
+
+export interface DataSourceInput {
+  id: string;
+  name: string;
+  type: DataSourceType;
+  capabilities: string[];
+  enabled?: boolean;
+  priority?: number;
+  baseUrl?: string;
+  secretRef?: string;
+  command?: string;
+  args?: string[];
+}
+
+export interface ListDataSourcesQueryResult {
+  listDataSources: DataSource[];
+}
+
+export interface AddDataSourceMutationResult {
+  addDataSource: DataSourceResult;
+}
+
+export interface AddDataSourceVariables {
+  input: DataSourceInput;
+}
+
+export interface RemoveDataSourceMutationResult {
+  removeDataSource: DataSourceResult;
+}
+
+export interface RemoveDataSourceVariables {
+  id: string;
+}
+
+export interface ToggleDataSourceMutationResult {
+  toggleDataSource: DataSourceResult;
+}
+
+export interface ToggleDataSourceVariables {
+  id: string;
+  enabled: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Subscriptions
 // ---------------------------------------------------------------------------
 

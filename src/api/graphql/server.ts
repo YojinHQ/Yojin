@@ -16,6 +16,12 @@ import {
   listConnectionsResolver,
   onConnectionStatusSubscription,
 } from './resolvers/connections.js';
+import {
+  addDataSourceResolver,
+  listDataSourcesResolver,
+  removeDataSourceResolver,
+  toggleDataSourceResolver,
+} from './resolvers/data-sources.js';
 import { onAlertSubscription, onPortfolioUpdateSubscription, onPriceMoveSubscription } from './resolvers/live.js';
 import { newsQuery, quoteQuery, sectorExposureQuery } from './resolvers/market.js';
 import {
@@ -53,6 +59,7 @@ const schema = createSchema({
       news: newsQuery,
       quote: quoteQuery,
       sectorExposure: sectorExposureQuery,
+      listDataSources: listDataSourcesResolver,
       listConnections: listConnectionsResolver,
       detectAvailableTiers: detectAvailableTiersResolver,
       deviceInfo: deviceInfoResolver,
@@ -65,6 +72,9 @@ const schema = createSchema({
       createAlert: createAlertMutation,
       dismissAlert: dismissAlertMutation,
       sendMessage: sendMessageMutation,
+      addDataSource: addDataSourceResolver,
+      removeDataSource: removeDataSourceResolver,
+      toggleDataSource: toggleDataSourceResolver,
       connectPlatform: connectPlatformResolver,
       disconnectPlatform: disconnectPlatformResolver,
       unlockVault: unlockVaultMutation,

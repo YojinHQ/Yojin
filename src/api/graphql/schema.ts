@@ -349,6 +349,58 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # ---------------------------------------------------------------------------
+  # Data Sources
+  # ---------------------------------------------------------------------------
+
+  enum DataSourceType {
+    CLI
+    MCP
+    API
+  }
+
+  enum DataSourceStatus {
+    ACTIVE
+    ERROR
+    DISABLED
+  }
+
+  type DataSourceCapability {
+    id: String!
+    description: String
+  }
+
+  type DataSource {
+    id: String!
+    name: String!
+    type: DataSourceType!
+    capabilities: [DataSourceCapability!]!
+    enabled: Boolean!
+    status: DataSourceStatus!
+    lastError: String
+    lastFetchedAt: String
+    priority: Int!
+  }
+
+  type DataSourceResult {
+    success: Boolean!
+    dataSource: DataSource
+    error: String
+  }
+
+  input DataSourceInput {
+    id: String!
+    name: String!
+    type: DataSourceType!
+    capabilities: [String!]!
+    enabled: Boolean
+    priority: Int
+    baseUrl: String
+    secretRef: String
+    command: String
+    args: [String!]
+  }
+
+  # ---------------------------------------------------------------------------
   # Root types
   # ---------------------------------------------------------------------------
 
@@ -379,6 +431,7 @@ export const typeDefs = /* GraphQL */ `
     sectorExposure: [SectorWeight!]!
     listConnections: [Connection!]!
     detectAvailableTiers(platform: String!): [TierAvailability!]!
+    listDataSources: [DataSource!]!
     vaultStatus: VaultStatus!
     listVaultSecrets: [VaultSecret!]!
   }
@@ -391,6 +444,9 @@ export const typeDefs = /* GraphQL */ `
     sendMessage(threadId: String!, message: String!, imageBase64: String, imageMediaType: String): SendMessagePayload!
     connectPlatform(input: ConnectPlatformInput!): ConnectionResult!
     disconnectPlatform(platform: String!, removeCredentials: Boolean = false): ConnectionResult!
+    addDataSource(input: DataSourceInput!): DataSourceResult!
+    removeDataSource(id: String!): DataSourceResult!
+    toggleDataSource(id: String!, enabled: Boolean!): DataSourceResult!
     unlockVault(passphrase: String!): VaultResult!
     setVaultPassphrase(newPassphrase: String!): VaultResult!
     changeVaultPassphrase(currentPassphrase: String!, newPassphrase: String!): VaultResult!

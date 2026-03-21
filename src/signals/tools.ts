@@ -88,12 +88,14 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
       until: z.string().optional().describe('Narrow the date range to search (ISO date)'),
     }),
     async execute(params: { id: string; since?: string; until?: string }): Promise<ToolResult> {
-      const signals = await archive.query({
+      const results = await archive.query({
+        id: params.id,
         since: params.since,
         until: params.until,
+        limit: 1,
       });
 
-      const signal = signals.find((s) => s.id === params.id);
+      const signal = results[0];
       if (!signal) {
         return { content: `Signal not found: ${params.id}`, isError: true };
       }

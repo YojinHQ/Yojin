@@ -347,6 +347,71 @@ export const DISCONNECT_PLATFORM_MUTATION = gql`
 `;
 
 // ---------------------------------------------------------------------------
+// Queries — Data Sources
+// ---------------------------------------------------------------------------
+
+export const LIST_DATA_SOURCES_QUERY = gql`
+  query ListDataSources {
+    listDataSources {
+      id
+      name
+      type
+      capabilities {
+        id
+        description
+      }
+      enabled
+      status
+      lastError
+      lastFetchedAt
+      priority
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Mutations — Data Sources
+// ---------------------------------------------------------------------------
+
+export const ADD_DATA_SOURCE_MUTATION = gql`
+  mutation AddDataSource($input: DataSourceInput!) {
+    addDataSource(input: $input) {
+      success
+      dataSource {
+        id
+        name
+        type
+        capabilities {
+          id
+        }
+        enabled
+        status
+        priority
+      }
+      error
+    }
+  }
+`;
+
+export const REMOVE_DATA_SOURCE_MUTATION = gql`
+  mutation RemoveDataSource($id: String!) {
+    removeDataSource(id: $id) {
+      success
+      error
+    }
+  }
+`;
+
+export const TOGGLE_DATA_SOURCE_MUTATION = gql`
+  mutation ToggleDataSource($id: String!, $enabled: Boolean!) {
+    toggleDataSource(id: $id, enabled: $enabled) {
+      success
+      error
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
 // Queries — Vault
 // ---------------------------------------------------------------------------
 

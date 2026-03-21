@@ -109,7 +109,7 @@ export const SignalIndexEntrySchema = z.object({
   id: z.string().min(1),
   contentHash: z.string().min(1),
   type: SignalTypeSchema,
-  tickers: z.array(z.string()), // denormalized from assets for fast lookup
+  tickers: z.array(z.string().min(1)), // denormalized from assets for fast lookup
   portfolioScore: z.number().min(0).max(1).optional(),
   publishedAt: z.string().datetime(),
   ingestedAt: z.string().datetime(),
