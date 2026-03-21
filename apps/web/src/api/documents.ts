@@ -411,6 +411,55 @@ export const TOGGLE_DATA_SOURCE_MUTATION = gql`
   }
 `;
 
+export const FETCH_DATA_SOURCE_MUTATION = gql`
+  mutation FetchDataSource($id: String!, $url: String) {
+    fetchDataSource(id: $id, url: $url) {
+      success
+      signalsIngested
+      duplicates
+      error
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Queries — Signals
+// ---------------------------------------------------------------------------
+
+export const SIGNALS_QUERY = gql`
+  query Signals(
+    $type: String
+    $ticker: String
+    $sourceId: String
+    $since: String
+    $until: String
+    $search: String
+    $limit: Int
+  ) {
+    signals(
+      type: $type
+      ticker: $ticker
+      sourceId: $sourceId
+      since: $since
+      until: $until
+      search: $search
+      limit: $limit
+    ) {
+      id
+      type
+      title
+      content
+      publishedAt
+      ingestedAt
+      confidence
+      tickers
+      sourceId
+      sourceName
+      link
+    }
+  }
+`;
+
 // ---------------------------------------------------------------------------
 // Queries — Vault
 // ---------------------------------------------------------------------------

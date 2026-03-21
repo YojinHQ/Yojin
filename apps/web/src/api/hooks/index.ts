@@ -17,7 +17,14 @@ export {
   useDisconnectPlatform,
   useOnConnectionStatus,
 } from './use-connections.js';
-export { useListDataSources, useAddDataSource, useRemoveDataSource, useToggleDataSource } from './use-data-sources.js';
+export {
+  useListDataSources,
+  useAddDataSource,
+  useRemoveDataSource,
+  useToggleDataSource,
+  useFetchDataSource,
+  useSignals,
+} from './use-data-sources.js';
 export {
   useVaultStatus,
   useListVaultSecrets,

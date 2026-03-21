@@ -2,16 +2,22 @@ import { useMutation, useQuery } from 'urql';
 
 import {
   ADD_DATA_SOURCE_MUTATION,
+  FETCH_DATA_SOURCE_MUTATION,
   LIST_DATA_SOURCES_QUERY,
   REMOVE_DATA_SOURCE_MUTATION,
+  SIGNALS_QUERY,
   TOGGLE_DATA_SOURCE_MUTATION,
 } from '../documents.js';
 import type {
   AddDataSourceMutationResult,
   AddDataSourceVariables,
+  FetchDataSourceMutationResult,
+  FetchDataSourceVariables,
   ListDataSourcesQueryResult,
   RemoveDataSourceMutationResult,
   RemoveDataSourceVariables,
+  SignalsQueryResult,
+  SignalsVariables,
   ToggleDataSourceMutationResult,
   ToggleDataSourceVariables,
 } from '../types.js';
@@ -34,4 +40,14 @@ export function useRemoveDataSource() {
 /** Enable/disable a data source. */
 export function useToggleDataSource() {
   return useMutation<ToggleDataSourceMutationResult, ToggleDataSourceVariables>(TOGGLE_DATA_SOURCE_MUTATION);
+}
+
+/** Trigger a fetch on a data source. */
+export function useFetchDataSource() {
+  return useMutation<FetchDataSourceMutationResult, FetchDataSourceVariables>(FETCH_DATA_SOURCE_MUTATION);
+}
+
+/** Query stored signals. */
+export function useSignals(variables: SignalsVariables = {}) {
+  return useQuery<SignalsQueryResult, SignalsVariables>({ query: SIGNALS_QUERY, variables });
 }

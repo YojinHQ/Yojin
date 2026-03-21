@@ -407,6 +407,58 @@ export interface ToggleDataSourceVariables {
 }
 
 // ---------------------------------------------------------------------------
+// Fetch Data Source
+// ---------------------------------------------------------------------------
+
+export interface FetchResult {
+  success: boolean;
+  signalsIngested: number;
+  duplicates: number;
+  error: string | null;
+}
+
+export interface FetchDataSourceMutationResult {
+  fetchDataSource: FetchResult;
+}
+
+export interface FetchDataSourceVariables {
+  id: string;
+  url?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Signals
+// ---------------------------------------------------------------------------
+
+export interface Signal {
+  id: string;
+  type: string;
+  title: string;
+  content: string | null;
+  publishedAt: string;
+  ingestedAt: string;
+  confidence: number;
+  tickers: string[];
+  sourceId: string;
+  sourceName: string;
+  link: string | null;
+}
+
+export interface SignalsQueryResult {
+  signals: Signal[];
+}
+
+export interface SignalsVariables {
+  type?: string;
+  ticker?: string;
+  sourceId?: string;
+  since?: string;
+  until?: string;
+  search?: string;
+  limit?: number;
+}
+
+// ---------------------------------------------------------------------------
 // Subscriptions
 // ---------------------------------------------------------------------------
 
