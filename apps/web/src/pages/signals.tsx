@@ -25,8 +25,8 @@ const CONFIDENCE_LEVELS = [
 ] as const;
 
 export default function Signals() {
-  const [typeFilter, setTypeFilter] = useState<string>('PORTFOLIO');
-  const [minConfidence, setMinConfidence] = useState(0.5);
+  const [typeFilter, setTypeFilter] = useState<string>('ALL');
+  const [minConfidence, setMinConfidence] = useState(0);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
 
