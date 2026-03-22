@@ -21,6 +21,9 @@ export function createStrategistProfile(): AgentProfile {
       'get_portfolio',
       // Security audit
       'security_audit_check',
+      // Memory tools
+      'store_signal_memory',
+      'recall_signal_memories',
       // Utility
       'get_current_time',
       'calculate',

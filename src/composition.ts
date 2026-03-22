@@ -36,6 +36,10 @@ import { createDefaultGuards } from './guards/registry.js';
 import type { OutputDlpGuard } from './guards/security/output-dlp.js';
 import type { PostureName } from './guards/types.js';
 import { getLogger } from './logging/index.js';
+import { wireMemory } from './memory/adapter.js';
+import type { SignalMemoryStore } from './memory/memory-store.js';
+import type { ReflectionEngine } from './memory/reflection.js';
+import type { MemoryAgentRole } from './memory/types.js';
 import { ensureDataDirs, resolveDataRoot, resolveDefaultsRoot } from './paths.js';
 import { PluginRegistry } from './plugins/registry.js';
 import { PortfolioSnapshotStore } from './portfolio/snapshot-store.js';
@@ -86,6 +90,8 @@ export interface YojinServices {
   snapshotStore: PortfolioSnapshotStore;
   piiRedactor: DefaultPiiRedactor;
   piiScanner: ChatPiiScanner;
+  memoryStores: Map<MemoryAgentRole, SignalMemoryStore>;
+  reflectionEngine?: ReflectionEngine;
   brain: {
     persona: PersonaManager;
     frontalLobe: FrontalLobe;
@@ -342,6 +348,15 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     enableNer: process.env.YOJIN_PII_NER === '1',
   });
 
+  // --- Signal memory ---
+  const memoryResult = await wireMemory({
+    dataRoot,
+    piiRedactor,
+  });
+  for (const tool of memoryResult.tools) {
+    toolRegistry.register(tool);
+  }
+
   // 10. PluginRegistry (empty — caller loads provider/channel plugins)
   const pluginRegistry = new PluginRegistry();
 
@@ -360,6 +375,8 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     snapshotStore,
     piiRedactor,
     piiScanner,
+    memoryStores: memoryResult.stores,
+    reflectionEngine: memoryResult.reflectionEngine,
     brain: {
       persona,
       frontalLobe,

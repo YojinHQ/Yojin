@@ -26,8 +26,9 @@ describe('buildContext', () => {
     // 2 starter + 4 credential stubs + 8 brain + 1 security audit
     // + 1 error analysis + 1 api health + 1 portfolio reasoning
     // + 2 portfolio tools (save_portfolio_positions, get_portfolio)
-    // + 2 data source query tools (query_data_source, list_data_sources) = 22
-    expect(schemas.length).toBe(22);
+    // + 2 data source query tools (query_data_source, list_data_sources)
+    // + 2 memory tools (store_signal_memory, recall_signal_memories) = 24
+    expect(schemas.length).toBe(24);
 
     const names = schemas.map((s) => s.name).sort();
     expect(names).toContain('get_current_time');
