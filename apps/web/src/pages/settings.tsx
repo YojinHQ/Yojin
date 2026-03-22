@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { useMutation } from 'urql';
 import { useTheme } from '../lib/theme';
 import type { ThemeChoice } from '../lib/theme';
 import { cn } from '../lib/utils';
 import Card from '../components/common/card';
+import Button from '../components/common/button';
 import Toggle from '../components/common/toggle';
+import { RESET_ONBOARDING_MUTATION } from '../api/documents';
+import { ONBOARDING_KEYS, useOnboardingModal } from '../lib/onboarding-context';
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
@@ -77,7 +81,46 @@ export default function Settings() {
           />
         </div>
       </Card>
+
+      {import.meta.env.DEV && <DevTools />}
     </div>
+  );
+}
+
+function DevTools() {
+  const { openOnboarding } = useOnboardingModal();
+  const [, resetOnboarding] = useMutation(RESET_ONBOARDING_MUTATION);
+  const [resetting, setResetting] = useState(false);
+
+  const handleResetOnboarding = useCallback(async () => {
+    setResetting(true);
+    try {
+      await resetOnboarding({});
+      // Clear client-side onboarding state
+      localStorage.removeItem(ONBOARDING_KEYS.COMPLETE_KEY);
+      localStorage.removeItem(ONBOARDING_KEYS.SKIPPED_KEY);
+      localStorage.removeItem(ONBOARDING_KEYS.STEP_KEY);
+      localStorage.removeItem(ONBOARDING_KEYS.STATE_KEY);
+      openOnboarding();
+    } finally {
+      setResetting(false);
+    }
+  }, [resetOnboarding, openOnboarding]);
+
+  return (
+    <Card title="Developer" section>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-text-primary">Reset onboarding</p>
+            <p className="text-xs text-text-muted">Clear server-side state and restart the onboarding flow</p>
+          </div>
+          <Button variant="danger" size="sm" loading={resetting} onClick={handleResetOnboarding}>
+            Reset
+          </Button>
+        </div>
+      </div>
+    </Card>
   );
 }
 

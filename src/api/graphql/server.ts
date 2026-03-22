@@ -28,6 +28,20 @@ import { fetchDataSourceResolver } from './resolvers/fetch-data-source.js';
 import { onAlertSubscription, onPortfolioUpdateSubscription, onPriceMoveSubscription } from './resolvers/live.js';
 import { newsQuery, quoteQuery, sectorExposureQuery } from './resolvers/market.js';
 import {
+  completeMagicLinkMutation,
+  completeOnboardingMutation,
+  confirmPersonaMutation,
+  confirmPositionsMutation,
+  detectAiCredentialQuery,
+  generatePersonaMutation,
+  onboardingStatusQuery,
+  parsePortfolioScreenshotMutation,
+  resetOnboardingMutation,
+  saveBriefingConfigMutation,
+  sendMagicLinkMutation,
+  validateAiCredentialMutation,
+} from './resolvers/onboarding.js';
+import {
   addManualPositionMutation,
   enrichedSnapshotQuery,
   portfolioHistoryQuery,
@@ -72,6 +86,8 @@ const schema = createSchema({
       deviceInfo: deviceInfoResolver,
       vaultStatus: vaultStatusQuery,
       listVaultSecrets: listVaultSecretsQuery,
+      detectAiCredential: detectAiCredentialQuery,
+      onboardingStatus: onboardingStatusQuery,
     },
     Mutation: {
       refreshPositions: refreshPositionsMutation,
@@ -91,6 +107,16 @@ const schema = createSchema({
       addVaultSecret: addVaultSecretMutation,
       updateVaultSecret: updateVaultSecretMutation,
       deleteVaultSecret: deleteVaultSecretMutation,
+      validateAiCredential: validateAiCredentialMutation,
+      sendMagicLink: sendMagicLinkMutation,
+      completeMagicLink: completeMagicLinkMutation,
+      generatePersona: generatePersonaMutation,
+      confirmPersona: confirmPersonaMutation,
+      parsePortfolioScreenshot: parsePortfolioScreenshotMutation,
+      confirmPositions: confirmPositionsMutation,
+      saveBriefingConfig: saveBriefingConfigMutation,
+      completeOnboarding: completeOnboardingMutation,
+      resetOnboarding: resetOnboardingMutation,
     },
     Subscription: {
       onAlert: onAlertSubscription,

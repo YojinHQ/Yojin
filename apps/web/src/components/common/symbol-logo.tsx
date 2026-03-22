@@ -36,9 +36,19 @@ function getColor(symbol: string): string {
   return PALETTE[Math.abs(hash) % PALETTE.length];
 }
 
-function getLogoUrl(symbol: string, assetClass: AssetClass): string {
-  const path = assetClass === 'crypto' ? 'crypto' : 'symbol';
-  return `https://assets.parqet.com/logos/${path}/${symbol}`;
+function getLogoUrls(symbol: string, assetClass: AssetClass): string[] {
+  const urls: string[] = [];
+
+  // 1. Parqet (works well for equities and some crypto)
+  const parqetPath = assetClass === 'crypto' ? 'crypto' : 'symbol';
+  urls.push(`https://assets.parqet.com/logos/${parqetPath}/${symbol}`);
+
+  // 2. Also try Parqet crypto path if asset class is equity (might be misclassified)
+  if (assetClass !== 'crypto') {
+    urls.push(`https://assets.parqet.com/logos/crypto/${symbol}`);
+  }
+
+  return urls;
 }
 
 interface SymbolCellProps {
@@ -58,7 +68,9 @@ export function SymbolCell({ symbol, assetClass = 'equity', size = 'sm', classNa
 }
 
 export function SymbolLogo({ symbol, assetClass = 'equity', size = 'sm', className }: SymbolLogoProps) {
-  const [imgError, setImgError] = useState(false);
+  const [urlIndex, setUrlIndex] = useState(0);
+  const urls = getLogoUrls(symbol, assetClass);
+  const exhausted = urlIndex >= urls.length;
 
   return (
     <div
@@ -67,16 +79,16 @@ export function SymbolLogo({ symbol, assetClass = 'equity', size = 'sm', classNa
         sizeStyles[size],
         className,
       )}
-      style={imgError ? { backgroundColor: getColor(symbol) } : undefined}
+      style={exhausted ? { backgroundColor: getColor(symbol) } : undefined}
     >
-      {imgError ? (
+      {exhausted ? (
         <span className="font-semibold leading-none text-white">{symbol.slice(0, 2)}</span>
       ) : (
         <img
-          src={getLogoUrl(symbol, assetClass)}
+          src={urls[urlIndex]}
           alt={`${symbol} logo`}
           className="h-full w-full object-cover"
-          onError={() => setImgError(true)}
+          onError={() => setUrlIndex((i) => i + 1)}
         />
       )}
     </div>

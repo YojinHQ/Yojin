@@ -1,5 +1,9 @@
 import { NavLink } from 'react-router';
+import { useQuery } from 'urql';
 import { useTheme } from '../../lib/theme';
+import { isOnboardingComplete, useOnboardingModal } from '../../lib/onboarding-context';
+import { ONBOARDING_STATUS_QUERY } from '../../api/documents';
+import type { OnboardingStatusQueryResult } from '../../api/types';
 import UserMenu from './user-menu';
 
 interface NavItem {
@@ -65,10 +69,10 @@ const navItems: NavItem[] = [
 
 export default function Sidebar() {
   const { resolved } = useTheme();
-  const logoSrc = resolved === 'dark' ? '/yojin_logo_white.png' : '/yojin_logo.png';
+  const logoSrc = resolved === 'dark' ? '/brand/yojin_logo_white.png' : '/brand/yojin_logo.png';
 
   return (
-    <aside className="flex w-[200px] flex-shrink-0 flex-col border-r border-border bg-bg-secondary">
+    <aside className="flex w-[220px] flex-shrink-0 flex-col border-r border-border bg-bg-secondary">
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-4">
         <img
@@ -107,10 +111,74 @@ export default function Sidebar() {
         ))}
       </nav>
 
+      {/* Onboarding CTA — shown when setup is incomplete */}
+      {!isOnboardingComplete() && <OnboardingCta />}
+
       {/* User menu */}
       <div className="border-t border-border px-3 py-3">
         <UserMenu />
       </div>
     </aside>
+  );
+}
+
+function OnboardingCta() {
+  const { openOnboarding } = useOnboardingModal();
+
+  const [result] = useQuery<OnboardingStatusQueryResult>({
+    query: ONBOARDING_STATUS_QUERY,
+  });
+
+  const status = result.data?.onboardingStatus;
+  const completedCount = status
+    ? [
+        status.personaExists,
+        status.aiCredentialConfigured,
+        status.connectedPlatforms.length > 0,
+        status.briefingConfigured,
+      ].filter(Boolean).length
+    : 0;
+
+  return (
+    <div className="mx-2 mb-2">
+      <button
+        type="button"
+        onClick={openOnboarding}
+        className="cursor-pointer group w-full rounded-xl border border-accent-primary/20 bg-accent-glow p-3 text-left transition-colors hover:border-accent-primary/40 hover:bg-accent-glow"
+      >
+        <div className="mb-2 flex items-center gap-2">
+          <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-accent-primary/10">
+            <svg
+              className="h-3.5 w-3.5 text-accent-primary"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456Z"
+              />
+            </svg>
+          </div>
+          <span className="text-xs font-semibold text-text-primary">Finish setup</span>
+        </div>
+
+        <p className="mb-2.5 text-[11px] leading-relaxed text-text-muted">
+          Complete onboarding to unlock all features.
+        </p>
+
+        {/* Progress dots */}
+        <div className="flex gap-1">
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className={`h-1 flex-1 rounded-full ${i < completedCount ? 'bg-accent-primary' : 'bg-border'}`}
+            />
+          ))}
+        </div>
+      </button>
+    </div>
   );
 }

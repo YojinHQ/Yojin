@@ -220,6 +220,34 @@ export const NEWS_QUERY = gql`
 `;
 
 // ---------------------------------------------------------------------------
+// Queries — Onboarding
+// ---------------------------------------------------------------------------
+
+export const ONBOARDING_STATUS_QUERY = gql`
+  query OnboardingStatus {
+    onboardingStatus {
+      completed
+      personaExists
+      aiCredentialConfigured
+      connectedPlatforms
+      briefingConfigured
+    }
+  }
+`;
+
+export const COMPLETE_ONBOARDING_MUTATION = gql`
+  mutation CompleteOnboarding {
+    completeOnboarding
+  }
+`;
+
+export const RESET_ONBOARDING_MUTATION = gql`
+  mutation ResetOnboarding {
+    resetOnboarding
+  }
+`;
+
+// ---------------------------------------------------------------------------
 // Queries — Connections
 // ---------------------------------------------------------------------------
 

@@ -3,6 +3,17 @@ unset GIT_DIR
 cd "$(git rev-parse --show-toplevel)"
 pnpm run lint-staged
 
+# Safety net: verify staged files are formatted after lint-staged has had its chance to fix them
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx|mjs|json|yml|yaml|css|html|graphql)$' || true)
+if [ -n "$STAGED_FILES" ]; then
+  echo "$STAGED_FILES" | xargs pnpm exec prettier --check || {
+    echo ""
+    echo "ERROR: Staged files have formatting issues that lint-staged did not fix."
+    echo "Run: pnpm exec prettier --write <file> && git add <file>"
+    exit 1
+  }
+fi
+
 # Typecheck backend
 pnpm exec tsc --noEmit
 

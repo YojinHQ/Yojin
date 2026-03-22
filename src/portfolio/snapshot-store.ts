@@ -95,6 +95,16 @@ export class PortfolioSnapshotStore {
     return RedactedSnapshotSchema.parse(data);
   }
 
+  /** Remove all snapshots (used during onboarding reset). */
+  async clearAll(): Promise<void> {
+    const { unlink } = await import('node:fs/promises');
+    const { existsSync } = await import('node:fs');
+    if (existsSync(this.filePath)) {
+      await unlink(this.filePath);
+      logger.info('All snapshots cleared');
+    }
+  }
+
   /** Read all snapshots (for history). */
   async getAll(): Promise<PortfolioSnapshot[]> {
     let content: string;

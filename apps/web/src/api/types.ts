@@ -252,6 +252,22 @@ export interface ConnectPlatformInput {
 }
 
 // ---------------------------------------------------------------------------
+// Onboarding Status
+// ---------------------------------------------------------------------------
+
+export interface OnboardingStatus {
+  completed: boolean;
+  personaExists: boolean;
+  aiCredentialConfigured: boolean;
+  connectedPlatforms: string[];
+  briefingConfigured: boolean;
+}
+
+export interface OnboardingStatusQueryResult {
+  onboardingStatus: OnboardingStatus;
+}
+
+// ---------------------------------------------------------------------------
 // Vault
 // ---------------------------------------------------------------------------
 

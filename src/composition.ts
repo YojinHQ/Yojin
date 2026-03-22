@@ -17,6 +17,13 @@ import { pubsub } from './api/graphql/pubsub.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
 import { runHealthChecks, setDataSourceConfigPath } from './api/graphql/resolvers/data-sources.js';
 import { setFetchDeps } from './api/graphql/resolvers/fetch-data-source.js';
+import {
+  setOnboardingConnectionManager,
+  setOnboardingDataRoot,
+  setOnboardingPersonaManager,
+  setOnboardingSnapshotStore,
+  setOnboardingVault,
+} from './api/graphql/resolvers/onboarding.js';
 import { setPortfolioConnectionManager } from './api/graphql/resolvers/portfolio.js';
 import { setSignalArchive } from './api/graphql/resolvers/signals.js';
 import { setVault } from './api/graphql/resolvers/vault.js';
@@ -236,6 +243,13 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   const frontalLobe = new FrontalLobe(brain, dataRoot);
   const emotionTracker = new EmotionTracker(brain, dataRoot);
   const persona = new PersonaManager(dataRoot);
+
+  // 5b. Onboarding resolver injection
+  setOnboardingDataRoot(dataRoot);
+  setOnboardingPersonaManager(persona);
+  setOnboardingSnapshotStore(snapshotStore);
+  if (vault) setOnboardingVault(vault);
+  if (connectionManager) setOnboardingConnectionManager(connectionManager);
 
   // 6. DataSourceRegistry (empty — no sources registered yet)
   const dataSourceRegistry = new DataSourceRegistry();

@@ -35,6 +35,113 @@
   }
 }
 
+@keyframes onboarding-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes onboarding-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes progress-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 90, 94, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(255, 90, 94, 0);
+  }
+}
+
+/* ── Step 5 "Done" completion animations ── */
+
+@keyframes done-draw-stroke {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes done-emblem-glow {
+  0% {
+    filter: drop-shadow(0 0 0 rgba(91, 185, 140, 0));
+  }
+  40% {
+    filter: drop-shadow(0 0 24px rgba(91, 185, 140, 0.45));
+  }
+  100% {
+    filter: drop-shadow(0 0 8px rgba(91, 185, 140, 0.12));
+  }
+}
+
+@keyframes done-led-on {
+  from {
+    background-color: var(--color-bg-tertiary);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  to {
+    background-color: var(--color-success);
+    box-shadow: 0 0 6px rgba(91, 185, 140, 0.5);
+  }
+}
+
+@keyframes done-ring-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes done-line-extend {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+@keyframes done-radial-glow {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 @layer base {
   body {
     font-family: var(--font-body);
