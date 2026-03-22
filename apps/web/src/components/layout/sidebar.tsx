@@ -68,7 +68,7 @@ export default function Sidebar() {
   const logoSrc = resolved === 'dark' ? '/yojin_logo_white.png' : '/yojin_logo.png';
 
   return (
-    <aside className="flex w-[200px] flex-shrink-0 flex-col border-r border-border bg-bg-secondary">
+    <aside className="flex w-[220px] flex-shrink-0 flex-col border-r border-border bg-bg-secondary">
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-4">
         <img

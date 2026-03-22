@@ -36,6 +36,7 @@ import {
   initiateOAuthMutation,
   onboardingStatusQuery,
   parsePortfolioScreenshotMutation,
+  resetOnboardingMutation,
   saveBriefingConfigMutation,
   validateAiCredentialMutation,
 } from './resolvers/onboarding.js';
@@ -113,6 +114,7 @@ const schema = createSchema({
       parsePortfolioScreenshot: parsePortfolioScreenshotMutation,
       confirmPositions: confirmPositionsMutation,
       saveBriefingConfig: saveBriefingConfigMutation,
+      resetOnboarding: resetOnboardingMutation,
     },
     Subscription: {
       onAlert: onAlertSubscription,

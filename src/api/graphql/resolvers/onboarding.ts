@@ -98,10 +98,8 @@ interface OnboardingStatusResult {
 export async function onboardingStatusQuery(): Promise<OnboardingStatusResult> {
   const personaExists = personaManager ? !personaManager.isFirstRun() : false;
 
-  let aiCredentialConfigured = !!process.env.ANTHROPIC_API_KEY;
-  if (!aiCredentialConfigured && vault?.isUnlocked) {
-    aiCredentialConfigured = await vault.has('anthropic_api_key');
-  }
+  const detected = await detectAiCredentialQuery();
+  const aiCredentialConfigured = detected !== null;
 
   let connectedPlatforms: string[] = [];
   if (connectionManager) {
@@ -490,6 +488,22 @@ export async function saveBriefingConfigMutation(
 
   yojinConfig.briefingChannel = channel;
   await writeFile(yojinPath, JSON.stringify(yojinConfig, null, 2), 'utf-8');
+
+  return true;
+}
+
+export async function resetOnboardingMutation(): Promise<boolean> {
+  // Reset persona to default
+  if (personaManager) {
+    await personaManager.resetPersona();
+  }
+
+  // Remove briefing config
+  const alertsPath = `${dataRoot}/config/alerts.json`;
+  if (existsSync(alertsPath)) {
+    const { unlink } = await import('node:fs/promises');
+    await unlink(alertsPath);
+  }
 
   return true;
 }

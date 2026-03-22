@@ -605,6 +605,7 @@ export const typeDefs = /* GraphQL */ `
     parsePortfolioScreenshot(input: ScreenshotInput!): ScreenshotResult!
     confirmPositions(input: ConfirmPositionsInput!): Boolean!
     saveBriefingConfig(input: BriefingConfigInput!): Boolean!
+    resetOnboarding: Boolean!
   }
 
   type Subscription {
