@@ -40,4 +40,8 @@ plans/
 data/*
 !data/default/
 !data/config/
+
+# Test artifacts (buildContext with dataRoot: '.' creates these)
+/config/
+
 .claude/worktrees/

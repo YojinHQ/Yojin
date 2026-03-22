@@ -6,13 +6,16 @@
  * or future AgentRuntime can consume.
  */
 
+import { existsSync } from 'node:fs';
+import { copyFile } from 'node:fs/promises';
+
 import { z } from 'zod';
 
 import { createDefaultProfiles } from './agents/defaults.js';
 import { AgentRegistry } from './agents/registry.js';
 import { pubsub } from './api/graphql/pubsub.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
-import { runHealthChecks } from './api/graphql/resolvers/data-sources.js';
+import { runHealthChecks, setDataSourceConfigPath } from './api/graphql/resolvers/data-sources.js';
 import { setFetchDeps } from './api/graphql/resolvers/fetch-data-source.js';
 import { setPortfolioConnectionManager } from './api/graphql/resolvers/portfolio.js';
 import { setSignalArchive } from './api/graphql/resolvers/signals.js';
@@ -33,7 +36,7 @@ import { createDefaultGuards } from './guards/registry.js';
 import type { OutputDlpGuard } from './guards/security/output-dlp.js';
 import type { PostureName } from './guards/types.js';
 import { getLogger } from './logging/index.js';
-import { ensureDataDirs, resolveDataRoot } from './paths.js';
+import { ensureDataDirs, resolveDataRoot, resolveDefaultsRoot } from './paths.js';
 import { PluginRegistry } from './plugins/registry.js';
 import { PortfolioSnapshotStore } from './portfolio/snapshot-store.js';
 import { createPlatformTools } from './scraper/adapter.js';
@@ -237,11 +240,22 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   // 6. DataSourceRegistry (empty — no sources registered yet)
   const dataSourceRegistry = new DataSourceRegistry();
 
+  // 6a. Seed data-sources.json from factory defaults if missing
+  const dsConfigPath = `${dataRoot}/config/data-sources.json`;
+  if (!existsSync(dsConfigPath)) {
+    const defaultDs = `${resolveDefaultsRoot()}/data-sources.default.json`;
+    if (existsSync(defaultDs)) {
+      await copyFile(defaultDs, dsConfigPath);
+      log.info('Seeded data-sources.json from factory defaults');
+    }
+  }
+
   // 6b. Signal Archive + Ingestor
   const signalArchive = new SignalArchive({ dir: `${dataRoot}/signals/by-date` });
   const signalIngestor = new SignalIngestor({ archive: signalArchive });
   setSignalArchive(signalArchive);
-  setFetchDeps({ configPath: `${dataRoot}/config/data-sources.json`, ingestor: signalIngestor, vault });
+  setDataSourceConfigPath(dsConfigPath);
+  setFetchDeps({ configPath: dsConfigPath, ingestor: signalIngestor, vault });
 
   // 6c. Run data source health checks (non-blocking)
   runHealthChecks().catch((err) => log.warn('Data source health check failed', { error: String(err) }));

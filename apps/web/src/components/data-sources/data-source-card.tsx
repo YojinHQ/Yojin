@@ -48,7 +48,6 @@ export function DataSourceCard({
 
   async function handleFetch() {
     if (hasSearchCapability) {
-      // Let the LLM decide what to search for
       openChatWith(`Use ${source.name} to search for relevant data about my portfolio positions.`);
       return;
     }
