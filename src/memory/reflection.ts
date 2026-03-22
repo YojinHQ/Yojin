@@ -83,6 +83,11 @@ export class ReflectionEngine {
         .filter((c) => c.type === 'text' && c.text)
         .map((c) => c.text ?? '')
         .join('');
+
+      if (!lesson.trim()) {
+        log.warn('LLM returned empty lesson for reflection', { entryId: entry.id });
+        return { success: false, reason: 'llm_error', entryId: entry.id };
+      }
     } catch (err) {
       log.warn('LLM call failed during reflection', { entryId: entry.id, error: err });
       return { success: false, reason: 'llm_error', entryId: entry.id };
