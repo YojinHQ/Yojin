@@ -3,7 +3,46 @@
  *
  * These are the TypeScript representations of the GraphQL schema types.
  * Resolvers return these shapes; future services will produce them.
+ *
+ * AssetClassSchema is the canonical Zod enum — all other modules re-export from here.
+ * Platform is an open type (KnownPlatform | string) to support custom platforms.
  */
+
+import { z } from 'zod';
+
+// ---------------------------------------------------------------------------
+// Canonical Zod schema for AssetClass
+// ---------------------------------------------------------------------------
+
+export const AssetClassSchema = z.enum(['EQUITY', 'CRYPTO', 'BOND', 'COMMODITY', 'CURRENCY', 'OTHER']);
+export type AssetClass = z.infer<typeof AssetClassSchema>;
+
+// ---------------------------------------------------------------------------
+// Platform — open type supporting custom platforms
+// ---------------------------------------------------------------------------
+
+/** Platforms with first-class support (branding, credentials, connectors). */
+export const KNOWN_PLATFORMS = [
+  'INTERACTIVE_BROKERS',
+  'ROBINHOOD',
+  'COINBASE',
+  'SCHWAB',
+  'BINANCE',
+  'FIDELITY',
+  'POLYMARKET',
+  'PHANTOM',
+  'MANUAL',
+] as const;
+
+export type KnownPlatform = (typeof KNOWN_PLATFORMS)[number];
+
+/** A known platform or any custom string (e.g. "Alpaca", "OKX"). */
+export type Platform = KnownPlatform | (string & {});
+
+/** Type guard — true for first-class platforms, false for custom strings. */
+export function isKnownPlatform(value: string): value is KnownPlatform {
+  return (KNOWN_PLATFORMS as readonly string[]).includes(value);
+}
 
 // ---------------------------------------------------------------------------
 // Portfolio
@@ -22,18 +61,6 @@ export interface Position {
   assetClass: AssetClass;
   platform: Platform;
 }
-
-export type AssetClass = 'EQUITY' | 'CRYPTO' | 'BOND' | 'COMMODITY' | 'CURRENCY' | 'OTHER';
-export type Platform =
-  | 'INTERACTIVE_BROKERS'
-  | 'ROBINHOOD'
-  | 'COINBASE'
-  | 'SCHWAB'
-  | 'BINANCE'
-  | 'FIDELITY'
-  | 'POLYMARKET'
-  | 'PHANTOM'
-  | 'MANUAL';
 
 export interface PortfolioSnapshot {
   id: string;

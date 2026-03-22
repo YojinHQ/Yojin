@@ -334,7 +334,7 @@ describe('GraphQL resolvers', () => {
     it('refreshes positions for a platform', async () => {
       const result = await executeQuery(`
         mutation {
-          refreshPositions(platform: INTERACTIVE_BROKERS) {
+          refreshPositions(platform: "INTERACTIVE_BROKERS") {
             id
             totalValue
             positions {

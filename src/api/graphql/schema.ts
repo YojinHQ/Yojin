@@ -16,17 +16,10 @@ export const typeDefs = /* GraphQL */ `
     OTHER
   }
 
-  enum Platform {
-    INTERACTIVE_BROKERS
-    ROBINHOOD
-    COINBASE
-    SCHWAB
-    BINANCE
-    FIDELITY
-    POLYMARKET
-    PHANTOM
-    MANUAL
-  }
+  # Platform is a String (not an enum) to support custom user-defined platforms.
+  # Known platforms: INTERACTIVE_BROKERS, ROBINHOOD, COINBASE, SCHWAB, BINANCE,
+  # FIDELITY, POLYMARKET, PHANTOM, MANUAL.
+  # Any other value is treated as a custom platform.
 
   enum AlertStatus {
     ACTIVE
@@ -63,7 +56,7 @@ export const typeDefs = /* GraphQL */ `
     unrealizedPnlPercent: Float!
     sector: String
     assetClass: AssetClass!
-    platform: Platform!
+    platform: String!
   }
 
   type PortfolioSnapshot {
@@ -74,7 +67,7 @@ export const typeDefs = /* GraphQL */ `
     totalPnl: Float!
     totalPnlPercent: Float!
     timestamp: String!
-    platform: Platform
+    platform: String
   }
 
   # ---------------------------------------------------------------------------
@@ -92,7 +85,7 @@ export const typeDefs = /* GraphQL */ `
     unrealizedPnlPercent: Float!
     sector: String
     assetClass: AssetClass!
-    platform: Platform!
+    platform: String!
     sentimentScore: Float
     sentimentLabel: String
     analystRating: String
@@ -267,7 +260,7 @@ export const typeDefs = /* GraphQL */ `
     quantity: Float!
     costBasis: Float!
     assetClass: AssetClass
-    platform: Platform
+    platform: String
   }
 
   # ---------------------------------------------------------------------------
@@ -288,9 +281,15 @@ export const typeDefs = /* GraphQL */ `
     DISCONNECTED
   }
 
+  input CredentialInput {
+    key: String!
+    value: String!
+  }
+
   input ConnectPlatformInput {
-    platform: Platform!
+    platform: String!
     tier: IntegrationTier
+    credentials: [CredentialInput!]
   }
 
   type ConnectionResult {
@@ -300,7 +299,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type Connection {
-    platform: Platform!
+    platform: String!
     tier: IntegrationTier!
     status: ConnectionStatus!
     lastSync: String
@@ -316,11 +315,115 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type ConnectionEvent {
-    platform: Platform!
+    platform: String!
     step: String!
     message: String!
     tier: IntegrationTier
     error: String
+  }
+
+  # ---------------------------------------------------------------------------
+  # Vault
+  # ---------------------------------------------------------------------------
+
+  type VaultStatus {
+    isUnlocked: Boolean!
+    hasPassphrase: Boolean!
+    secretCount: Int!
+  }
+
+  type VaultSecret {
+    key: String!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type VaultResult {
+    success: Boolean!
+    error: String
+  }
+
+  input VaultSecretInput {
+    key: String!
+    value: String!
+  }
+
+  # ---------------------------------------------------------------------------
+  # Data Sources
+  # ---------------------------------------------------------------------------
+
+  enum DataSourceType {
+    CLI
+    MCP
+    API
+  }
+
+  enum DataSourceStatus {
+    ACTIVE
+    ERROR
+    DISABLED
+  }
+
+  type DataSourceCapability {
+    id: String!
+    description: String
+  }
+
+  type DataSource {
+    id: String!
+    name: String!
+    type: DataSourceType!
+    capabilities: [DataSourceCapability!]!
+    enabled: Boolean!
+    status: DataSourceStatus!
+    lastError: String
+    lastFetchedAt: String
+    priority: Int!
+  }
+
+  type DataSourceResult {
+    success: Boolean!
+    dataSource: DataSource
+    error: String
+  }
+
+  type FetchResult {
+    success: Boolean!
+    signalsIngested: Int!
+    duplicates: Int!
+    error: String
+  }
+
+  # ---------------------------------------------------------------------------
+  # Signals
+  # ---------------------------------------------------------------------------
+
+  type Signal {
+    id: String!
+    type: String!
+    title: String!
+    content: String
+    publishedAt: String!
+    ingestedAt: String!
+    confidence: Float!
+    contentHash: String!
+    tickers: [String!]!
+    sourceId: String!
+    sourceName: String!
+    link: String
+  }
+
+  input DataSourceInput {
+    id: String!
+    name: String!
+    type: DataSourceType!
+    capabilities: [String!]!
+    enabled: Boolean
+    priority: Int
+    baseUrl: String
+    secretRef: String
+    command: String
+    args: [String!]
   }
 
   # ---------------------------------------------------------------------------
@@ -335,7 +438,19 @@ export const typeDefs = /* GraphQL */ `
     totalPnlPercent: Float!
   }
 
+  type DeviceInfo {
+    deviceId: String!
+    shortId: String!
+    createdAt: String!
+  }
+
+  type CliCommandStatus {
+    command: String!
+    available: Boolean!
+  }
+
   type Query {
+    deviceInfo: DeviceInfo!
     portfolio: PortfolioSnapshot
     positions: [Position!]!
     portfolioHistory: [PortfolioHistoryPoint!]!
@@ -346,17 +461,42 @@ export const typeDefs = /* GraphQL */ `
     quote(symbol: String!): Quote
     sectorExposure: [SectorWeight!]!
     listConnections: [Connection!]!
-    detectAvailableTiers(platform: Platform!): [TierAvailability!]!
+    detectAvailableTiers(platform: String!): [TierAvailability!]!
+    listDataSources: [DataSource!]!
+    checkDataSourceHealth: [DataSource!]!
+    checkCliCommands(commands: [String!]!): [CliCommandStatus!]!
+    signals(
+      type: String
+      ticker: String
+      sourceId: String
+      since: String
+      until: String
+      search: String
+      minConfidence: Float
+      limit: Int
+    ): [Signal!]!
+    vaultStatus: VaultStatus!
+    listVaultSecrets: [VaultSecret!]!
   }
 
   type Mutation {
-    refreshPositions(platform: Platform!): PortfolioSnapshot!
+    refreshPositions(platform: String!): PortfolioSnapshot!
     addManualPosition(input: ManualPositionInput!): PortfolioSnapshot!
     createAlert(rule: AlertRuleInput!): Alert!
     dismissAlert(id: ID!): Alert!
     sendMessage(threadId: String!, message: String!, imageBase64: String, imageMediaType: String): SendMessagePayload!
     connectPlatform(input: ConnectPlatformInput!): ConnectionResult!
-    disconnectPlatform(platform: Platform!, removeCredentials: Boolean = false): ConnectionResult!
+    disconnectPlatform(platform: String!, removeCredentials: Boolean = false): ConnectionResult!
+    fetchDataSource(id: String!, url: String): FetchResult!
+    addDataSource(input: DataSourceInput!): DataSourceResult!
+    removeDataSource(id: String!): DataSourceResult!
+    toggleDataSource(id: String!, enabled: Boolean!): DataSourceResult!
+    unlockVault(passphrase: String!): VaultResult!
+    setVaultPassphrase(newPassphrase: String!): VaultResult!
+    changeVaultPassphrase(currentPassphrase: String!, newPassphrase: String!): VaultResult!
+    addVaultSecret(input: VaultSecretInput!): VaultResult!
+    updateVaultSecret(input: VaultSecretInput!): VaultResult!
+    deleteVaultSecret(key: String!): VaultResult!
   }
 
   type Subscription {
@@ -364,6 +504,6 @@ export const typeDefs = /* GraphQL */ `
     onPortfolioUpdate: PortfolioSnapshot!
     onPriceMove(symbol: String!, threshold: Float!): PriceEvent!
     onChatMessage(threadId: String!): ChatEvent!
-    onConnectionStatus(platform: Platform!): ConnectionEvent!
+    onConnectionStatus(platform: String!): ConnectionEvent!
   }
 `;

@@ -8,8 +8,11 @@
 import { z } from 'zod';
 
 import type { AssetClass, Platform, Position } from '../api/graphql/types.js';
+import { AssetClassSchema } from '../api/graphql/types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
+import { PlatformSchema } from '../scraper/types.js';
+import { balanceToRange, quantityToRange } from '../trust/pii/patterns.js';
 
 const PositionInputSchema = z.object({
   symbol: z.string().min(1).describe('Ticker symbol (e.g. AAPL, BTC)'),
@@ -21,15 +24,8 @@ const PositionInputSchema = z.object({
   unrealizedPnl: z.number().default(0).describe('Unrealized profit/loss'),
   unrealizedPnlPercent: z.number().default(0).describe('Unrealized P&L as a percentage'),
   sector: z.string().optional().describe('Sector (e.g. Technology, Healthcare)'),
-  assetClass: z
-    .enum(['EQUITY', 'CRYPTO', 'BOND', 'COMMODITY', 'CURRENCY', 'OTHER'])
-    .default('OTHER')
-    .describe('Asset class'),
+  assetClass: AssetClassSchema.default('OTHER').describe('Asset class'),
 });
-
-const PlatformSchema = z
-  .enum(['INTERACTIVE_BROKERS', 'ROBINHOOD', 'COINBASE', 'MANUAL'])
-  .describe('Platform the positions were imported from');
 
 export interface PortfolioToolsOptions {
   snapshotStore: PortfolioSnapshotStore;
@@ -45,7 +41,7 @@ export function createPortfolioTools(options: PortfolioToolsOptions): ToolDefini
       'Call this whenever a user shares a portfolio screenshot or provides position data. ' +
       'This persists the positions so the user can track their portfolio over time.',
     parameters: z.object({
-      platform: PlatformSchema,
+      platform: PlatformSchema.describe('Platform the positions were imported from'),
       positions: z.array(PositionInputSchema).min(1).describe('Array of positions to save'),
     }),
     async execute(params: {
@@ -72,15 +68,16 @@ export function createPortfolioTools(options: PortfolioToolsOptions): ToolDefini
         platform: params.platform,
       });
 
+      // Redact exact values — the LLM should not see real balances.
+      // The UI reads exact values directly from the snapshot store via GraphQL.
       return {
         content:
           `Portfolio saved successfully.\n` +
           `Snapshot ID: ${snapshot.id}\n` +
           `Platform: ${params.platform}\n` +
           `Positions: ${positions.length}\n` +
-          `Total Value: $${snapshot.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n` +
-          `Total P&L: $${snapshot.totalPnl.toLocaleString('en-US', { minimumFractionDigits: 2 })} ` +
-          `(${snapshot.totalPnlPercent.toFixed(2)}%)`,
+          `Total Value: ${balanceToRange(snapshot.totalValue)}\n` +
+          `Total P&L: ${snapshot.totalPnl < 0 ? '-' : '+'}${balanceToRange(snapshot.totalPnl)}`,
       };
     },
   };
@@ -99,11 +96,13 @@ export function createPortfolioTools(options: PortfolioToolsOptions): ToolDefini
         };
       }
 
+      // Redact exact values — the LLM sees symbols, bucketed quantities, and balance
+      // ranges but NOT exact dollar amounts or quantities. The UI shows real values via GraphQL.
       const summary = snapshot.positions
         .map(
           (p) =>
-            `  ${p.symbol}: ${p.quantity} shares @ $${p.currentPrice} = $${p.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2 })} ` +
-            `(P&L: ${p.unrealizedPnl >= 0 ? '+' : ''}$${p.unrealizedPnl.toLocaleString('en-US', { minimumFractionDigits: 2 })})`,
+            `  ${p.symbol}: ${quantityToRange(p.quantity)}, value: ${balanceToRange(p.marketValue)} ` +
+            `(P&L: ${p.unrealizedPnlPercent >= 0 ? '+' : ''}${p.unrealizedPnlPercent.toFixed(1)}%)`,
         )
         .join('\n');
 
@@ -111,10 +110,8 @@ export function createPortfolioTools(options: PortfolioToolsOptions): ToolDefini
         content:
           `Portfolio (${snapshot.platform ?? 'ALL'}) — ${snapshot.timestamp}\n` +
           `Positions:\n${summary}\n\n` +
-          `Total Value: $${snapshot.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n` +
-          `Total Cost: $${snapshot.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n` +
-          `Total P&L: $${snapshot.totalPnl.toLocaleString('en-US', { minimumFractionDigits: 2 })} ` +
-          `(${snapshot.totalPnlPercent.toFixed(2)}%)`,
+          `Total Value: ${balanceToRange(snapshot.totalValue)}\n` +
+          `Total P&L: ${snapshot.totalPnlPercent.toFixed(1)}%`,
       };
     },
   };

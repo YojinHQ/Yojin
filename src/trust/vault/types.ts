@@ -37,12 +37,21 @@ export const VaultFileSchema = z.object({
   entries: z.record(z.string(), VaultEntrySchema),
   /** Passphrase verification canary — decrypted to validate passphrase on unlock. */
   canary: CanarySchema.optional(),
+  /** Whether the user has set a custom passphrase (false = default empty passphrase). */
+  passphraseSet: z.boolean().optional(),
 });
 export type VaultFile = z.infer<typeof VaultFileSchema>;
 
 // ---------------------------------------------------------------------------
 // Vault interface
 // ---------------------------------------------------------------------------
+
+/** Metadata for a stored secret (never includes the decrypted value). */
+export interface SecretMeta {
+  key: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface SecretVault {
   /** Store a secret (encrypts the value). */
@@ -53,6 +62,8 @@ export interface SecretVault {
   has(key: string): Promise<boolean>;
   /** List secret key names only (never values). */
   list(): Promise<string[]>;
+  /** List secrets with metadata (key, createdAt, updatedAt — never values). */
+  listWithMeta(): Promise<SecretMeta[]>;
   /** Delete a secret. */
   delete(key: string): Promise<void>;
 }

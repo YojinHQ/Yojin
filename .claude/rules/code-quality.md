@@ -37,6 +37,8 @@ Extend via interfaces, not modification:
 - Thrown errors are for unexpected/programmer errors only.
 - Log errors with context before propagating: `logger.error('Failed to enrich', { symbol, error })`.
 - Never swallow errors silently.
+- In `finally` blocks, wrap cleanup in its own try/catch to avoid suppressing the original exception.
+- When a function has setup + action + cleanup, decide explicitly whether setup failure should abort or be best-effort. Match the error strategy symmetrically.
 
 ## Refactoring — Ask First
 

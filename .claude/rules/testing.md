@@ -25,3 +25,4 @@ globs: ["test/**/*.ts", "**/*.test.ts", "**/*.spec.ts"]
 - Use `describe`/`it` blocks.
 - Test names should describe the behavior, not the implementation.
 - Prefer real data fixtures over mocks where possible.
+- **Initialize `vi.mock` closure variables.** When a `vi.mock` factory closes over a `let` variable (e.g. `let defaultsRoot: string`), always initialize it (`= ''`). Vitest hoists `vi.mock()` to the top of the file — an uninitialized variable triggers TS2454 and risks `undefined` if evaluation order changes.

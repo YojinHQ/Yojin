@@ -12,6 +12,11 @@ import { createDefaultProfiles } from './agents/defaults.js';
 import { AgentRegistry } from './agents/registry.js';
 import { pubsub } from './api/graphql/pubsub.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
+import { runHealthChecks } from './api/graphql/resolvers/data-sources.js';
+import { setFetchDeps } from './api/graphql/resolvers/fetch-data-source.js';
+import { setPortfolioConnectionManager } from './api/graphql/resolvers/portfolio.js';
+import { setSignalArchive } from './api/graphql/resolvers/signals.js';
+import { setVault } from './api/graphql/resolvers/vault.js';
 import { BrainStore } from './brain/brain.js';
 import { EmotionTracker } from './brain/emotion.js';
 import { FrontalLobe } from './brain/frontal-lobe.js';
@@ -34,14 +39,19 @@ import { PortfolioSnapshotStore } from './portfolio/snapshot-store.js';
 import { createPlatformTools } from './scraper/adapter.js';
 import { ConnectionManager } from './scraper/connection-manager.js';
 import { loadCredentialLookup } from './scraper/platform-credentials.js';
+import { registerAllConnectors } from './scraper/platforms/index.js';
+import { SignalArchive } from './signals/archive.js';
+import { SignalIngestor } from './signals/ingestor.js';
 import { createApiHealthTools } from './tools/api-health.js';
 import { createBrainTools } from './tools/brain-tools.js';
+import { createDataSourceQueryTools } from './tools/data-source-query.js';
 import { createErrorAnalysisTools } from './tools/error-analysis.js';
 import { createPortfolioReasoningTools } from './tools/portfolio-reasoning.js';
 import { createPortfolioTools } from './tools/portfolio-tools.js';
 import { createSecurityAuditTools } from './tools/security-audit.js';
 import { FileAuditLog } from './trust/audit/audit-log.js';
 import { ChatPiiScanner } from './trust/pii/chat-scanner.js';
+import { DefaultPiiRedactor } from './trust/pii/redactor.js';
 import { createSecretTools } from './trust/vault/secure-input.js';
 import { EncryptedVault } from './trust/vault/vault.js';
 
@@ -71,6 +81,7 @@ export interface YojinServices {
   dataSourceRegistry: DataSourceRegistry;
   personaManager: PersonaManager;
   snapshotStore: PortfolioSnapshotStore;
+  piiRedactor: DefaultPiiRedactor;
   piiScanner: ChatPiiScanner;
   brain: {
     persona: PersonaManager;
@@ -133,24 +144,12 @@ export async function readPassphraseFromTty(prompt: string): Promise<string> {
 }
 
 /**
- * Resolve the vault passphrase:
- * 1. YOJIN_VAULT_PASSPHRASE env var
- * 2. TTY prompt (if stdin is a TTY)
- * 3. null (vault skipped)
+ * Resolve the vault passphrase from env var only.
+ * No TTY prompt at startup — vault auto-unlocks without a passphrase by default.
+ * Users can set a passphrase via the web UI or CLI command.
  */
-async function resolvePassphrase(): Promise<string | null> {
-  const envPassphrase = process.env.YOJIN_VAULT_PASSPHRASE;
-  if (envPassphrase) return envPassphrase;
-
-  if (process.stdin.isTTY) {
-    try {
-      return await readPassphraseFromTty('Vault passphrase (hidden): ');
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
+function resolvePassphrase(): string | null {
+  return process.env.YOJIN_VAULT_PASSPHRASE ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -184,13 +183,21 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   if (!skipVault) {
     try {
       vault = new EncryptedVault({ auditLog, vaultPath: `${dataRoot}/vault/secrets.json` });
-      const passphrase = await resolvePassphrase();
+      // Always expose vault to GraphQL so the web UI can manage it
+      setVault(vault);
+
+      const passphrase = resolvePassphrase();
       if (passphrase) {
         await vault.unlock(passphrase);
-        log.info('Vault unlocked');
+        log.info('Vault unlocked with passphrase');
       } else {
-        log.info('No vault passphrase — credential tools will report vault locked');
-        vault = undefined;
+        // Try auto-unlock with empty passphrase (default for new vaults)
+        const autoUnlocked = await vault.tryAutoUnlock();
+        if (autoUnlocked) {
+          log.info('Vault auto-unlocked (no passphrase set)');
+        } else {
+          log.info('Vault has a passphrase — unlock via web UI or YOJIN_VAULT_PASSPHRASE env var');
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -199,9 +206,12 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     }
   }
 
-  // 4b. ConnectionManager (requires vault)
+  // 4b. Portfolio snapshot store (created early — ConnectionManager needs it)
+  const snapshotStore = new PortfolioSnapshotStore(dataRoot);
+
+  // 4c. ConnectionManager (requires unlocked vault)
   let connectionManager: ConnectionManager | undefined;
-  if (vault) {
+  if (vault?.isUnlocked) {
     const credentialLookup = await loadCredentialLookup(`${dataRoot}/config/platform-credentials.json`);
     connectionManager = new ConnectionManager({
       vault,
@@ -210,8 +220,11 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
       configPath: `${dataRoot}/config/connections.json`,
       statePath: `${dataRoot}/cache/connection-state.json`,
       credentialLookup,
+      snapshotStore,
     });
+    registerAllConnectors({ manager: connectionManager, vault });
     setConnectionManager(connectionManager);
+    setPortfolioConnectionManager(connectionManager);
     log.info('ConnectionManager ready');
   }
 
@@ -224,8 +237,14 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   // 6. DataSourceRegistry (empty — no sources registered yet)
   const dataSourceRegistry = new DataSourceRegistry();
 
-  // 6b. Portfolio snapshot store
-  const snapshotStore = new PortfolioSnapshotStore(dataRoot);
+  // 6b. Signal Archive + Ingestor
+  const signalArchive = new SignalArchive({ dir: `${dataRoot}/data/signals/by-date` });
+  const signalIngestor = new SignalIngestor({ archive: signalArchive });
+  setSignalArchive(signalArchive);
+  setFetchDeps({ configPath: `${dataRoot}/data/config/data-sources.json`, ingestor: signalIngestor, vault });
+
+  // 6c. Run data source health checks (non-blocking)
+  runHealthChecks().catch((err) => log.warn('Data source health check failed', { error: String(err) }));
 
   // 7. ToolRegistry — register all tools
   const toolRegistry = new ToolRegistry();
@@ -235,8 +254,8 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     toolRegistry.register(tool);
   }
 
-  // Credential tools (4 tools if vault available, stubs if not)
-  if (vault) {
+  // Credential tools (4 tools if vault unlocked, stubs if not)
+  if (vault?.isUnlocked) {
     for (const tool of createSecretTools({ vault })) {
       toolRegistry.register(tool);
     }
@@ -263,6 +282,15 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
 
   // API health tool (1 tool)
   for (const tool of createApiHealthTools({ dataSourceRegistry })) {
+    toolRegistry.register(tool);
+  }
+
+  // Data source query tools (2 tools: query_data_source, list_data_sources)
+  for (const tool of createDataSourceQueryTools({
+    configPath: `${dataRoot}/data/config/data-sources.json`,
+    vault,
+    ingestor: signalIngestor,
+  })) {
     toolRegistry.register(tool);
   }
 
@@ -293,7 +321,8 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   }
   log.info(`AgentRegistry ready — ${agentRegistry.getAll().length} agents`);
 
-  // 9. PII scanner (regex-only by default, NER opt-in via YOJIN_PII_NER=1)
+  // 9. PII redaction
+  const piiRedactor = new DefaultPiiRedactor({ auditLog });
   const piiScanner = new ChatPiiScanner({
     auditLog,
     enableNer: process.env.YOJIN_PII_NER === '1',
@@ -315,6 +344,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     dataSourceRegistry,
     personaManager: persona,
     snapshotStore,
+    piiRedactor,
     piiScanner,
     brain: {
       persona,

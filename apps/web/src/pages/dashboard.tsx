@@ -9,10 +9,10 @@ export default function Dashboard() {
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* Main content */}
-      <div className="flex flex-1 flex-col overflow-hidden p-4 gap-3">
+      <div className="flex flex-1 flex-col overflow-hidden p-6 gap-5">
         <PortfolioValueStrip />
         <TotalValueChart />
-        <div className="flex min-h-0 flex-1 gap-3">
+        <div className="flex min-h-0 flex-1 gap-5">
           <PositionsPreview />
           <AllocationChart />
         </div>

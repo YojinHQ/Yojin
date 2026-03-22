@@ -97,7 +97,7 @@ export async function parsePortfolioScreenshot(params: ParseScreenshotParams): P
   }
 
   const metadata: ExtractionMetadata = {
-    source: 'screenshot',
+    source: 'SCREENSHOT',
     platform,
     extractedAt: new Date().toISOString(),
     confidence: overall,

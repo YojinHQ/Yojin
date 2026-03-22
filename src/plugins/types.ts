@@ -133,9 +133,20 @@ export interface ChannelSetupAdapter {
 export interface ChannelCapabilities {
   supportsThreading: boolean;
   supportsReactions: boolean;
+  supportsTyping: boolean;
   supportsFiles: boolean;
   supportsEditing: boolean;
   maxMessageLength?: number;
+}
+
+/** Handle returned by startTyping — call stop() to cancel the typing indicator. */
+export interface TypingHandle {
+  stop(): Promise<void>;
+}
+
+export interface ChannelTypingAdapter {
+  /** Start a typing indicator on a channel/thread. Returns a handle to stop it. */
+  startTyping(channelId: string, threadTs?: string): Promise<TypingHandle>;
 }
 
 export interface ChannelPlugin {
@@ -147,6 +158,7 @@ export interface ChannelPlugin {
   messagingAdapter: ChannelMessagingAdapter;
   authAdapter: ChannelAuthAdapter;
   setupAdapter: ChannelSetupAdapter;
+  typingAdapter?: ChannelTypingAdapter;
   capabilities: ChannelCapabilities;
 
   /** Lifecycle: called when the plugin is initialized. */

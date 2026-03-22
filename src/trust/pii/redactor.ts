@@ -82,9 +82,10 @@ export class DefaultPiiRedactor implements PiiRedactor {
       for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
         const fieldPath = path ? `${path}.${key}` : key;
 
-        // Handle numeric balance fields specially
+        // Handle numeric balance fields specially — preserve sign for P&L fields
         if (this.isBalanceField(key) && typeof value === 'number') {
-          result[key] = balanceToRange(value);
+          const sign = value < 0 ? '-' : '';
+          result[key] = `${sign}${balanceToRange(value)}`;
           rulesApplied.add('balance-range');
           onRedact(1);
           continue;
@@ -145,6 +146,10 @@ export class DefaultPiiRedactor implements PiiRedactor {
       'balance',
       'totalValue',
       'total_value',
+      'totalCost',
+      'total_cost',
+      'totalPnl',
+      'total_pnl',
       'marketValue',
       'market_value',
       'costBasis',

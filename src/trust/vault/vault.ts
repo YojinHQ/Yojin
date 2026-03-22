@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { promisify } from 'node:util';
 
-import type { SecretVault, VaultFile } from './types.js';
+import type { SecretMeta, SecretVault, VaultFile } from './types.js';
 import { VaultFileSchema } from './types.js';
 import { resolveDataRoot } from '../../paths.js';
 import type { AuditLog } from '../audit/types.js';
@@ -39,6 +39,37 @@ export class EncryptedVault implements SecretVault {
   constructor(options: VaultOptions) {
     this.vaultPath = options.vaultPath ?? `${resolveDataRoot()}/vault/secrets.json`;
     this.auditLog = options.auditLog;
+  }
+
+  /** Whether the vault has been unlocked in this session. */
+  get isUnlocked(): boolean {
+    return this.derivedKey !== null;
+  }
+
+  /** Whether the user has set a custom passphrase (vs. default empty passphrase). */
+  get hasPassphrase(): boolean {
+    return this.vaultData?.passphraseSet === true;
+  }
+
+  /**
+   * Try to auto-unlock with an empty passphrase.
+   * Returns true if successful (fresh vault or vault using default passphrase).
+   * Returns false if the vault has a user-set passphrase — caller must use unlock().
+   */
+  async tryAutoUnlock(): Promise<boolean> {
+    const data = this.loadOrCreateVault();
+
+    // If user has set a passphrase, don't auto-unlock
+    if (data.passphraseSet) return false;
+
+    // Try empty passphrase
+    try {
+      await this.unlock('');
+      return true;
+    } catch {
+      // Vault exists with a non-empty passphrase (legacy vault without passphraseSet flag)
+      return false;
+    }
   }
 
   /** Derive encryption key from passphrase. Must be called before any operation. */
@@ -130,6 +161,16 @@ export class EncryptedVault implements SecretVault {
     return Object.keys(data.entries);
   }
 
+  async listWithMeta(): Promise<SecretMeta[]> {
+    const { data } = this.ensureUnlocked();
+    this.logAccess('*', 'list');
+    return Object.entries(data.entries).map(([key, entry]) => ({
+      key,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+    }));
+  }
+
   async delete(key: string): Promise<void> {
     const { data } = this.ensureUnlocked();
 
@@ -141,6 +182,98 @@ export class EncryptedVault implements SecretVault {
     delete data.entries[key];
     this.save();
     this.logAccess(key, 'delete');
+  }
+
+  /**
+   * Set a passphrase on a vault that currently uses the default (empty) passphrase.
+   * Re-encrypts all entries with the new passphrase.
+   */
+  async setPassphrase(newPassphrase: string): Promise<void> {
+    if (!newPassphrase) throw new Error('Passphrase cannot be empty');
+    const { data } = this.ensureUnlocked();
+    if (data.passphraseSet) throw new Error('Vault already has a passphrase. Use changePassphrase instead.');
+
+    await this.reEncrypt(newPassphrase);
+    this.auditLog.append({ type: 'secret.access', details: { key: '*', operation: 'set-passphrase' as 'set' } });
+  }
+
+  /**
+   * Change the vault passphrase. Requires the current passphrase for verification.
+   * Pass empty string for newPassphrase to remove the passphrase.
+   */
+  async changePassphrase(currentPassphrase: string, newPassphrase: string): Promise<void> {
+    // Verify current passphrase by deriving key and checking canary
+    const data = this.loadOrCreateVault();
+    const currentKey = await pbkdf2Async(
+      currentPassphrase,
+      Buffer.from(data.salt, 'base64'),
+      PBKDF2_ITERATIONS,
+      KEY_LENGTH,
+      'sha512',
+    );
+
+    if (data.canary) {
+      try {
+        const decipher = createDecipheriv(ALGORITHM, currentKey, Buffer.from(data.canary.iv, 'base64'));
+        decipher.setAuthTag(Buffer.from(data.canary.tag, 'base64'));
+        let decrypted = decipher.update(data.canary.value, 'base64', 'utf8');
+        decrypted += decipher.final('utf8');
+        if (decrypted !== CANARY_PLAINTEXT) throw new Error('Wrong passphrase');
+      } catch {
+        throw new Error('Current passphrase is incorrect');
+      }
+    }
+
+    await this.reEncrypt(newPassphrase);
+    this.auditLog.append({ type: 'secret.access', details: { key: '*', operation: 'change-passphrase' as 'set' } });
+  }
+
+  /**
+   * Re-encrypt all entries with a new passphrase. Generates new salt, key, and canary.
+   */
+  private async reEncrypt(newPassphrase: string): Promise<void> {
+    const { key: oldKey, data } = this.ensureUnlocked();
+
+    // Decrypt all values with old key
+    const plainEntries: Array<{ key: string; value: string; createdAt: string; updatedAt: string }> = [];
+    for (const [entryKey, entry] of Object.entries(data.entries)) {
+      const decipher = createDecipheriv(ALGORITHM, oldKey, Buffer.from(entry.iv, 'base64'));
+      decipher.setAuthTag(Buffer.from(entry.tag, 'base64'));
+      let decrypted = decipher.update(entry.value, 'base64', 'utf8');
+      decrypted += decipher.final('utf8');
+      plainEntries.push({ key: entryKey, value: decrypted, createdAt: entry.createdAt, updatedAt: entry.updatedAt });
+    }
+
+    // New salt + derive new key
+    const newSalt = randomBytes(SALT_LENGTH);
+    const newKey = await pbkdf2Async(newPassphrase, newSalt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha512');
+
+    // Re-encrypt all entries
+    data.salt = newSalt.toString('base64');
+    data.entries = {};
+    data.passphraseSet = newPassphrase.length > 0;
+
+    this.derivedKey = newKey;
+
+    for (const { key: entryKey, value, createdAt, updatedAt } of plainEntries) {
+      const iv = randomBytes(IV_LENGTH);
+      const cipher = createCipheriv(ALGORITHM, newKey, iv);
+      let encrypted = cipher.update(value, 'utf8', 'base64');
+      encrypted += cipher.final('base64');
+      const tag = cipher.getAuthTag();
+
+      data.entries[entryKey] = {
+        value: encrypted,
+        iv: iv.toString('base64'),
+        tag: tag.toString('base64'),
+        createdAt,
+        updatedAt,
+      };
+    }
+
+    // Write new canary
+    data.canary = undefined;
+    this.writeCanary();
   }
 
   private ensureUnlocked(): { key: Buffer; data: VaultFile } {

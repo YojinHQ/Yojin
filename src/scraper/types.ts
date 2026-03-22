@@ -1,33 +1,26 @@
 /**
- * Scraper domain types — interfaces for platform connectors and
- * screenshot extraction results.
- *
- * The PlatformConnector interface here is minimal and will be
- * reconciled with YOJ-55 once the tiered connector framework lands.
+ * Scraper domain types — interfaces for platform connectors,
+ * tiered connector framework, and screenshot extraction results.
  */
 
+import type { BrowserContext } from 'playwright';
 import { z } from 'zod';
 
-import type { Platform } from '../api/graphql/types.js';
+import { AssetClassSchema } from '../api/graphql/types.js';
+import { KNOWN_PLATFORMS, type Platform } from '../api/graphql/types.js';
 import type { AgentLoopProvider, ImageMediaType } from '../core/types.js';
 
+export { AssetClassSchema };
+
 // ---------------------------------------------------------------------------
-// Zod schemas for validating Claude Vision output
+// Integration tiers (priority order: cli > api > ui > screenshot)
 // ---------------------------------------------------------------------------
 
-export const AssetClassSchema = z.enum(['EQUITY', 'CRYPTO', 'BOND', 'COMMODITY', 'CURRENCY', 'OTHER']);
+/** Accepts known platforms or any non-empty custom string. */
+export const PlatformSchema = z.string().min(1) as z.ZodType<Platform>;
 
-export const PlatformSchema = z.enum([
-  'INTERACTIVE_BROKERS',
-  'ROBINHOOD',
-  'COINBASE',
-  'SCHWAB',
-  'BINANCE',
-  'FIDELITY',
-  'POLYMARKET',
-  'PHANTOM',
-  'MANUAL',
-]);
+/** Re-export for consumers that only need the Zod enum of known values. */
+export const KnownPlatformSchema = z.enum(KNOWN_PLATFORMS);
 
 export const IntegrationTierSchema = z.enum(['CLI', 'API', 'UI', 'SCREENSHOT']);
 
@@ -115,13 +108,28 @@ export const ExtractionResponseSchema = z.object({
 export type ExtractionResponse = z.infer<typeof ExtractionResponseSchema>;
 
 // ---------------------------------------------------------------------------
-// Platform connector (minimal — reconciled with YOJ-55 later)
+// BrowserLike — narrow interface for UI connectors (avoids unsafe Browser cast)
+// ---------------------------------------------------------------------------
+
+export interface BrowserLike {
+  newContext(options?: Record<string, unknown>): Promise<BrowserContext>;
+}
+
+// ---------------------------------------------------------------------------
+// Platform connector interfaces
 // ---------------------------------------------------------------------------
 
 export interface PlatformConnector {
   readonly platformId: string;
   readonly platformName: string;
   fetchPositions(): Promise<PlatformConnectorResult>;
+}
+
+export interface TieredPlatformConnector extends PlatformConnector {
+  readonly tier: IntegrationTier;
+  isAvailable(): Promise<boolean>;
+  connect(credentialRefs: string[]): Promise<{ success: boolean; error?: string }>;
+  disconnect(): Promise<void>;
 }
 
 export type PlatformConnectorResult =
@@ -147,7 +155,7 @@ export interface ParseScreenshotParams {
 // ---------------------------------------------------------------------------
 
 export interface ExtractionMetadata {
-  source: 'screenshot' | 'scraper';
+  source: IntegrationTier;
   platform: Platform;
   extractedAt: string;
   confidence: number;

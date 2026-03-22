@@ -36,11 +36,14 @@ export type {
   Article,
   PriceEvent,
   AssetClass,
+  KnownPlatform,
   Platform,
   AlertStatus,
   AlertRuleType,
   Direction,
 } from './types.js';
+
+export { KNOWN_PLATFORMS, isKnownPlatform } from './types.js';
 
 // Documents — for advanced use (manual client.query, testing)
 export {

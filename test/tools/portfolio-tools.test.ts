@@ -100,5 +100,46 @@ describe('Portfolio tools', () => {
       expect(result.content).toContain('COINBASE');
       expect(result.content).toContain('Total Value');
     });
+
+    it('redacts exact dollar amounts — LLM sees ranges, not real values', async () => {
+      const saveTool = tools.find((t) => t.name === 'save_portfolio_positions')!;
+      const getTool = tools.find((t) => t.name === 'get_portfolio')!;
+
+      await saveTool.execute({
+        platform: 'COINBASE',
+        positions: [
+          { symbol: 'BTC', name: 'Bitcoin', quantity: 1, costBasis: 50000, currentPrice: 67000, marketValue: 67000 },
+          { symbol: 'ETH', name: 'Ethereum', quantity: 10, costBasis: 2000, currentPrice: 3500, marketValue: 35000 },
+        ],
+      });
+
+      const getResult = await getTool.execute({});
+      // LLM should see balance ranges, not exact values
+      expect(getResult.content).toContain('$50k-$100k'); // totalValue ~$102k
+      // LLM should NOT see exact dollar amounts
+      expect(getResult.content).not.toContain('67,000');
+      expect(getResult.content).not.toContain('35,000');
+      expect(getResult.content).not.toContain('$102,');
+      // LLM should NOT see exact quantities — only bucketed ranges
+      expect(getResult.content).not.toMatch(/: 1 unit/);
+      expect(getResult.content).toContain('1-10 units'); // quantity 1 → "1-10 units" bucket
+      expect(getResult.content).toContain('10-100 units'); // quantity 10 → "10-100 units" bucket
+    });
+
+    it('save response redacts exact totals', async () => {
+      const saveTool = tools.find((t) => t.name === 'save_portfolio_positions')!;
+
+      const result = await saveTool.execute({
+        platform: 'COINBASE',
+        positions: [
+          { symbol: 'BTC', name: 'Bitcoin', quantity: 1, costBasis: 50000, currentPrice: 67000, marketValue: 67000 },
+        ],
+      });
+
+      // Save response shows ranges, not exact values
+      expect(result.content).toContain('$50k-$100k'); // totalValue $67k
+      expect(result.content).not.toContain('67,000');
+      expect(result.content).not.toContain('$67,');
+    });
   });
 });

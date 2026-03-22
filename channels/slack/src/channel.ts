@@ -108,6 +108,7 @@ export function buildSlackChannel(): ChannelPlugin {
   const capabilities: ChannelCapabilities = {
     supportsThreading: true,
     supportsReactions: true,
+    supportsTyping: false,
     supportsFiles: true,
     supportsEditing: true,
     maxMessageLength: 40_000,

@@ -15,6 +15,8 @@ import { join } from 'node:path';
 
 import type { Platform, PortfolioSnapshot, Position } from '../api/graphql/types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
+import type { PiiRedactor, RedactedSnapshot } from '../trust/pii/types.js';
+import { RedactedSnapshotSchema } from '../trust/pii/types.js';
 
 const logger = createSubsystemLogger('snapshot-store');
 
@@ -74,6 +76,23 @@ export class PortfolioSnapshotStore {
       logger.warn('Failed to parse latest snapshot line');
       return null;
     }
+  }
+
+  /**
+   * Return the latest snapshot with PII redacted — balances converted to
+   * ranges, account IDs hashed. Use this before sending data to external
+   * services (Keelson enrichment, etc.).
+   */
+  async getLatestRedacted(redactor: PiiRedactor): Promise<RedactedSnapshot | null> {
+    const snapshot = await this.getLatest();
+    if (!snapshot) return null;
+    // Strip fields that allow exact balance reconstruction (quantity × currentPrice = marketValue)
+    const sanitized = {
+      ...snapshot,
+      positions: snapshot.positions.map(({ currentPrice: _price, quantity: _qty, ...p }) => p),
+    };
+    const { data } = redactor.redact(sanitized as Record<string, unknown>);
+    return RedactedSnapshotSchema.parse(data);
   }
 
   /** Read all snapshots (for history). */

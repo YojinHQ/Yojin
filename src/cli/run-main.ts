@@ -103,6 +103,7 @@ async function startGateway(): Promise<void> {
 
   const gateway = new Gateway(services.config, agentRuntime, {
     snapshotStore: services.snapshotStore,
+    connectionManager: services.connectionManager,
   });
 
   // Graceful shutdown

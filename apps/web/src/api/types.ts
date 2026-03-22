@@ -10,7 +10,29 @@
 // ---------------------------------------------------------------------------
 
 export type AssetClass = 'EQUITY' | 'CRYPTO' | 'BOND' | 'COMMODITY' | 'CURRENCY' | 'OTHER';
-export type Platform = 'INTERACTIVE_BROKERS' | 'ROBINHOOD' | 'COINBASE' | 'SCHWAB' | 'BINANCE' | 'FIDELITY' | 'MANUAL';
+
+/** Platforms with first-class support (branding, credentials, connectors). */
+export const KNOWN_PLATFORMS = [
+  'INTERACTIVE_BROKERS',
+  'ROBINHOOD',
+  'COINBASE',
+  'SCHWAB',
+  'BINANCE',
+  'FIDELITY',
+  'POLYMARKET',
+  'PHANTOM',
+  'MANUAL',
+] as const;
+
+export type KnownPlatform = (typeof KNOWN_PLATFORMS)[number];
+
+/** A known platform or any custom string (e.g. "Alpaca", "OKX"). */
+export type Platform = KnownPlatform | (string & {});
+
+/** Type guard — true for first-class platforms, false for custom strings. */
+export function isKnownPlatform(value: string): value is KnownPlatform {
+  return (KNOWN_PLATFORMS as readonly string[]).includes(value);
+}
 export type AlertStatus = 'ACTIVE' | 'TRIGGERED' | 'DISMISSED';
 export type AlertRuleType =
   | 'PRICE_MOVE'
@@ -173,6 +195,280 @@ export interface Article {
 }
 
 // ---------------------------------------------------------------------------
+// Device Identity
+// ---------------------------------------------------------------------------
+
+export interface DeviceInfo {
+  deviceId: string;
+  shortId: string;
+  createdAt: string;
+}
+
+export interface DeviceInfoQueryResult {
+  deviceInfo: DeviceInfo;
+}
+
+// ---------------------------------------------------------------------------
+// Connections / Onboarding
+// ---------------------------------------------------------------------------
+
+export type IntegrationTier = 'CLI' | 'API' | 'UI' | 'SCREENSHOT';
+export type ConnectionStatus = 'PENDING' | 'VALIDATING' | 'CONNECTED' | 'ERROR' | 'DISCONNECTED';
+
+export interface Connection {
+  platform: Platform;
+  tier: IntegrationTier;
+  status: ConnectionStatus;
+  lastSync: string | null;
+  lastError: string | null;
+  syncInterval: number;
+  autoRefresh: boolean;
+}
+
+export interface TierAvailability {
+  tier: IntegrationTier;
+  available: boolean;
+  requiresCredentials: string[];
+}
+
+export interface ConnectionResult {
+  success: boolean;
+  connection: Connection | null;
+  error: string | null;
+}
+
+export interface ConnectionEvent {
+  platform: string;
+  step: string;
+  message: string;
+  tier: IntegrationTier | null;
+  error: string | null;
+}
+
+export interface ConnectPlatformInput {
+  platform: string;
+  tier?: IntegrationTier;
+  credentials?: { key: string; value: string }[];
+}
+
+// ---------------------------------------------------------------------------
+// Vault
+// ---------------------------------------------------------------------------
+
+export interface VaultStatus {
+  isUnlocked: boolean;
+  hasPassphrase: boolean;
+  secretCount: number;
+}
+
+export interface VaultSecret {
+  key: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VaultResult {
+  success: boolean;
+  error: string | null;
+}
+
+export interface VaultSecretInput {
+  key: string;
+  value: string;
+}
+
+export interface VaultStatusQueryResult {
+  vaultStatus: VaultStatus;
+}
+
+export interface ListVaultSecretsQueryResult {
+  listVaultSecrets: VaultSecret[];
+}
+
+export interface UnlockVaultMutationResult {
+  unlockVault: VaultResult;
+}
+
+export interface UnlockVaultVariables {
+  passphrase: string;
+}
+
+export interface SetVaultPassphraseMutationResult {
+  setVaultPassphrase: VaultResult;
+}
+
+export interface SetVaultPassphraseVariables {
+  newPassphrase: string;
+}
+
+export interface ChangeVaultPassphraseMutationResult {
+  changeVaultPassphrase: VaultResult;
+}
+
+export interface ChangeVaultPassphraseVariables {
+  currentPassphrase: string;
+  newPassphrase: string;
+}
+
+export interface AddVaultSecretMutationResult {
+  addVaultSecret: VaultResult;
+}
+
+export interface AddVaultSecretVariables {
+  input: VaultSecretInput;
+}
+
+export interface UpdateVaultSecretMutationResult {
+  updateVaultSecret: VaultResult;
+}
+
+export interface UpdateVaultSecretVariables {
+  input: VaultSecretInput;
+}
+
+export interface DeleteVaultSecretMutationResult {
+  deleteVaultSecret: VaultResult;
+}
+
+export interface DeleteVaultSecretVariables {
+  key: string;
+}
+
+// ---------------------------------------------------------------------------
+// Data Sources
+// ---------------------------------------------------------------------------
+
+export type DataSourceType = 'CLI' | 'MCP' | 'API';
+export type DataSourceStatus = 'ACTIVE' | 'ERROR' | 'DISABLED';
+
+export interface DataSourceCapability {
+  id: string;
+  description: string | null;
+}
+
+export interface DataSource {
+  id: string;
+  name: string;
+  type: DataSourceType;
+  capabilities: DataSourceCapability[];
+  enabled: boolean;
+  status: DataSourceStatus;
+  lastError: string | null;
+  lastFetchedAt: string | null;
+  priority: number;
+}
+
+export interface DataSourceResult {
+  success: boolean;
+  dataSource: DataSource | null;
+  error: string | null;
+}
+
+export interface DataSourceInput {
+  id: string;
+  name: string;
+  type: DataSourceType;
+  capabilities: string[];
+  enabled?: boolean;
+  priority?: number;
+  baseUrl?: string;
+  secretRef?: string;
+  command?: string;
+  args?: string[];
+}
+
+export interface ListDataSourcesQueryResult {
+  listDataSources: DataSource[];
+}
+
+export interface AddDataSourceMutationResult {
+  addDataSource: DataSourceResult;
+}
+
+export interface AddDataSourceVariables {
+  input: DataSourceInput;
+}
+
+export interface RemoveDataSourceMutationResult {
+  removeDataSource: DataSourceResult;
+}
+
+export interface RemoveDataSourceVariables {
+  id: string;
+}
+
+export interface ToggleDataSourceMutationResult {
+  toggleDataSource: DataSourceResult;
+}
+
+export interface ToggleDataSourceVariables {
+  id: string;
+  enabled: boolean;
+}
+
+export interface CliCommandStatus {
+  command: string;
+  available: boolean;
+}
+
+export interface CheckCliCommandsQueryResult {
+  checkCliCommands: CliCommandStatus[];
+}
+
+// ---------------------------------------------------------------------------
+// Fetch Data Source
+// ---------------------------------------------------------------------------
+
+export interface FetchResult {
+  success: boolean;
+  signalsIngested: number;
+  duplicates: number;
+  error: string | null;
+}
+
+export interface FetchDataSourceMutationResult {
+  fetchDataSource: FetchResult;
+}
+
+export interface FetchDataSourceVariables {
+  id: string;
+  url?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Signals
+// ---------------------------------------------------------------------------
+
+export interface Signal {
+  id: string;
+  type: string;
+  title: string;
+  content: string | null;
+  publishedAt: string;
+  ingestedAt: string;
+  confidence: number;
+  tickers: string[];
+  sourceId: string;
+  sourceName: string;
+  link: string | null;
+}
+
+export interface SignalsQueryResult {
+  signals: Signal[];
+}
+
+export interface SignalsVariables {
+  type?: string;
+  ticker?: string;
+  sourceId?: string;
+  since?: string;
+  until?: string;
+  search?: string;
+  minConfidence?: number;
+  limit?: number;
+}
+
+// ---------------------------------------------------------------------------
 // Subscriptions
 // ---------------------------------------------------------------------------
 
@@ -222,6 +518,47 @@ export interface QuoteQueryResult {
 
 export interface NewsQueryResult {
   news: Article[];
+}
+
+// ---------------------------------------------------------------------------
+// Connection query/mutation wrappers
+// ---------------------------------------------------------------------------
+
+export interface ListConnectionsQueryResult {
+  listConnections: Connection[];
+}
+
+export interface DetectAvailableTiersQueryResult {
+  detectAvailableTiers: TierAvailability[];
+}
+
+export interface DetectAvailableTiersVariables {
+  platform: string;
+}
+
+export interface ConnectPlatformMutationResult {
+  connectPlatform: ConnectionResult;
+}
+
+export interface ConnectPlatformVariables {
+  input: ConnectPlatformInput;
+}
+
+export interface DisconnectPlatformMutationResult {
+  disconnectPlatform: Pick<ConnectionResult, 'success' | 'error'>;
+}
+
+export interface DisconnectPlatformVariables {
+  platform: string;
+  removeCredentials?: boolean;
+}
+
+export interface OnConnectionStatusSubscriptionResult {
+  onConnectionStatus: ConnectionEvent;
+}
+
+export interface OnConnectionStatusVariables {
+  platform: string;
 }
 
 // ---------------------------------------------------------------------------

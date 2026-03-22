@@ -74,42 +74,101 @@ All state is file-driven — JSONL sessions, JSON configs, Markdown personas. No
 
 ### Prerequisites
 
-- Node.js >= 20
+- Node.js >= 22
 - pnpm 10+
 
 ### Install
 
 ```bash
+git clone https://github.com/YojinHQ/Yojin.git
+cd Yojin
 pnpm install
 ```
 
-### Configure
+### First Run
 
 ```bash
-# Set up your AI provider (pick one)
-export ANTHROPIC_API_KEY=sk-ant-...
-# or
-pnpm dev -- setup-token  # OAuth flow for Claude Code CLI
+pnpm chat
 ```
+
+On first launch, Yojin will:
+
+1. **Bootstrap** — prompt you to connect an LLM provider (paste an Anthropic API key or run the OAuth flow)
+2. **Onboard** — ask a few questions about your investment style and generate a personalized persona
+
+No manual config files needed — credentials are stored in the encrypted vault automatically.
 
 ### Run
 
 ```bash
-# Development
+# Interactive chat (recommended starting point)
+pnpm chat
+
+# Start backend + web dashboard (development)
 pnpm dev
 
-# Interactive chat
-pnpm chat
+# Backend server only
+pnpm dev:be
 
 # Production
 pnpm build && pnpm start
-
-# Web UI development
-pnpm dev:web
-
-# Backend + Web UI together
-pnpm dev:all
 ```
+
+## CLI Usage
+
+Yojin ships a CLI entry point (`yojin`) with the following commands:
+
+```
+yojin                Start the backend server (API + GraphQL)
+yojin chat           Chat with Yojin in your terminal
+yojin setup          Connect your Claude account (OAuth flow)
+yojin web            Start the web dashboard only
+yojin secret <cmd>   Manage encrypted credentials
+yojin acp            Start ACP (Agent Client Protocol) server
+yojin version        Print version
+yojin help           Show help
+```
+
+### `yojin chat`
+
+Full agent loop in your terminal — streaming responses, tool execution, color-coded output.
+
+```bash
+pnpm chat
+
+# Options:
+pnpm chat -- --model claude-opus-4-6   # Choose model
+pnpm chat -- --provider anthropic      # Choose provider
+pnpm chat -- --system "Be concise"     # Custom system prompt
+```
+
+### `yojin secret`
+
+Manage credentials in the encrypted vault (AES-256-GCM). The vault auto-unlocks without a passphrase by default. You can also manage secrets via the Web UI under Profile.
+
+```bash
+pnpm dev:be -- secret set ANTHROPIC_API_KEY   # Store a secret (hidden input)
+pnpm dev:be -- secret list                    # List stored secret names
+pnpm dev:be -- secret show ANTHROPIC_API_KEY  # Reveal a secret (TTY only)
+pnpm dev:be -- secret delete ANTHROPIC_API_KEY # Remove a secret
+```
+
+### `yojin setup`
+
+Run the OAuth PKCE flow to authenticate with Claude — opens your browser, stores the token in the vault.
+
+```bash
+pnpm setup
+```
+
+### Environment Variables
+
+| Variable                  | Purpose                                      | Required |
+|---------------------------|----------------------------------------------|----------|
+| `ANTHROPIC_API_KEY`       | Anthropic API key (alternative to OAuth)     | One of these |
+| `CLAUDE_CODE_OAUTH_TOKEN` | OAuth token from `yojin setup`               | One of these |
+| `YOJIN_VAULT_PASSPHRASE`  | Passphrase for the encrypted credential vault | No (auto-unlocks without one) |
+| `YOJIN_PII_NER`           | Set to `1` to enable NER-based PII detection | No |
 
 ## Project Structure
 
@@ -142,23 +201,22 @@ yojin/
 
 ## Commands
 
-| Command                        | Description                           |
-|--------------------------------|---------------------------------------|
-| `pnpm dev`                     | Start development server (tsx)        |
-| `pnpm chat`                    | Interactive chat REPL                 |
-| `pnpm build`                   | Compile TypeScript                    |
-| `pnpm start`                   | Run compiled output                   |
-| `pnpm test`                    | Run tests (vitest)                    |
-| `pnpm lint`                    | Lint with ESLint                      |
-| `pnpm clean`                   | Remove dist/                          |
-| `pnpm dev -- secret set <key>` | Store an encrypted secret             |
-| `pnpm dev -- secret list`      | List stored secret names              |
-| `pnpm dev:web`                 | Start React web app (Vite dev server) |
-| `pnpm dev:all`                 | Start backend + web app in parallel   |
-| `pnpm build:web`               | Build React web app                   |
-| `pnpm build:all`               | Build all packages                    |
-| `pnpm test:all`                | Run tests across all packages         |
-| `pnpm ci:all`                  | Full CI check across all packages     |
+| Command          | Description                           |
+|------------------|---------------------------------------|
+| `pnpm dev`       | Start backend + web app (development) |
+| `pnpm dev:be`    | Start backend only (tsx)              |
+| `pnpm dev:web`   | Start React web app (Vite dev server) |
+| `pnpm chat`      | Interactive chat REPL                 |
+| `pnpm setup`     | OAuth setup flow                      |
+| `pnpm build`     | Compile TypeScript                    |
+| `pnpm start`     | Run compiled output                   |
+| `pnpm test`      | Run tests (vitest)                    |
+| `pnpm lint`      | Lint with ESLint                      |
+| `pnpm clean`     | Remove dist/                          |
+| `pnpm build:web` | Build React web app                   |
+| `pnpm build:all` | Build all packages                    |
+| `pnpm test:all`  | Run tests across all packages         |
+| `pnpm ci:all`    | Full CI check across all packages     |
 
 ## Channels
 
@@ -254,12 +312,14 @@ Yojin is built with security as a first-class concern. Every agent action passes
 
 ### Credential Vault
 
+The vault auto-unlocks without a passphrase by default — no setup required on first run. Users can optionally set a passphrase via the Web UI (Profile page) or the `YOJIN_VAULT_PASSPHRASE` env var for additional security.
+
 ```text
 ┌──────────────────────────────────────────────┐
 │               Encrypted Vault                 │
 │                                               │
 │  Passphrase ──▶ PBKDF2 (600k, SHA-512)       │
-│                      │                        │
+│  (optional)          │                        │
 │                 Derived Key                    │
 │                      │                        │
 │              ┌───────┴───────┐                │
@@ -276,6 +336,7 @@ Yojin is built with security as a first-class concern. Every agent action passes
 │  Key names: plaintext (enables list w/o key)  │
 │  MCP server: injects creds at transport layer │
 │  Raw values: NEVER in LLM prompts             │
+│  Web UI: manage secrets under Profile page    │
 └──────────────────────────────────────────────┘
 ```
 
@@ -443,13 +504,13 @@ Delete an event        ──▶ prevHash gap  ──▶ verifyChain() detects i
 
 ### Security Highlights
 
-- **Encrypted credential vault** — AES-256-GCM with PBKDF2 key derivation. Credentials injected at the transport layer, never exposed to the LLM.
+- **Encrypted credential vault** — AES-256-GCM with PBKDF2 key derivation. Auto-unlocks without passphrase by default; optional passphrase via Web UI or env var. Credentials injected at the transport layer, never exposed to the LLM.
 - **12 deterministic guards** — Kill switch, self-defense, tool policy, fs, command, egress, output-dlp, rate-budget, repetition, read-only, cooldown, symbol-whitelist.
 - **PII protection** — Chat messages scrubbed before LLM via Rehydra (email, phone, card, IP, URL + optional NER for names). Structured data redacted before external APIs (account IDs hashed, balances ranged).
 - **Human approval gate** — Irreversible actions (trades, new connections) require explicit approval via your active channel.
 - **HMAC-chained audit log** — Tamper-evident append-only JSONL. Every security event logged, chain integrity verifiable.
 - **Pipeline freeze** — Guard pipeline locked after initialization. No runtime modification possible.
-- **Local-first** — Your data stays on your machine. No cloud database, no containers, no third-party data storage.
+- **Local-first** — Your data stays on your machine. No cloud database, no containers, no third-party data storage. Manage everything via Web UI or CLI.
 
 ## Tech Stack
 

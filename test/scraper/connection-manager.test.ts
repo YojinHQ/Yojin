@@ -128,17 +128,18 @@ describe('detectAvailableTiers', () => {
     expect(tiers.find((t) => t.tier === 'CLI')?.available).toBe(true);
   });
 
-  it('marks unavailable connectors correctly', async () => {
+  it('marks tiers as available when a connector is registered', async () => {
     const platform: Platform = 'COINBASE';
-    manager.registerConnector(makeConnector(platform, 'API', { isAvailable: vi.fn().mockResolvedValue(false) }));
-    manager.registerConnector(makeConnector(platform, 'SCREENSHOT', { isAvailable: vi.fn().mockResolvedValue(true) }));
+    manager.registerConnector(makeConnector(platform, 'API'));
 
     const tiers = await manager.detectAvailableTiers(platform);
 
     const api = tiers.find((t) => t.tier === 'API');
-    const screenshot = tiers.find((t) => t.tier === 'SCREENSHOT');
-    expect(api?.available).toBe(false);
-    expect(screenshot?.available).toBe(true);
+    const ui = tiers.find((t) => t.tier === 'UI');
+    // API has a registered connector → available
+    expect(api?.available).toBe(true);
+    // UI has no registered connector → unavailable
+    expect(ui?.available).toBe(false);
   });
 
   it('includes credential requirements from getCredentialRequirements', async () => {
@@ -152,10 +153,13 @@ describe('detectAvailableTiers', () => {
     expect(api?.requiresCredentials).toContain('COINBASE_API_SECRET');
   });
 
-  it('returns all tiers as unavailable when no connectors registered', async () => {
+  it('returns non-SCREENSHOT tiers as unavailable when no connectors registered', async () => {
     const tiers = await manager.detectAvailableTiers('ROBINHOOD');
     expect(tiers).toHaveLength(4);
-    expect(tiers.every((t) => !t.available)).toBe(true);
+    // SCREENSHOT is always available (no connector needed)
+    const nonScreenshot = tiers.filter((t) => t.tier !== 'SCREENSHOT');
+    expect(nonScreenshot.every((t) => !t.available)).toBe(true);
+    expect(tiers.find((t) => t.tier === 'SCREENSHOT')?.available).toBe(true);
   });
 });
 
@@ -284,11 +288,13 @@ describe('connectPlatform — success', () => {
     expect((tierEvent?.payload as { tier: string }).tier).toBe('API');
   });
 
-  it('returns error when no tiers available for auto-detection', async () => {
+  it('returns error when no real connector is registered for auto-detected tier', async () => {
+    // SCREENSHOT is always "available" but no connector is registered for it,
+    // so connectPlatform fails with "No connector registered"
     const result = await manager.connectPlatform({ platform: 'COINBASE' });
 
     expect(result.success).toBe(false);
-    expect(result.error).toMatch(/No available integration tier/);
+    expect(result.error).toMatch(/No connector registered/);
   });
 });
 
