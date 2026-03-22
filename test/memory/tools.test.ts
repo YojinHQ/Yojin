@@ -13,6 +13,7 @@ function makeMockStore(): MockStore {
   return {
     store: vi.fn().mockResolvedValue('mock-id'),
     recall: vi.fn().mockResolvedValue([]),
+    get: vi.fn(),
     reflect: vi.fn(),
     findUnreflected: vi.fn().mockResolvedValue([]),
     initialize: vi.fn(),
@@ -32,7 +33,7 @@ function makeMockRedactor(): PiiRedactor {
 }
 
 function makeStores(entries: [MemoryAgentRole, MockStore][]): Map<MemoryAgentRole, SignalMemoryStore> {
-  return new Map(entries) as Map<MemoryAgentRole, SignalMemoryStore>;
+  return new Map(entries) as unknown as Map<MemoryAgentRole, SignalMemoryStore>;
 }
 
 describe('createMemoryTools', () => {

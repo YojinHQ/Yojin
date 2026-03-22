@@ -95,6 +95,10 @@ export class SignalMemoryStore {
     return { success: true };
   }
 
+  get(id: string): MemoryEntry | undefined {
+    return this.entries.get(id);
+  }
+
   async recall(
     situation: string,
     options?: { topN?: number; tickers?: string[] },

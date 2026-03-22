@@ -153,8 +153,8 @@ export class ReflectionEngine {
     for (const entry of unreflected) {
       const r = await this.reflectOnEntry(entry);
       if (r.success) {
-        const results = await store.recall(entry.situation, { tickers: [ticker], topN: 1 });
-        if (results.length > 0) reflected.push(results[0].entry);
+        const updated = store.get(entry.id);
+        if (updated) reflected.push(updated);
       }
     }
 

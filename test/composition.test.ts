@@ -49,6 +49,8 @@ describe('buildContext', () => {
     expect(names).toContain('diagnose_data_error');
     expect(names).toContain('check_api_health');
     expect(names).toContain('portfolio_reasoning');
+    expect(names).toContain('store_signal_memory');
+    expect(names).toContain('recall_signal_memories');
   });
 
   it('registers 4 agent profiles', async () => {

@@ -43,6 +43,7 @@ function makeMockStore(): MockStore {
     reflect: vi.fn().mockResolvedValue({ success: true }),
     findUnreflected: vi.fn().mockResolvedValue([]),
     recall: vi.fn().mockResolvedValue([]),
+    get: vi.fn(),
     store: vi.fn(),
     initialize: vi.fn(),
     prune: vi.fn(),
@@ -69,7 +70,7 @@ function makeMockProvider(): LlmProvider {
 }
 
 function makeStores(entries: [MemoryAgentRole, MockStore][]): Map<MemoryAgentRole, SignalMemoryStore> {
-  return new Map(entries) as Map<MemoryAgentRole, SignalMemoryStore>;
+  return new Map(entries) as unknown as Map<MemoryAgentRole, SignalMemoryStore>;
 }
 
 describe('ReflectionEngine', () => {
@@ -251,9 +252,10 @@ describe('ReflectionEngine', () => {
   describe('reflectOnRevisit', () => {
     it('reflects on unreflected entries for a specific ticker', async () => {
       const entry = makeEntry({ id: 'e1' });
+      const reflectedEntry = { ...entry, reflectedAt: '2026-03-22T10:00:00Z', grade: 'CORRECT' as const };
       const store = makeMockStore();
       store.findUnreflected.mockResolvedValue([entry]);
-      store.recall.mockResolvedValue([{ entry: { ...entry, reflectedAt: '2026-03-22T10:00:00Z' }, score: 0.9 }]);
+      store.get.mockReturnValue(reflectedEntry);
 
       const engine = new ReflectionEngine({
         providerRouter: makeMockProvider(),
@@ -265,6 +267,7 @@ describe('ReflectionEngine', () => {
       const lessons = await engine.reflectOnRevisit('analyst', 'AAPL');
       expect(lessons).toHaveLength(1);
       expect(store.reflect).toHaveBeenCalled();
+      expect(store.get).toHaveBeenCalledWith('e1');
     });
   });
 });
