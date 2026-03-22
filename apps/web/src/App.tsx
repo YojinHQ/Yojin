@@ -7,11 +7,11 @@ import { ThemeProvider } from './lib/theme';
 import AppShell from './components/layout/app-shell';
 import Position from './pages/position';
 import Skills from './pages/skills';
+import Chat from './pages/chat';
 import Profile from './pages/profile';
 import Settings from './pages/settings';
 import Dashboard from './pages/dashboard';
 import Positions from './pages/positions';
-import Signals from './pages/signals';
 
 function RedirectPositionSymbol() {
   const { symbol } = useParams<{ symbol: string }>();
@@ -29,8 +29,7 @@ export default function App() {
                 <Route index element={<Dashboard />} />
                 <Route path="portfolio" element={<Positions />} />
                 <Route path="portfolio/:symbol" element={<Position />} />
-                <Route path="chat" element={<Navigate to="/" replace />} />
-                <Route path="signals" element={<Signals />} />
+                <Route path="chat" element={<Chat />} />
                 <Route path="skills" element={<Skills />} />
                 <Route path="profile" element={<Profile />} />
                 <Route path="settings" element={<Settings />} />

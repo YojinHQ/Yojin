@@ -27,15 +27,11 @@ const cache = cacheExchange({
   keys: {
     Position: (data) => `${data.symbol as string}:${data.platform as string}`,
     EnrichedPosition: (data) => `${data.symbol as string}:${data.platform as string}`,
-    Connection: (data) => data.platform as string,
     AlertRule: () => null, // embedded, not an entity
     SectorWeight: () => null,
     Concentration: () => null,
     CorrelationCluster: () => null,
     PriceEvent: () => null,
-    TierAvailability: () => null,
-    ConnectionResult: () => null,
-    ConnectionEvent: () => null,
   },
   updates: {
     Mutation: {
@@ -43,7 +39,6 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'portfolio');
         cache.invalidate('Query', 'positions');
         cache.invalidate('Query', 'enrichedSnapshot');
-        cache.invalidate('Query', 'listConnections');
       },
       addManualPosition(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
@@ -55,16 +50,6 @@ const cache = cacheExchange({
       },
       dismissAlert(_result, _args, cache) {
         cache.invalidate('Query', 'alerts');
-      },
-      connectPlatform(result: { connectPlatform?: { success?: boolean } }, _args, cache) {
-        if (result.connectPlatform?.success) {
-          cache.invalidate('Query', 'listConnections');
-        }
-      },
-      disconnectPlatform(result: { disconnectPlatform?: { success?: boolean } }, _args, cache) {
-        if (result.disconnectPlatform?.success) {
-          cache.invalidate('Query', 'listConnections');
-        }
       },
     },
   },
