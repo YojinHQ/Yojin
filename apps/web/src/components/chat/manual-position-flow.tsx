@@ -62,8 +62,6 @@ const ACCOUNT_TO_PLATFORM: Record<string, Platform> = {
   Schwab: 'SCHWAB',
   Binance: 'BINANCE',
   Fidelity: 'FIDELITY',
-  Polymarket: 'POLYMARKET',
-  Phantom: 'PHANTOM',
 };
 
 /** Returns the known platform for a preset, or the raw input as a custom platform. */

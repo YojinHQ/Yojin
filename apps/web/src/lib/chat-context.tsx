@@ -81,8 +81,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const isProcessingRef = useRef(false);
   const piiDetectedRef = useRef(false);
   const piiTypesRef = useRef<string[]>([]);
-  // Dedup events from StrictMode double-subscriptions
-  const lastEventRef = useRef<unknown>(null);
 
   const [, sendMessageMutation] = useMutation(SEND_MESSAGE_MUTATION);
   const processQueueRef = useRef<() => void>(() => {});
@@ -145,10 +143,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const handleSubscription = useCallback(
     (_prev: unknown, data: { onChatMessage: ChatEvent }) => {
-      // Skip duplicate events from React StrictMode double-subscriptions
-      if (data === lastEventRef.current) return data;
-      lastEventRef.current = data;
-
       const event = data.onChatMessage;
 
       if (event.type === 'THINKING') {
