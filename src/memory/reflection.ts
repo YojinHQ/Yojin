@@ -139,12 +139,6 @@ export class ReflectionEngine {
       }
     }
 
-    // Enforce maxEntries cap after reflection adds data to entries
-    for (const [role, store] of this.stores) {
-      const pruned = await store.prune();
-      if (pruned > 0) log.info('Pruned memory entries', { role, pruned });
-    }
-
     log.info('Reflection sweep complete', { ...result });
     return result;
   }

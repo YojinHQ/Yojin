@@ -35,6 +35,8 @@ export async function wireMemory(options: WireMemoryOptions): Promise<WireMemory
   for (const role of MEMORY_ROLES) {
     const store = new SignalMemoryStore({ role, dataDir: memoryDir });
     await store.initialize();
+    // Enforce maxEntries cap at startup — safe because no agents are running yet.
+    await store.prune();
     stores.set(role, store);
   }
 
