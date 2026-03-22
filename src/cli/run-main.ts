@@ -17,6 +17,7 @@ import { buildContext } from '../composition.js';
 import { AgentRuntime } from '../core/agent-runtime.js';
 import { EventLog } from '../core/event-log.js';
 import { Gateway } from '../gateway/server.js';
+import { resolveDataRoot } from '../paths.js';
 import { JsonlSessionStore } from '../sessions/jsonl-store.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
 
@@ -70,10 +71,10 @@ async function buildFullRuntime(): Promise<{
   dataRoot: string;
   services: Awaited<ReturnType<typeof buildContext>>;
 }> {
-  const dataRoot = '.';
+  const dataRoot = resolveDataRoot();
   const services = await buildContext({ dataRoot });
 
-  const providerRouter = new ProviderRouter();
+  const providerRouter = new ProviderRouter({ configPath: `${dataRoot}/config/ai-provider.json` });
   const claudeProvider = new ClaudeCodeProvider();
   await claudeProvider.initialize();
   providerRouter.registerBackend(claudeProvider);
@@ -85,8 +86,8 @@ async function buildFullRuntime(): Promise<{
     agentRegistry: services.agentRegistry,
     toolRegistry: services.toolRegistry,
     guardRunner: services.guardRunner,
-    sessionStore: new JsonlSessionStore(`${dataRoot}/data/sessions`),
-    eventLog: new EventLog(`${dataRoot}/data/event-log`),
+    sessionStore: new JsonlSessionStore(`${dataRoot}/sessions`),
+    eventLog: new EventLog(`${dataRoot}/event-log`),
     provider: providerRouter,
     outputDlp: services.outputDlp,
     piiScanner: services.piiScanner,
@@ -99,10 +100,8 @@ async function buildFullRuntime(): Promise<{
 
 async function startGateway(): Promise<void> {
   const { agentRuntime, services } = await buildFullRuntime();
-  const { loadConfig } = await import('../config/config.js');
-  const config = loadConfig();
 
-  const gateway = new Gateway(config, agentRuntime, {
+  const gateway = new Gateway(services.config, agentRuntime, {
     snapshotStore: services.snapshotStore,
     connectionManager: services.connectionManager,
   });
@@ -132,7 +131,7 @@ function startFrontend(): Promise<void> {
 async function startAcp(): Promise<void> {
   const { agentRuntime, dataRoot } = await buildFullRuntime();
   const bridge = new LocalRuntimeBridge(agentRuntime);
-  const acpSessionStore = new AcpSessionStore(`${dataRoot}/data/acp`);
+  const acpSessionStore = new AcpSessionStore(`${dataRoot}/acp`);
   const { shutdown } = startAcpServer({ bridge, sessionStore: acpSessionStore });
 
   const gracefulShutdown = async () => {

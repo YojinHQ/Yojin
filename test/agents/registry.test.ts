@@ -2,8 +2,13 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+
+let defaultsRoot: string = '';
+vi.mock('../../src/paths.js', () => ({
+  resolveDefaultsRoot: () => defaultsRoot,
+}));
 
 import { AgentRegistry } from '../../src/agents/registry.js';
 import type { AgentProfile } from '../../src/agents/types.js';
@@ -36,6 +41,7 @@ let tmpDir: string;
 
 beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), 'agent-registry-test-'));
+  defaultsRoot = join(tmpDir, 'defaults');
 });
 
 afterEach(async () => {
@@ -108,7 +114,7 @@ describe('AgentRegistry', () => {
     const registry = new AgentRegistry();
     registry.register(makeProfile({ id: 'strategist', role: 'strategist' }));
 
-    const agentDir = join(tmpDir, 'data/default/agents');
+    const agentDir = join(defaultsRoot, 'agents');
     await mkdir(agentDir, { recursive: true });
     await writeFile(join(agentDir, 'strategist.default.md'), '# Strategist\nYou decide.\n');
 

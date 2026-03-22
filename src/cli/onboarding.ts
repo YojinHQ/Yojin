@@ -2,7 +2,7 @@
  * First-run onboarding — asks the user a few questions and generates
  * a personalized persona for the Strategist agent.
  *
- * Runs once when no data/brain/persona.md override exists yet.
+ * Runs once when no brain/persona.md override exists yet (relative to data root).
  * Uses the Anthropic provider to generate the persona from answers.
  */
 

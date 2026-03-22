@@ -36,6 +36,8 @@ export interface GuardRegistryOptions {
   toolPolicyDefault?: 'allow' | 'deny';
   /** Kill switch options. */
   killSwitch?: KillSwitchOptions;
+  /** Resolved audit directory path — passed to FsGuard for write-blocking. */
+  auditPath?: string;
 }
 
 export interface GuardRegistryResult {
@@ -72,7 +74,7 @@ export function createDefaultGuards(posture: PostureConfig, options?: GuardRegis
         ]
       : []),
     // 4. Infrastructure guards
-    new FsGuard(),
+    new FsGuard({ auditPath: options?.auditPath }),
     new CommandGuard(),
     new EgressGuard({ allowedDomains: options?.egressAllowedDomains }),
     outputDlp,

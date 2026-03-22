@@ -131,7 +131,7 @@ export interface DataSourcePlugin {
 }
 
 // ---------------------------------------------------------------------------
-// Config — persisted in data/config/data-sources.json
+// Config — persisted in config/data-sources.json (relative to data root)
 // ---------------------------------------------------------------------------
 
 const CliConfigSchema = z.object({

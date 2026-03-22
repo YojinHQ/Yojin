@@ -1,8 +1,8 @@
 /**
  * Persona — default/override pattern for the Strategist's personality.
  *
- * Factory default lives at data/default/persona.default.md (git-tracked).
- * User override lives at data/brain/persona.md (gitignored).
+ * Factory default is bundled with the package (resolved via resolveDefaultsRoot()).
+ * User override lives at brain/persona.md (relative to data root ~/.yojin/, gitignored).
  * First run auto-copies default to override. git pull updates defaults
  * without clobbering user customizations.
  */
@@ -12,16 +12,16 @@ import { copyFile, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import type { PersonaManager as PersonaManagerInterface } from './types.js';
+import { resolveDefaultsRoot } from '../paths.js';
 
-const DEFAULT_PERSONA_PATH = 'data/default/persona.default.md';
-const OVERRIDE_PERSONA_PATH = 'data/brain/persona.md';
+const OVERRIDE_PERSONA_PATH = 'brain/persona.md';
 
 export class PersonaManager implements PersonaManagerInterface {
   private readonly defaultPath: string;
   private readonly overridePath: string;
 
   constructor(dataRoot = '.') {
-    this.defaultPath = `${dataRoot}/${DEFAULT_PERSONA_PATH}`;
+    this.defaultPath = `${resolveDefaultsRoot()}/persona.default.md`;
     this.overridePath = `${dataRoot}/${OVERRIDE_PERSONA_PATH}`;
   }
 
@@ -72,16 +72,16 @@ export class PersonaManager implements PersonaManagerInterface {
 /**
  * Load an agent's system prompt using the default/override pattern.
  *
- * Default: data/default/agents/{agentId}.default.md (git-tracked)
- * Override: data/brain/agents/{agentId}.md (gitignored)
+ * Default: bundled with the package, resolved via resolveDefaultsRoot()
+ * Override: brain/agents/{agentId}.md (relative to data root ~/.yojin/, gitignored)
  */
 export async function loadAgentPrompt(agentId: string, dataRoot = '.'): Promise<string> {
   if (!/^[a-z0-9-]+$/.test(agentId)) {
     throw new Error(`Invalid agentId: "${agentId}"`);
   }
 
-  const overridePath = `${dataRoot}/data/brain/agents/${agentId}.md`;
-  const defaultPath = `${dataRoot}/data/default/agents/${agentId}.default.md`;
+  const overridePath = `${dataRoot}/brain/agents/${agentId}.md`;
+  const defaultPath = `${resolveDefaultsRoot()}/agents/${agentId}.default.md`;
 
   try {
     if (existsSync(overridePath)) return await readFile(overridePath, 'utf-8');

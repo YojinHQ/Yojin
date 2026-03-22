@@ -1,9 +1,9 @@
 /**
  * FileAuditLog — append-only JSONL security audit log with HMAC chain.
  *
- * Writes to data/audit/security.jsonl. Each line is an independently
- * JSON-parseable AuditEvent. Uses synchronous writes to guarantee
- * no audit events are lost.
+ * Writes to audit/security.jsonl (relative to data root ~/.yojin/).
+ * Each line is an independently JSON-parseable AuditEvent. Uses synchronous writes
+ * to guarantee no audit events are lost.
  *
  * HMAC chain: each event includes `prevHash` (HMAC of the previous event)
  * and `hash` (HMAC of the current event including prevHash). This creates
@@ -16,6 +16,7 @@ import { dirname } from 'node:path';
 
 import type { AuditEvent, AuditEventInput, AuditFilter, AuditLog } from './types.js';
 import { AuditEventSchema } from './types.js';
+import { resolveDataRoot } from '../../paths.js';
 
 const HMAC_ALGO = 'sha256';
 // Use env var for HMAC key if available; otherwise fall back to a fixed seed.
@@ -29,7 +30,7 @@ export class FileAuditLog implements AuditLog {
   private lastHash = '0000000000000000000000000000000000000000000000000000000000000000';
 
   constructor(auditDir?: string) {
-    const dir = auditDir ?? 'data/audit';
+    const dir = auditDir ?? `${resolveDataRoot()}/audit`;
     this.filePath = `${dir}/security.jsonl`;
 
     // Load the last hash from existing log

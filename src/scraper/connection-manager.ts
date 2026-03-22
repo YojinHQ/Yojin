@@ -53,9 +53,9 @@ export interface ConnectionManagerOptions {
   vault: SecretVault;
   pubsub: { publish(channel: string, payload: unknown): void };
   auditLog: { append(event: Record<string, unknown>): void };
-  /** Path to config file — data/config/connections.json */
+  /** Path to config file — config/connections.json (relative to data root) */
   configPath: string;
-  /** Path to state file — data/cache/connection-state.json */
+  /** Path to state file — cache/connection-state.json (relative to data root) */
   statePath: string;
   /** Custom credential lookup (supports config overrides). Falls back to hardcoded defaults. */
   credentialLookup?: CredentialLookup;

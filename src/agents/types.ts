@@ -36,7 +36,7 @@ export type AgentProfile = z.infer<typeof AgentProfileSchema>;
  * AgentProfile with its system prompt loaded from Markdown.
  *
  * Separated from AgentProfile because the system prompt is loaded at runtime
- * from data/default/agents/{id}.default.md (or user override), not stored in
+ * from the package defaults (via resolveDefaultsRoot()) or user override, not stored in
  * the serializable config.
  */
 export interface LoadedAgentProfile extends AgentProfile {

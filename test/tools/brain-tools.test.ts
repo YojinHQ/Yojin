@@ -2,7 +2,12 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+let defaultsRoot: string = '';
+vi.mock('../../src/paths.js', () => ({
+  resolveDefaultsRoot: () => defaultsRoot,
+}));
 
 import { BrainStore } from '../../src/brain/brain.js';
 import { EmotionTracker } from '../../src/brain/emotion.js';
@@ -23,6 +28,7 @@ function getTool(name: string): ToolDefinition {
 
 beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), 'brain-tools-test-'));
+  defaultsRoot = join(tmpDir, 'defaults');
   brain = new BrainStore(tmpDir);
   const frontalLobe = new FrontalLobe(brain, tmpDir);
   const emotionTracker = new EmotionTracker(brain, tmpDir);

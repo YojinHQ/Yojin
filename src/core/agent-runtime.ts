@@ -25,6 +25,7 @@ import type { EmotionTracker, FrontalLobe, PersonaManager } from '../brain/types
 import type { GuardRunner } from '../guards/guard-runner.js';
 import type { OutputDlpGuard } from '../guards/security/output-dlp.js';
 import { createSubsystemLogger } from '../logging/logger.js';
+import { resolveDataRoot } from '../paths.js';
 import type { SessionStore } from '../sessions/types.js';
 import type { ApprovalGate } from '../trust/approval/approval-gate.js';
 import { GuardedToolRegistry } from '../trust/guarded-tool-registry.js';
@@ -69,7 +70,7 @@ export class AgentRuntime {
     this.sessionStore = options.sessionStore;
     this.eventLog = options.eventLog;
     this.provider = options.provider;
-    this.dataRoot = options.dataRoot ?? '.';
+    this.dataRoot = options.dataRoot ?? resolveDataRoot();
     this.brain = options.brain;
     this.piiScanner = options.piiScanner;
     this.guardedRegistry = new GuardedToolRegistry({

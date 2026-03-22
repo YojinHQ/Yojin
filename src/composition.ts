@@ -33,6 +33,7 @@ import { createDefaultGuards } from './guards/registry.js';
 import type { OutputDlpGuard } from './guards/security/output-dlp.js';
 import type { PostureName } from './guards/types.js';
 import { getLogger } from './logging/index.js';
+import { ensureDataDirs, resolveDataRoot } from './paths.js';
 import { PluginRegistry } from './plugins/registry.js';
 import { PortfolioSnapshotStore } from './portfolio/snapshot-store.js';
 import { createPlatformTools } from './scraper/adapter.js';
@@ -61,7 +62,7 @@ const log = getLogger().sub('composition');
 // ---------------------------------------------------------------------------
 
 export interface BuildContextOptions {
-  /** Data root directory (default: '.'). */
+  /** Data root directory (default: resolveDataRoot()). */
   dataRoot?: string;
   /** Skip vault initialization (for tests). */
   skipVault?: boolean;
@@ -156,19 +157,24 @@ function resolvePassphrase(): string | null {
 // ---------------------------------------------------------------------------
 
 export async function buildContext(options?: BuildContextOptions): Promise<YojinServices> {
-  const dataRoot = options?.dataRoot ?? '.';
+  const dataRoot = options?.dataRoot ?? resolveDataRoot();
+  await ensureDataDirs(dataRoot);
   const skipVault = options?.skipVault ?? false;
 
   // 1. Config
   const config = loadConfig();
 
   // 2. Audit log
-  const auditLog = new FileAuditLog(`${dataRoot}/data/audit`);
+  const auditPath = `${dataRoot}/audit`;
+  const auditLog = new FileAuditLog(auditPath);
 
   // 3. Guard pipeline
   const postureName: PostureName = ((config as Record<string, unknown>).guardPosture as PostureName) ?? 'local';
   const posture = POSTURE_CONFIGS[postureName];
-  const { guards, outputDlp } = createDefaultGuards(posture);
+  const { guards, outputDlp } = createDefaultGuards(posture, {
+    auditPath,
+    killSwitch: { sentinelPath: `${dataRoot}/.kill` },
+  });
   const guardRunner = new GuardRunner(guards, { auditLog, posture: postureName });
   guardRunner.freeze();
 
@@ -176,7 +182,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   let vault: EncryptedVault | undefined;
   if (!skipVault) {
     try {
-      vault = new EncryptedVault({ auditLog, vaultPath: `${dataRoot}/data/vault/secrets.json` });
+      vault = new EncryptedVault({ auditLog, vaultPath: `${dataRoot}/vault/secrets.json` });
       // Always expose vault to GraphQL so the web UI can manage it
       setVault(vault);
 
@@ -206,13 +212,13 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   // 4c. ConnectionManager (requires unlocked vault)
   let connectionManager: ConnectionManager | undefined;
   if (vault?.isUnlocked) {
-    const credentialLookup = await loadCredentialLookup(`${dataRoot}/data/config/platform-credentials.json`);
+    const credentialLookup = await loadCredentialLookup(`${dataRoot}/config/platform-credentials.json`);
     connectionManager = new ConnectionManager({
       vault,
       pubsub,
       auditLog,
-      configPath: `${dataRoot}/data/config/connections.json`,
-      statePath: `${dataRoot}/data/cache/connection-state.json`,
+      configPath: `${dataRoot}/config/connections.json`,
+      statePath: `${dataRoot}/cache/connection-state.json`,
       credentialLookup,
       snapshotStore,
     });
@@ -232,10 +238,10 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   const dataSourceRegistry = new DataSourceRegistry();
 
   // 6b. Signal Archive + Ingestor
-  const signalArchive = new SignalArchive({ dir: `${dataRoot}/data/signals/by-date` });
+  const signalArchive = new SignalArchive({ dir: `${dataRoot}/signals/by-date` });
   const signalIngestor = new SignalIngestor({ archive: signalArchive });
   setSignalArchive(signalArchive);
-  setFetchDeps({ configPath: `${dataRoot}/data/config/data-sources.json`, ingestor: signalIngestor, vault });
+  setFetchDeps({ configPath: `${dataRoot}/config/data-sources.json`, ingestor: signalIngestor, vault });
 
   // 6c. Run data source health checks (non-blocking)
   runHealthChecks().catch((err) => log.warn('Data source health check failed', { error: String(err) }));
@@ -281,7 +287,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
 
   // Data source query tools (2 tools: query_data_source, list_data_sources)
   for (const tool of createDataSourceQueryTools({
-    configPath: `${dataRoot}/data/config/data-sources.json`,
+    configPath: `${dataRoot}/config/data-sources.json`,
     vault,
     ingestor: signalIngestor,
   })) {
@@ -353,7 +359,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
 // ---------------------------------------------------------------------------
 
 const VAULT_LOCKED_MSG =
-  'Vault is locked — no passphrase provided. ' + 'Set YOJIN_VAULT_PASSPHRASE or run in a TTY to unlock.';
+  'Vault is locked — no passphrase provided. Set YOJIN_VAULT_PASSPHRASE or run in a TTY to unlock.';
 
 function createVaultLockedStubs(): ToolDefinition[] {
   return [

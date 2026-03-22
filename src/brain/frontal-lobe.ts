@@ -2,7 +2,8 @@
  * Frontal Lobe — Strategist's working memory.
  *
  * Current hypotheses, observations, and active reasoning chains stored
- * as Markdown at data/brain/frontal-lobe.md. Auto-commits on every update.
+ * as Markdown at brain/frontal-lobe.md (relative to data root ~/.yojin/).
+ * Auto-commits on every update.
  */
 
 import { createHash } from 'node:crypto';
@@ -13,7 +14,7 @@ import { dirname } from 'node:path';
 import { BrainStore } from './brain.js';
 import type { BrainCommit, FrontalLobe as FrontalLobeInterface } from './types.js';
 
-const FRONTAL_LOBE_FILE = 'data/brain/frontal-lobe.md';
+const FRONTAL_LOBE_FILE = 'brain/frontal-lobe.md';
 
 const DEFAULT_CONTENT = `# Working Memory
 
