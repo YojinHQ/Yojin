@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { isOnboardingSkipped, useOnboardingModal } from '../../lib/onboarding-context';
+import { useOnboardingStatus } from '../../lib/onboarding-context';
 import { cn } from '../../lib/utils';
 import Button from '../common/button';
 
 export function SetupBanner() {
-  const { openOnboarding } = useOnboardingModal();
+  const { openOnboarding, skipped } = useOnboardingStatus();
   const [dismissed, setDismissed] = useState(false);
 
-  if (dismissed || !isOnboardingSkipped()) return null;
+  if (dismissed || !skipped) return null;
 
   return (
     <div

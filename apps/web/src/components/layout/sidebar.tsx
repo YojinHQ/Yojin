@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router';
 import { useQuery } from 'urql';
 import { useTheme } from '../../lib/theme';
-import { isOnboardingComplete, useOnboardingModal } from '../../lib/onboarding-context';
+import { useOnboardingStatus } from '../../lib/onboarding-context';
 import { ONBOARDING_STATUS_QUERY } from '../../api/documents';
 import type { OnboardingStatusQueryResult } from '../../api/types';
 import UserMenu from './user-menu';
@@ -69,6 +69,7 @@ const navItems: NavItem[] = [
 
 export default function Sidebar() {
   const { resolved } = useTheme();
+  const { completed } = useOnboardingStatus();
   const logoSrc = resolved === 'dark' ? '/brand/yojin_logo_white.png' : '/brand/yojin_logo.png';
 
   return (
@@ -112,7 +113,7 @@ export default function Sidebar() {
       </nav>
 
       {/* Onboarding CTA — shown when setup is incomplete */}
-      {!isOnboardingComplete() && <OnboardingCta />}
+      {!completed && <OnboardingCta />}
 
       {/* User menu */}
       <div className="border-t border-border px-3 py-3">
@@ -123,7 +124,7 @@ export default function Sidebar() {
 }
 
 function OnboardingCta() {
-  const { openOnboarding } = useOnboardingModal();
+  const { openOnboarding } = useOnboardingStatus();
 
   const [result] = useQuery<OnboardingStatusQueryResult>({
     query: ONBOARDING_STATUS_QUERY,

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { tooltipStyle } from '../../lib/mock-chart-data';
-import { usePositions } from '../../api';
+import { usePositions, usePortfolioHistory } from '../../api';
 import Spinner from '../common/spinner';
 
 const ASSET_CLASS_COLORS: Record<string, string> = {
@@ -13,15 +13,94 @@ const ASSET_CLASS_COLORS: Record<string, string> = {
   OTHER: 'var(--color-text-muted)',
 };
 
-function formatCurrency(n: number): string {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+/** Seeded pseudo-random so chart is stable across re-renders. */
+function seededRandom(seed: number): number {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+}
+
+/**
+ * Build per-asset-class time-series from portfolio history + current allocation.
+ * Applies slight drift per point so the chart isn't perfectly flat.
+ * When only 1 history point exists, pads to 2 so Recharts can render an area.
+ */
+function buildAllocationHistory(
+  history: { timestamp: string; totalValue: number }[],
+  ratios: { assetClass: string; ratio: number }[],
+): Record<string, unknown>[] {
+  // Pad single-point history so AreaChart can render
+  let points = history;
+  if (points.length === 1) {
+    points = [{ ...points[0], timestamp: '' }, points[0]];
+  }
+
+  return points.map((point, i) => {
+    const date =
+      point.timestamp === ''
+        ? ''
+        : new Date(point.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const row: Record<string, unknown> = { date };
+
+    let remaining = point.totalValue;
+    for (let j = 0; j < ratios.length; j++) {
+      const isLast = j === ratios.length - 1;
+      if (isLast) {
+        row[ratios[j].assetClass] = Math.max(0, remaining);
+      } else {
+        const drift = points.length > 2 ? 1 + (seededRandom(i * 100 + j) - 0.5) * 0.06 : 1;
+        const value = point.totalValue * ratios[j].ratio * drift;
+        row[ratios[j].assetClass] = Math.max(0, value);
+        remaining -= value;
+      }
+    }
+    return row;
+  });
+}
+
+/** Horizontal stacked bar fallback when there's no time-series data. */
+function AllocationBar({
+  assetClasses,
+}: {
+  assetClasses: { assetClass: string; label: string; ratio: number; color: string }[];
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col justify-center gap-3 px-1">
+      {/* Stacked bar */}
+      <div className="flex h-5 w-full overflow-hidden rounded-full">
+        {assetClasses.map((a) => (
+          <div
+            key={a.assetClass}
+            className="h-full transition-all duration-500"
+            style={{ width: `${a.ratio * 100}%`, backgroundColor: a.color }}
+          />
+        ))}
+      </div>
+      {/* Breakdown rows */}
+      <div className="flex flex-col gap-1.5">
+        {assetClasses.map((a) => (
+          <div key={a.assetClass} className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: a.color }} />
+              <span className="text-xs text-text-secondary">{a.label}</span>
+            </div>
+            <span className="text-xs font-medium text-text-primary">{(a.ratio * 100).toFixed(1)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function AllocationChart() {
-  const [{ data, fetching, error }] = usePositions();
+  const [{ data: posData, fetching: posFetching, error: posError }] = usePositions();
+  const [{ data: histData, fetching: histFetching, error: histError }] = usePortfolioHistory();
 
-  const allocation = useMemo(() => {
-    const positions = data?.positions ?? [];
+  const fetching = posFetching || histFetching;
+  const error = posError || histError;
+
+  // Compute current allocation ratios from positions
+  const assetClasses = useMemo(() => {
+    const positions = posData?.positions ?? [];
     if (positions.length === 0) return [];
 
     const totals: Record<string, number> = {};
@@ -30,15 +109,26 @@ export default function AllocationChart() {
     }
 
     const grandTotal = Object.values(totals).reduce((a, b) => a + b, 0);
+    if (grandTotal === 0) return [];
+
     return Object.entries(totals)
       .map(([assetClass, value]) => ({
-        name: assetClass.charAt(0) + assetClass.slice(1).toLowerCase(),
-        value,
-        percent: grandTotal > 0 ? (value / grandTotal) * 100 : 0,
+        assetClass,
+        label: assetClass.charAt(0) + assetClass.slice(1).toLowerCase(),
+        ratio: value / grandTotal,
         color: ASSET_CLASS_COLORS[assetClass] ?? ASSET_CLASS_COLORS.OTHER,
       }))
-      .sort((a, b) => b.value - a.value);
-  }, [data?.positions]);
+      .sort((a, b) => b.ratio - a.ratio);
+  }, [posData?.positions]);
+
+  const historyLength = histData?.portfolioHistory?.length ?? 0;
+
+  // Build time-series allocation data (only when 2+ history points exist)
+  const chartData = useMemo(() => {
+    const history = histData?.portfolioHistory ?? [];
+    if (history.length === 0 || assetClasses.length === 0) return [];
+    return buildAllocationHistory(history, assetClasses);
+  }, [histData?.portfolioHistory, assetClasses]);
 
   if (fetching) {
     return (
@@ -48,7 +138,7 @@ export default function AllocationChart() {
     );
   }
 
-  if (error || allocation.length === 0) {
+  if (error || assetClasses.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-lg border border-border bg-bg-card p-3">
         <h3 className="text-2xs font-medium text-text-primary uppercase tracking-wider mb-4">Asset Allocation</h3>
@@ -58,55 +148,67 @@ export default function AllocationChart() {
     );
   }
 
+  // Fallback: show stacked bar when there's not enough history for a meaningful time-series
+  const useBarFallback = historyLength <= 1;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-bg-card p-3">
       <div className="mb-1.5 flex flex-shrink-0 items-center justify-between">
         <h3 className="text-2xs font-medium text-text-primary uppercase tracking-wider">Asset Allocation</h3>
         <div className="flex gap-2">
-          {allocation.map((a) => (
-            <div key={a.name} className="flex items-center gap-1">
+          {assetClasses.map((a) => (
+            <div key={a.assetClass} className="flex items-center gap-1">
               <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: a.color }} />
-              <span className="text-2xs text-text-muted">{a.name}</span>
+              <span className="text-2xs text-text-muted">{a.label}</span>
             </div>
           ))}
         </div>
       </div>
-      <div className="flex min-h-0 flex-1 items-center gap-4">
-        <div className="h-full w-1/2">
+
+      {useBarFallback ? (
+        <AllocationBar assetClasses={assetClasses} />
+      ) : (
+        <div className="min-h-0 flex-1">
           <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={allocation}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                innerRadius="55%"
-                outerRadius="85%"
-                paddingAngle={2}
-                strokeWidth={0}
-              >
-                {allocation.map((entry) => (
-                  <Cell key={entry.name} fill={entry.color} />
-                ))}
-              </Pie>
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Recharts Formatter type is overly strict */}
-              <Tooltip contentStyle={tooltipStyle} formatter={((value: number) => [formatCurrency(value)]) as any} />
-            </PieChart>
+            <AreaChart data={chartData} stackOffset="expand" margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+              <XAxis
+                dataKey="date"
+                tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                width={32}
+                tickFormatter={(v: number) => `${(v * 100).toFixed(0)}%`}
+              />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                formatter={
+                  ((value: number, name: string) => {
+                    const label = name.charAt(0) + name.slice(1).toLowerCase();
+                    return [`$${Math.round(value).toLocaleString()}`, label];
+                  }) as any // eslint-disable-line @typescript-eslint/no-explicit-any -- Recharts Formatter type
+                }
+              />
+              {assetClasses.map((a) => (
+                <Area
+                  key={a.assetClass}
+                  type="monotone"
+                  dataKey={a.assetClass}
+                  stackId="1"
+                  stroke={a.color}
+                  fill={a.color}
+                  fillOpacity={0.85}
+                />
+              ))}
+            </AreaChart>
           </ResponsiveContainer>
         </div>
-        <div className="flex flex-1 flex-col gap-1.5">
-          {allocation.map((a) => (
-            <div key={a.name} className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: a.color }} />
-                <span className="text-xs text-text-secondary">{a.name}</span>
-              </div>
-              <span className="text-xs font-medium text-text-primary">{a.percent.toFixed(1)}%</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import {
   isOnboardingComplete,
   isOnboardingSkipped,
   ONBOARDING_KEYS,
-  OnboardingModalContext,
+  OnboardingStatusContext,
 } from './lib/onboarding-context';
 import { ThemeProvider } from './lib/theme';
 import AppShell from './components/layout/app-shell';
@@ -36,9 +36,8 @@ function RedirectPositionSymbol() {
  */
 function OnboardingGuard() {
   const [modalOpen, setModalOpen] = useState(false);
-
-  const completed = isOnboardingComplete();
-  const skipped = isOnboardingSkipped();
+  const [completed, setCompleted] = useState(() => isOnboardingComplete());
+  const [skipped, setSkipped] = useState(() => isOnboardingSkipped());
 
   const [result] = useQuery<OnboardingStatusQueryResult>({
     query: ONBOARDING_STATUS_QUERY,
@@ -46,35 +45,70 @@ function OnboardingGuard() {
   });
 
   const openOnboarding = useCallback(() => setModalOpen(true), []);
-  const closeOnboarding = useCallback(() => setModalOpen(false), []);
+
+  const markSkipped = useCallback(() => {
+    localStorage.setItem(ONBOARDING_KEYS.SKIPPED_KEY, 'true');
+    setSkipped(true);
+    setModalOpen(false);
+  }, []);
+
+  const markCompleted = useCallback(() => {
+    localStorage.setItem(ONBOARDING_KEYS.COMPLETE_KEY, 'true');
+    localStorage.removeItem(ONBOARDING_KEYS.SKIPPED_KEY);
+    localStorage.removeItem(ONBOARDING_KEYS.STEP_KEY);
+    localStorage.removeItem(ONBOARDING_KEYS.STATE_KEY);
+    setCompleted(true);
+    setSkipped(false);
+    setModalOpen(false);
+  }, []);
+
+  const resetOnboardingStatus = useCallback(() => {
+    localStorage.removeItem(ONBOARDING_KEYS.COMPLETE_KEY);
+    localStorage.removeItem(ONBOARDING_KEYS.SKIPPED_KEY);
+    localStorage.removeItem(ONBOARDING_KEYS.STEP_KEY);
+    localStorage.removeItem(ONBOARDING_KEYS.STATE_KEY);
+    setCompleted(false);
+    setSkipped(false);
+  }, []);
 
   const serverCompleted = result.data?.onboardingStatus?.completed ?? false;
 
-  // Re-hydrate localStorage when backend confirms completion (in an effect, not render)
+  // Re-hydrate localStorage when backend confirms completion (external side-effect only)
   useEffect(() => {
     if (!completed && !skipped && serverCompleted) {
       localStorage.setItem(ONBOARDING_KEYS.COMPLETE_KEY, 'true');
     }
   }, [completed, skipped, serverCompleted]);
 
-  // Still loading backend status — wait
-  if (!completed && !skipped && result.fetching) return null;
+  // Derive effective completion from both local and server state
   const isComplete = completed || serverCompleted;
+
+  // Still loading backend status — wait
+  if (!isComplete && !skipped && result.fetching) return null;
   const showModal = !isComplete && (!skipped || modalOpen);
 
+  const statusValue = {
+    completed: isComplete,
+    skipped,
+    openOnboarding,
+    markSkipped,
+    markCompleted,
+    resetOnboardingStatus,
+  };
+
   return (
-    <OnboardingModalContext.Provider value={{ openOnboarding }}>
+    <OnboardingStatusContext.Provider value={statusValue}>
       {showModal ? (
         <>
           <div className="pointer-events-none select-none blur-sm" aria-hidden="true" inert>
             <AppShell />
           </div>
-          <OnboardingPage onDismiss={closeOnboarding} />
+          <OnboardingPage />
         </>
       ) : (
         <AppShell />
       )}
-    </OnboardingModalContext.Provider>
+    </OnboardingStatusContext.Provider>
   );
 }
 

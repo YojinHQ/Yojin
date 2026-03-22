@@ -108,40 +108,164 @@ export async function startMagicLinkFlow(email: string): Promise<MagicLinkStartR
     });
     page = await context.newPage();
 
-    // Navigate to Claude OAuth page
-    await page.goto(oauthUrl, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(2000);
+    // Navigate to Claude OAuth page — lands on claude.ai/login if not authenticated
+    await page.goto(oauthUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForTimeout(3000);
 
     await dismissCookieBanner(page);
 
-    // Enter email on the login page
-    const emailInput = page.locator('input[type="email"], input[name="email"], input#email').first();
-    const inputVisible = await emailInput.isVisible().catch(() => false);
+    // ── Phase 1: Reveal email input ──────────────────────────────────────────
+    // Claude's login page shows SSO buttons first. Click any element that
+    // looks like "Continue with email" / "Email" / "email address" to reveal
+    // the email input field.
+    const revealEmailInput = async (p: Page): Promise<boolean> => {
+      return p.evaluate(() => {
+        // Broad search: buttons, links, divs with role=button, and any clickable-looking element
+        const clickables = Array.from(
+          document.querySelectorAll('button, a, [role="button"], [role="link"], [tabindex="0"]'),
+        );
+        for (const el of clickables) {
+          const text = (el as HTMLElement).textContent?.trim().toLowerCase() || '';
+          const ariaLabel = el.getAttribute('aria-label')?.toLowerCase() || '';
+          const combined = `${text} ${ariaLabel}`;
+          if (
+            combined.includes('email') ||
+            combined.includes('e-mail') ||
+            combined.includes('log in with') ||
+            combined.includes('sign in with')
+          ) {
+            (el as HTMLElement).click();
+            return true;
+          }
+        }
+        return false;
+      });
+    };
 
-    if (inputVisible) {
-      await emailInput.fill(email);
-      await page.waitForTimeout(500);
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(3000);
-    } else {
-      await closeBrowser();
-      return { success: false, error: 'Could not find email input on Claude login page.' };
+    // Try to reveal — then wait for potential transition/render
+    const revealed = await revealEmailInput(page).catch(() => false);
+    if (revealed) {
+      await page.waitForTimeout(2000);
     }
 
-    // Check if we're now on a "check your email" page (success)
+    // ── Phase 2: Find and fill email input ───────────────────────────────────
+    // Use waitForSelector to handle SPA rendering delays, then fall back to
+    // scanning all visible inputs.
+    const emailSelectors = [
+      'input[type="email"]',
+      'input[name="email"]',
+      'input[name="email_address"]',
+      'input[name="emailAddress"]',
+      'input#email',
+      'input[autocomplete="email"]',
+      'input[autocomplete="username"]',
+      'input[placeholder*="email" i]',
+      'input[aria-label*="email" i]',
+      'input[data-testid*="email" i]',
+    ];
+
+    let emailInput = null;
+
+    // First try: wait for any email-specific input to appear (up to 5s)
+    for (const selector of emailSelectors) {
+      try {
+        await page.waitForSelector(selector, { state: 'visible', timeout: 1000 });
+        emailInput = page.locator(selector).first();
+        break;
+      } catch {
+        // Not found with this selector, try next
+      }
+    }
+
+    // Second try: any visible input that isn't hidden/checkbox/radio/submit
+    if (!emailInput) {
+      const fallbackInput = page
+        .locator(
+          'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"])',
+        )
+        .first();
+      const fallbackVisible = await fallbackInput.isVisible().catch(() => false);
+      if (fallbackVisible) {
+        emailInput = fallbackInput;
+      }
+    }
+
+    if (emailInput) {
+      await emailInput.click();
+      await emailInput.fill(email);
+      await page.waitForTimeout(500);
+
+      // Try clicking a submit/continue button first, fall back to Enter key
+      const submitted = await page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button[type="submit"], button'));
+        const submitBtn = buttons.find((b) => {
+          const text = (b as HTMLElement).textContent?.toLowerCase() || '';
+          return (
+            text.includes('continue') ||
+            text.includes('submit') ||
+            text.includes('sign in') ||
+            text.includes('log in') ||
+            text.includes('send')
+          );
+        });
+        if (submitBtn) {
+          (submitBtn as HTMLElement).click();
+          return true;
+        }
+        return false;
+      });
+      if (!submitted) {
+        await page.keyboard.press('Enter');
+      }
+      await page.waitForTimeout(3000);
+    } else {
+      // Dump page structure for debugging
+      const debugInfo = await page
+        .evaluate(() => {
+          const inputs = Array.from(document.querySelectorAll('input')).map((i) => ({
+            type: i.type,
+            name: i.name,
+            id: i.id,
+            placeholder: i.placeholder,
+            visible: i.offsetParent !== null,
+          }));
+          const buttons = Array.from(document.querySelectorAll('button, [role="button"]')).map((b) =>
+            (b as HTMLElement).textContent?.trim().slice(0, 80),
+          );
+          return { inputs, buttons, url: window.location.href };
+        })
+        .catch(() => ({ inputs: [], buttons: [], url: 'unknown' }));
+
+      await closeBrowser();
+      return {
+        success: false,
+        error: `Could not find email input on the login page. Page elements: ${JSON.stringify(debugInfo)}`,
+      };
+    }
+
+    // Check if we're now on a "check your email" / "verification sent" page (success)
     const bodyText = await page.evaluate(() => document.body.innerText).catch(() => '');
+    const lower = bodyText.toLowerCase();
     const onCheckEmail =
-      bodyText.toLowerCase().includes('check your email') ||
-      bodyText.toLowerCase().includes('magic link') ||
-      bodyText.toLowerCase().includes('sent');
+      lower.includes('check your email') ||
+      lower.includes('magic link') ||
+      lower.includes('verification') ||
+      lower.includes('login link') ||
+      lower.includes('sent a') ||
+      lower.includes('sent you') ||
+      lower.includes('inbox');
 
     if (onCheckEmail) {
       return { success: true };
     }
 
-    // No positive signal found — treat as failure
+    // No positive signal — include page URL for debugging
+    const finalUrl = page.url();
     await closeBrowser();
-    return { success: false, error: 'Failed to submit email. Check the email address and try again.' };
+    return {
+      success: false,
+      error: `Email submitted but no confirmation detected (${finalUrl}). Check the email address and try again.`,
+    };
   } catch (err) {
     await closeBrowser();
     return { success: false, error: err instanceof Error ? err.message : 'Failed to start OAuth flow.' };

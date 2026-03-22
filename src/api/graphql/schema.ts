@@ -434,6 +434,8 @@ export const typeDefs = /* GraphQL */ `
     MAGIC_LINK
     API_KEY
     ENV_DETECTED
+    OAUTH
+    KEYCHAIN
   }
 
   type DetectedCredential {
@@ -532,6 +534,23 @@ export const typeDefs = /* GraphQL */ `
     briefingConfigured: Boolean!
   }
 
+  type KeychainTokenResult {
+    found: Boolean!
+    model: String
+    error: String
+  }
+
+  type OAuthFlowResult {
+    authUrl: String!
+    state: String!
+  }
+
+  type OAuthCompleteResult {
+    success: Boolean!
+    model: String
+    error: String
+  }
+
   # ---------------------------------------------------------------------------
   # Root types
   # ---------------------------------------------------------------------------
@@ -584,6 +603,7 @@ export const typeDefs = /* GraphQL */ `
     vaultStatus: VaultStatus!
     listVaultSecrets: [VaultSecret!]!
     detectAiCredential: DetectedCredential
+    detectKeychainToken: KeychainTokenResult!
     onboardingStatus: OnboardingStatusResult!
   }
 
@@ -606,6 +626,8 @@ export const typeDefs = /* GraphQL */ `
     updateVaultSecret(input: VaultSecretInput!): VaultResult!
     deleteVaultSecret(key: String!): VaultResult!
     validateAiCredential(input: ValidateCredentialInput!): ValidateCredentialResult!
+    startOAuthFlow: OAuthFlowResult!
+    completeOAuthFlow(code: String!): OAuthCompleteResult!
     sendMagicLink(email: String!): MagicLinkResult!
     completeMagicLink(magicLinkUrl: String!): MagicLinkVerifyResult!
     generatePersona(input: PersonaInput!): PersonaResult!

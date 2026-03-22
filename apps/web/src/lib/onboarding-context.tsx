@@ -1,8 +1,7 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import type { ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 
 export interface AiProviderState {
-  method: 'magic-link' | 'api-key' | 'env-detected';
+  method: 'keychain' | 'api-key' | 'env-detected';
   model?: string;
   validated: boolean;
 }
@@ -89,13 +88,12 @@ export function OnboardingProvider({
   children,
   initialStep,
   isReset = false,
-  onDismiss,
 }: {
   children: ReactNode;
   initialStep?: number;
   isReset?: boolean;
-  onDismiss?: () => void;
 }) {
+  const { markSkipped, markCompleted } = useOnboardingStatus();
   const [currentStep, setCurrentStep] = useState(() => initialStep ?? readStep());
   const [state, setState] = useState<OnboardingState>(readState);
 
@@ -126,17 +124,12 @@ export function OnboardingProvider({
   }, []);
 
   const skipOnboarding = useCallback(() => {
-    localStorage.setItem(SKIPPED_KEY, 'true');
-    onDismiss?.();
-  }, [onDismiss]);
+    markSkipped();
+  }, [markSkipped]);
 
   const completeOnboarding = useCallback(() => {
-    localStorage.setItem(COMPLETE_KEY, 'true');
-    localStorage.removeItem(SKIPPED_KEY);
-    localStorage.removeItem(STEP_KEY);
-    localStorage.removeItem(STATE_KEY);
-    onDismiss?.();
-  }, [onDismiss]);
+    markCompleted();
+  }, [markCompleted]);
 
   return (
     <OnboardingContext.Provider
@@ -164,15 +157,34 @@ export function useOnboarding() {
 }
 
 /**
- * Context for opening the onboarding modal from anywhere in the app
- * (e.g., setup banner, sidebar CTA). Provided by OnboardingGuard.
+ * Reactive onboarding status — the single source of truth for completed/skipped
+ * state. Provided by OnboardingGuard so every consumer re-renders when status changes.
  */
-const OnboardingModalContext = createContext<{ openOnboarding: () => void }>({
+interface OnboardingStatusContextValue {
+  completed: boolean;
+  skipped: boolean;
+  openOnboarding: () => void;
+  markSkipped: () => void;
+  markCompleted: () => void;
+  resetOnboardingStatus: () => void;
+}
+
+const OnboardingStatusContext = createContext<OnboardingStatusContextValue>({
+  completed: false,
+  skipped: false,
   openOnboarding: () => {},
+  markSkipped: () => {},
+  markCompleted: () => {},
+  resetOnboardingStatus: () => {},
 });
 
-export { OnboardingModalContext };
+export { OnboardingStatusContext };
+
+export function useOnboardingStatus() {
+  return useContext(OnboardingStatusContext);
+}
 
 export function useOnboardingModal() {
-  return useContext(OnboardingModalContext);
+  const { openOnboarding } = useContext(OnboardingStatusContext);
+  return { openOnboarding };
 }

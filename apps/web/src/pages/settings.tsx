@@ -7,7 +7,7 @@ import Card from '../components/common/card';
 import Button from '../components/common/button';
 import Toggle from '../components/common/toggle';
 import { RESET_ONBOARDING_MUTATION } from '../api/documents';
-import { ONBOARDING_KEYS, useOnboardingModal } from '../lib/onboarding-context';
+import { useOnboardingStatus } from '../lib/onboarding-context';
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
@@ -88,7 +88,7 @@ export default function Settings() {
 }
 
 function DevTools() {
-  const { openOnboarding } = useOnboardingModal();
+  const { openOnboarding, resetOnboardingStatus } = useOnboardingStatus();
   const [, resetOnboarding] = useMutation(RESET_ONBOARDING_MUTATION);
   const [resetting, setResetting] = useState(false);
 
@@ -96,16 +96,12 @@ function DevTools() {
     setResetting(true);
     try {
       await resetOnboarding({});
-      // Clear client-side onboarding state
-      localStorage.removeItem(ONBOARDING_KEYS.COMPLETE_KEY);
-      localStorage.removeItem(ONBOARDING_KEYS.SKIPPED_KEY);
-      localStorage.removeItem(ONBOARDING_KEYS.STEP_KEY);
-      localStorage.removeItem(ONBOARDING_KEYS.STATE_KEY);
+      resetOnboardingStatus();
       openOnboarding();
     } finally {
       setResetting(false);
     }
-  }, [resetOnboarding, openOnboarding]);
+  }, [resetOnboarding, resetOnboardingStatus, openOnboarding]);
 
   return (
     <Card title="Developer" section>

@@ -16,6 +16,26 @@ const RANGE_DAYS: Record<TimeRange, number> = {
   ALL: Infinity,
 };
 
+/** Format Y-axis values based on magnitude — avoids "$0k" for small portfolios. */
+function formatYAxis(val: number): string {
+  const abs = Math.abs(val);
+  if (abs >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`;
+  if (abs >= 10_000) return `$${(val / 1_000).toFixed(0)}k`;
+  if (abs >= 1_000) return `$${(val / 1_000).toFixed(1)}k`;
+  return `$${val.toFixed(0)}`;
+}
+
+/**
+ * When only 1 data point exists, pad to 2 so Recharts can render a line.
+ * Shifts the synthetic point back by 1 day.
+ */
+function ensureMinPoints(points: { date: string; value: number }[]): { date: string; value: number }[] {
+  if (points.length >= 2) return points;
+  if (points.length === 0) return [];
+  const only = points[0];
+  return [{ date: '', value: only.value }, only];
+}
+
 export default function TotalValueChart() {
   const [activeRange, setActiveRange] = useState<TimeRange>('ALL');
   const [{ data, fetching, error }] = usePortfolioHistory();
@@ -25,21 +45,19 @@ export default function TotalValueChart() {
     if (history.length === 0) return [];
 
     const days = RANGE_DAYS[activeRange];
-    if (days === Infinity) {
-      return history.map((p) => ({
-        date: new Date(p.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        value: p.totalValue,
-      }));
+    let filtered = history;
+    if (days !== Infinity) {
+      const latest = new Date(history[history.length - 1].timestamp).getTime();
+      const cutoff = latest - days * 24 * 60 * 60 * 1000;
+      filtered = history.filter((p) => new Date(p.timestamp).getTime() >= cutoff);
     }
 
-    const latest = new Date(history[history.length - 1].timestamp).getTime();
-    const cutoff = latest - days * 24 * 60 * 60 * 1000;
-    return history
-      .filter((p) => new Date(p.timestamp).getTime() >= cutoff)
-      .map((p) => ({
-        date: new Date(p.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        value: p.totalValue,
-      }));
+    const mapped = filtered.map((p) => ({
+      date: new Date(p.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      value: p.totalValue,
+    }));
+
+    return ensureMinPoints(mapped);
   }, [data?.portfolioHistory, activeRange]);
 
   const baselineValue = chartData[0]?.value ?? 0;
@@ -61,6 +79,12 @@ export default function TotalValueChart() {
       </div>
     );
   }
+
+  // Build a sensible Y domain: pad by 10% of value (min $5) so the line isn't at the edge
+  const values = chartData.map((d) => d.value);
+  const minVal = Math.min(...values);
+  const maxVal = Math.max(...values);
+  const pad = Math.max(5, (maxVal - minVal) * 0.1 || maxVal * 0.1);
 
   return (
     <div className="flex min-h-[120px] flex-[1.5] flex-col rounded-lg border border-border bg-bg-card px-3 pt-2 pb-1">
@@ -102,9 +126,9 @@ export default function TotalValueChart() {
               tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }}
               axisLine={false}
               tickLine={false}
-              width={40}
-              domain={['dataMin - 200', 'dataMax + 200']}
-              tickFormatter={(val: number) => `$${(val / 1000).toFixed(0)}k`}
+              width={48}
+              domain={[Math.max(0, minVal - pad), maxVal + pad]}
+              tickFormatter={formatYAxis}
             />
             <ReferenceLine
               y={baselineValue}

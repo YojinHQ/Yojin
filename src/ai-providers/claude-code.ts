@@ -1,11 +1,11 @@
 import { execFile, spawn } from 'node:child_process';
-import { platform } from 'node:os';
 import { promisify } from 'node:util';
 
 import Anthropic from '@anthropic-ai/sdk';
 
 import { toAnthropicMessages } from './anthropic-messages.js';
 import type { AIProvider } from './types.js';
+import { readTokenFromKeychain } from '../auth/keychain.js';
 import { getTokenManager } from '../auth/token-manager.js';
 import type { AgentMessage, ContentBlock, ToolSchema } from '../core/types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
@@ -22,25 +22,6 @@ function isAuthError(error: unknown): boolean {
 /** Detect OAuth tokens by prefix. */
 function isOAuthToken(token: string): boolean {
   return token.startsWith('sk-ant-oat');
-}
-
-/**
- * Attempt to read Claude Code OAuth token from macOS Keychain.
- */
-async function readTokenFromKeychain(): Promise<string | null> {
-  if (platform() !== 'darwin') return null;
-  try {
-    const { stdout } = await execFileAsync(
-      'security',
-      ['find-generic-password', '-s', 'Claude Code-credentials', '-w'],
-      { encoding: 'utf8', timeout: 3000 },
-    );
-    const parsed = JSON.parse(stdout.trim()) as { claudeAiOauth?: { accessToken?: string } };
-    const token = parsed.claudeAiOauth?.accessToken;
-    return token && isOAuthToken(token) ? token : null;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -170,6 +151,32 @@ export class ClaudeCodeProvider implements AIProvider {
     }
 
     logger.info('No OAuth token found — staying in CLI mode (no image support)');
+  }
+
+  /**
+   * Re-initialize the provider with a new OAuth token.
+   * Called when onboarding refreshes an expired keychain token or the user
+   * configures a credential after server startup.
+   */
+  configureOAuthToken(token: string): void {
+    this.authMode = 'oauth';
+    this.oauthSource = 'env';
+    this.client = new Anthropic({
+      apiKey: null,
+      authToken: token,
+      defaultHeaders: OAUTH_HEADERS,
+    });
+    logger.info('Reconfigured to OAuth SDK mode (runtime)');
+  }
+
+  /**
+   * Re-initialize the provider with an API key.
+   * Called when onboarding validates a new API key after server startup.
+   */
+  configureApiKey(apiKey: string): void {
+    this.authMode = 'api_key';
+    this.client = new Anthropic({ apiKey });
+    logger.info('Reconfigured to API key mode (runtime)');
   }
 
   models(): string[] {

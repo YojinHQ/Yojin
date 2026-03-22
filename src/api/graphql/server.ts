@@ -29,16 +29,19 @@ import { onAlertSubscription, onPortfolioUpdateSubscription, onPriceMoveSubscrip
 import { newsQuery, quoteQuery, sectorExposureQuery } from './resolvers/market.js';
 import {
   completeMagicLinkMutation,
+  completeOAuthFlowMutation,
   completeOnboardingMutation,
   confirmPersonaMutation,
   confirmPositionsMutation,
   detectAiCredentialQuery,
+  detectKeychainTokenQuery,
   generatePersonaMutation,
   onboardingStatusQuery,
   parsePortfolioScreenshotMutation,
   resetOnboardingMutation,
   saveBriefingConfigMutation,
   sendMagicLinkMutation,
+  startOAuthFlowMutation,
   validateAiCredentialMutation,
 } from './resolvers/onboarding.js';
 import {
@@ -87,6 +90,7 @@ const schema = createSchema({
       vaultStatus: vaultStatusQuery,
       listVaultSecrets: listVaultSecretsQuery,
       detectAiCredential: detectAiCredentialQuery,
+      detectKeychainToken: detectKeychainTokenQuery,
       onboardingStatus: onboardingStatusQuery,
     },
     Mutation: {
@@ -108,6 +112,8 @@ const schema = createSchema({
       updateVaultSecret: updateVaultSecretMutation,
       deleteVaultSecret: deleteVaultSecretMutation,
       validateAiCredential: validateAiCredentialMutation,
+      startOAuthFlow: startOAuthFlowMutation,
+      completeOAuthFlow: completeOAuthFlowMutation,
       sendMagicLink: sendMagicLinkMutation,
       completeMagicLink: completeMagicLinkMutation,
       generatePersona: generatePersonaMutation,

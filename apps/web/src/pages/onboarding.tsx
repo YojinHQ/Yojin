@@ -55,7 +55,7 @@ function OnboardingRouter() {
   }
 }
 
-export default function OnboardingPage({ onDismiss }: { onDismiss?: () => void }) {
+export default function OnboardingPage() {
   const location = useLocation();
   const wasReset = (location.state as { reset?: boolean } | null)?.reset === true;
 
@@ -68,7 +68,7 @@ export default function OnboardingPage({ onDismiss }: { onDismiss?: () => void }
   // Full reset — start from step 0, skip backend check
   if (wasReset) {
     return (
-      <OnboardingProvider initialStep={0} isReset onDismiss={onDismiss}>
+      <OnboardingProvider initialStep={0} isReset>
         <OnboardingRouter />
       </OnboardingProvider>
     );
@@ -80,7 +80,7 @@ export default function OnboardingPage({ onDismiss }: { onDismiss?: () => void }
   const resumeStep = resolveResumeStep(result.data?.onboardingStatus);
 
   return (
-    <OnboardingProvider initialStep={resumeStep} onDismiss={onDismiss}>
+    <OnboardingProvider initialStep={resumeStep}>
       <OnboardingRouter />
     </OnboardingProvider>
   );
