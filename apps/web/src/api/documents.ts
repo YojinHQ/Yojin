@@ -347,6 +347,131 @@ export const DISCONNECT_PLATFORM_MUTATION = gql`
 `;
 
 // ---------------------------------------------------------------------------
+// Queries — Data Sources
+// ---------------------------------------------------------------------------
+
+export const LIST_DATA_SOURCES_QUERY = gql`
+  query ListDataSources {
+    listDataSources {
+      id
+      name
+      type
+      capabilities {
+        id
+        description
+      }
+      enabled
+      status
+      lastError
+      lastFetchedAt
+      priority
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Mutations — Data Sources
+// ---------------------------------------------------------------------------
+
+export const ADD_DATA_SOURCE_MUTATION = gql`
+  mutation AddDataSource($input: DataSourceInput!) {
+    addDataSource(input: $input) {
+      success
+      dataSource {
+        id
+        name
+        type
+        capabilities {
+          id
+        }
+        enabled
+        status
+        priority
+      }
+      error
+    }
+  }
+`;
+
+export const REMOVE_DATA_SOURCE_MUTATION = gql`
+  mutation RemoveDataSource($id: String!) {
+    removeDataSource(id: $id) {
+      success
+      error
+    }
+  }
+`;
+
+export const TOGGLE_DATA_SOURCE_MUTATION = gql`
+  mutation ToggleDataSource($id: String!, $enabled: Boolean!) {
+    toggleDataSource(id: $id, enabled: $enabled) {
+      success
+      error
+    }
+  }
+`;
+
+export const FETCH_DATA_SOURCE_MUTATION = gql`
+  mutation FetchDataSource($id: String!, $url: String) {
+    fetchDataSource(id: $id, url: $url) {
+      success
+      signalsIngested
+      duplicates
+      error
+    }
+  }
+`;
+
+export const CHECK_CLI_COMMANDS_QUERY = gql`
+  query CheckCliCommands($commands: [String!]!) {
+    checkCliCommands(commands: $commands) {
+      command
+      available
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Queries — Signals
+// ---------------------------------------------------------------------------
+
+export const SIGNALS_QUERY = gql`
+  query Signals(
+    $type: String
+    $ticker: String
+    $sourceId: String
+    $since: String
+    $until: String
+    $search: String
+    $minConfidence: Float
+    $limit: Int
+  ) {
+    signals(
+      type: $type
+      ticker: $ticker
+      sourceId: $sourceId
+      since: $since
+      until: $until
+      search: $search
+      minConfidence: $minConfidence
+      limit: $limit
+    ) {
+      id
+      type
+      title
+      content
+      publishedAt
+      ingestedAt
+      confidence
+      tickers
+      sourceId
+      sourceName
+      link
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
 // Queries — Vault
 // ---------------------------------------------------------------------------
 

@@ -18,6 +18,7 @@ globs: ["**/*.ts"]
 - Prefer `interface` over `type` for object shapes that will be implemented.
 - **Types must match runtime shape.** If a field is stripped at runtime (destructured out, deleted), `Omit` it from the type. Never use `as unknown as T` to hide a mismatch — create a purpose-built type instead.
 - **No unreachable union branches.** If a type says `string | number` but only `number` is reachable at runtime, use `number`. Dead branches mislead consumers and create dead defensive code.
+- **Non-empty identity fields.** Zod string fields used as IDs, dedup keys, or lookup keys (e.g. `id`, `contentHash`, `ticker`) must use `.min(1)` — bare `z.string()` accepts `""`, which silently breaks dedup, lookups, and joins. Similarly, arrays that must have at least one entry (e.g. provenance `sources`) need `.min(1)`.
 
 ## Patterns
 - Async/await everywhere — no raw Promise chains or callbacks.

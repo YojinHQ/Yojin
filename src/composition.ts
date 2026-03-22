@@ -12,7 +12,10 @@ import { createDefaultProfiles } from './agents/defaults.js';
 import { AgentRegistry } from './agents/registry.js';
 import { pubsub } from './api/graphql/pubsub.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
+import { runHealthChecks } from './api/graphql/resolvers/data-sources.js';
+import { setFetchDeps } from './api/graphql/resolvers/fetch-data-source.js';
 import { setPortfolioConnectionManager } from './api/graphql/resolvers/portfolio.js';
+import { setSignalArchive } from './api/graphql/resolvers/signals.js';
 import { setVault } from './api/graphql/resolvers/vault.js';
 import { BrainStore } from './brain/brain.js';
 import { EmotionTracker } from './brain/emotion.js';
@@ -36,8 +39,11 @@ import { createPlatformTools } from './scraper/adapter.js';
 import { ConnectionManager } from './scraper/connection-manager.js';
 import { loadCredentialLookup } from './scraper/platform-credentials.js';
 import { registerAllConnectors } from './scraper/platforms/index.js';
+import { SignalArchive } from './signals/archive.js';
+import { SignalIngestor } from './signals/ingestor.js';
 import { createApiHealthTools } from './tools/api-health.js';
 import { createBrainTools } from './tools/brain-tools.js';
+import { createDataSourceQueryTools } from './tools/data-source-query.js';
 import { createErrorAnalysisTools } from './tools/error-analysis.js';
 import { createPortfolioReasoningTools } from './tools/portfolio-reasoning.js';
 import { createPortfolioTools } from './tools/portfolio-tools.js';
@@ -225,6 +231,15 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   // 6. DataSourceRegistry (empty — no sources registered yet)
   const dataSourceRegistry = new DataSourceRegistry();
 
+  // 6b. Signal Archive + Ingestor
+  const signalArchive = new SignalArchive({ dir: `${dataRoot}/data/signals/by-date` });
+  const signalIngestor = new SignalIngestor({ archive: signalArchive });
+  setSignalArchive(signalArchive);
+  setFetchDeps({ configPath: `${dataRoot}/data/config/data-sources.json`, ingestor: signalIngestor, vault });
+
+  // 6c. Run data source health checks (non-blocking)
+  runHealthChecks().catch((err) => log.warn('Data source health check failed', { error: String(err) }));
+
   // 7. ToolRegistry — register all tools
   const toolRegistry = new ToolRegistry();
 
@@ -261,6 +276,15 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
 
   // API health tool (1 tool)
   for (const tool of createApiHealthTools({ dataSourceRegistry })) {
+    toolRegistry.register(tool);
+  }
+
+  // Data source query tools (2 tools: query_data_source, list_data_sources)
+  for (const tool of createDataSourceQueryTools({
+    configPath: `${dataRoot}/data/config/data-sources.json`,
+    vault,
+    ingestor: signalIngestor,
+  })) {
     toolRegistry.register(tool);
   }
 

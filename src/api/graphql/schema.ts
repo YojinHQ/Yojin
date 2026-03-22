@@ -349,6 +349,84 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # ---------------------------------------------------------------------------
+  # Data Sources
+  # ---------------------------------------------------------------------------
+
+  enum DataSourceType {
+    CLI
+    MCP
+    API
+  }
+
+  enum DataSourceStatus {
+    ACTIVE
+    ERROR
+    DISABLED
+  }
+
+  type DataSourceCapability {
+    id: String!
+    description: String
+  }
+
+  type DataSource {
+    id: String!
+    name: String!
+    type: DataSourceType!
+    capabilities: [DataSourceCapability!]!
+    enabled: Boolean!
+    status: DataSourceStatus!
+    lastError: String
+    lastFetchedAt: String
+    priority: Int!
+  }
+
+  type DataSourceResult {
+    success: Boolean!
+    dataSource: DataSource
+    error: String
+  }
+
+  type FetchResult {
+    success: Boolean!
+    signalsIngested: Int!
+    duplicates: Int!
+    error: String
+  }
+
+  # ---------------------------------------------------------------------------
+  # Signals
+  # ---------------------------------------------------------------------------
+
+  type Signal {
+    id: String!
+    type: String!
+    title: String!
+    content: String
+    publishedAt: String!
+    ingestedAt: String!
+    confidence: Float!
+    contentHash: String!
+    tickers: [String!]!
+    sourceId: String!
+    sourceName: String!
+    link: String
+  }
+
+  input DataSourceInput {
+    id: String!
+    name: String!
+    type: DataSourceType!
+    capabilities: [String!]!
+    enabled: Boolean
+    priority: Int
+    baseUrl: String
+    secretRef: String
+    command: String
+    args: [String!]
+  }
+
+  # ---------------------------------------------------------------------------
   # Root types
   # ---------------------------------------------------------------------------
 
@@ -366,6 +444,11 @@ export const typeDefs = /* GraphQL */ `
     createdAt: String!
   }
 
+  type CliCommandStatus {
+    command: String!
+    available: Boolean!
+  }
+
   type Query {
     deviceInfo: DeviceInfo!
     portfolio: PortfolioSnapshot
@@ -379,6 +462,19 @@ export const typeDefs = /* GraphQL */ `
     sectorExposure: [SectorWeight!]!
     listConnections: [Connection!]!
     detectAvailableTiers(platform: String!): [TierAvailability!]!
+    listDataSources: [DataSource!]!
+    checkDataSourceHealth: [DataSource!]!
+    checkCliCommands(commands: [String!]!): [CliCommandStatus!]!
+    signals(
+      type: String
+      ticker: String
+      sourceId: String
+      since: String
+      until: String
+      search: String
+      minConfidence: Float
+      limit: Int
+    ): [Signal!]!
     vaultStatus: VaultStatus!
     listVaultSecrets: [VaultSecret!]!
   }
@@ -391,6 +487,10 @@ export const typeDefs = /* GraphQL */ `
     sendMessage(threadId: String!, message: String!, imageBase64: String, imageMediaType: String): SendMessagePayload!
     connectPlatform(input: ConnectPlatformInput!): ConnectionResult!
     disconnectPlatform(platform: String!, removeCredentials: Boolean = false): ConnectionResult!
+    fetchDataSource(id: String!, url: String): FetchResult!
+    addDataSource(input: DataSourceInput!): DataSourceResult!
+    removeDataSource(id: String!): DataSourceResult!
+    toggleDataSource(id: String!, enabled: Boolean!): DataSourceResult!
     unlockVault(passphrase: String!): VaultResult!
     setVaultPassphrase(newPassphrase: String!): VaultResult!
     changeVaultPassphrase(currentPassphrase: String!, newPassphrase: String!): VaultResult!

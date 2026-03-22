@@ -1,12 +1,23 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import Card from '../components/common/card';
 import Spinner from '../components/common/spinner';
 import Button from '../components/common/button';
 import Badge from '../components/common/badge';
+import { DataSourceCard } from '../components/data-sources/data-source-card';
+import { AddDataSourceModal } from '../components/data-sources/add-data-source-modal';
 import { PlatformCard } from '../components/platforms/platform-card';
 import { AddPlatformModal } from '../components/platforms/add-platform-modal';
-import { useListConnections, useDisconnectPlatform, useRefreshPositions, useDeviceInfo } from '../api/hooks';
+import {
+  useListConnections,
+  useDisconnectPlatform,
+  useRefreshPositions,
+  useDeviceInfo,
+  useListDataSources,
+  useRemoveDataSource,
+  useToggleDataSource,
+  useFetchDataSource,
+} from '../api/hooks';
 import { VaultSection } from './vault';
 
 export default function Profile() {
@@ -17,19 +28,85 @@ export default function Profile() {
   const [disconnectingPlatform, setDisconnectingPlatform] = useState<string | null>(null);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
 
+  const [addDsModalOpen, setAddDsModalOpen] = useState(false);
+  const [addDsModalKey, setAddDsModalKey] = useState(0);
+  const [togglingDs, setTogglingDs] = useState<string | null>(null);
+  const [removingDs, setRemovingDs] = useState<string | null>(null);
+  const [dsError, setDsError] = useState<string | null>(null);
+
   const [{ data: deviceData, fetching: deviceFetching }] = useDeviceInfo();
   const [{ data, fetching, error }] = useListConnections();
   const [, disconnectPlatform] = useDisconnectPlatform();
   const [, refreshPositions] = useRefreshPositions();
+  const [{ data: dsData, fetching: dsFetching, error: dsQueryError }, reexecuteDs] = useListDataSources();
+  const [, removeDataSource] = useRemoveDataSource();
+  const [, toggleDataSource] = useToggleDataSource();
+  const [, fetchDataSource] = useFetchDataSource();
 
   function openAddModal() {
     setAddModalKey((k: number) => k + 1);
     setAddModalOpen(true);
   }
 
+  function openAddDsModal() {
+    setAddDsModalKey((k: number) => k + 1);
+    setAddDsModalOpen(true);
+  }
+
   const device = deviceData?.deviceInfo;
   const connections = data?.listConnections ?? [];
   const connectedPlatforms = connections.map((c) => c.platform);
+  const dataSources = dsData?.listDataSources ?? [];
+
+  const refreshDs = useCallback(() => {
+    reexecuteDs({ requestPolicy: 'network-only' });
+  }, [reexecuteDs]);
+
+  async function handleToggleDs(id: string, enabled: boolean) {
+    setTogglingDs(id);
+    setDsError(null);
+    try {
+      const result = await toggleDataSource({ id, enabled });
+      if (result.error || !result.data?.toggleDataSource.success) {
+        setDsError(result.data?.toggleDataSource.error ?? result.error?.message ?? 'Toggle failed');
+      }
+    } finally {
+      setTogglingDs(null);
+      refreshDs();
+    }
+  }
+
+  async function handleRemoveDs(id: string) {
+    setRemovingDs(id);
+    setDsError(null);
+    try {
+      const result = await removeDataSource({ id });
+      if (result.error || !result.data?.removeDataSource.success) {
+        setDsError(result.data?.removeDataSource.error ?? result.error?.message ?? 'Remove failed');
+      }
+    } finally {
+      setRemovingDs(null);
+      refreshDs();
+    }
+  }
+
+  async function handleFetchDs(
+    id: string,
+    url?: string,
+  ): Promise<{ ingested: number; duplicates: number; error?: string } | null> {
+    const result = await fetchDataSource({ id, url });
+    const fetchResult = result.data?.fetchDataSource;
+    if (result.error) {
+      return { ingested: 0, duplicates: 0, error: result.error.message };
+    }
+    if (!fetchResult?.success) {
+      return { ingested: 0, duplicates: 0, error: fetchResult?.error ?? 'Fetch failed' };
+    }
+    return {
+      ingested: fetchResult.signalsIngested,
+      duplicates: fetchResult.duplicates,
+    };
+  }
 
   async function handleSyncNow(platform: string) {
     setSyncingPlatform(platform);
@@ -159,6 +236,54 @@ export default function Profile() {
         open={addModalOpen}
         onClose={() => setAddModalOpen(false)}
         connectedPlatforms={connectedPlatforms}
+      />
+
+      {/* Data Sources */}
+      <Card title="Data Sources" section className="relative">
+        <div className="absolute right-5 top-5">
+          <Button size="sm" onClick={openAddDsModal}>
+            + Add Source
+          </Button>
+        </div>
+
+        {dsFetching ? (
+          <div className="flex justify-center py-8">
+            <Spinner />
+          </div>
+        ) : dsQueryError ? (
+          <p className="py-8 text-center text-sm text-error">Failed to load data sources.</p>
+        ) : dataSources.length === 0 ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-text-muted mb-3">No data sources configured yet.</p>
+            <Button size="sm" onClick={openAddDsModal}>
+              Add your first data source
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {dsError && <p className="text-sm text-error bg-error/10 rounded-lg px-3 py-2">{dsError}</p>}
+            {dataSources.map((source) => (
+              <DataSourceCard
+                key={source.id}
+                source={source}
+                onToggle={handleToggleDs}
+                onRemove={handleRemoveDs}
+                onFetch={handleFetchDs}
+                toggling={togglingDs === source.id}
+                removing={removingDs === source.id}
+              />
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <AddDataSourceModal
+        key={addDsModalKey}
+        open={addDsModalOpen}
+        onClose={() => {
+          setAddDsModalOpen(false);
+          refreshDs();
+        }}
       />
 
       {/* Credential Vault */}

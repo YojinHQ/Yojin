@@ -18,6 +18,15 @@ export {
   useOnConnectionStatus,
 } from './use-connections.js';
 export {
+  useListDataSources,
+  useAddDataSource,
+  useRemoveDataSource,
+  useToggleDataSource,
+  useFetchDataSource,
+  useSignals,
+  useCheckCliCommands,
+} from './use-data-sources.js';
+export {
   useVaultStatus,
   useListVaultSecrets,
   useUnlockVault,
