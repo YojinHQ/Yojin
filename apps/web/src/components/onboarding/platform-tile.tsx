@@ -17,7 +17,7 @@ export const PLATFORMS: PlatformConfig[] = [
     domain: 'interactivebrokers.com',
     instructions: [
       'Open the IBKR mobile app or web portal',
-      'Go to Portfolio → Positions',
+      'Go to the Portfolio page',
       'Take a screenshot showing all your holdings',
     ],
   },
@@ -28,8 +28,8 @@ export const PLATFORMS: PlatformConfig[] = [
     domain: 'robinhood.com',
     instructions: [
       'Open the Robinhood app or robinhood.com',
-      'Go to your portfolio page',
-      'Screenshot showing your positions list',
+      'Tap Investing, then Stocks & ETFs',
+      'Screenshot your holdings list',
     ],
   },
   {
@@ -62,28 +62,47 @@ export const PLATFORMS: PlatformConfig[] = [
     name: 'WeBull',
     logo: '/platforms/webull.png',
     domain: 'webull.com',
-    instructions: ['Open the WeBull app or webull.com', 'Go to your Positions tab', 'Screenshot all positions'],
+    instructions: [
+      'Open the WeBull app or webull.com',
+      'Tap the Webull logo (bottom center) to view your account',
+      'Screenshot all positions',
+    ],
   },
   {
     id: 'SOFI',
     name: 'SoFi',
     logo: '/platforms/sofi.png',
     domain: 'sofi.com',
-    instructions: ['Open the SoFi app or sofi.com', 'Go to Invest → Holdings', 'Screenshot your portfolio'],
+    instructions: ['Open the SoFi app or sofi.com', 'Tap the Invest tab at the bottom', 'Screenshot your portfolio'],
   },
   {
     id: 'SCHWAB',
     name: 'Schwab',
     logo: '/platforms/schwab.png',
     domain: 'schwab.com',
-    instructions: ['Open schwab.com or the Schwab app', 'Go to Positions', 'Screenshot your holdings'],
+    instructions: ['Open schwab.com or the Schwab app', 'Go to Accounts, then Positions', 'Screenshot your holdings'],
   },
   {
     id: 'FIDELITY',
     name: 'Fidelity',
     logo: '/platforms/fidelity.png',
     domain: 'fidelity.com',
-    instructions: ['Open fidelity.com or the Fidelity app', 'Go to Positions', 'Screenshot your holdings'],
+    instructions: [
+      'Open fidelity.com or the Fidelity app',
+      'Go to your account, then the Positions tab',
+      'Screenshot your holdings',
+    ],
+  },
+  {
+    id: 'MOOMOO',
+    name: 'Moomoo',
+    logo: '/platforms/moomoo.png',
+    domain: 'moomoo.com',
+    instructions: [
+      'Open the Moomoo app or moomoo.com',
+      'Go to Holdings under your account',
+      'Screenshot your positions',
+    ],
   },
   {
     id: 'PHANTOM',

@@ -21,6 +21,22 @@ interface EditingCell {
   field: keyof ExtractedPosition;
 }
 
+/** Red-tinted pill shown for fields the screenshot couldn't extract. */
+function MissingBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md bg-error/10 px-1.5 py-0.5 text-xs text-error">
+      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+        />
+      </svg>
+      missing
+    </span>
+  );
+}
+
 export function EditableTable({ positions, onChange, className }: EditableTableProps) {
   const [editing, setEditing] = useState<EditingCell | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -62,6 +78,15 @@ export function EditableTable({ positions, onChange, className }: EditableTableP
     },
     [positions, onChange],
   );
+
+  const addRow = useCallback(() => {
+    onChange([...positions, { symbol: '', name: '', quantity: null, avgEntry: null, marketValue: null }]);
+    // Start editing the symbol cell of the new row
+    setTimeout(() => {
+      setEditValue('');
+      setEditing({ row: positions.length, field: 'symbol' });
+    }, 0);
+  }, [positions, onChange]);
 
   return (
     <div className={cn('overflow-hidden rounded-xl border border-border', className)}>
@@ -113,8 +138,14 @@ export function EditableTable({ positions, onChange, className }: EditableTableP
                       onClick={() => startEdit(rowIdx, 'symbol')}
                       className="cursor-pointer flex items-center gap-2 rounded px-1 py-0.5 hover:bg-bg-tertiary"
                     >
-                      <SymbolLogo symbol={pos.symbol} size="sm" />
-                      <span className="text-sm font-medium text-text-primary">{pos.symbol}</span>
+                      {pos.symbol ? (
+                        <>
+                          <SymbolLogo symbol={pos.symbol} size="sm" />
+                          <span className="text-sm font-medium text-text-primary">{pos.symbol}</span>
+                        </>
+                      ) : (
+                        <MissingBadge />
+                      )}
                     </button>
                   )}
                 </td>
@@ -135,7 +166,7 @@ export function EditableTable({ positions, onChange, className }: EditableTableP
                       onClick={() => startEdit(rowIdx, 'name')}
                       className="cursor-pointer truncate rounded px-1 py-0.5 text-sm text-text-secondary hover:bg-bg-tertiary"
                     >
-                      {pos.name || '—'}
+                      {pos.name || <MissingBadge />}
                     </button>
                   )}
                 </td>
@@ -156,7 +187,7 @@ export function EditableTable({ positions, onChange, className }: EditableTableP
                       onClick={() => startEdit(rowIdx, 'quantity')}
                       className="cursor-pointer rounded px-1 py-0.5 text-sm text-text-primary hover:bg-bg-tertiary"
                     >
-                      {pos.quantity != null ? Number(pos.quantity).toLocaleString() : '—'}
+                      {pos.quantity != null ? Number(pos.quantity).toLocaleString() : <MissingBadge />}
                     </button>
                   )}
                 </td>
@@ -177,7 +208,7 @@ export function EditableTable({ positions, onChange, className }: EditableTableP
                       onClick={() => startEdit(rowIdx, 'avgEntry')}
                       className="cursor-pointer rounded px-1 py-0.5 text-sm text-text-primary hover:bg-bg-tertiary"
                     >
-                      {pos.avgEntry != null ? `$${Number(pos.avgEntry).toLocaleString()}` : '—'}
+                      {pos.avgEntry != null ? `$${Number(pos.avgEntry).toLocaleString()}` : <MissingBadge />}
                     </button>
                   )}
                 </td>
@@ -198,7 +229,7 @@ export function EditableTable({ positions, onChange, className }: EditableTableP
                       onClick={() => startEdit(rowIdx, 'marketValue')}
                       className="cursor-pointer rounded px-1 py-0.5 text-sm text-text-primary hover:bg-bg-tertiary"
                     >
-                      {pos.marketValue != null ? `$${Number(pos.marketValue).toLocaleString()}` : '—'}
+                      {pos.marketValue != null ? `$${Number(pos.marketValue).toLocaleString()}` : <MissingBadge />}
                     </button>
                   )}
                 </td>
@@ -219,6 +250,18 @@ export function EditableTable({ positions, onChange, className }: EditableTableP
           })}
         </tbody>
       </table>
+
+      {/* Add row */}
+      <button
+        type="button"
+        onClick={addRow}
+        className="cursor-pointer flex w-full items-center justify-center gap-1.5 border-t border-border py-2.5 text-sm text-text-muted transition-colors hover:bg-bg-hover/40 hover:text-text-secondary"
+      >
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        Add position
+      </button>
 
       {positions.length === 0 && (
         <div className="px-4 py-8 text-center text-sm text-text-muted">No positions extracted</div>

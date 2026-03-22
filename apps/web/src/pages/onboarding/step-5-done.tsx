@@ -2,40 +2,148 @@ import { useNavigate } from 'react-router';
 import { useMutation } from 'urql';
 import { useOnboarding } from '../../lib/onboarding-context';
 import { OnboardingShell } from '../../components/onboarding/onboarding-shell';
-import { SummaryRow } from '../../components/onboarding/summary-row';
 import Button from '../../components/common/button';
 import { COMPLETE_ONBOARDING_MUTATION } from '../../api/documents';
+import { cn } from '../../lib/utils';
+
+/* ─── Animated completion emblem ────────────────────────────────── */
+
+const OUTER_R = 48;
+const OUTER_C = 2 * Math.PI * OUTER_R;
+const INNER_R = 38;
+const INNER_C = 2 * Math.PI * INNER_R;
+const CHECK_LEN = 60;
+
+function CompletionEmblem() {
+  return (
+    <div className="relative flex items-center justify-center">
+      {/* Radial ambient glow */}
+      <div
+        className="absolute h-56 w-56 rounded-full"
+        style={{
+          background: 'radial-gradient(circle, rgba(91,185,140,0.12) 0%, transparent 70%)',
+          opacity: 0,
+          animation: 'done-radial-glow 1s ease-out 0.9s forwards',
+        }}
+      />
+
+      <svg
+        viewBox="0 0 120 120"
+        className="relative h-32 w-32"
+        style={{ animation: 'done-emblem-glow 1.8s ease-out 1s both' }}
+      >
+        {/* Outer ring — draws clockwise from top, then breathes */}
+        <circle
+          cx="60"
+          cy="60"
+          r={OUTER_R}
+          fill="none"
+          stroke="var(--color-success)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          opacity="0.5"
+          strokeDasharray={OUTER_C}
+          strokeDashoffset={OUTER_C}
+          transform="rotate(-90 60 60)"
+          style={{
+            animation: 'done-draw-stroke 1s ease-out 0.15s forwards, done-ring-breathe 5s ease-in-out 1.5s infinite',
+          }}
+        />
+
+        {/* Inner ring */}
+        <circle
+          cx="60"
+          cy="60"
+          r={INNER_R}
+          fill="none"
+          stroke="var(--color-success)"
+          strokeWidth="0.5"
+          opacity="0.25"
+          strokeDasharray={INNER_C}
+          strokeDashoffset={INNER_C}
+          transform="rotate(-90 60 60)"
+          style={{ animation: 'done-draw-stroke 0.8s ease-out 0.4s forwards' }}
+        />
+
+        {/* Checkmark — draws after rings */}
+        <path
+          d="M40 63 L53 76 L80 46"
+          fill="none"
+          stroke="var(--color-success)"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray={CHECK_LEN}
+          strokeDashoffset={CHECK_LEN}
+          style={{ animation: 'done-draw-stroke 0.5s ease-out 0.85s forwards' }}
+        />
+      </svg>
+    </div>
+  );
+}
+
+/* ─── Status LED row ────────────────────────────────────────────── */
+
+interface StatusLedProps {
+  active: boolean;
+  label: string;
+  detail: string;
+  index: number;
+}
+
+const STATUS_BASE_DELAY = 1400;
+const STATUS_STAGGER = 150;
+
+function StatusLed({ active, label, detail, index }: StatusLedProps) {
+  const delay = STATUS_BASE_DELAY + index * STATUS_STAGGER;
+
+  return (
+    <div
+      className="flex items-center gap-3 px-5 py-3 opacity-0 [animation:onboarding-fade-up_0.4s_ease-out_forwards]"
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      {/* LED dot */}
+      <div
+        className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-bg-tertiary"
+        style={active ? { animation: `done-led-on 0.3s ease-out ${delay + 200}ms forwards` } : undefined}
+      />
+
+      <span className={cn('text-sm', active ? 'text-text-primary' : 'text-text-muted')}>{label}</span>
+
+      <span className={cn('ml-auto text-xs tabular-nums', active ? 'text-text-secondary' : 'text-text-muted')}>
+        {detail}
+      </span>
+    </div>
+  );
+}
+
+/* ─── Step 5: Done ──────────────────────────────────────────────── */
 
 export function Step5Done() {
   const { state, completeOnboarding } = useOnboarding();
   const navigate = useNavigate();
   const [, executeComplete] = useMutation(COMPLETE_ONBOARDING_MUTATION);
 
-  const handleFinish = async (path: string) => {
-    // Mark completed server-side (persistent flag file)
-    await executeComplete({});
-    // Mark completed client-side (localStorage)
+  const handleFinish = (path: string) => {
+    // Fire-and-forget: mark completed server-side (best-effort)
+    executeComplete({});
+    // Mark completed client-side (localStorage) and close modal
     completeOnboarding();
     navigate(path, { replace: true });
   };
 
-  // Build summary data from wizard state
+  /* ── Derive summary from wizard state ── */
+
   const aiConnected = state.aiProvider?.validated ?? false;
   const aiDetail = state.aiProvider?.model || 'Claude';
 
   const persona = state.persona;
   const personaCreated = persona?.confirmed ?? false;
-  const personaDetail =
-    personaCreated && persona
-      ? `${persona.name} — ${persona.riskTolerance}, ${persona.assetClasses.join(' + ')}, ${persona.communicationStyle}`
-      : 'Skipped';
+  const personaDetail = personaCreated && persona ? `${persona.name} · ${persona.riskTolerance}` : 'Skipped';
 
   const connected = state.platforms?.connected ?? [];
   const platformCount = connected.length;
-  const platformsDetail =
-    platformCount > 0
-      ? `${platformCount} platform${platformCount > 1 ? 's' : ''} (${connected.map((p) => p.platform.replace('_', ' ')).join(', ')})`
-      : 'Skipped';
+  const platformsDetail = platformCount > 0 ? `${platformCount} platform${platformCount > 1 ? 's' : ''}` : 'Skipped';
 
   const briefing = state.briefing;
   const briefingConfigured = !!briefing;
@@ -44,41 +152,66 @@ export function Step5Done() {
       ? `${formatTime(briefing.time)} ${briefing.timezone.split('/').pop()?.replace('_', ' ')}`
       : 'Skipped';
 
+  const items: Omit<StatusLedProps, 'index'>[] = [
+    { active: aiConnected, label: 'AI provider', detail: aiDetail },
+    { active: personaCreated, label: 'Investor persona', detail: personaDetail },
+    { active: platformCount > 0, label: 'Portfolio linked', detail: platformsDetail },
+    { active: briefingConfigured, label: 'Daily briefing', detail: briefingDetail },
+  ];
+
   return (
     <OnboardingShell currentStep={5}>
-      <div className="w-full max-w-lg">
-        {/* Header */}
-        <div
-          className="mb-8 text-center opacity-0 [animation:onboarding-fade-up_0.6s_ease-out_forwards]"
-          style={{ animationDelay: '0ms' }}
-        >
-          <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-success/10">
-            <svg className="h-7 w-7 text-success" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-            </svg>
-          </div>
-          <h1 className="mb-2 font-headline text-3xl text-text-primary">You're all set</h1>
-          <p className="text-sm text-text-secondary">Yojin is configured and ready to work for you.</p>
+      <div className="flex w-full max-w-lg flex-col items-center">
+        {/* ── Animated emblem ── */}
+        <div className="mb-6">
+          <CompletionEmblem />
         </div>
 
-        {/* Summary card */}
-        <div
-          className="mb-8 divide-y divide-border rounded-xl border border-border bg-bg-card px-5 opacity-0 [animation:onboarding-fade-up_0.5s_ease-out_forwards]"
-          style={{ animationDelay: '150ms' }}
+        {/* ── Headline ── */}
+        <h1
+          className="mb-2 font-headline text-4xl text-text-primary opacity-0 [animation:onboarding-fade-up_0.6s_ease-out_forwards]"
+          style={{ animationDelay: '1000ms' }}
         >
-          <SummaryRow completed={aiConnected} label="Claude connected" detail={aiDetail} />
-          <SummaryRow completed={personaCreated} label="Persona created" detail={personaDetail} />
-          <SummaryRow completed={platformCount > 0} label="Platforms connected" detail={platformsDetail} />
-          <SummaryRow completed={briefingConfigured} label="Morning briefing" detail={briefingDetail} />
+          You're all set
+        </h1>
+
+        <p
+          className="mb-8 text-center text-sm text-text-secondary opacity-0 [animation:onboarding-fade-up_0.5s_ease-out_forwards]"
+          style={{ animationDelay: '1150ms' }}
+        >
+          Yojin is online and ready to work for you.
+        </p>
+
+        {/* ── Finish line — gradient divider ── */}
+        <div
+          className="mb-8 h-px w-full max-w-[200px]"
+          style={{
+            background: 'linear-gradient(to right, transparent, var(--color-success), transparent)',
+            transform: 'scaleX(0)',
+            opacity: 0,
+            animation: 'done-line-extend 0.6s ease-out 1300ms forwards',
+          }}
+        />
+
+        {/* ── Status board ── */}
+        <div className="mb-10 w-full rounded-xl bg-black/20 py-1 ring-1 ring-white/[0.06]">
+          {items.map((item, i) => (
+            <StatusLed key={item.label} index={i} {...item} />
+          ))}
         </div>
 
-        {/* CTAs */}
+        {/* ── CTAs ── */}
         <div
           className="flex items-center justify-center gap-3 opacity-0 [animation:onboarding-fade-up_0.5s_ease-out_forwards]"
-          style={{ animationDelay: '300ms' }}
+          style={{ animationDelay: '2100ms' }}
         >
-          <Button variant="primary" size="lg" onClick={() => handleFinish('/')} className="px-6">
-            Go to dashboard
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={() => handleFinish('/')}
+            className="px-8 shadow-[0_0_24px_rgba(255,90,94,0.2)]"
+          >
+            Enter dashboard
             <svg className="ml-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
             </svg>
@@ -89,7 +222,7 @@ export function Step5Done() {
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z"
+                d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 0 1 1.037-.443 48.2 48.2 0 0 0 5.887-.37c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.4 48.4 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"
               />
             </svg>
           </Button>
@@ -98,6 +231,8 @@ export function Step5Done() {
     </OnboardingShell>
   );
 }
+
+/* ── Helpers ── */
 
 function formatTime(time24: string): string {
   const [hStr, mStr] = time24.split(':');

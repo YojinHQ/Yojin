@@ -343,7 +343,7 @@ export function Step2Persona() {
               </div>
               <div
                 className={cn(
-                  'prose prose-sm prose-invert max-h-48 max-w-none overflow-y-auto text-text-secondary',
+                  'prose prose-sm prose-invert max-w-none text-text-secondary',
                   // Headings
                   '[&_h1]:font-headline [&_h1]:text-sm [&_h1]:text-text-primary [&_h1]:mb-2 [&_h1]:pb-1.5 [&_h1]:border-b [&_h1]:border-border',
                   '[&_h2]:text-[11px] [&_h2]:uppercase [&_h2]:tracking-wider [&_h2]:text-text-muted [&_h2]:mt-3 [&_h2]:mb-1.5 [&_h2]:font-medium',

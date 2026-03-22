@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
 import { useMutation } from 'urql';
-import { useNavigate } from 'react-router';
 import { useTheme } from '../lib/theme';
 import type { ThemeChoice } from '../lib/theme';
 import { cn } from '../lib/utils';
@@ -8,7 +7,7 @@ import Card from '../components/common/card';
 import Button from '../components/common/button';
 import Toggle from '../components/common/toggle';
 import { RESET_ONBOARDING_MUTATION } from '../api/documents';
-import { ONBOARDING_KEYS } from '../lib/onboarding-context';
+import { ONBOARDING_KEYS, useOnboardingModal } from '../lib/onboarding-context';
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
@@ -89,7 +88,7 @@ export default function Settings() {
 }
 
 function DevTools() {
-  const navigate = useNavigate();
+  const { openOnboarding } = useOnboardingModal();
   const [, resetOnboarding] = useMutation(RESET_ONBOARDING_MUTATION);
   const [resetting, setResetting] = useState(false);
 
@@ -102,11 +101,11 @@ function DevTools() {
       localStorage.removeItem(ONBOARDING_KEYS.SKIPPED_KEY);
       localStorage.removeItem(ONBOARDING_KEYS.STEP_KEY);
       localStorage.removeItem(ONBOARDING_KEYS.STATE_KEY);
-      navigate('/onboarding', { replace: true, state: { reset: true } });
+      openOnboarding();
     } finally {
       setResetting(false);
     }
-  }, [resetOnboarding, navigate]);
+  }, [resetOnboarding, openOnboarding]);
 
   return (
     <Card title="Developer" section>
