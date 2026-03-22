@@ -427,6 +427,104 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # ---------------------------------------------------------------------------
+  # Onboarding
+  # ---------------------------------------------------------------------------
+
+  enum AiAuthMethod {
+    OAUTH
+    API_KEY
+    ENV_DETECTED
+  }
+
+  type DetectedCredential {
+    method: AiAuthMethod!
+    model: String
+  }
+
+  enum AiKeyProvider {
+    ANTHROPIC
+    OPENROUTER
+  }
+
+  input ValidateCredentialInput {
+    method: AiAuthMethod!
+    apiKey: String
+    provider: AiKeyProvider
+  }
+
+  type ValidateCredentialResult {
+    success: Boolean!
+    model: String
+    error: String
+  }
+
+  type OAuthInitResult {
+    authUrl: String!
+    state: String!
+  }
+
+  input PersonaInput {
+    name: String!
+    riskTolerance: String!
+    assetClasses: [String!]!
+    communicationStyle: String!
+    hardRules: String
+  }
+
+  type PersonaResult {
+    markdown: String!
+  }
+
+  input ScreenshotInput {
+    image: String!
+    mediaType: String!
+    platform: String!
+  }
+
+  type ExtractedPositionGql {
+    symbol: String!
+    name: String
+    quantity: Float
+    avgEntry: Float
+    marketValue: Float
+  }
+
+  type ScreenshotResult {
+    success: Boolean!
+    positions: [ExtractedPositionGql!]
+    confidence: Float
+    warnings: [String!]
+    error: String
+  }
+
+  input PositionInput {
+    symbol: String!
+    name: String
+    quantity: Float
+    avgEntry: Float
+    marketValue: Float
+  }
+
+  input ConfirmPositionsInput {
+    platform: String!
+    positions: [PositionInput!]!
+  }
+
+  input BriefingConfigInput {
+    time: String!
+    timezone: String!
+    sections: [String!]!
+    channel: String!
+  }
+
+  type OnboardingStatusResult {
+    personaExists: Boolean!
+    aiCredentialConfigured: Boolean!
+    connectedPlatforms: [String!]!
+    briefingConfigured: Boolean!
+  }
+
+  # ---------------------------------------------------------------------------
   # Root types
   # ---------------------------------------------------------------------------
 
@@ -477,6 +575,8 @@ export const typeDefs = /* GraphQL */ `
     ): [Signal!]!
     vaultStatus: VaultStatus!
     listVaultSecrets: [VaultSecret!]!
+    detectAiCredential: DetectedCredential
+    onboardingStatus: OnboardingStatusResult!
   }
 
   type Mutation {
@@ -497,6 +597,14 @@ export const typeDefs = /* GraphQL */ `
     addVaultSecret(input: VaultSecretInput!): VaultResult!
     updateVaultSecret(input: VaultSecretInput!): VaultResult!
     deleteVaultSecret(key: String!): VaultResult!
+    validateAiCredential(input: ValidateCredentialInput!): ValidateCredentialResult!
+    initiateOAuth: OAuthInitResult!
+    exchangeOAuthCode(code: String!, state: String!): ValidateCredentialResult!
+    generatePersona(input: PersonaInput!): PersonaResult!
+    confirmPersona(markdown: String!): Boolean!
+    parsePortfolioScreenshot(input: ScreenshotInput!): ScreenshotResult!
+    confirmPositions(input: ConfirmPositionsInput!): Boolean!
+    saveBriefingConfig(input: BriefingConfigInput!): Boolean!
   }
 
   type Subscription {

@@ -36,9 +36,73 @@ function getColor(symbol: string): string {
   return PALETTE[Math.abs(hash) % PALETTE.length];
 }
 
-function getLogoUrl(symbol: string, assetClass: AssetClass): string {
-  const path = assetClass === 'crypto' ? 'crypto' : 'symbol';
-  return `https://assets.parqet.com/logos/${path}/${symbol}`;
+// CoinGecko requires coin IDs, not ticker symbols. Map common ones.
+const COINGECKO_IDS: Record<string, string> = {
+  BTC: 'bitcoin',
+  ETH: 'ethereum',
+  SOL: 'solana',
+  BNB: 'binancecoin',
+  XRP: 'ripple',
+  ADA: 'cardano',
+  DOGE: 'dogecoin',
+  DOT: 'polkadot',
+  MATIC: 'matic-network',
+  POL: 'matic-network',
+  LINK: 'chainlink',
+  AVAX: 'avalanche-2',
+  UNI: 'uniswap',
+  ATOM: 'cosmos',
+  LTC: 'litecoin',
+  ARB: 'arbitrum',
+  OP: 'optimism',
+  APT: 'aptos',
+  SUI: 'sui',
+  NEAR: 'near',
+  FIL: 'filecoin',
+  AAVE: 'aave',
+  MKR: 'maker',
+  CRV: 'curve-dao-token',
+  SNX: 'havven',
+  COMP: 'compound-governance-token',
+  LDO: 'lido-dao',
+  RENDER: 'render-token',
+  FET: 'fetch-ai',
+  INJ: 'injective-protocol',
+  TIA: 'celestia',
+  SEI: 'sei-network',
+  PEPE: 'pepe',
+  SHIB: 'shiba-inu',
+  WLD: 'worldcoin-wld',
+  WETH: 'weth',
+  WBTC: 'wrapped-bitcoin',
+  USDT: 'tether',
+  USDC: 'usd-coin',
+  DAI: 'dai',
+  VIRTUAL: 'virtual-protocol',
+  LXP: 'linea-voyage-xp',
+  YSARB: 'lucky-money-arb',
+};
+
+function getLogoUrls(symbol: string, assetClass: AssetClass): string[] {
+  const upper = symbol.toUpperCase();
+  const urls: string[] = [];
+
+  // 1. Parqet (works well for equities and some crypto)
+  const parqetPath = assetClass === 'crypto' ? 'crypto' : 'symbol';
+  urls.push(`https://assets.parqet.com/logos/${parqetPath}/${symbol}`);
+
+  // 2. CoinGecko (for crypto with known IDs)
+  const geckoId = COINGECKO_IDS[upper];
+  if (geckoId) {
+    urls.push(`https://assets.coingecko.com/coins/images/${geckoId}/small/${geckoId}.png`);
+  }
+
+  // 3. Also try Parqet crypto path if asset class is equity (might be misclassified)
+  if (assetClass !== 'crypto') {
+    urls.push(`https://assets.parqet.com/logos/crypto/${symbol}`);
+  }
+
+  return urls;
 }
 
 interface SymbolCellProps {
@@ -58,7 +122,9 @@ export function SymbolCell({ symbol, assetClass = 'equity', size = 'sm', classNa
 }
 
 export function SymbolLogo({ symbol, assetClass = 'equity', size = 'sm', className }: SymbolLogoProps) {
-  const [imgError, setImgError] = useState(false);
+  const [urlIndex, setUrlIndex] = useState(0);
+  const urls = getLogoUrls(symbol, assetClass);
+  const exhausted = urlIndex >= urls.length;
 
   return (
     <div
@@ -67,16 +133,16 @@ export function SymbolLogo({ symbol, assetClass = 'equity', size = 'sm', classNa
         sizeStyles[size],
         className,
       )}
-      style={imgError ? { backgroundColor: getColor(symbol) } : undefined}
+      style={exhausted ? { backgroundColor: getColor(symbol) } : undefined}
     >
-      {imgError ? (
+      {exhausted ? (
         <span className="font-semibold leading-none text-white">{symbol.slice(0, 2)}</span>
       ) : (
         <img
-          src={getLogoUrl(symbol, assetClass)}
+          src={urls[urlIndex]}
           alt={`${symbol} logo`}
           className="h-full w-full object-cover"
-          onError={() => setImgError(true)}
+          onError={() => setUrlIndex((i) => i + 1)}
         />
       )}
     </div>

@@ -1,8 +1,9 @@
-import { Routes, Route, Navigate, useParams } from 'react-router';
+import { Routes, Route, Navigate, useParams, useLocation } from 'react-router';
 import { Provider } from 'urql';
 import { ChatProvider } from './lib/chat-context';
 import { ChatPanelProvider } from './lib/chat-panel-context';
 import { graphqlClient } from './lib/graphql';
+import { isOnboardingComplete } from './lib/onboarding-context';
 import { ThemeProvider } from './lib/theme';
 import AppShell from './components/layout/app-shell';
 import Position from './pages/position';
@@ -12,10 +13,26 @@ import Profile from './pages/profile';
 import Settings from './pages/settings';
 import Dashboard from './pages/dashboard';
 import Positions from './pages/positions';
+import OnboardingPage from './pages/onboarding';
 
 function RedirectPositionSymbol() {
   const { symbol } = useParams<{ symbol: string }>();
   return <Navigate to={`/portfolio/${symbol}`} replace />;
+}
+
+function OnboardingGuard() {
+  const location = useLocation();
+  if (!isOnboardingComplete() && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
+  }
+  return <AppShell />;
+}
+
+function OnboardingRedirectIfComplete() {
+  if (isOnboardingComplete()) {
+    return <Navigate to="/" replace />;
+  }
+  return <OnboardingPage />;
 }
 
 export default function App() {
@@ -25,7 +42,11 @@ export default function App() {
         <ChatProvider>
           <ChatPanelProvider>
             <Routes>
-              <Route element={<AppShell />}>
+              {/* Onboarding — outside AppShell */}
+              <Route path="onboarding" element={<OnboardingRedirectIfComplete />} />
+
+              {/* Main app — guarded by onboarding check */}
+              <Route element={<OnboardingGuard />}>
                 <Route index element={<Dashboard />} />
                 <Route path="portfolio" element={<Positions />} />
                 <Route path="portfolio/:symbol" element={<Position />} />

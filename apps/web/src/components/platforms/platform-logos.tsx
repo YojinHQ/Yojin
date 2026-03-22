@@ -17,16 +17,16 @@ const sizeStyles = {
   lg: 'h-12 w-12 text-base',
 };
 
-/** Map platform IDs to their logo filenames in /logos/platforms/. */
+/** Map platform IDs to their logo filenames in /platforms/. */
 const LOGO_FILES: Record<KnownPlatform, string> = {
-  INTERACTIVE_BROKERS: 'interactive-brokers.svg',
-  ROBINHOOD: 'robinhood.svg',
-  COINBASE: 'coinbase.svg',
-  SCHWAB: 'schwab.svg',
-  BINANCE: 'binance.svg',
-  FIDELITY: 'fidelity.svg',
-  POLYMARKET: 'polymarket.svg',
-  PHANTOM: 'phantom.svg',
+  INTERACTIVE_BROKERS: 'interactive-brokers.png',
+  ROBINHOOD: 'robinhood.png',
+  COINBASE: 'coinbase.png',
+  SCHWAB: 'schwab.png',
+  BINANCE: 'binance.png',
+  FIDELITY: 'fidelity.png',
+  POLYMARKET: 'polymarket.png',
+  PHANTOM: 'phantom.png',
   MANUAL: '',
 };
 
@@ -40,7 +40,7 @@ export function PlatformLogo({ platform, size = 'md', className }: PlatformLogoP
   if (hasLogo) {
     return (
       <img
-        src={`/logos/platforms/${logoFile}`}
+        src={`/platforms/${logoFile}`}
         alt={meta.label}
         onError={() => setImgError(true)}
         className={cn('rounded-lg object-contain', sizeStyles[size], className)}

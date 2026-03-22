@@ -28,6 +28,18 @@ import { fetchDataSourceResolver } from './resolvers/fetch-data-source.js';
 import { onAlertSubscription, onPortfolioUpdateSubscription, onPriceMoveSubscription } from './resolvers/live.js';
 import { newsQuery, quoteQuery, sectorExposureQuery } from './resolvers/market.js';
 import {
+  confirmPersonaMutation,
+  confirmPositionsMutation,
+  detectAiCredentialQuery,
+  exchangeOAuthCodeMutation,
+  generatePersonaMutation,
+  initiateOAuthMutation,
+  onboardingStatusQuery,
+  parsePortfolioScreenshotMutation,
+  saveBriefingConfigMutation,
+  validateAiCredentialMutation,
+} from './resolvers/onboarding.js';
+import {
   addManualPositionMutation,
   enrichedSnapshotQuery,
   portfolioHistoryQuery,
@@ -72,6 +84,8 @@ const schema = createSchema({
       deviceInfo: deviceInfoResolver,
       vaultStatus: vaultStatusQuery,
       listVaultSecrets: listVaultSecretsQuery,
+      detectAiCredential: detectAiCredentialQuery,
+      onboardingStatus: onboardingStatusQuery,
     },
     Mutation: {
       refreshPositions: refreshPositionsMutation,
@@ -91,6 +105,14 @@ const schema = createSchema({
       addVaultSecret: addVaultSecretMutation,
       updateVaultSecret: updateVaultSecretMutation,
       deleteVaultSecret: deleteVaultSecretMutation,
+      validateAiCredential: validateAiCredentialMutation,
+      initiateOAuth: initiateOAuthMutation,
+      exchangeOAuthCode: exchangeOAuthCodeMutation,
+      generatePersona: generatePersonaMutation,
+      confirmPersona: confirmPersonaMutation,
+      parsePortfolioScreenshot: parsePortfolioScreenshotMutation,
+      confirmPositions: confirmPositionsMutation,
+      saveBriefingConfig: saveBriefingConfigMutation,
     },
     Subscription: {
       onAlert: onAlertSubscription,
