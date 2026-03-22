@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 
 export interface AiProviderState {
-  method: 'magic-link' | 'api-key' | 'env-detected';
+  method: 'keychain' | 'api-key' | 'env-detected';
   model?: string;
   validated: boolean;
 }

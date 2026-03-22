@@ -13,7 +13,7 @@ import { AcpSessionStore } from '../acp/session-store.js';
 import { ClaudeCodeProvider } from '../ai-providers/claude-code.js';
 import { ProviderRouter } from '../ai-providers/router.js';
 import { VercelAIProvider } from '../ai-providers/vercel-ai.js';
-import { setOnboardingProvider } from '../api/graphql/resolvers/onboarding.js';
+import { setOnboardingClaudeCodeProvider, setOnboardingProvider } from '../api/graphql/resolvers/onboarding.js';
 import { buildContext } from '../composition.js';
 import { AgentRuntime } from '../core/agent-runtime.js';
 import { EventLog } from '../core/event-log.js';
@@ -83,6 +83,7 @@ async function buildFullRuntime(): Promise<{
   await providerRouter.loadConfig();
   providerRouter.startConfigRefresh();
   setOnboardingProvider(providerRouter);
+  setOnboardingClaudeCodeProvider(claudeProvider);
 
   const agentRuntime = new AgentRuntime({
     agentRegistry: services.agentRegistry,

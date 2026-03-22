@@ -10,8 +10,14 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-import { buildClaudeOAuthUrl, exchangeClaudeOAuthCode, generatePkceParams } from '../../../auth/claude-oauth.js';
-import { readTokenFromKeychain } from '../../../auth/keychain.js';
+import type { ClaudeCodeProvider } from '../../../ai-providers/claude-code.js';
+import {
+  buildClaudeOAuthUrl,
+  exchangeClaudeOAuthCode,
+  generatePkceParams,
+  refreshClaudeOAuthToken,
+} from '../../../auth/claude-oauth.js';
+import { readRefreshTokenFromKeychain, readTokenFromKeychain } from '../../../auth/keychain.js';
 import { completeMagicLinkFlow, startMagicLinkFlow } from '../../../auth/magic-link-flow.js';
 import type { PersonaManager } from '../../../brain/types.js';
 import type { AgentLoopProvider } from '../../../core/types.js';
@@ -29,6 +35,7 @@ let provider: AgentLoopProvider | undefined;
 let providerModel = 'claude-sonnet-4-20250514';
 let connectionManager: ConnectionManager | undefined;
 let snapshotStore: PortfolioSnapshotStore | undefined;
+let claudeCodeProvider: ClaudeCodeProvider | undefined;
 let dataRoot = '.';
 
 export function setOnboardingVault(v: EncryptedVault): void {
@@ -42,6 +49,10 @@ export function setOnboardingPersonaManager(pm: PersonaManager): void {
 export function setOnboardingProvider(p: AgentLoopProvider, model?: string): void {
   provider = p;
   if (model) providerModel = model;
+}
+
+export function setOnboardingClaudeCodeProvider(ccp: ClaudeCodeProvider): void {
+  claudeCodeProvider = ccp;
 }
 
 export function setOnboardingConnectionManager(cm: ConnectionManager): void {
@@ -104,16 +115,21 @@ interface KeychainTokenResult {
 }
 
 /**
- * Check macOS Keychain for an existing Claude Code OAuth token.
- * If found, validate it with a test API call and store in vault.
+ * Store an OAuth token in the vault, set it in the env, and reconfigure the
+ * ClaudeCodeProvider so subsequent API calls use it immediately.
  */
-export async function detectKeychainTokenQuery(): Promise<KeychainTokenResult> {
-  const token = await readTokenFromKeychain();
-  if (!token) {
-    return { found: false };
+async function activateOAuthToken(token: string): Promise<void> {
+  process.env.CLAUDE_CODE_OAUTH_TOKEN = token;
+  if (vault?.isUnlocked) {
+    await vault.set('anthropic_oauth_token', token);
   }
+  claudeCodeProvider?.configureOAuthToken(token);
+}
 
-  // Validate the token with a lightweight API call
+/**
+ * Validate an OAuth token with a lightweight API call.
+ */
+async function validateOAuthToken(token: string): Promise<boolean> {
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -129,20 +145,49 @@ export async function detectKeychainTokenQuery(): Promise<KeychainTokenResult> {
         messages: [{ role: 'user', content: 'hi' }],
       }),
     });
-
-    if (!res.ok) {
-      return { found: true, error: 'Keychain token found but expired or invalid.' };
-    }
-
-    // Store in vault
-    if (vault?.isUnlocked) {
-      await vault.set('anthropic_oauth_token', token);
-    }
-
-    return { found: true, model: 'Claude (Keychain)' };
+    return res.ok;
   } catch {
-    return { found: true, error: 'Could not validate keychain token.' };
+    return false;
   }
+}
+
+/**
+ * Check macOS Keychain for an existing Claude Code OAuth token.
+ * If found, validate it (refreshing if expired) and store in vault.
+ */
+export async function detectKeychainTokenQuery(): Promise<KeychainTokenResult> {
+  const token = await readTokenFromKeychain();
+  if (!token) {
+    return { found: false };
+  }
+
+  // Try the token as-is first
+  if (await validateOAuthToken(token)) {
+    activateOAuthToken(token);
+    return { found: true, model: 'Claude (Keychain)' };
+  }
+
+  // Token expired/invalid — try refreshing
+  const refreshToken = await readRefreshTokenFromKeychain();
+  if (refreshToken) {
+    try {
+      const refreshed = await refreshClaudeOAuthToken(refreshToken);
+      if (await validateOAuthToken(refreshed.accessToken)) {
+        activateOAuthToken(refreshed.accessToken);
+        if (vault?.isUnlocked && refreshed.refreshToken) {
+          await vault.set('anthropic_oauth_refresh_token', refreshed.refreshToken);
+        }
+        return { found: true, model: 'Claude (Keychain)' };
+      }
+    } catch {
+      // Refresh failed — token is truly expired
+    }
+  }
+
+  return {
+    found: true,
+    error: 'Keychain token found but expired. Re-authenticate Claude Code with: claude auth login',
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -310,6 +355,8 @@ async function validateAnthropicKey(apiKey: string): Promise<ValidateCredentialR
     if (vault?.isUnlocked) {
       await vault.set('anthropic_api_key', apiKey);
     }
+    process.env.ANTHROPIC_API_KEY = apiKey;
+    claudeCodeProvider?.configureApiKey(apiKey);
     return { success: true, model: 'Claude (Anthropic)' };
   }
 

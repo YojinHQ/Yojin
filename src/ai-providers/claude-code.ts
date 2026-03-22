@@ -153,6 +153,32 @@ export class ClaudeCodeProvider implements AIProvider {
     logger.info('No OAuth token found — staying in CLI mode (no image support)');
   }
 
+  /**
+   * Re-initialize the provider with a new OAuth token.
+   * Called when onboarding refreshes an expired keychain token or the user
+   * configures a credential after server startup.
+   */
+  configureOAuthToken(token: string): void {
+    this.authMode = 'oauth';
+    this.oauthSource = 'env';
+    this.client = new Anthropic({
+      apiKey: null,
+      authToken: token,
+      defaultHeaders: OAUTH_HEADERS,
+    });
+    logger.info('Reconfigured to OAuth SDK mode (runtime)');
+  }
+
+  /**
+   * Re-initialize the provider with an API key.
+   * Called when onboarding validates a new API key after server startup.
+   */
+  configureApiKey(apiKey: string): void {
+    this.authMode = 'api_key';
+    this.client = new Anthropic({ apiKey });
+    logger.info('Reconfigured to API key mode (runtime)');
+  }
+
   models(): string[] {
     return ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'];
   }
