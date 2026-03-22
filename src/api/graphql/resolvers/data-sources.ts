@@ -51,6 +51,7 @@ const DataSourceConfigSchema = z.object({
   secretRef: z.string().optional(),
   command: z.string().optional(),
   args: z.array(z.string()).optional(),
+  feeds: z.array(z.string().url()).optional(),
 });
 
 type DataSourceConfig = z.infer<typeof DataSourceConfigSchema>;

@@ -45,6 +45,7 @@ const DataSourceConfigSchema = z.object({
   args: z.array(z.string()).optional(),
   baseUrl: z.string().optional(),
   secretRef: z.string().optional(),
+  feeds: z.array(z.string().url()).optional(),
 });
 
 type DataSourceConfig = z.infer<typeof DataSourceConfigSchema>;
@@ -69,15 +70,31 @@ interface RssItem {
 
 function parseRssXml(xml: string): RssItem[] {
   const items: RssItem[] = [];
-  const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+
+  // Try RSS <item> tags first, then Atom <entry> tags
+  const isAtom = !/<item>/i.test(xml) && /<entry>/i.test(xml);
+  const blockRegex = isAtom ? /<entry>([\s\S]*?)<\/entry>/gi : /<item>([\s\S]*?)<\/item>/gi;
   let match;
 
-  while ((match = itemRegex.exec(xml)) !== null) {
+  while ((match = blockRegex.exec(xml)) !== null) {
     const block = match[1];
     const title = extractTag(block, 'title');
-    const link = extractTag(block, 'link');
-    const description = extractTag(block, 'description');
-    const pubDate = extractTag(block, 'pubDate');
+
+    let link: string | null;
+    let description: string | null;
+    let pubDate: string | null;
+
+    if (isAtom) {
+      // Atom: <link href="..."/>, <summary>, <updated>
+      link = extractAtomLink(block);
+      description = extractTag(block, 'summary') ?? extractTag(block, 'content');
+      pubDate = extractTag(block, 'updated') ?? extractTag(block, 'published');
+    } else {
+      // RSS: <link>, <description>, <pubDate>
+      link = extractTag(block, 'link');
+      description = extractTag(block, 'description');
+      pubDate = extractTag(block, 'pubDate');
+    }
 
     if (title) {
       items.push({
@@ -90,6 +107,16 @@ function parseRssXml(xml: string): RssItem[] {
   }
 
   return items;
+}
+
+/** Extract href from Atom-style <link href="..." /> or <link href="...">...</link> */
+function extractAtomLink(xml: string): string | null {
+  // Match <link ... href="..." ... /> or <link ... href="..." ...>
+  // Prefer rel="alternate" if present, otherwise take first
+  const allLinks = [...xml.matchAll(/<link\s[^>]*href=["']([^"']+)["'][^>]*\/?>/gi)];
+  if (allLinks.length === 0) return null;
+  const alternate = allLinks.find((m) => /rel=["']alternate["']/i.test(m[0]));
+  return (alternate ?? allLinks[0])[1];
 }
 
 function extractTag(xml: string, tag: string): string | null {
@@ -166,6 +193,68 @@ function jsonToSignals(stdout: string, config: DataSourceConfig): RawSignalInput
 }
 
 // ---------------------------------------------------------------------------
+// Multi-feed fetcher — runs curl for each configured feed URL
+// ---------------------------------------------------------------------------
+
+async function fetchMultipleFeeds(config: DataSourceConfig, command: string, urls: string[]): Promise<FetchResult> {
+  if (!ingestor) {
+    return { success: false, signalsIngested: 0, duplicates: 0, error: 'Signal ingestor not initialized' };
+  }
+
+  let totalIngested = 0;
+  let totalDuplicates = 0;
+  const errors: string[] = [];
+
+  for (const url of urls) {
+    const cmdArgs = [...(config.args ?? []), url];
+    try {
+      const { stdout } = await runCli(command, cmdArgs, {
+        timeout: 30_000,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+
+      const trimmed = stdout.trim();
+      if (!trimmed) {
+        errors.push(`${url}: empty response`);
+        continue;
+      }
+
+      let rawSignals: RawSignalInput[];
+      if (trimmed.startsWith('<?xml') || trimmed.startsWith('<rss') || trimmed.startsWith('<feed')) {
+        rawSignals = rssToSignals(parseRssXml(trimmed), config);
+      } else if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        rawSignals = jsonToSignals(trimmed, config);
+      } else {
+        errors.push(`${url}: unrecognized format`);
+        continue;
+      }
+
+      if (rawSignals.length === 0) continue;
+
+      const result = await ingestor.ingest(rawSignals);
+      totalIngested += result.ingested;
+      totalDuplicates += result.duplicates;
+      if (result.errors.length > 0) errors.push(...result.errors);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn(`Feed fetch failed for ${url}: ${msg}`);
+      errors.push(`${url}: ${msg}`);
+    }
+  }
+
+  logger.info(
+    `Multi-feed fetch for ${config.id}: ${totalIngested} ingested, ${totalDuplicates} duplicates, ${errors.length} errors`,
+  );
+
+  return {
+    success: totalIngested > 0 || errors.length === 0,
+    signalsIngested: totalIngested,
+    duplicates: totalDuplicates,
+    error: errors.length > 0 ? errors.join('; ') : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Resolver
 // ---------------------------------------------------------------------------
 
@@ -213,11 +302,16 @@ export async function fetchDataSourceResolver(
     return { success: false, signalsIngested: 0, duplicates: 0, error: `Data source "${args.id}" has no command` };
   }
 
+  // For RSS sources with configured feeds: fetch all feeds (or a single URL if provided)
+  const feedUrls = args.url ? [args.url] : (config.feeds ?? []);
+  if (feedUrls.length > 0) {
+    return fetchMultipleFeeds(config, config.command, feedUrls);
+  }
+
   // Build the command args
   const cmdArgs = [...(config.args ?? [])];
 
   // For Nimble-style sources: if args include "search" subcommand, pass url as --query
-  // For curl-style sources: append url directly
   if (args.url) {
     if (cmdArgs.includes('search')) {
       cmdArgs.push('--query', args.url);
