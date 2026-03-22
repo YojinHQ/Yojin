@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-let defaultsRoot: string;
+let defaultsRoot: string = '';
 vi.mock('../../src/paths.js', () => ({
   resolveDefaultsRoot: () => defaultsRoot,
 }));

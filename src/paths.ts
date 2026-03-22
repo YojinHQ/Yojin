@@ -7,7 +7,7 @@
 
 import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** Subdirectories created inside the data root on first run. */
@@ -47,7 +47,7 @@ export function resolveDefaultsRoot(): string {
   const thisDir = dirname(fileURLToPath(import.meta.url));
   // When compiled: dist/src/paths.js → need ../../ to reach project root
   // When running source: src/paths.ts → need ../ to reach project root
-  const isCompiledOutput = thisDir.includes('/dist/');
+  const isCompiledOutput = thisDir.split(sep).includes('dist');
   const projectRoot = isCompiledOutput ? resolve(thisDir, '..', '..') : resolve(thisDir, '..');
   return resolve(projectRoot, 'data', 'default');
 }
