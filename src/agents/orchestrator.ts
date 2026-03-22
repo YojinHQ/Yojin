@@ -81,11 +81,17 @@ export function registerBuiltinWorkflows(
   const afterStageHooks = new Map<number, () => Promise<void>>();
 
   if (options?.reflectionEngine) {
+    const engine = options.reflectionEngine;
     afterStageHooks.set(0, async () => {
-      const engine = options.reflectionEngine;
-      if (!engine) return;
-      const result = await engine.runSweep({ olderThanDays: 7 });
-      logger.info('Post-scrape reflection sweep', { ...result });
+      // Fire-and-forget: don't block the workflow pipeline
+      engine
+        .runSweep({ olderThanDays: 7 })
+        .then((result) => {
+          logger.info('Post-scrape reflection sweep', { ...result });
+        })
+        .catch((err) => {
+          logger.warn('Reflection sweep failed', { error: err });
+        });
     });
   }
 

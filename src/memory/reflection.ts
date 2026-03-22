@@ -108,8 +108,8 @@ export class ReflectionEngine {
     });
 
     if (!reflectResult.success) {
-      log.warn('Failed to persist reflection', { entryId: entry.id, error: reflectResult.error });
-      return { success: false, reason: 'llm_error', entryId: entry.id };
+      log.error('Failed to persist reflection', { entryId: entry.id, storeError: reflectResult.error });
+      return { success: false, reason: 'store_error', entryId: entry.id };
     }
 
     log.info('Reflection complete', { entryId: entry.id, grade, returnPct: price.returnPct });

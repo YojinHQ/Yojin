@@ -56,7 +56,7 @@ export type PriceOutcome = z.infer<typeof PriceOutcomeSchema>;
 /** Result of reflecting on a single entry. */
 export type ReflectionResult =
   | { success: true }
-  | { success: false; reason: 'price_unavailable' | 'llm_error'; entryId: string };
+  | { success: false; reason: 'price_unavailable' | 'llm_error' | 'store_error'; entryId: string };
 
 /** Summary of a batch reflection sweep. */
 export interface ReflectionSweepResult {
