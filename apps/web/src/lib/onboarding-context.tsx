@@ -45,6 +45,7 @@ export interface OnboardingState {
 interface OnboardingContextValue {
   state: OnboardingState;
   currentStep: number;
+  isReset: boolean;
   updateState: (patch: Partial<OnboardingState>) => void;
   goToStep: (step: number) => void;
   nextStep: () => void;
@@ -85,9 +86,17 @@ export function isOnboardingSkipped(): boolean {
   return localStorage.getItem(SKIPPED_KEY) === 'true' && !isOnboardingComplete();
 }
 
-export function OnboardingProvider({ children }: { children: ReactNode }) {
+export function OnboardingProvider({
+  children,
+  initialStep,
+  isReset = false,
+}: {
+  children: ReactNode;
+  initialStep?: number;
+  isReset?: boolean;
+}) {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(readStep);
+  const [currentStep, setCurrentStep] = useState(() => initialStep ?? readStep());
   const [state, setState] = useState<OnboardingState>(readState);
 
   // Persist step changes
@@ -130,7 +139,17 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
   return (
     <OnboardingContext.Provider
-      value={{ state, currentStep, updateState, goToStep, nextStep, prevStep, skipOnboarding, completeOnboarding }}
+      value={{
+        state,
+        currentStep,
+        isReset,
+        updateState,
+        goToStep,
+        nextStep,
+        prevStep,
+        skipOnboarding,
+        completeOnboarding,
+      }}
     >
       {children}
     </OnboardingContext.Provider>

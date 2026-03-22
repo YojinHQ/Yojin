@@ -89,13 +89,21 @@ export async function detectAiCredentialQuery(): Promise<DetectedCredential | nu
 }
 
 interface OnboardingStatusResult {
+  completed: boolean;
   personaExists: boolean;
   aiCredentialConfigured: boolean;
   connectedPlatforms: string[];
   briefingConfigured: boolean;
 }
 
+/** Path to the persistent onboarding completion marker. */
+function onboardingCompletedPath(): string {
+  return `${dataRoot}/config/onboarding-completed.json`;
+}
+
 export async function onboardingStatusQuery(): Promise<OnboardingStatusResult> {
+  const completed = existsSync(onboardingCompletedPath());
+
   const personaExists = personaManager ? !personaManager.isFirstRun() : false;
 
   const detected = await detectAiCredentialQuery();
@@ -114,7 +122,15 @@ export async function onboardingStatusQuery(): Promise<OnboardingStatusResult> {
   const alertsConfigPath = `${dataRoot}/config/alerts.json`;
   const briefingConfigured = existsSync(alertsConfigPath);
 
-  return { personaExists, aiCredentialConfigured, connectedPlatforms, briefingConfigured };
+  return { completed, personaExists, aiCredentialConfigured, connectedPlatforms, briefingConfigured };
+}
+
+/** Mark onboarding as completed (called at the end of the flow). */
+export async function completeOnboardingMutation(): Promise<boolean> {
+  const filePath = onboardingCompletedPath();
+  await ensureDir(dirname(filePath));
+  await writeFile(filePath, JSON.stringify({ completedAt: new Date().toISOString() }), 'utf-8');
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -493,16 +509,61 @@ export async function saveBriefingConfigMutation(
 }
 
 export async function resetOnboardingMutation(): Promise<boolean> {
+  const { unlink } = await import('node:fs/promises');
+
+  // Remove onboarding completion marker
+  const markerPath = onboardingCompletedPath();
+  if (existsSync(markerPath)) {
+    await unlink(markerPath);
+  }
+
   // Reset persona to default
   if (personaManager) {
     await personaManager.resetPersona();
   }
 
+  // Remove AI credentials from vault
+  if (vault?.isUnlocked) {
+    for (const key of [
+      'anthropic_api_key',
+      'openrouter_api_key',
+      'anthropic_oauth_token',
+      'anthropic_oauth_refresh_token',
+    ]) {
+      if (await vault.has(key)) {
+        await vault.delete(key);
+      }
+    }
+  }
+
   // Remove briefing config
   const alertsPath = `${dataRoot}/config/alerts.json`;
   if (existsSync(alertsPath)) {
-    const { unlink } = await import('node:fs/promises');
     await unlink(alertsPath);
+  }
+
+  // Remove briefing channel from yojin.json
+  const yojinPath = `${dataRoot}/config/yojin.json`;
+  if (existsSync(yojinPath)) {
+    try {
+      const raw = JSON.parse(await readFile(yojinPath, 'utf-8'));
+      delete raw.briefingChannel;
+      await writeFile(yojinPath, JSON.stringify(raw, null, 2), 'utf-8');
+    } catch {
+      // Config unreadable — skip
+    }
+  }
+
+  // Disconnect all platforms
+  if (connectionManager) {
+    try {
+      const connections = await connectionManager.listConnections();
+      for (const conn of connections) {
+        await connectionManager.disconnectPlatform(conn.platform, { removeCredentials: true });
+      }
+    } catch {
+      // ConnectionManager not ready
+    }
   }
 
   return true;

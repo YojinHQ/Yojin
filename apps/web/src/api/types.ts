@@ -256,6 +256,7 @@ export interface ConnectPlatformInput {
 // ---------------------------------------------------------------------------
 
 export interface OnboardingStatus {
+  completed: boolean;
   personaExists: boolean;
   aiCredentialConfigured: boolean;
   connectedPlatforms: string[];

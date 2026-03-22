@@ -28,6 +28,7 @@ import { fetchDataSourceResolver } from './resolvers/fetch-data-source.js';
 import { onAlertSubscription, onPortfolioUpdateSubscription, onPriceMoveSubscription } from './resolvers/live.js';
 import { newsQuery, quoteQuery, sectorExposureQuery } from './resolvers/market.js';
 import {
+  completeOnboardingMutation,
   confirmPersonaMutation,
   confirmPositionsMutation,
   detectAiCredentialQuery,
@@ -114,6 +115,7 @@ const schema = createSchema({
       parsePortfolioScreenshot: parsePortfolioScreenshotMutation,
       confirmPositions: confirmPositionsMutation,
       saveBriefingConfig: saveBriefingConfigMutation,
+      completeOnboarding: completeOnboardingMutation,
       resetOnboarding: resetOnboardingMutation,
     },
     Subscription: {

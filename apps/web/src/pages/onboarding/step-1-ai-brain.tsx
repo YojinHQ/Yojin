@@ -23,7 +23,7 @@ const PROVIDERS: ProviderConfig[] = [
 type AuthMode = 'oauth' | 'api-key';
 
 export function Step1AiBrain() {
-  const { state, updateState, nextStep, prevStep } = useOnboarding();
+  const { state, updateState, nextStep, prevStep, isReset } = useOnboarding();
 
   const [provider, setProvider] = useState<Provider>('claude');
   const [authMode, setAuthMode] = useState<AuthMode>('oauth');
@@ -59,11 +59,11 @@ export function Step1AiBrain() {
         // No env credential
       }
     }
-    if (!state.aiProvider?.validated) detect();
+    if (!isReset && !state.aiProvider?.validated) detect();
     return () => {
       cancelled = true;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isReset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelectProvider = (p: Provider) => {
     if (p === provider) return;

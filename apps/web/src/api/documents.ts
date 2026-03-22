@@ -226,11 +226,18 @@ export const NEWS_QUERY = gql`
 export const ONBOARDING_STATUS_QUERY = gql`
   query OnboardingStatus {
     onboardingStatus {
+      completed
       personaExists
       aiCredentialConfigured
       connectedPlatforms
       briefingConfigured
     }
+  }
+`;
+
+export const COMPLETE_ONBOARDING_MUTATION = gql`
+  mutation CompleteOnboarding {
+    completeOnboarding
   }
 `;
 

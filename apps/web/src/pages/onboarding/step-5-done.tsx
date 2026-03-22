@@ -1,14 +1,20 @@
 import { useNavigate } from 'react-router';
+import { useMutation } from 'urql';
 import { useOnboarding } from '../../lib/onboarding-context';
 import { OnboardingShell } from '../../components/onboarding/onboarding-shell';
 import { SummaryRow } from '../../components/onboarding/summary-row';
 import Button from '../../components/common/button';
+import { COMPLETE_ONBOARDING_MUTATION } from '../../api/documents';
 
 export function Step5Done() {
   const { state, completeOnboarding } = useOnboarding();
   const navigate = useNavigate();
+  const [, executeComplete] = useMutation(COMPLETE_ONBOARDING_MUTATION);
 
-  const handleFinish = (path: string) => {
+  const handleFinish = async (path: string) => {
+    // Mark completed server-side (persistent flag file)
+    await executeComplete({});
+    // Mark completed client-side (localStorage)
     completeOnboarding();
     navigate(path, { replace: true });
   };

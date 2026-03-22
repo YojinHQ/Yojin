@@ -518,6 +518,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type OnboardingStatusResult {
+    completed: Boolean!
     personaExists: Boolean!
     aiCredentialConfigured: Boolean!
     connectedPlatforms: [String!]!
@@ -605,6 +606,7 @@ export const typeDefs = /* GraphQL */ `
     parsePortfolioScreenshot(input: ScreenshotInput!): ScreenshotResult!
     confirmPositions(input: ConfirmPositionsInput!): Boolean!
     saveBriefingConfig(input: BriefingConfigInput!): Boolean!
+    completeOnboarding: Boolean!
     resetOnboarding: Boolean!
   }
 

@@ -102,7 +102,7 @@ function DevTools() {
       localStorage.removeItem(ONBOARDING_KEYS.SKIPPED_KEY);
       localStorage.removeItem(ONBOARDING_KEYS.STEP_KEY);
       localStorage.removeItem(ONBOARDING_KEYS.STATE_KEY);
-      navigate('/onboarding', { replace: true });
+      navigate('/onboarding', { replace: true, state: { reset: true } });
     } finally {
       setResetting(false);
     }

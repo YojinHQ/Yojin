@@ -41,8 +41,8 @@ function OnboardingGuard() {
   // Query still in flight — wait before deciding
   if (result.fetching) return null;
 
-  // Backend confirms persona exists — re-hydrate localStorage and show app
-  if (result.data?.onboardingStatus?.personaExists) {
+  // Backend confirms onboarding was completed — re-hydrate localStorage and show app
+  if (result.data?.onboardingStatus?.completed) {
     localStorage.setItem(ONBOARDING_KEYS.COMPLETE_KEY, 'true');
     return <AppShell />;
   }
@@ -55,7 +55,7 @@ function OnboardingGuard() {
 }
 
 function OnboardingRedirectIfComplete() {
-  if (isOnboardingComplete() || isOnboardingSkipped()) {
+  if (isOnboardingComplete()) {
     return <Navigate to="/" replace />;
   }
   return <OnboardingPage />;

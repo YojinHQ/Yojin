@@ -1,10 +1,38 @@
+import { useLocation } from 'react-router';
+import { useQuery } from 'urql';
 import { OnboardingProvider, useOnboarding } from '../lib/onboarding-context';
+import { ONBOARDING_STATUS_QUERY } from '../api/documents';
+import type { OnboardingStatusQueryResult } from '../api/types';
 import { Step0Welcome } from './onboarding/step-0-welcome';
 import { Step1AiBrain } from './onboarding/step-1-ai-brain';
 import { Step2Persona } from './onboarding/step-2-persona';
 import { Step3Platforms } from './onboarding/step-3-platforms';
 import { Step4Briefing } from './onboarding/step-4-briefing';
 import { Step5Done } from './onboarding/step-5-done';
+
+/**
+ * Determines the first incomplete onboarding step based on backend status.
+ * Only resumes mid-flow if onboarding was never fully completed — otherwise
+ * the user already finished and shouldn't land here (OnboardingGuard handles that).
+ *
+ * Returns undefined to start from step 0 (fresh / reset).
+ */
+function resolveResumeStep(status: OnboardingStatusQueryResult['onboardingStatus'] | undefined): number | undefined {
+  if (!status) return undefined;
+
+  // If onboarding was completed, the guard should have redirected — but just in case
+  if (status.completed) return 5;
+
+  // Only resume if the user actually went through onboarding steps (persona confirmed).
+  // Env-var auto-detection alone is not "progress" — the user never interacted with the flow.
+  if (!status.personaExists) return undefined;
+
+  // Persona exists but onboarding wasn't completed — resume at first missing step
+  if (status.connectedPlatforms.length === 0) return 3;
+  if (!status.briefingConfigured) return 4;
+
+  return 5;
+}
 
 function OnboardingRouter() {
   const { currentStep } = useOnboarding();
@@ -28,8 +56,31 @@ function OnboardingRouter() {
 }
 
 export default function OnboardingPage() {
+  const location = useLocation();
+  const wasReset = (location.state as { reset?: boolean } | null)?.reset === true;
+
+  const [result] = useQuery<OnboardingStatusQueryResult>({
+    query: ONBOARDING_STATUS_QUERY,
+    pause: wasReset,
+    requestPolicy: 'network-only',
+  });
+
+  // Full reset — start from step 0, skip backend check
+  if (wasReset) {
+    return (
+      <OnboardingProvider initialStep={0} isReset>
+        <OnboardingRouter />
+      </OnboardingProvider>
+    );
+  }
+
+  // Wait for the backend check before rendering
+  if (result.fetching) return null;
+
+  const resumeStep = resolveResumeStep(result.data?.onboardingStatus);
+
   return (
-    <OnboardingProvider>
+    <OnboardingProvider initialStep={resumeStep}>
       <OnboardingRouter />
     </OnboardingProvider>
   );
