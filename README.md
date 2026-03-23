@@ -111,6 +111,20 @@ Jintel runs as a separate service. PII redaction runs before every Jintel call �
 
 **GraphQL API** — graphql-yoga on Hono; exposes typed queries, mutations, and real-time subscriptions for the Web UI. The schema is the single contract between the backend and frontend — the React app reads portfolio state, risk data, agent activity, and signal feeds exclusively through this API.
 
+```graphql
+# Query available tiers
+query { detectAvailableTiers(platform: COINBASE) { tier, available, requiresCredentials } }
+
+# Connect (async — subscribe to onConnectionStatus for progress)
+mutation { connectPlatform(input: { platform: COINBASE, tier: API }) { success, error } }
+
+# List active connections
+query { listConnections { platform, tier, status, lastSync } }
+
+# Disconnect
+mutation { disconnectPlatform(platform: COINBASE, removeCredentials: true) { success } }
+```
+
 ## Security & Privacy
 
 Your data never leaves your machine.
@@ -124,6 +138,70 @@ Your credentials, positions, and account details are stored and processed on you
 API keys and credentials are stored in a local encrypted vault using AES-256-GCM with per-entry IVs; the key is derived via PBKDF2 (600k iterations, SHA-512). A canary entry verifies the passphrase on unlock without decrypting real secrets.
 
 The vault never makes network requests. When an AI agent needs a credential at runtime, it reads from the vault locally — the key is never hardcoded, logged, or transmitted.
+
+```text
+┌──────────────────────────────────────────────┐
+│               Encrypted Vault                 │
+│                                               │
+│  Passphrase ──▶ PBKDF2 (600k, SHA-512)       │
+│  (optional)          │                        │
+│                 Derived Key                    │
+│                      │                        │
+│              ┌───────┴───────┐                │
+│              │  AES-256-GCM  │                │
+│              │  per-entry IV │                │
+│              └───────┬───────┘                │
+│                      │                        │
+│  ┌───────────────────┼───────────────────┐    │
+│  │  KEY_A: ████████  │  KEY_B: ████████  │    │
+│  │  KEY_C: ████████  │  KEY_D: ████████  │    │
+│  └───────────────────┴───────────────────┘    │
+│                                               │
+│  Canary: verifies passphrase on unlock        │
+│  Key names: plaintext (enables list w/o key)  │
+│  MCP server: injects creds at transport layer │
+│  Raw values: NEVER in LLM prompts             │
+└──────────────────────────────────────────────┘
+```
+
+When connecting a platform, the LLM never sees your API key. The CLI switches to a secure side-channel for collection:
+
+```text
+  LLM Conversation                     Secure Side-Channel (TTY)
+  ────────────────                     ─────────────────────────
+  "Connect your Binance account"
+         │
+         ▼
+  tool_call: store_credential
+    key: "BINANCE_API_KEY"
+    desc: "Binance API key"
+         │
+         │                      ┌─────────────────────────────┐
+         │                      │  Prompt on stderr            │
+         │                      │  (LLM reads stdout only)     │
+         │                      │                              │
+         │                      │  > Enter BINANCE_API_KEY:    │
+         │                      │    ••••••••••••••••          │
+         │                      │    (raw mode, echo off)      │
+         │                      │                              │
+         │                      │  Value ──▶ Encrypted Vault   │
+         │                      │           (AES-256-GCM)      │
+         │                      └─────────────────────────────┘
+         ▼
+  tool_result: "Credential
+    'BINANCE_API_KEY' stored."
+         │
+         ▼                        Later, when a tool needs it:
+  Conversation continues            SecretProxy retrieves from vault
+  (secret never in context)         ──▶ injects into HTTP headers
+                                    ──▶ scrubs response body
+                                    ──▶ returns safe result to LLM
+```
+
+- **stderr prompts** — LLM only reads stdout, never sees the input prompt
+- **TTY raw mode, echo disabled** — nothing printed while you type
+- **Non-TTY rejection** — refuses piped input, preventing LLM from feeding secrets programmatically
+- **Transport-layer injection** — credentials go from vault directly into HTTP headers, never into prompts
 
 ### Layer 2 — Deterministic Guard Pipeline
 
@@ -141,7 +219,42 @@ Before any agent action executes, it passes through a pipeline of security guard
 
 Chat messages run through Rehydra (regex + optional NER) with a reversible AES-256-GCM encrypted PII map, so responses are rehydrated before the user sees them. Structured snapshots use SHA-256 hashing for account IDs and range-bucketing for balances before any external API call.
 
-Every piece of data flowing into the LLM or any external API is filtered and stripped before being processed. Account IDs are hashed. Names and emails are stripped. The AI reasons over sanitized data — it never sees the raw values.
+```text
+User: "my email is dean@test.com"
+        │
+        ▼
+  ChatPiiScanner.scrub()     ◀── regex (email, phone, card, IP, URL, IBAN)
+        │                         + optional NER (names, orgs, locations)
+        ▼
+LLM sees: "my email is <PII type="EMAIL" id="1"/>"
+        │
+        ▼
+  ChatPiiScanner.restore()   ◀── AES-256-GCM encrypted PII map
+        │
+        ▼
+User sees: "Got it, I noted dean@test.com"
+```
+
+Enable NER for name/org detection: `YOJIN_PII_NER=1`
+
+Portfolio snapshots are redacted before any external API call:
+
+```text
+Raw Snapshot                    Redacted Snapshot
+┌─────────────────┐            ┌──────────────────┐
+│ accountId: 1234 │  SHA-256   │ accountId:        │
+│                 │ ────────▶  │  <ACCT-a1b2c3d4>  │
+│ balance: 75000  │  range     │ balance:          │
+│                 │ ────────▶  │  $50k-$100k       │
+│ email:          │  strip     │ email:            │
+│  john@test.com  │ ────────▶  │  <EMAIL-REDACT>   │
+│ ownerName:      │  strip     │ ownerName:        │
+│  John Doe       │ ────────▶  │  <NAME-REDACT>    │
+│ symbol: AAPL    │  preserve  │ symbol: AAPL      │
+│ price: 150.25   │ ────────▶  │ price: 150.25     │
+└─────────────────┘            └──────────────────┘
+  Original NEVER mutated          Logged to audit
+```
 
 ### Layer 4 — Approval Gate
 
@@ -171,7 +284,22 @@ pnpm chat
 
 On first launch, Yojin bootstraps itself: connects an LLM provider (paste an Anthropic API key or run the OAuth flow) and generates a personalized Strategist persona based on your investment style. No manual config files needed.
 
-### Commands
+### CLI Usage
+
+Yojin ships a CLI entry point (`yojin`) with the following commands:
+
+```
+yojin                Start the backend server (API + GraphQL)
+yojin chat           Chat with Yojin in your terminal
+yojin setup          Connect your Claude account (OAuth flow)
+yojin web            Start the web dashboard only
+yojin secret <cmd>   Manage encrypted credentials
+yojin acp            Start ACP (Agent Client Protocol) server
+yojin version        Print version
+yojin help           Show help
+```
+
+### Dev Commands
 
 ```bash
 pnpm chat          # Interactive chat REPL (start here)
