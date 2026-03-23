@@ -87,8 +87,7 @@ async function buildFullRuntime(): Promise<{
   setOnboardingProvider(providerRouter);
   setOnboardingClaudeCodeProvider(claudeProvider);
 
-  // Wire ReflectionEngine with a lazy price provider that reads the current client
-  // from jintelToolOptions at call time.
+  // ReflectionEngine with lazy price provider — reads jintelToolOptions.client at call time.
   const priceProvider = createJintelPriceProvider({
     getClient: () => services.jintelToolOptions.client,
   });

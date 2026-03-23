@@ -251,7 +251,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
   const enrichEntity: ToolDefinition = {
     name: 'enrich_entity',
     description:
-      'Get detailed enrichment data for an entity by ticker. Includes market data, news, ' +
+      'Get detailed enrichment data for an entity by ticker. Includes market data, news (up to 10 articles), ' +
       'risk profile, regulatory filings, and corporate info. Select specific fields or get all.',
     parameters: z.object({
       ticker: z.string().describe('Entity ticker or ID (e.g. AAPL, BTC)'),
