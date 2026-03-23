@@ -2,16 +2,16 @@
 
 [![CI](https://github.com/YojinHQ/Yojin/actions/workflows/ci.yml/badge.svg)](https://github.com/YojinHQ/Yojin/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22.12-brightgreen)](https://nodejs.org)
 
 A local-first AI agent that connects to your investment accounts, delivers personalized intelligence, monitors your portfolio 24/7, and executes trades — across every platform you use.
 
-| | |
-|---|---|
-| **Unified portfolio view** | All of your accounts in one place. Positions, P&L, and intelligence updated in real time. |
-| **Chat** | Tell Yojin what you want — analyze a stock, check your portfolio, place a trade. |
-| **Personalized intelligence** | News, sentiment, technical analysis, and macro events based on your actual positions. |
-| **Explainable finance** | Before every action, Yojin thinks, explores, reasons, tests, calculates, and asks for your approval. |
+|                               |                                                                                                      |
+|-------------------------------|------------------------------------------------------------------------------------------------------|
+| **Unified portfolio view**    | All of your accounts in one place. Positions, P&L, and intelligence updated in real time.            |
+| **Chat**                      | Tell Yojin what you want — analyze a stock, check your portfolio, place a trade.                     |
+| **Personalized intelligence** | News, sentiment, technical analysis, and macro events based on your actual positions.                |
+| **Explainable finance**       | Before every action, Yojin thinks, explores, reasons, tests, calculates, and asks for your approval. |
 
 ## Architecture
 
@@ -25,12 +25,12 @@ All state is file-driven — JSONL sessions, JSON configs, Markdown personas. No
 
 ### Agents
 
-| Agent | Role |
-|---|---|
-| **Analyst** | Ingests signals from Jintel, runs technical analysis (SMA, RSI, BBANDS), extracts tickers from news. Maintains a self-evolving working memory — past analyses, recommendations, and their actual outcomes are stored and retrieved via BM25 to inform every future decision. |
-| **Strategist** | Owns the Brain (persona, working memory, emotions). Runs bull/bear debate analysis. Defines strategy — asset allocation, rebalancing rules, entry/exit logic tailored to your goals. |
-| **Risk Manager** | Analyzes exposure, concentration, correlation, drawdown. Monitors markets 24/7. Delivers alerts via Telegram and daily portfolio digests. |
-| **Trader** | Executes trades on target platforms (Robinhood, Coinbase, IBKR, Schwab, Binance, and more). |
+| Agent            | Role                                                                                                                                                                                                                                                                         |
+|------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Analyst**      | Ingests signals from Jintel, runs technical analysis (SMA, RSI, BBANDS), extracts tickers from news. Maintains a self-evolving working memory — past analyses, recommendations, and their actual outcomes are stored and retrieved via BM25 to inform every future decision. |
+| **Strategist**   | Owns the Brain (persona, working memory, emotions). Runs bull/bear debate analysis. Defines strategy — asset allocation, rebalancing rules, entry/exit logic tailored to your goals.                                                                                         |
+| **Risk Manager** | Analyzes exposure, concentration, correlation, drawdown. Monitors markets 24/7. Delivers alerts via Telegram and daily portfolio digests.                                                                                                                                    |
+| **Trader**       | Executes trades on target platforms (Robinhood, Coinbase, IBKR, Schwab, Binance, and more).                                                                                                                                                                                  |
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
@@ -82,12 +82,12 @@ After an evaluation window closes (configurable: 1d, 7d, 30d), the reflection en
 
 Each agent role maintains an independent store:
 
-| Role | Memory Contains |
-|---|---|
-| Bull Researcher | Past bullish arguments + outcomes |
-| Bear Researcher | Past bearish arguments + outcomes |
-| Research Manager | Past judge decisions + outcomes |
-| Risk Manager | Past risk assessments + outcomes |
+| Role             | Memory Contains                   |
+|------------------|-----------------------------------|
+| Bull Researcher  | Past bullish arguments + outcomes |
+| Bear Researcher  | Past bearish arguments + outcomes |
+| Research Manager | Past judge decisions + outcomes   |
+| Risk Manager     | Past risk assessments + outcomes  |
 
 Fully offline — BM25 only, no vector database. Configurable capacity (default 1,000 entries per role) with pruning when exceeded. Persisted as local JSON in `data/memory/`.
 
@@ -103,12 +103,12 @@ Jintel runs as a separate service. PII redaction runs before every Jintel call �
 
 ### AI Providers
 
-| Provider | Notes |
-|---|---|
-| Anthropic SDK | Default. OAuth or API key. |
-| Claude Code | Subprocess mode for extended agentic tasks |
-| OpenRouter | Access to 200+ models via a single API |
-| OpenAI Codex | OpenAI models via the Codex API |
+| Provider      | Notes                                      |
+|---------------|--------------------------------------------|
+| Anthropic SDK | Default. OAuth or API key.                 |
+| Claude Code   | Subprocess mode for extended agentic tasks |
+| OpenRouter    | Access to 200+ models via a single API     |
+| OpenAI Codex  | OpenAI models via the Codex API            |
 
 ### Core Components
 
@@ -283,7 +283,7 @@ Yojin runs locally on your computer. Interactive install walks you through the i
 
 ### Prerequisites
 
-- Node.js >= 22
+- Node.js >= 22.12
 - pnpm 10+
 
 ### Install
@@ -301,7 +301,7 @@ On first launch, Yojin bootstraps itself: connects an LLM provider (paste an Ant
 
 Yojin ships a CLI entry point (`yojin`) with the following commands:
 
-```
+```text
 yojin                Start the backend server (API + GraphQL)
 yojin chat           Chat with Yojin in your terminal
 yojin setup          Connect your Claude account (OAuth flow)
@@ -356,12 +356,41 @@ yojin/
 
 ## Channels
 
-| Channel | Status |
-|---|---|
-| Web UI | Working (Hono + GraphQL + SSE) |
+| Channel   | Status                            |
+|-----------|-----------------------------------|
+| Web UI    | Working (Hono + GraphQL + SSE)    |
 | MCP / ACP | Working (Claude Desktop / Cursor) |
-| Telegram | Working (grammY) |
-| Discord | Planned |
+| Telegram  | Working (grammY)                  |
+| Discord   | Planned                           |
+
+## Tech Stack
+
+- **TypeScript** — strict mode, ESM, Node.js 22.12+
+- **Anthropic SDK** — Claude as the default AI provider
+- **Hono + graphql-yoga** — Web server and GraphQL API with subscriptions
+- **Playwright** — browser automation for scraping investment platforms
+- **Rehydra** — reversible PII masking in chat (regex + optional NER)
+- **Zod** — schema validation for all external data
+- **vitest** — testing
+- **tslog** — structured logging
+- **React 19** — Web UI with Vite 8, Tailwind CSS 4
+- **GraphQL** — graphql-yoga on Hono for API layer
+- **urql** — Lightweight GraphQL client
+- **pnpm** — package manager
+
+## Persona
+
+Yojin's behavior is driven by a Markdown persona file. Edit `data/brain/persona.md` to change how the agent thinks:
+
+```markdown
+# Persona: Conservative Portfolio Analyst
+
+I focus on risk-adjusted returns and concentration risk.
+When any single position exceeds 25% of portfolio, I flag it immediately.
+I never recommend more than 10% of portfolio in speculative positions.
+```
+
+No code changes needed — the agent adapts on the next request.
 
 ## Contributing
 

@@ -66,18 +66,18 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "0.16.1",
-    "@ai-sdk/anthropic": "3.0.58",
-    "@ai-sdk/openai": "3.0.41",
+    "@ai-sdk/anthropic": "3.0.63",
+    "@ai-sdk/openai": "3.0.47",
     "@anthropic-ai/sdk": "0.39.0",
     "@hono/node-server": "1.19.11",
     "@slack/bolt": "4.6.0",
     "@slack/web-api": "7.15.0",
     "ai": "6.0.116",
-    "dotenv": "16.6.1",
+    "dotenv": "17.3.1",
     "graphql": "16.13.1",
     "graphql-yoga": "5.18.1",
     "hono": "4.12.8",
-    "rehydra": "0.3.4",
+    "rehydra": "0.6.2",
     "tslog": "4.10.2",
     "zod": "3.25.76",
     "zod-to-json-schema": "3.25.1"
@@ -86,7 +86,7 @@
     "@eslint/js": "10.0.1",
     "@types/node": "25.5.0",
     "concurrently": "9.2.1",
-    "eslint": "10.0.3",
+    "eslint": "10.1.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-import-x": "4.16.2",
     "eslint-plugin-storybook": "10.2.19",
@@ -97,7 +97,7 @@
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.57.1",
-    "vitest": "3.2.4"
+    "vitest": "4.1.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -106,6 +106,6 @@
   },
   "packageManager": "pnpm@10.17.1",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   }
 }

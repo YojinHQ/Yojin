@@ -65,7 +65,7 @@ let _cached: Env | undefined;
 export function loadEnv(): Env {
   if (_cached) return _cached;
 
-  loadDotenv();
+  loadDotenv({ quiet: true });
 
   const result = EnvSchema.safeParse(process.env);
 

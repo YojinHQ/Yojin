@@ -80,7 +80,7 @@ pnpm ci:all           # Full CI check across all packages
 
 ## Tech Stack
 
-- **Runtime**: Node.js >= 20, ESM (`"type": "module"`)
+- **Runtime**: Node.js >= 22.12, ESM (`"type": "module"`)
 - **Language**: TypeScript 5.7, strict mode, NodeNext module resolution
 - **Package manager**: pnpm 10 (workspaces: `apps/*`, `packages/*`)
 - **Testing**: vitest
