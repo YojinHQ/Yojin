@@ -1,6 +1,7 @@
 import { cn } from '../../lib/utils';
 import { usePortfolio } from '../../api';
 import Spinner from '../common/spinner';
+import { DashboardCard } from '../common/dashboard-card';
 
 function formatCurrency(n: number): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -21,18 +22,19 @@ export default function PortfolioValueCard() {
 
   if (fetching) {
     return (
-      <div className="flex min-w-0 items-center justify-center rounded-lg border border-border bg-bg-card p-6">
-        <Spinner size="sm" />
-      </div>
+      <DashboardCard title="Portfolio Value">
+        <div className="flex flex-1 items-center justify-center px-4 pb-4">
+          <Spinner size="sm" />
+        </div>
+      </DashboardCard>
     );
   }
 
   if (error || !data?.portfolio) {
     return (
-      <div className="flex min-w-0 flex-col rounded-lg border border-border bg-bg-card p-6">
-        <p className="text-2xs uppercase tracking-wider text-text-secondary">Portfolio Value</p>
-        <p className="mt-2 text-3xl font-bold text-text-muted">N/A</p>
-      </div>
+      <DashboardCard title="Portfolio Value">
+        <p className="px-4 pb-4 text-3xl font-bold text-text-muted">N/A</p>
+      </DashboardCard>
     );
   }
 
@@ -46,20 +48,21 @@ export default function PortfolioValueCard() {
   const isNeutral = change === 0;
 
   return (
-    <div className="flex min-w-0 flex-col justify-center rounded-lg border border-border bg-bg-card p-6">
-      <p className="text-2xs uppercase tracking-wider text-text-secondary">Portfolio Value</p>
-      <p className="mt-2 text-3xl font-bold text-text-primary">{formatCurrency(totalValue)}</p>
-      <div
-        className={cn(
-          'mt-1.5 flex items-center gap-1.5 text-xs',
-          isNeutral ? 'text-text-muted' : isPositive ? 'text-success' : 'text-error',
-        )}
-      >
-        {!isNeutral && <span className="text-2xs">{isPositive ? '\u25B2' : '\u25BC'}</span>}
-        <span className="font-medium">{formatChange(change)}</span>
-        <span className="font-medium">{formatPercent(dayChangePercent)}</span>
-        <span className="text-text-muted">today</span>
+    <DashboardCard title="Portfolio Value">
+      <div className="px-4 pb-4">
+        <p className="text-3xl font-bold text-text-primary">{formatCurrency(totalValue)}</p>
+        <div
+          className={cn(
+            'mt-1.5 flex items-center gap-1.5 text-xs',
+            isNeutral ? 'text-text-muted' : isPositive ? 'text-success' : 'text-error',
+          )}
+        >
+          {!isNeutral && <span className="text-2xs">{isPositive ? '\u25B2' : '\u25BC'}</span>}
+          <span className="font-medium">{formatChange(change)}</span>
+          <span className="font-medium">{formatPercent(dayChangePercent)}</span>
+          <span className="text-text-muted">today</span>
+        </div>
       </div>
-    </div>
+    </DashboardCard>
   );
 }

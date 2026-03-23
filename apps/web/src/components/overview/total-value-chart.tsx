@@ -4,6 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { tooltipStyle, formatValue } from '../../lib/mock-chart-data';
 import { usePortfolioHistory } from '../../api';
 import Spinner from '../common/spinner';
+import { DashboardCard } from '../common/dashboard-card';
 
 const timeRanges = ['1W', '1M', '3M', '1Y', 'ALL'] as const;
 type TimeRange = (typeof timeRanges)[number];
@@ -62,21 +63,41 @@ export default function TotalValueChart() {
 
   const baselineValue = chartData[0]?.value ?? 0;
 
+  const timeRangeButtons = (
+    <div className="flex gap-0.5">
+      {timeRanges.map((range) => (
+        <button
+          key={range}
+          onClick={() => setActiveRange(range)}
+          className={cn(
+            'rounded px-1.5 py-px text-2xs font-medium transition-colors',
+            activeRange === range ? 'bg-accent-primary text-white' : 'text-text-muted hover:text-text-secondary',
+          )}
+        >
+          {range}
+        </button>
+      ))}
+    </div>
+  );
+
   if (fetching) {
     return (
-      <div className="flex min-h-[120px] flex-1 items-center justify-center rounded-lg border border-border bg-bg-card">
-        <Spinner size="sm" />
-      </div>
+      <DashboardCard title="Total Value" headerAction={timeRangeButtons} className="min-h-[120px] flex-1">
+        <div className="flex flex-1 items-center justify-center">
+          <Spinner size="sm" />
+        </div>
+      </DashboardCard>
     );
   }
 
   if (error || chartData.length === 0) {
     return (
-      <div className="flex min-h-[120px] flex-1 flex-col items-center justify-center rounded-lg border border-border bg-bg-card px-3 pt-2 pb-1">
-        <h3 className="text-2xs font-medium text-text-primary uppercase tracking-wider mb-2">Total Value</h3>
-        <p className="text-xs text-text-muted">No history available</p>
-        <p className="mt-0.5 text-2xs text-text-muted/60">Import portfolio snapshots to see value over time</p>
-      </div>
+      <DashboardCard title="Total Value" className="min-h-[120px] flex-1">
+        <div className="flex flex-1 flex-col items-center justify-center">
+          <p className="text-xs text-text-muted">No history available</p>
+          <p className="mt-0.5 text-2xs text-text-muted/60">Import portfolio snapshots to see value over time</p>
+        </div>
+      </DashboardCard>
     );
   }
 
@@ -87,25 +108,8 @@ export default function TotalValueChart() {
   const pad = Math.max(5, (maxVal - minVal) * 0.1 || maxVal * 0.1);
 
   return (
-    <div className="flex min-h-[120px] flex-1 flex-col rounded-lg border border-border bg-bg-card px-3 pt-2 pb-1">
-      <div className="mb-1 flex flex-shrink-0 items-center justify-between">
-        <h3 className="text-2xs font-medium text-text-primary uppercase tracking-wider">Total Value</h3>
-        <div className="flex gap-0.5">
-          {timeRanges.map((range) => (
-            <button
-              key={range}
-              onClick={() => setActiveRange(range)}
-              className={cn(
-                'rounded px-1.5 py-px text-2xs font-medium transition-colors',
-                activeRange === range ? 'bg-accent-primary text-white' : 'text-text-muted hover:text-text-secondary',
-              )}
-            >
-              {range}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="min-h-0 flex-1">
+    <DashboardCard title="Total Value" headerAction={timeRangeButtons} className="min-h-[120px] flex-1">
+      <div className="min-h-0 flex-1 px-3 pb-1">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
             <defs>
@@ -148,6 +152,6 @@ export default function TotalValueChart() {
           </AreaChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </DashboardCard>
   );
 }

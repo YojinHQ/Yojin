@@ -1,4 +1,5 @@
 import { cn } from '../../lib/utils';
+import { DashboardCard } from '../common/dashboard-card';
 
 type ActionType = 'TRADE' | 'SCAN' | 'ALERT';
 
@@ -47,13 +48,13 @@ const mockActions: ActionEntry[] = [
 
 export default function YojinActionsCard() {
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-bg-card p-5">
-      <div className="mb-3 flex flex-shrink-0 items-center justify-between">
-        <h3 className="text-lg font-semibold text-text-primary font-headline">Yojin Actions</h3>
-        <span className="text-2xs text-text-muted">Recent Activity</span>
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-auto">
+    <DashboardCard
+      title="Yojin Actions"
+      variant="feature"
+      className="flex-1"
+      headerAction={<span className="text-2xs text-text-muted">Recent Activity</span>}
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-auto px-5 pb-5">
         {mockActions.map((action) => (
           <div key={`${action.time}-${action.type}`} className="flex items-start gap-2.5">
             <span className="mt-0.5 flex-shrink-0 text-2xs tabular-nums text-text-muted">{action.time}</span>
@@ -72,6 +73,6 @@ export default function YojinActionsCard() {
           </div>
         ))}
       </div>
-    </div>
+    </DashboardCard>
   );
 }

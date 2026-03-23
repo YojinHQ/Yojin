@@ -5,6 +5,7 @@ import { cn } from '../../lib/utils';
 import { SymbolLogo } from '../common/symbol-logo';
 import { usePositions } from '../../api';
 import Spinner from '../common/spinner';
+import { DashboardCard } from '../common/dashboard-card';
 
 function formatCurrency(n: number): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -59,20 +60,25 @@ const TH = 'px-3 py-2 text-2xs font-medium uppercase tracking-wider text-text-mu
 export default function PositionsPreview() {
   const [{ data, fetching, error }] = usePositions();
 
+  const viewAllLink = (
+    <Link to="/portfolio" className="text-2xs text-accent-primary transition-colors hover:text-accent-primary/80">
+      View All
+    </Link>
+  );
+
   if (fetching) {
     return (
-      <div className="flex min-h-0 min-w-0 items-center justify-center rounded-lg border border-border bg-bg-card">
-        <Spinner size="sm" />
-      </div>
+      <DashboardCard title="Top Positions" headerAction={viewAllLink}>
+        <div className="flex flex-1 items-center justify-center">
+          <Spinner size="sm" />
+        </div>
+      </DashboardCard>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-bg-card">
-        <div className="flex flex-shrink-0 items-center justify-between px-3 py-2">
-          <h3 className="text-2xs font-medium text-text-primary uppercase tracking-wider">Top Positions</h3>
-        </div>
+      <DashboardCard title="Top Positions">
         <div className="flex min-h-0 flex-1 flex-col overflow-auto">
           <table className="w-full text-left">
             <thead>
@@ -104,7 +110,7 @@ export default function PositionsPreview() {
             <p className="mt-0.5 text-2xs text-text-muted/60">Connect a portfolio to see your holdings</p>
           </div>
         </div>
-      </div>
+      </DashboardCard>
     );
   }
 
@@ -112,13 +118,7 @@ export default function PositionsPreview() {
   const top = [...data.positions].sort((a, b) => b.marketValue - a.marketValue).slice(0, 5);
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-bg-card">
-      <div className="flex flex-shrink-0 items-center justify-between px-3 py-2">
-        <h3 className="text-2xs font-medium text-text-primary uppercase tracking-wider">Top Positions</h3>
-        <Link to="/portfolio" className="text-2xs text-accent-primary hover:text-accent-primary/80 transition-colors">
-          View All
-        </Link>
-      </div>
+    <DashboardCard title="Top Positions" headerAction={viewAllLink}>
       <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full text-left">
           <thead className="sticky top-0 z-10 bg-bg-card">
@@ -141,11 +141,11 @@ export default function PositionsPreview() {
                 <tr key={pos.symbol} className="border-b border-border last:border-b-0">
                   {/* Asset: logo + symbol + name */}
                   <td className="px-3 py-2">
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex min-w-0 items-center gap-2">
                       <SymbolLogo symbol={pos.symbol} size="sm" />
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-semibold text-text-primary leading-tight">{pos.symbol}</span>
-                        <span className="text-2xs text-text-muted leading-tight truncate">{pos.name}</span>
+                      <div className="flex min-w-0 flex-col">
+                        <span className="text-xs font-semibold leading-tight text-text-primary">{pos.symbol}</span>
+                        <span className="truncate text-2xs leading-tight text-text-muted">{pos.name}</span>
                       </div>
                     </div>
                   </td>
@@ -156,19 +156,19 @@ export default function PositionsPreview() {
                   </td>
 
                   {/* Price Today */}
-                  <td className="px-3 py-2 text-right text-xs font-medium text-text-primary whitespace-nowrap tabular-nums">
+                  <td className="whitespace-nowrap px-3 py-2 text-right text-xs font-medium tabular-nums text-text-primary">
                     {formatCurrency(pos.currentPrice)}
                   </td>
 
                   {/* Change $ */}
-                  <td className={cn('px-3 py-2 text-right text-xs whitespace-nowrap tabular-nums', colorClass)}>
-                    {arrow && <span className="text-2xs mr-0.5">{arrow}</span>}
+                  <td className={cn('whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums', colorClass)}>
+                    {arrow && <span className="mr-0.5 text-2xs">{arrow}</span>}
                     {formatChange(pos.dayChange)}
                   </td>
 
                   {/* Change % */}
-                  <td className={cn('px-3 py-2 text-right text-xs whitespace-nowrap tabular-nums', colorClass)}>
-                    {arrow && <span className="text-2xs mr-0.5">{arrow}</span>}
+                  <td className={cn('whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums', colorClass)}>
+                    {arrow && <span className="mr-0.5 text-2xs">{arrow}</span>}
                     {formatPercent(pos.dayChangePercent)}
                   </td>
                 </tr>
@@ -177,6 +177,6 @@ export default function PositionsPreview() {
           </tbody>
         </table>
       </div>
-    </div>
+    </DashboardCard>
   );
 }

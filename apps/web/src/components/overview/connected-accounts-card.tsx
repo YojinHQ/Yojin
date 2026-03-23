@@ -3,6 +3,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { cn } from '../../lib/utils';
 import { usePositions } from '../../api';
 import Spinner from '../common/spinner';
+import { DashboardCard } from '../common/dashboard-card';
 import AddAccountModal from './add-account-modal';
 
 const PLATFORM_DISPLAY: Record<string, { name: string; logo: string }> = {
@@ -135,14 +136,6 @@ export default function ConnectedAccountsCard() {
     reexecuteQuery({ requestPolicy: 'network-only' });
   };
 
-  if (fetching) {
-    return (
-      <div className="flex min-w-0 items-center justify-center rounded-lg border border-border bg-bg-card p-4">
-        <Spinner size="sm" />
-      </div>
-    );
-  }
-
   const addButton = (
     <button
       onClick={() => setModalOpen(true)}
@@ -150,13 +143,6 @@ export default function ConnectedAccountsCard() {
     >
       +Add Account
     </button>
-  );
-
-  const header = (
-    <div className="flex items-center justify-between">
-      <h3 className="text-2xs font-medium uppercase tracking-wider text-text-primary">Connected Accounts</h3>
-      {addButton}
-    </div>
   );
 
   const modal = (
@@ -168,23 +154,31 @@ export default function ConnectedAccountsCard() {
     />
   );
 
+  if (fetching) {
+    return (
+      <DashboardCard title="Connected Accounts" headerAction={addButton}>
+        <div className="flex flex-1 items-center justify-center px-4 pb-4">
+          <Spinner size="sm" />
+        </div>
+        {modal}
+      </DashboardCard>
+    );
+  }
+
   if (error || accounts.length === 0) {
     return (
-      <div className="flex min-w-0 flex-col rounded-lg border border-border bg-bg-card p-4">
-        {header}
-        <div className="mt-4 flex flex-1 items-center justify-center">
+      <DashboardCard title="Connected Accounts" headerAction={addButton}>
+        <div className="flex flex-1 items-center justify-center px-4 pb-4">
           <p className="text-xs text-text-muted">No accounts connected yet</p>
         </div>
         {modal}
-      </div>
+      </DashboardCard>
     );
   }
 
   return (
-    <div className="flex min-w-0 flex-col rounded-lg border border-border bg-bg-card p-4">
-      {header}
-
-      <div className="mt-3 flex min-h-0 flex-1 items-start gap-6">
+    <DashboardCard title="Connected Accounts" headerAction={addButton}>
+      <div className="flex min-h-0 flex-1 items-start gap-6 px-4 pb-4">
         {/* Account list */}
         <div className="flex min-w-0 flex-1 flex-col gap-2.5">
           {accounts.map((account) => {
@@ -246,6 +240,6 @@ export default function ConnectedAccountsCard() {
       </div>
 
       {modal}
-    </div>
+    </DashboardCard>
   );
 }
