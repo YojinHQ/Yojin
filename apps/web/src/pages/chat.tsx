@@ -8,22 +8,15 @@ import ChatInput from '../components/chat/chat-input';
 import type { ImageAttachment } from '../components/chat/chat-input';
 import ChatMessage from '../components/chat/chat-message';
 import ChatAvatar from '../components/chat/chat-avatar';
+import CardSkeleton from '../components/chat/tool-cards/card-skeleton';
 import { SessionSidebar } from '../components/chat/session-sidebar';
 import { useChatContext } from '../lib/chat-context';
 
 /* ─── Page ─── */
 
 export default function Chat() {
-  const {
-    messages,
-    pendingMessages,
-    streamingContent,
-    isLoading,
-    isThinking,
-    activeTools,
-    sendMessage,
-    activeSession,
-  } = useChatContext();
+  const { messages, pendingMessages, streamingContent, isLoading, pendingToolCards, sendMessage, activeSession } =
+    useChatContext();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -45,7 +38,7 @@ export default function Chat() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isLoading, streamingContent, isThinking, activeTools]);
+  }, [messages, isLoading, streamingContent, pendingToolCards]);
 
   // Reset UI state when session changes (state-during-render pattern, not an effect).
   // See: https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
@@ -143,56 +136,40 @@ export default function Chat() {
               />
             ))}
 
-            {/* Streaming response */}
-            {streamingContent && <ChatMessage id="streaming" role="assistant" content={streamingContent} />}
+            {/* ── Active loading states ──
+                 Priority: card skeletons > streaming text > subtle indicator.
+                 When display tool cards are pending, show skeletons and suppress
+                 streaming text (the LLM commentary is redundant with the card). */}
+
+            {/* Card skeleton placeholders — shown as soon as a TOOL_CARD event arrives */}
+            {isLoading && pendingToolCards.length > 0 && (
+              <ChatMessage role="assistant">
+                <div className="flex flex-col gap-3">
+                  {pendingToolCards.map((card, i) => (
+                    <CardSkeleton key={`${card.tool}-${i}`} tool={card.tool} />
+                  ))}
+                </div>
+              </ChatMessage>
+            )}
+
+            {/* Streaming text — only for text-only responses (no pending tool cards) */}
+            {streamingContent && pendingToolCards.length === 0 && (
+              <ChatMessage id="streaming" role="assistant" content={streamingContent} />
+            )}
 
             {/* Pending queued messages — rendered after streaming so conversation order is preserved */}
             {pendingMessages.map((msg) => (
               <ChatMessage key={msg.id} role="user" content={msg.content} />
             ))}
 
-            {/* Loading / thinking / tool indicators */}
-            {isLoading && !streamingContent && (
+            {/* Minimal loading indicator — before any tool cards or streaming text arrive */}
+            {isLoading && pendingToolCards.length === 0 && !streamingContent && (
               <div className="flex items-start gap-3">
                 <ChatAvatar />
-                <div className="flex flex-col gap-2">
-                  {isThinking && (
-                    <div className="inline-flex items-center gap-2 rounded-full border border-border bg-bg-card px-3 py-1.5">
-                      <div className="flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-primary" />
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-primary [animation-delay:0.2s]" />
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-primary [animation-delay:0.4s]" />
-                      </div>
-                      <span className="text-xs text-text-secondary">Thinking</span>
-                    </div>
-                  )}
-
-                  {activeTools.map((tool, i) => (
-                    <div
-                      key={`${tool}-${i}`}
-                      className="inline-flex items-center gap-2 rounded-full border border-border bg-bg-card px-3 py-1.5"
-                    >
-                      <svg className="h-3.5 w-3.5 animate-spin text-accent-primary" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                        />
-                      </svg>
-                      <span className="font-mono text-xs text-text-secondary">{tool}</span>
-                    </div>
-                  ))}
-
-                  {!isThinking && activeTools.length === 0 && (
-                    <div className="rounded-2xl rounded-tl-sm border border-border bg-bg-card px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted [animation-delay:-0.3s]" />
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted [animation-delay:-0.15s]" />
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted" />
-                      </div>
-                    </div>
-                  )}
+                <div className="inline-flex items-center gap-1.5 rounded-2xl rounded-tl-sm border border-border bg-bg-card px-4 py-3">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted [animation-delay:200ms]" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted [animation-delay:400ms]" />
                 </div>
               </div>
             )}

@@ -54,16 +54,16 @@ export default function ChatMessage({
       <div className="min-w-0 max-w-[85%]">
         {children ?? (
           <div className="flex flex-col gap-3">
-            {content && (
+            {toolCards?.map((card, i) => (
+              <ToolRenderer key={`${card.tool}-${i}`} tool={card.tool} params={JSON.parse(card.params)} />
+            ))}
+            {content && (!toolCards || toolCards.length === 0) && (
               <div className="rounded-xl rounded-tl-sm border border-border bg-bg-card px-4 py-3">
                 <div className="prose prose-invert prose-sm max-w-none text-sm leading-relaxed text-text-primary">
                   <Markdown>{content}</Markdown>
                 </div>
               </div>
             )}
-            {toolCards?.map((card, i) => (
-              <ToolRenderer key={`${card.tool}-${i}`} tool={card.tool} params={JSON.parse(card.params)} />
-            ))}
             {piiProtected && piiTypes && piiTypes.length > 0 && (
               <div className="inline-flex items-center gap-1.5 self-start px-1">
                 <svg className="h-3 w-3 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">

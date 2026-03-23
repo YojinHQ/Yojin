@@ -254,9 +254,17 @@ export function SessionSidebar({ collapsed = false, onToggle }: SessionSidebarPr
                 const timeLabel = formatTime(session.lastMessageAt ?? session.createdAt);
 
                 return (
-                  <button
+                  <div
                     key={session.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => handleSelectSession(session)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleSelectSession(session);
+                      }
+                    }}
                     className={cn(
                       'group flex w-full cursor-pointer items-start gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-all',
                       isActive
@@ -323,7 +331,7 @@ export function SessionSidebar({ collapsed = false, onToggle }: SessionSidebarPr
                         />
                       </svg>
                     </button>
-                  </button>
+                  </div>
                 );
               })}
             </div>

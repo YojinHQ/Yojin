@@ -74,6 +74,8 @@ interface ChatContextValue {
   isLoading: boolean;
   isThinking: boolean;
   activeTools: string[];
+  /** Tool cards detected during current agent turn (drives skeleton loading). */
+  pendingToolCards: ToolCardRef[];
   sendMessage: (content: string, image?: ChatImageData) => void;
   /** Current session info. */
   activeSession: ActiveSessionInfo;
@@ -94,6 +96,61 @@ export function useChatContext(): ChatContextValue {
   return ctx;
 }
 
+/**
+ * Collapse raw session history into the user-facing message list.
+ *
+ * The session store keeps every API-level message (intermediate tool-call assistant
+ * messages, tool-result user messages, and the final text assistant message). This
+ * merges tool cards from intermediate assistant messages into the final assistant
+ * response and drops empty tool-result messages so the chat renders cleanly.
+ */
+function collapseSessionMessages(
+  raw: { id: string; role: string; content: string; toolCards?: ToolCardRef[] }[],
+): ChatMessage[] {
+  const result: ChatMessage[] = [];
+  let pendingToolCards: ToolCardRef[] = [];
+
+  for (const m of raw) {
+    const role = m.role === 'USER' ? ('user' as const) : ('assistant' as const);
+
+    if (role === 'assistant') {
+      // Accumulate tool cards from intermediate assistant messages (tool-call turns)
+      if (m.toolCards?.length) {
+        pendingToolCards.push(...m.toolCards);
+      }
+      // If this assistant message has no tool cards, it's the final text response —
+      // attach any accumulated tool cards and emit.
+      if (!m.toolCards?.length && m.content) {
+        result.push({
+          id: m.id,
+          role,
+          content: m.content,
+          toolCards: pendingToolCards.length > 0 ? [...pendingToolCards] : undefined,
+        });
+        pendingToolCards = [];
+      }
+      // Skip assistant messages that only have tool cards (merged into next) or are empty
+    } else {
+      // Keep real user messages (with content); drop empty tool-result messages
+      if (m.content) {
+        result.push({ id: m.id, role, content: m.content });
+      }
+    }
+  }
+
+  // If there are leftover tool cards with no final text, emit them standalone
+  if (pendingToolCards.length > 0) {
+    result.push({
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: '',
+      toolCards: pendingToolCards,
+    });
+  }
+
+  return result;
+}
+
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const client = useClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -102,6 +159,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [activeTools, setActiveTools] = useState<string[]>([]);
+  // Reactive mirror of toolCardsRef — drives skeleton rendering in the UI
+  const [pendingToolCards, setPendingToolCards] = useState<ToolCardRef[]>([]);
 
   // Session state — restored from localStorage or new
   const [threadId, setThreadId] = useState(() => {
@@ -138,6 +197,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
     isProcessingRef.current = false;
     toolCardsRef.current = [];
+    setPendingToolCards([]);
   }, []);
 
   const processMessage = useCallback(
@@ -206,6 +266,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         const isDuplicate = toolCardsRef.current.some((c) => c.tool === card.tool && c.params === card.params);
         if (!isDuplicate) {
           toolCardsRef.current.push(card);
+          // Update reactive state so the UI can show card skeletons immediately
+          setPendingToolCards((prev) => [...prev, card]);
         }
       } else if (event.type === 'TOOL_USE' && event.toolName) {
         setIsThinking(false);
@@ -310,14 +372,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             messages: { id: string; role: string; content: string; toolCards?: ToolCardRef[] }[];
           };
           setThreadId(newThreadId ?? session.threadId);
-          setMessages(
-            session.messages.map((m) => ({
-              id: m.id,
-              role: m.role === 'USER' ? ('user' as const) : ('assistant' as const),
-              content: m.content,
-              toolCards: m.toolCards?.length ? m.toolCards : undefined,
-            })),
-          );
+          setMessages(collapseSessionMessages(session.messages));
         }
       })();
     },
@@ -336,6 +391,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     isLoading,
     isThinking,
     activeTools,
+    pendingToolCards,
     sendMessage,
     activeSession: activeSessionInfo,
     switchSession,

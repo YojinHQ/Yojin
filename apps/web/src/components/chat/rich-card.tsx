@@ -199,7 +199,7 @@ interface ActionsProps {
 
 function Actions({ label = 'Suggested Actions', actions }: ActionsProps) {
   return (
-    <div className="px-6 pb-6">
+    <div className="px-6 pt-4 pb-6">
       <div className="mb-3 text-[11px] font-medium uppercase tracking-wider text-text-muted">{label}</div>
       <div className="flex flex-wrap gap-2">
         {actions.map((action) => (

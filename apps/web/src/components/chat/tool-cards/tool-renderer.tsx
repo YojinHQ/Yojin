@@ -15,19 +15,21 @@ interface ToolRendererProps {
  * The renderer receives the parsed name and params.
  */
 export default function ToolRenderer({ tool, params }: ToolRendererProps) {
+  let card: React.ReactNode;
+
   switch (tool) {
     case 'positions-list':
-      return <PositionsListCard variant={(params.variant as 'top' | 'worst' | 'movers' | 'all') ?? 'all'} />;
-
+      card = <PositionsListCard variant={(params.variant as 'top' | 'worst' | 'movers' | 'all') ?? 'all'} />;
+      break;
     case 'portfolio-overview':
-      return <PortfolioOverviewCard period={(params.period as 'today' | 'week' | 'ytd') ?? 'today'} />;
-
+      card = <PortfolioOverviewCard period={(params.period as 'today' | 'week' | 'ytd') ?? 'today'} />;
+      break;
     case 'allocation':
-      return <AllocationCard />;
-
+      card = <AllocationCard />;
+      break;
     case 'morning-briefing':
-      return <MorningBriefingCard />;
-
+      card = <MorningBriefingCard />;
+      break;
     default:
       return (
         <div className="rounded-xl border border-border bg-bg-card px-6 py-4">
@@ -35,4 +37,6 @@ export default function ToolRenderer({ tool, params }: ToolRendererProps) {
         </div>
       );
   }
+
+  return <div className="animate-card-in">{card}</div>;
 }
