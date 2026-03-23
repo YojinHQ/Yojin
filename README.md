@@ -15,13 +15,13 @@ A local-first AI agent that connects to your investment accounts, delivers perso
 
 ## Architecture
 
-Yojin is a multi-agent system built around a central **Orchestrator** that coordinates four specialized agents. Each agent has its own system prompt, tool set, and allowed actions — but they share state through a common data layer rather than calling each other directly.
+Yojin is a multi-agent system built around a central **Orchestrator** that coordinates specialized agents. Each agent has its own role, tool set, and allowed actions — but they share state through a common interoperability layer.
 
-The **Orchestrator** is the entry point for every workflow — whether triggered by a user message, a scheduled digest, or a market event. It decides which agents to invoke, in what order or in parallel, and assembles their outputs into a coherent response or action. Agents produce structured outputs (PortfolioSnapshot, RiskReport, Signals) that flow through a shared pipeline; no agent has awareness of another's internals.
+The **Orchestrator** is the entry point for every workflow — whether triggered by a user message, a scheduled digest, or a market event. It decides which agents to invoke, in what order or in parallel, and assembles their outputs into a coherent response or action. Agents produce structured outputs (PortfolioSnapshot, RiskReport, Signals) that flow through a shared pipeline.
 
-Underneath the agents, a **plugin system** decouples LLM providers and delivery channels from the runtime. Providers and channels are loaded as plugins at startup, making it straightforward to swap models or add new messaging surfaces without touching agent logic. A **deterministic trust layer** — vault, guard pipeline, PII redactor, and audit log — wraps every action before execution, independent of any agent or provider.
+All state is file-driven — JSONL sessions, JSON configs, Markdown files. No database, no ORM, no containers.
 
-All state is file-driven — JSONL sessions, JSON configs, Markdown personas. No database, no ORM, no containers.
+A **deterministic security layer** — vault, guard pipeline, PII redactor, and audit log — wraps every action before execution.
 
 ### Agents
 
@@ -67,7 +67,7 @@ All state is file-driven — JSONL sessions, JSON configs, Markdown personas. No
 
 ### The Brain (Strategist)
 
-The Strategist is the only stateful agent. Its brain persists across sessions, stored as versioned Markdown and JSON files in `data/brain/`. Each decision checkpoint creates a git-like commit with a diff of working memory state; emotion state is updated after each enriched snapshot.
+The Strategist's brain persists across sessions, stored as versioned Markdown and JSON files in `data/brain/`. Each decision checkpoint creates a git-like commit with a diff of working memory state.
 
 - **Frontal lobe** — working memory: hypotheses, observations, active reasoning
 - **Emotion** — confidence level and risk appetite with rationale
@@ -76,7 +76,7 @@ The Strategist is the only stateful agent. Its brain persists across sessions, s
 
 ### Memory System
 
-Agents learn from their own track record. Every analysis produces a `(situation, recommendation, outcome)` tuple stored in a per-role memory file. When the same agent faces a new decision, BM25Okapi retrieval surfaces the most lexically similar past situations — and what actually happened after acting on them.
+Agents learn from their own track record. Analysis produces a `(situation, recommendation, outcome)` tuple stored in a per-role memory file. When the agent faces a new decision, BM25Okapi retrieval surfaces the most lexically similar past situations — and what actually happened after acting on them.
 
 After an evaluation window closes (configurable: 1d, 7d, 30d), the reflection engine compares the predicted direction against the actual market outcome, grades the call (CORRECT / PARTIALLY_CORRECT / INCORRECT), and writes a structured lesson back into memory. That lesson is injected into future prompts automatically — no retraining, no embeddings, no external API.
 
@@ -84,10 +84,10 @@ Each agent role maintains an independent store:
 
 | Role             | Memory Contains                   |
 |------------------|-----------------------------------|
-| Bull Researcher  | Past bullish arguments + outcomes |
-| Bear Researcher  | Past bearish arguments + outcomes |
-| Research Manager | Past judge decisions + outcomes   |
-| Risk Manager     | Past risk assessments + outcomes  |
+| Bull             | Past bullish arguments + outcomes |
+| Bear             | Past bearish arguments + outcomes |
+| Research         | Past judge decisions + outcomes   |
+| Risk             | Past risk assessments + outcomes  |
 
 Fully offline — BM25 only, no vector database. Configurable capacity (default 1,000 entries per role) with pruning when exceeded. Persisted as local JSON in `data/memory/`.
 
@@ -101,14 +101,6 @@ Jintel is the intelligence layer that powers Yojin's market awareness. It is acc
 - **Portfolio-aware processing** — signals are filtered and ranked against your actual positions, so you only see intelligence that's relevant to what you hold
 Jintel runs as a separate service. PII redaction runs before every Jintel call — Jintel receives sanitized, anonymized data only.
 
-### AI Providers
-
-| Provider      | Notes                                      |
-|---------------|--------------------------------------------|
-| Anthropic SDK | Default. OAuth or API key.                 |
-| Claude Code   | Subprocess mode for extended agentic tasks |
-| OpenRouter    | Access to 200+ models via a single API     |
-| OpenAI Codex  | OpenAI models via the Codex API            |
 
 ### Core Components
 
@@ -139,9 +131,8 @@ mutation { disconnectPlatform(platform: COINBASE, removeCredentials: true) { suc
 ```
 
 ## Security & Privacy
-
-Your data never leaves your machine. 
-Sensitive data is scrubbed before it reaches the AI model. Your credentials, positions, and account details are stored and processed on your computer — not on our servers, not in the cloud.
+ 
+Your credentials, positions, and account details are stored and processed on your computer — not on our servers, not in the cloud. Sensitive data is scrubbed before it reaches the AI model.
 
 The architecture below enforces this at four independent layers, so no single point of failure can expose your data.
 
