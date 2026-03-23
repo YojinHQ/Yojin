@@ -101,7 +101,6 @@ Jintel is the intelligence layer that powers Yojin's market awareness. It is acc
 - **Portfolio-aware processing** — signals are filtered and ranked against your actual positions, so you only see intelligence that's relevant to what you hold
 Jintel runs as a separate service. PII redaction runs before every Jintel call — Jintel receives sanitized, anonymized data only.
 
-
 ### Core Components
 
 **AgentRuntime** — the execution engine that drives the agent loop: sends messages to the LLM, dispatches tool calls, streams responses, and enforces token budgets. Each agent profile runs inside the same runtime instance with isolated tool scope and session history.
@@ -111,6 +110,8 @@ Jintel runs as a separate service. PII redaction runs before every Jintel call �
 **ProviderRouter** — routes LLM requests to the correct backend (Anthropic, Claude Code, OpenRouter, Codex) based on per-agent configuration. Provider selection is resolved at the profile level, with a global fallback.
 
 **Persistent Memory** — file-backed session store using append-only JSONL. Conversation histories, the Strategist's brain state, and the signal archive all survive process restarts without a database. The event log is a separate append-only JSONL that records every system event for observability.
+
+**Watchlist** — JSONL-backed watchlist store in `src/watchlist/` with Jintel enrichment. Symbols are persisted with in-memory Map cache; enrichment data (quote, news, risk score) is cached locally with configurable TTL and refreshed lazily on access. Three agent tools: `watchlist.add`, `watchlist.remove`, `watchlist.list`.
 
 **Signal Ingestion** — background pipeline in `src/signals/` that pulls from Jintel, deduplicates entries by content hash, extracts ticker mentions via `TickerExtractor`, and writes to the local archive. Agents query the archive at reasoning time rather than hitting the API inline.
 
@@ -131,7 +132,7 @@ mutation { disconnectPlatform(platform: COINBASE, removeCredentials: true) { suc
 ```
 
 ## Security & Privacy
- 
+
 Your credentials, positions, and account details are stored and processed on your computer — not on our servers, not in the cloud. Sensitive data is scrubbed before it reaches the AI model.
 
 The architecture below enforces this at four independent layers, so no single point of failure can expose your data.

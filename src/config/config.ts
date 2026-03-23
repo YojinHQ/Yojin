@@ -32,6 +32,11 @@ export const YojinConfigSchema = z.object({
   defaultProvider: z.string().optional(),
   defaultModel: z.string().optional(),
   port: z.number().default(3000),
+  watchlist: z
+    .object({
+      enrichmentTtlSeconds: z.number().default(3600),
+    })
+    .default({}),
 });
 
 export type YojinConfig = z.infer<typeof YojinConfigSchema>;
