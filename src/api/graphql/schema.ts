@@ -627,7 +627,7 @@ export const typeDefs = /* GraphQL */ `
     deleteVaultSecret(key: String!): VaultResult!
     validateAiCredential(input: ValidateCredentialInput!): ValidateCredentialResult!
     startOAuthFlow: OAuthFlowResult!
-    completeOAuthFlow(code: String!): OAuthCompleteResult!
+    completeOAuthFlow(code: String!, state: String!): OAuthCompleteResult!
     sendMagicLink(email: String!): MagicLinkResult!
     completeMagicLink(magicLinkUrl: String!): MagicLinkVerifyResult!
     generatePersona(input: PersonaInput!): PersonaResult!

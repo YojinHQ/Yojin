@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 
 export interface AiProviderState {
-  method: 'keychain' | 'api-key' | 'env-detected';
+  method: 'keychain' | 'api-key' | 'oauth' | 'env-detected';
   model?: string;
   validated: boolean;
 }

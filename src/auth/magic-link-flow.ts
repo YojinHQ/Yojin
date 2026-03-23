@@ -5,10 +5,13 @@
  *   1. startMagicLinkFlow(email)  — launch browser, navigate to Claude OAuth page, enter email
  *   2. completeMagicLinkFlow(url) — navigate to magic link URL, click Authorize, capture token
  *
+ * Uses headed mode (visible browser) to bypass Cloudflare Turnstile bot protection
+ * on claude.ai. This is acceptable because Yojin runs as a desktop app.
+ *
  * Adapted from ai-team's Puppeteer-based ClaudeOAuthService.
  */
 
-import type { Browser, Page } from 'playwright';
+import type { Browser, BrowserContext, Page } from 'playwright';
 
 import {
   type ClaudeOAuthResult,
@@ -22,12 +25,17 @@ import {
 // ---------------------------------------------------------------------------
 
 let browser: Browser | null = null;
+let _browserContext: BrowserContext | null = null;
 let page: Page | null = null;
 let pkceCodeVerifier = '';
 let pkceState = '';
 let flowInProgress = false;
 
 const OAUTH_CALLBACK_URI = 'https://console.anthropic.com/oauth/code/callback';
+
+// Chrome user-agent — keep current to avoid Cloudflare flagging outdated browsers
+const CHROME_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -42,6 +50,7 @@ async function closeBrowser(): Promise<void> {
     // best-effort
   }
   browser = null;
+  _browserContext = null;
   page = null;
   pkceCodeVerifier = '';
   pkceState = '';
@@ -68,6 +77,89 @@ async function dismissCookieBanner(p: Page): Promise<void> {
   }
 }
 
+/**
+ * Launch a Playwright browser with anti-detection measures.
+ * Uses headed mode to bypass Cloudflare Turnstile — Yojin is a desktop app,
+ * so a visible browser window during onboarding is acceptable.
+ */
+async function launchStealthBrowser(): Promise<{ browser: Browser; context: BrowserContext; page: Page }> {
+  const { chromium } = await import('playwright');
+
+  const b = await chromium.launch({
+    headless: false,
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-infobars',
+      '--window-size=1280,800',
+    ],
+  });
+
+  const ctx = await b.newContext({
+    viewport: { width: 1280, height: 800 },
+    userAgent: CHROME_USER_AGENT,
+    locale: 'en-US',
+    timezoneId: 'America/New_York',
+  });
+
+  // Stealth: remove navigator.webdriver flag that Cloudflare checks
+  await ctx.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    // Fake chrome.runtime to look like a real Chrome installation
+    if (!(window as unknown as Record<string, unknown>).chrome) {
+      (window as unknown as Record<string, unknown>).chrome = {
+        runtime: {},
+        loadTimes: () => ({}),
+        csi: () => ({}),
+      };
+    }
+    // Override permissions query to prevent detection
+    const originalQuery = window.navigator.permissions.query.bind(window.navigator.permissions);
+    window.navigator.permissions.query = (params: PermissionDescriptor) => {
+      if (params.name === 'notifications') {
+        return Promise.resolve({ state: 'denied', onchange: null } as PermissionStatus);
+      }
+      return originalQuery(params);
+    };
+  });
+
+  const p = await ctx.newPage();
+  return { browser: b, context: ctx, page: p };
+}
+
+/**
+ * Wait for Cloudflare Turnstile challenge to resolve and the real page content to load.
+ * Returns true if the page appears ready, false if it's still stuck on Turnstile.
+ */
+async function waitForTurnstile(p: Page, timeoutMs = 30000): Promise<boolean> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeoutMs) {
+    const hasRealContent = await p.evaluate(() => {
+      // Check if there are visible inputs (beyond the hidden turnstile one)
+      const visibleInputs = Array.from(document.querySelectorAll('input')).filter(
+        (i) => i.type !== 'hidden' && i.offsetParent !== null,
+      );
+      // Check if there are visible buttons
+      const visibleButtons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(
+        (b) => (b as HTMLElement).offsetParent !== null,
+      );
+      // Check for any interactive clickable elements (SSO buttons, links)
+      const clickables = Array.from(document.querySelectorAll('a, [tabindex="0"]')).filter(
+        (el) => (el as HTMLElement).offsetParent !== null && (el as HTMLElement).textContent?.trim(),
+      );
+      return visibleInputs.length > 0 || visibleButtons.length > 0 || clickables.length > 2;
+    });
+
+    if (hasRealContent) return true;
+
+    await p.waitForTimeout(1000);
+  }
+
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Step 1: Start flow — enter email on Claude OAuth page
 // ---------------------------------------------------------------------------
@@ -87,8 +179,6 @@ export async function startMagicLinkFlow(email: string): Promise<MagicLinkStartR
   flowInProgress = true;
 
   try {
-    const { chromium } = await import('playwright');
-
     // Generate PKCE params
     const pkce = generatePkceParams();
     pkceCodeVerifier = pkce.codeVerifier;
@@ -99,18 +189,42 @@ export async function startMagicLinkFlow(email: string): Promise<MagicLinkStartR
       state: pkce.state,
     });
 
-    // Launch headless browser
-    browser = await chromium.launch({ headless: true });
-    const context = await browser.newContext({
-      viewport: { width: 1280, height: 800 },
-      userAgent:
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    });
-    page = await context.newPage();
+    // Launch browser with anti-detection
+    const launched = await launchStealthBrowser();
+    browser = launched.browser;
+    _browserContext = launched.context;
+    page = launched.page;
 
     // Navigate to Claude OAuth page — lands on claude.ai/login if not authenticated
     await page.goto(oauthUrl, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForTimeout(3000);
+
+    // Wait for Cloudflare Turnstile to resolve and page to render
+    const pageReady = await waitForTurnstile(page, 30000);
+
+    if (!pageReady) {
+      // Page didn't render — Cloudflare likely blocked us
+      const debugInfo = await page
+        .evaluate(() => ({
+          inputs: Array.from(document.querySelectorAll('input')).map((i) => ({
+            type: i.type,
+            name: i.name,
+            id: i.id,
+            visible: i.offsetParent !== null,
+          })),
+          buttons: Array.from(document.querySelectorAll('button, [role="button"]')).map((b) =>
+            (b as HTMLElement).textContent?.trim().slice(0, 80),
+          ),
+          url: window.location.href,
+        }))
+        .catch(() => ({ inputs: [], buttons: [], url: 'unknown' }));
+
+      console.error('[magic-link] Cloudflare block debug:', debugInfo);
+      await closeBrowser();
+      return {
+        success: false,
+        error: `Claude's login page didn't load (Cloudflare protection). Try "Open in browser" instead.`,
+      };
+    }
 
     await dismissCookieBanner(page);
 
@@ -169,7 +283,7 @@ export async function startMagicLinkFlow(email: string): Promise<MagicLinkStartR
     // First try: wait for any email-specific input to appear (up to 5s)
     for (const selector of emailSelectors) {
       try {
-        await page.waitForSelector(selector, { state: 'visible', timeout: 1000 });
+        await page.waitForSelector(selector, { state: 'visible', timeout: 1500 });
         emailInput = page.locator(selector).first();
         break;
       } catch {
@@ -236,10 +350,11 @@ export async function startMagicLinkFlow(email: string): Promise<MagicLinkStartR
         })
         .catch(() => ({ inputs: [], buttons: [], url: 'unknown' }));
 
+      console.error('[magic-link] Email input not found debug:', debugInfo);
       await closeBrowser();
       return {
         success: false,
-        error: `Could not find email input on the login page. Page elements: ${JSON.stringify(debugInfo)}`,
+        error: `Could not find email input on the login page. Try "Open in browser" instead.`,
       };
     }
 
@@ -303,7 +418,13 @@ export async function completeMagicLinkFlow(magicLinkUrl: string): Promise<Magic
 
     // Navigate to the magic link URL
     await page.goto(magicLinkUrl, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(3000);
+
+    // Wait for Turnstile to resolve on the magic link page too
+    const linkPageReady = await waitForTurnstile(page, 15000);
+    if (!linkPageReady) {
+      await closeBrowser();
+      return { success: false, error: `Magic link page didn't load (Cloudflare protection). Please try again.` };
+    }
 
     await dismissCookieBanner(page);
 

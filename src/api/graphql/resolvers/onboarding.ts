@@ -194,8 +194,15 @@ export async function detectKeychainTokenQuery(): Promise<KeychainTokenResult> {
 // OAuth PKCE flow
 // ---------------------------------------------------------------------------
 
-/** In-memory PKCE state — lives for the duration of a single OAuth flow. */
-let pendingPkce: { codeVerifier: string; state: string } | null = null;
+/** In-memory PKCE state keyed by `state` param to handle concurrent/double-click flows. */
+const PKCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+interface PkceEntry {
+  codeVerifier: string;
+  createdAt: number;
+}
+
+const pendingPkceByState = new Map<string, PkceEntry>();
 
 interface OAuthFlowResult {
   authUrl: string;
@@ -207,8 +214,14 @@ interface OAuthFlowResult {
  * The frontend opens this URL in the user's browser.
  */
 export function startOAuthFlowMutation(): OAuthFlowResult {
+  // Prune expired PKCE entries from abandoned flows
+  const now = Date.now();
+  for (const [k, v] of pendingPkceByState) {
+    if (now - v.createdAt > PKCE_TTL_MS) pendingPkceByState.delete(k);
+  }
+
   const pkce = generatePkceParams();
-  pendingPkce = { codeVerifier: pkce.codeVerifier, state: pkce.state };
+  pendingPkceByState.set(pkce.state, { codeVerifier: pkce.codeVerifier, createdAt: now });
 
   const authUrl = buildClaudeOAuthUrl({
     codeChallenge: pkce.codeChallenge,
@@ -230,44 +243,41 @@ interface OAuthCompleteResult {
  */
 export async function completeOAuthFlowMutation(
   _parent: unknown,
-  args: { code: string },
+  args: { code: string; state: string },
 ): Promise<OAuthCompleteResult> {
   const code = args.code.trim();
   if (!code) {
     return { success: false, error: 'Authorization code is required.' };
   }
 
-  if (!pendingPkce) {
+  const state = args.state.trim();
+  const entry = pendingPkceByState.get(state);
+  if (!entry) {
     return { success: false, error: 'No pending OAuth flow. Please start again.' };
   }
 
   try {
     const result = await exchangeClaudeOAuthCode({
       code,
-      codeVerifier: pendingPkce.codeVerifier,
-      state: pendingPkce.state,
+      codeVerifier: entry.codeVerifier,
+      state,
     });
 
-    // Clear the pending PKCE state
-    pendingPkce = null;
+    // Clear the used PKCE entry
+    pendingPkceByState.delete(state);
 
-    // Store the token in vault
-    if (vault?.isUnlocked) {
-      await vault.set('anthropic_oauth_token', result.accessToken);
-      if (result.refreshToken) {
-        await vault.set('anthropic_oauth_refresh_token', result.refreshToken);
-      }
+    // Store, set env, and reconfigure provider so the token is usable immediately
+    await activateOAuthToken(result.accessToken);
+    if (vault?.isUnlocked && result.refreshToken) {
+      await vault.set('anthropic_oauth_refresh_token', result.refreshToken);
     }
-
-    // Also set in process.env so the provider can pick it up immediately
-    process.env.CLAUDE_CODE_OAUTH_TOKEN = result.accessToken;
     if (result.refreshToken) {
       process.env.CLAUDE_CODE_OAUTH_REFRESH_TOKEN = result.refreshToken;
     }
 
     return { success: true, model: 'Claude (OAuth)' };
   } catch (err) {
-    pendingPkce = null;
+    pendingPkceByState.delete(state);
     return {
       success: false,
       error: err instanceof Error ? err.message : 'OAuth token exchange failed.',
@@ -496,10 +506,8 @@ export async function completeMagicLinkMutation(
   const result = await completeMagicLinkFlow(url);
 
   if (result.success && result.token) {
-    // Store the OAuth token in the vault
-    if (vault?.isUnlocked) {
-      await vault.set('anthropic_oauth_token', result.token);
-    }
+    // Store, set env, and reconfigure provider so the token is usable immediately
+    await activateOAuthToken(result.token);
     return { success: true, model: result.model || 'Claude (OAuth)' };
   }
 
