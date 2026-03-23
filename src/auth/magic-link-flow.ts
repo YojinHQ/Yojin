@@ -218,10 +218,11 @@ export async function startMagicLinkFlow(email: string): Promise<MagicLinkStartR
         }))
         .catch(() => ({ inputs: [], buttons: [], url: 'unknown' }));
 
+      console.error('[magic-link] Cloudflare block debug:', debugInfo);
       await closeBrowser();
       return {
         success: false,
-        error: `Claude's login page didn't load (Cloudflare protection). Try "Open in browser" instead. Debug: ${JSON.stringify(debugInfo)}`,
+        error: `Claude's login page didn't load (Cloudflare protection). Try "Open in browser" instead.`,
       };
     }
 
@@ -349,10 +350,11 @@ export async function startMagicLinkFlow(email: string): Promise<MagicLinkStartR
         })
         .catch(() => ({ inputs: [], buttons: [], url: 'unknown' }));
 
+      console.error('[magic-link] Email input not found debug:', debugInfo);
       await closeBrowser();
       return {
         success: false,
-        error: `Could not find email input on the login page. Try "Open in browser" instead. Debug: ${JSON.stringify(debugInfo)}`,
+        error: `Could not find email input on the login page. Try "Open in browser" instead.`,
       };
     }
 

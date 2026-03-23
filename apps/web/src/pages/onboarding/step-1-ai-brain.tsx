@@ -36,9 +36,11 @@ export function Step1AiBrain() {
   const [autoDetected, setAutoDetected] = useState(false);
 
   // OAuth flow state
-  const [oauthMode, setOauthMode] = useState<'choose' | 'browser' | 'magic_link'>('choose');
+  const [oauthMode, setOauthMode] = useState<'choose' | 'browser' | 'magic_link' | 'magic_link_waiting'>('choose');
   const [authCode, setAuthCode] = useState('');
   const [oauthEmail, setOauthEmail] = useState('');
+  const [oauthState, setOauthState] = useState('');
+  const [magicLinkUrl, setMagicLinkUrl] = useState('');
 
   // Auto-detect credentials from env vars, vault, and macOS Keychain on mount.
   useEffect(() => {
@@ -86,8 +88,9 @@ export function Step1AiBrain() {
     }
 
     if (!isReset && !validated) {
-      detectEnv();
-      detectKeychain();
+      detectEnv().then(() => {
+        if (!cancelled) detectKeychain();
+      });
     }
 
     return () => {
@@ -104,6 +107,8 @@ export function Step1AiBrain() {
     setOauthMode('choose');
     setAuthCode('');
     setOauthEmail('');
+    setOauthState('');
+    setMagicLinkUrl('');
     if (!autoDetected) {
       setValidated(false);
       setValidatedModel('');
@@ -165,6 +170,7 @@ export function Step1AiBrain() {
       const result = json?.data?.startOAuthFlow;
       if (result?.authUrl) {
         window.open(result.authUrl, '_blank', 'noopener,noreferrer');
+        setOauthState(result.state);
         setOauthMode('browser');
         setAuthCode('');
       } else {
@@ -190,8 +196,8 @@ export function Step1AiBrain() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `mutation ($code: String!) { completeOAuthFlow(code: $code) { success model error } }`,
-          variables: { code },
+          query: `mutation ($code: String!, $state: String!) { completeOAuthFlow(code: $code, state: $state) { success model error } }`,
+          variables: { code, state: oauthState },
         }),
       });
       const json = await res.json();
@@ -210,16 +216,18 @@ export function Step1AiBrain() {
     } finally {
       setValidating(false);
     }
-  }, [authCode, updateState]);
+  }, [authCode, oauthState, updateState]);
 
   const handleCancelOAuth = useCallback(() => {
     setOauthMode('choose');
     setAuthCode('');
     setOauthEmail('');
+    setOauthState('');
+    setMagicLinkUrl('');
     setError('');
   }, []);
 
-  /** Magic link: open Claude login in user's browser with PKCE URL, then wait for code paste. */
+  /** Magic link: launch server-side Playwright browser to enter email on Claude's login page. */
   const handleMagicLinkStart = useCallback(async () => {
     const email = oauthEmail.trim().toLowerCase();
     if (!email || !email.includes('@')) {
@@ -233,17 +241,17 @@ export function Step1AiBrain() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `mutation { startOAuthFlow { authUrl state } }`,
+          query: `mutation ($email: String!) { sendMagicLink(email: $email) { success error } }`,
+          variables: { email },
         }),
       });
       const json = await res.json();
-      const result = json?.data?.startOAuthFlow;
-      if (result?.authUrl) {
-        window.open(result.authUrl, '_blank', 'noopener,noreferrer');
-        setOauthMode('browser');
-        setAuthCode('');
+      const result = json?.data?.sendMagicLink;
+      if (result?.success) {
+        setOauthMode('magic_link_waiting');
+        setMagicLinkUrl('');
       } else {
-        setError('Failed to generate authorization URL.');
+        setError(result?.error || 'Failed to send magic link.');
       }
     } catch {
       setError('Connection failed. Make sure the backend is running.');
@@ -251,6 +259,42 @@ export function Step1AiBrain() {
       setValidating(false);
     }
   }, [oauthEmail]);
+
+  /** Complete magic link flow: user pastes the magic link URL from their email. */
+  const handleSubmitMagicLink = useCallback(async () => {
+    const url = magicLinkUrl.trim();
+    if (!url) {
+      setError('Please paste the magic link URL from your email.');
+      return;
+    }
+    setError('');
+    setValidating(true);
+    try {
+      const res = await fetch('/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `mutation ($magicLinkUrl: String!) { completeMagicLink(magicLinkUrl: $magicLinkUrl) { success model error } }`,
+          variables: { magicLinkUrl: url },
+        }),
+      });
+      const json = await res.json();
+      const result = json?.data?.completeMagicLink;
+      if (result?.success) {
+        setValidated(true);
+        setValidatedModel(result.model || 'Claude (OAuth)');
+        updateState({ aiProvider: { method: 'oauth', model: result.model || 'Claude (OAuth)', validated: true } });
+        setOauthMode('choose');
+        setMagicLinkUrl('');
+      } else {
+        setError(result?.error || 'Failed to complete magic link flow.');
+      }
+    } catch {
+      setError('Connection failed. Make sure the backend is running.');
+    } finally {
+      setValidating(false);
+    }
+  }, [magicLinkUrl, updateState]);
 
   // ── Navigation ─────────────────────────────────────────────────────────────
 
@@ -500,13 +544,13 @@ export function Step1AiBrain() {
                       </>
                     )}
 
-                    {/* Magic link: enter email then open browser */}
+                    {/* Magic link: enter email to trigger server-side flow */}
                     {oauthMode === 'magic_link' && (
                       <>
                         <div className="rounded-lg bg-bg-tertiary/50 p-3">
                           <p className="text-[11px] leading-relaxed text-text-muted">
-                            Enter your Anthropic email. We'll open Claude's login page — sign in with your email and
-                            you'll receive a magic link. After authorizing, paste the code back here.
+                            Enter your Anthropic email. We'll submit it to Claude's login page and you'll receive a
+                            magic link in your inbox. Paste the link back here to complete sign-in.
                           </p>
                         </div>
                         <Input
@@ -529,10 +573,49 @@ export function Step1AiBrain() {
                             onClick={handleMagicLinkStart}
                             className="flex-1"
                           >
-                            Open in browser
+                            Send magic link
                           </Button>
                           <Button variant="secondary" size="md" onClick={handleCancelOAuth}>
                             Back
+                          </Button>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Magic link waiting: paste the URL from the email */}
+                    {oauthMode === 'magic_link_waiting' && (
+                      <>
+                        <div className="rounded-lg border border-accent-primary/20 bg-accent-primary/[0.04] p-3">
+                          <p className="mb-2 text-xs font-medium text-text-primary">Check your email</p>
+                          <div className="space-y-1 text-[11px] leading-relaxed text-text-muted">
+                            <p>1. Anthropic sent a magic link to your email</p>
+                            <p>2. Open the email and copy the magic link URL</p>
+                            <p>3. Paste the full URL below</p>
+                          </div>
+                        </div>
+                        <Input
+                          label="Magic link URL"
+                          type="text"
+                          placeholder="https://claude.ai/magic-link/..."
+                          value={magicLinkUrl}
+                          onChange={(e) => setMagicLinkUrl(e.target.value)}
+                          error={error || undefined}
+                          size="md"
+                          onKeyDown={(e) => e.key === 'Enter' && handleSubmitMagicLink()}
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            variant="primary"
+                            size="md"
+                            loading={validating}
+                            disabled={!magicLinkUrl.trim()}
+                            onClick={handleSubmitMagicLink}
+                            className="flex-1"
+                          >
+                            Verify link
+                          </Button>
+                          <Button variant="secondary" size="md" onClick={handleCancelOAuth}>
+                            Cancel
                           </Button>
                         </div>
                       </>

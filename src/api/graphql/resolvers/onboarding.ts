@@ -194,8 +194,8 @@ export async function detectKeychainTokenQuery(): Promise<KeychainTokenResult> {
 // OAuth PKCE flow
 // ---------------------------------------------------------------------------
 
-/** In-memory PKCE state — lives for the duration of a single OAuth flow. */
-let pendingPkce: { codeVerifier: string; state: string } | null = null;
+/** In-memory PKCE state keyed by `state` param to handle concurrent/double-click flows. */
+const pendingPkceByState = new Map<string, string>();
 
 interface OAuthFlowResult {
   authUrl: string;
@@ -208,7 +208,7 @@ interface OAuthFlowResult {
  */
 export function startOAuthFlowMutation(): OAuthFlowResult {
   const pkce = generatePkceParams();
-  pendingPkce = { codeVerifier: pkce.codeVerifier, state: pkce.state };
+  pendingPkceByState.set(pkce.state, pkce.codeVerifier);
 
   const authUrl = buildClaudeOAuthUrl({
     codeChallenge: pkce.codeChallenge,
@@ -230,26 +230,28 @@ interface OAuthCompleteResult {
  */
 export async function completeOAuthFlowMutation(
   _parent: unknown,
-  args: { code: string },
+  args: { code: string; state: string },
 ): Promise<OAuthCompleteResult> {
   const code = args.code.trim();
   if (!code) {
     return { success: false, error: 'Authorization code is required.' };
   }
 
-  if (!pendingPkce) {
+  const state = args.state.trim();
+  const codeVerifier = pendingPkceByState.get(state);
+  if (!codeVerifier) {
     return { success: false, error: 'No pending OAuth flow. Please start again.' };
   }
 
   try {
     const result = await exchangeClaudeOAuthCode({
       code,
-      codeVerifier: pendingPkce.codeVerifier,
-      state: pendingPkce.state,
+      codeVerifier,
+      state,
     });
 
-    // Clear the pending PKCE state
-    pendingPkce = null;
+    // Clear the used PKCE entry
+    pendingPkceByState.delete(state);
 
     // Store, set env, and reconfigure provider so the token is usable immediately
     await activateOAuthToken(result.accessToken);
@@ -262,7 +264,7 @@ export async function completeOAuthFlowMutation(
 
     return { success: true, model: 'Claude (OAuth)' };
   } catch (err) {
-    pendingPkce = null;
+    pendingPkceByState.delete(state);
     return {
       success: false,
       error: err instanceof Error ? err.message : 'OAuth token exchange failed.',
