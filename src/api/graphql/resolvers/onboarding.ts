@@ -37,6 +37,7 @@ let connectionManager: ConnectionManager | undefined;
 let snapshotStore: PortfolioSnapshotStore | undefined;
 let claudeCodeProvider: ClaudeCodeProvider | undefined;
 let dataRoot = '.';
+let onJintelKeyValidatedCb: ((apiKey: string) => void) | undefined;
 
 export function setOnboardingVault(v: EncryptedVault): void {
   vault = v;
@@ -65,6 +66,10 @@ export function setOnboardingSnapshotStore(store: PortfolioSnapshotStore): void 
 
 export function setOnboardingDataRoot(root: string): void {
   dataRoot = root;
+}
+
+export function setJintelKeyValidatedCallback(cb: (apiKey: string) => void): void {
+  onJintelKeyValidatedCb = cb;
 }
 
 // ---------------------------------------------------------------------------
@@ -291,6 +296,7 @@ interface OnboardingStatusResult {
   aiCredentialConfigured: boolean;
   connectedPlatforms: string[];
   briefingConfigured: boolean;
+  jintelConfigured: boolean;
 }
 
 /** Path to the persistent onboarding completion marker. */
@@ -319,7 +325,9 @@ export async function onboardingStatusQuery(): Promise<OnboardingStatusResult> {
   const alertsConfigPath = `${dataRoot}/config/alerts.json`;
   const briefingConfigured = existsSync(alertsConfigPath);
 
-  return { completed, personaExists, aiCredentialConfigured, connectedPlatforms, briefingConfigured };
+  const jintelConfigured = vault?.isUnlocked ? !!(await vault.get('jintel-api-key')) : false;
+
+  return { completed, personaExists, aiCredentialConfigured, connectedPlatforms, briefingConfigured, jintelConfigured };
 }
 
 /** Mark onboarding as completed (called at the end of the flow). */
@@ -328,6 +336,45 @@ export async function completeOnboardingMutation(): Promise<boolean> {
   await ensureDir(dirname(filePath));
   await writeFile(filePath, JSON.stringify({ completedAt: new Date().toISOString() }), 'utf-8');
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Jintel key validation
+// ---------------------------------------------------------------------------
+
+export async function validateJintelKeyMutation(
+  _parent: unknown,
+  args: { apiKey: string },
+): Promise<{ success: boolean; error?: string }> {
+  const apiKey = args.apiKey.trim();
+
+  if (!apiKey) {
+    return { success: false, error: 'API key cannot be empty.' };
+  }
+
+  // Fail fast if vault can't store the key — before making any network call
+  if (!vault?.isUnlocked) {
+    return { success: false, error: 'Vault is locked. Unlock it first.' };
+  }
+
+  // Create a temporary client to test the key
+  const { JintelClient } = await import('../../../jintel/client.js');
+  const baseUrl = process.env.JINTEL_API_URL ?? 'https://api.jintel.ai/api';
+  const testClient = new JintelClient({ baseUrl, apiKey });
+  const health = await testClient.healthCheck();
+
+  if (!health.healthy) {
+    return { success: false, error: health.error ?? 'Failed to connect to Jintel API.' };
+  }
+
+  try {
+    await vault.set('jintel-api-key', apiKey);
+    onJintelKeyValidatedCb?.(apiKey);
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Failed to store key: ${msg}` };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -761,7 +808,7 @@ export async function resetOnboardingMutation(): Promise<boolean> {
     await personaManager.resetPersona();
   }
 
-  // Remove AI credentials from vault
+  // Remove AI + Jintel credentials from vault
   if (vault?.isUnlocked) {
     for (const key of [
       'anthropic_api_key',
@@ -770,6 +817,7 @@ export async function resetOnboardingMutation(): Promise<boolean> {
       'anthropic_verified_email',
       'anthropic_oauth_token',
       'anthropic_oauth_refresh_token',
+      'jintel-api-key',
     ]) {
       if (await vault.has(key)) {
         await vault.delete(key);

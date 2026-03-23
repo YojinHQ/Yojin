@@ -561,6 +561,12 @@ export const typeDefs = /* GraphQL */ `
     aiCredentialConfigured: Boolean!
     connectedPlatforms: [String!]!
     briefingConfigured: Boolean!
+    jintelConfigured: Boolean!
+  }
+
+  type ValidateJintelKeyResult {
+    success: Boolean!
+    error: String
   }
 
   type KeychainTokenResult {
@@ -671,6 +677,7 @@ export const typeDefs = /* GraphQL */ `
     saveBriefingConfig(input: BriefingConfigInput!): Boolean!
     completeOnboarding: Boolean!
     resetOnboarding: Boolean!
+    validateJintelKey(apiKey: String!): ValidateJintelKeyResult!
   }
 
   type Subscription {

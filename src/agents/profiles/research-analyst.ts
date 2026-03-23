@@ -7,24 +7,23 @@ export function createResearchAnalystProfile(): AgentProfile {
     role: 'analyst',
     description: 'Market intelligence — gathers, validates, and structures data from connected sources.',
     tools: [
-      // OpenBB tools
-      'openbb_equity_quote',
-      'openbb_equity_fundamentals',
-      'openbb_equity_price',
-      'openbb_crypto_quote',
-      'openbb_currency_quote',
-      'openbb_commodity_quote',
-      'openbb_economy_indicators',
+      // Jintel tools
+      'search_entities',
+      'enrich_entity',
+      'market_quotes',
+      'news_search',
+      'sanctions_screen',
+      'web_search',
       // Signal tools
       'glob_signals',
       'grep_signals',
       'read_signal',
+      // Enrichment (future — wired in FE integration story)
+      'enrich_position',
+      'enrich_snapshot',
       // Research / technicals
       'run_technical',
       'resolve_symbol',
-      // Enrichment
-      'enrich_position',
-      'enrich_snapshot',
       // Data source
       'query_data_source',
       'list_data_sources',

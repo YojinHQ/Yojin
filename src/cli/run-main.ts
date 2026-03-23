@@ -18,6 +18,8 @@ import { buildContext } from '../composition.js';
 import { AgentRuntime } from '../core/agent-runtime.js';
 import { EventLog } from '../core/event-log.js';
 import { Gateway } from '../gateway/server.js';
+import { createJintelPriceProvider } from '../jintel/price-provider.js';
+import { createReflectionEngine } from '../memory/adapter.js';
 import { resolveDataRoot } from '../paths.js';
 import { JsonlSessionStore } from '../sessions/jsonl-store.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
@@ -85,6 +87,17 @@ async function buildFullRuntime(): Promise<{
   providerRouter.startConfigRefresh();
   setOnboardingProvider(providerRouter);
   setOnboardingClaudeCodeProvider(claudeProvider);
+
+  // ReflectionEngine with lazy price provider — reads jintelToolOptions.client at call time.
+  const priceProvider = createJintelPriceProvider({
+    getClient: () => services.jintelToolOptions.client,
+  });
+  services.reflectionEngine = createReflectionEngine({
+    stores: services.memoryStores,
+    providerRouter,
+    priceProvider,
+    piiRedactor: services.piiRedactor,
+  });
 
   const sessionStore = new JsonlSessionStore(`${dataRoot}/sessions`);
 

@@ -73,7 +73,7 @@ export interface LlmProvider {
   completeWithTools(params: {
     model: string;
     system?: string;
-    messages: Array<{ role: string; content: string }>;
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>;
   }): Promise<{
     content: Array<{ type: string; text?: string }>;
     stopReason: string;

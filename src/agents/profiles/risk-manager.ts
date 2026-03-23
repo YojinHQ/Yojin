@@ -18,6 +18,8 @@ export function createRiskManagerProfile(): AgentProfile {
       // Diagnostics
       'diagnose_data_error',
       'check_api_health',
+      // Jintel
+      'sanctions_screen',
       // Memory tools
       'store_signal_memory',
       'recall_signal_memories',
