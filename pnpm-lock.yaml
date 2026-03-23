@@ -45,8 +45,8 @@ importers:
         specifier: 4.12.8
         version: 4.12.8
       rehydra:
-        specifier: 0.3.4
-        version: 0.3.4
+        specifier: 0.6.2
+        version: 0.6.2
       tslog:
         specifier: 4.10.2
         version: 4.10.2
@@ -3054,8 +3054,8 @@ packages:
   redux@5.0.1:
     resolution: {integrity: sha512-M9/ELqF6fy8FwmkpnF0S3YKOqMyoWJ4+CS5Efg2ct3oY9daQvd/Pc71FpGZsVsbl3Cpb+IIcjBDUnnyBdQbq4w==}
 
-  rehydra@0.3.4:
-    resolution: {integrity: sha512-W92FKHfoQPf/ln1HdXKsmPfPxrRLpuxLa4xgzDO0a6DPJq5pGn9PEkGb/0hUm8RL2lYExCBzS7w8ufP8fBBkSw==}
+  rehydra@0.6.2:
+    resolution: {integrity: sha512-hUiUhcK4yuZPtR4ebucPWnwIYNpjZgYWZunE/toZO3f4CBm8v7MS7yIuGet8eNcD2mZr/zynZ1NJsoNA0juAyA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       better-sqlite3: ^11.0.0
@@ -6714,7 +6714,7 @@ snapshots:
 
   redux@5.0.1: {}
 
-  rehydra@0.3.4:
+  rehydra@0.6.2:
     optionalDependencies:
       onnxruntime-node: 1.24.3
 

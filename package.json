@@ -77,7 +77,7 @@
     "graphql": "16.13.1",
     "graphql-yoga": "5.18.1",
     "hono": "4.12.8",
-    "rehydra": "0.3.4",
+    "rehydra": "0.6.2",
     "tslog": "4.10.2",
     "zod": "3.25.76",
     "zod-to-json-schema": "3.25.1"
