@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from 'dotenv';
 
-config();
+config({ quiet: true });
 
 type AuthMode = 'cli' | 'api_key';
 

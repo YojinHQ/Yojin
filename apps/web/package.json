@@ -14,7 +14,7 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
-    "@tailwindcss/vite": "4.2.1",
+    "@tailwindcss/vite": "4.2.2",
     "@urql/core": "6.0.1",
     "@urql/exchange-graphcache": "^9.0.0",
     "clsx": "2.1.1",
@@ -27,7 +27,7 @@
     "react-router": "7.13.1",
     "recharts": "3.8.0",
     "tailwind-merge": "3.5.0",
-    "tailwindcss": "4.2.1",
+    "tailwindcss": "4.2.2",
     "urql": "5.0.1"
   },
   "devDependencies": {
@@ -46,7 +46,7 @@
     "jsdom": "29.0.0",
     "storybook": "10.3.1",
     "typescript": "5.9.3",
-    "vite": "7.3.1",
-    "vitest": "3.2.4"
+    "vite": "8.0.1",
+    "vitest": "4.1.0"
   }
 }

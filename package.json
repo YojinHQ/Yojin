@@ -73,11 +73,11 @@
     "@slack/bolt": "4.6.0",
     "@slack/web-api": "7.15.0",
     "ai": "6.0.116",
-    "dotenv": "16.6.1",
+    "dotenv": "17.3.1",
     "graphql": "16.13.1",
     "graphql-yoga": "5.18.1",
     "hono": "4.12.8",
-    "rehydra": "0.3.4",
+    "rehydra": "0.6.2",
     "tslog": "4.10.2",
     "zod": "3.25.76",
     "zod-to-json-schema": "3.25.1"
@@ -97,7 +97,7 @@
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.57.1",
-    "vitest": "3.2.4"
+    "vitest": "4.1.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -106,6 +106,6 @@
   },
   "packageManager": "pnpm@10.17.1",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   }
 }
