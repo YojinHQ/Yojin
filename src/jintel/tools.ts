@@ -1,5 +1,6 @@
 /**
- * Jintel agent tools — search_entities, enrich_entity, market_quotes, news_search, sanctions_screen.
+ * Jintel agent tools — search_entities, enrich_entity, market_quotes,
+ * news_search, sanctions_screen, web_search.
  *
  * Wraps JintelClient for agent use. When the client is not configured,
  * tools return a helpful error guiding the user to set up their API key.
@@ -9,7 +10,15 @@ import { z } from 'zod';
 
 import type { JintelClient, JintelResult } from './client.js';
 import { EntityTypeSchema } from './types.js';
-import type { EnrichmentField, Entity, MarketQuote, NewsArticle, RiskSignal, SanctionsMatch } from './types.js';
+import type {
+  EnrichmentField,
+  Entity,
+  MarketQuote,
+  NewsArticle,
+  RiskSignal,
+  SanctionsMatch,
+  WebResult,
+} from './types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
 
@@ -46,9 +55,11 @@ function failureResult(error: string): ToolResult {
   return { content: error + FALLBACK_SUFFIX, isError: true };
 }
 
-function handleResult<T>(result: JintelResult<T>): T | ToolResult {
-  if (!result.success) return failureResult(result.error);
-  return result.data;
+type HandleResult<T> = { ok: true; data: T } | { ok: false; toolResult: ToolResult };
+
+function handleResult<T>(result: JintelResult<T>): HandleResult<T> {
+  if (!result.success) return { ok: false, toolResult: failureResult(result.error) };
+  return { ok: true, data: result.data };
 }
 
 function newsToSignals(articles: NewsArticle[]): RawSignalInput[] {
@@ -194,6 +205,16 @@ function formatSanctions(matches: SanctionsMatch[]): string {
     .join('\n\n');
 }
 
+function formatWebResults(results: WebResult[]): string {
+  if (results.length === 0) return 'No web results found.';
+  return results
+    .map(
+      (r) =>
+        `- **${r.title}**\n  ${r.source}${r.publishedAt ? ` | ${r.publishedAt}` : ''}${r.snippet ? `\n  ${r.snippet}` : ''}\n  ${r.url}`,
+    )
+    .join('\n');
+}
+
 function formatNumber(n: number): string {
   if (n >= 1e12) return `${(n / 1e12).toFixed(1)}T`;
   if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
@@ -223,9 +244,9 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         type: params.type,
         limit: params.limit,
       });
-      const data = handleResult(result);
-      if ('isError' in (data as ToolResult)) return data as ToolResult;
-      return { content: formatEntities(data as Entity[]) };
+      const handled = handleResult(result);
+      if (!handled.ok) return handled.toolResult;
+      return { content: formatEntities(handled.data) };
     },
   };
 
@@ -241,10 +262,10 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     async execute(params: { ticker: string; fields?: EnrichmentField[] }): Promise<ToolResult> {
       if (!client) return notConfigured();
       const result = await client.enrichEntity(params.ticker, params.fields);
-      const data = handleResult(result);
-      if ('isError' in (data as ToolResult)) return data as ToolResult;
+      const handled = handleResult(result);
+      if (!handled.ok) return handled.toolResult;
 
-      const entity = data as Entity;
+      const entity = handled.data;
       const content = formatEnrichment(entity);
 
       // Best-effort signal ingestion
@@ -271,9 +292,9 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     async execute(params: { tickers: string[] }): Promise<ToolResult> {
       if (!client) return notConfigured();
       const result = await client.quotes(params.tickers);
-      const data = handleResult(result);
-      if ('isError' in (data as ToolResult)) return data as ToolResult;
-      return { content: formatQuotes(data as MarketQuote[]) };
+      const handled = handleResult(result);
+      if (!handled.ok) return handled.toolResult;
+      return { content: formatQuotes(handled.data) };
     },
   };
 
@@ -287,10 +308,10 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     async execute(params: { query: string; limit?: number }): Promise<ToolResult> {
       if (!client) return notConfigured();
       const result = await client.newsSearch(params.query, params.limit);
-      const data = handleResult(result);
-      if ('isError' in (data as ToolResult)) return data as ToolResult;
+      const handled = handleResult(result);
+      if (!handled.ok) return handled.toolResult;
 
-      const articles = data as NewsArticle[];
+      const articles = handled.data;
       const content = formatNews(articles);
 
       // Best-effort signal ingestion
@@ -311,11 +332,29 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     async execute(params: { name: string; country?: string }): Promise<ToolResult> {
       if (!client) return notConfigured();
       const result = await client.sanctionsScreen(params.name, params.country);
-      const data = handleResult(result);
-      if ('isError' in (data as ToolResult)) return data as ToolResult;
-      return { content: formatSanctions(data as SanctionsMatch[]) };
+      const handled = handleResult(result);
+      if (!handled.ok) return handled.toolResult;
+      return { content: formatSanctions(handled.data) };
     },
   };
 
-  return [searchEntities, enrichEntity, marketQuotes, newsSearch, sanctionsScreen];
+  const webSearch: ToolDefinition = {
+    name: 'web_search',
+    description:
+      'Search the web for general information, company details, or recent events. ' +
+      'Returns titles, snippets, sources, and URLs.',
+    parameters: z.object({
+      query: z.string().describe('Web search query'),
+      limit: z.number().int().min(1).max(50).optional().describe('Max results (default 10)'),
+    }),
+    async execute(params: { query: string; limit?: number }): Promise<ToolResult> {
+      if (!client) return notConfigured();
+      const result = await client.webSearch(params.query, params.limit);
+      const handled = handleResult(result);
+      if (!handled.ok) return handled.toolResult;
+      return { content: formatWebResults(handled.data) };
+    },
+  };
+
+  return [searchEntities, enrichEntity, marketQuotes, newsSearch, sanctionsScreen, webSearch];
 }

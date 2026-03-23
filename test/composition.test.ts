@@ -19,17 +19,17 @@ describe('buildContext', () => {
     expect(services.vault).toBeUndefined();
   });
 
-  it('registers 32 tools (with vault-locked stubs)', async () => {
+  it('registers 33 tools (with vault-locked stubs)', async () => {
     const services = await buildContext({ skipVault: true });
     const schemas = services.toolRegistry.toSchemas();
 
     // 2 starter + 4 credential stubs + 8 brain + 1 security audit
-    // + 5 jintel tools + 3 signal tools
+    // + 6 jintel tools + 3 signal tools
     // + 1 error analysis + 1 api health + 1 portfolio reasoning
     // + 2 portfolio tools (save_portfolio_positions, get_portfolio)
     // + 2 data source query tools (query_data_source, list_data_sources)
-    // + 2 memory tools (store_signal_memory, recall_signal_memories) = 32
-    expect(schemas.length).toBe(32);
+    // + 2 memory tools (store_signal_memory, recall_signal_memories) = 33
+    expect(schemas.length).toBe(33);
 
     const names = schemas.map((s) => s.name).sort();
     expect(names).toContain('get_current_time');
@@ -58,6 +58,7 @@ describe('buildContext', () => {
     expect(names).toContain('market_quotes');
     expect(names).toContain('news_search');
     expect(names).toContain('sanctions_screen');
+    expect(names).toContain('web_search');
     // Signal tools
     expect(names).toContain('glob_signals');
     expect(names).toContain('grep_signals');

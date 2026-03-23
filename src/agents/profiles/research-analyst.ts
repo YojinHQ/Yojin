@@ -13,6 +13,7 @@ export function createResearchAnalystProfile(): AgentProfile {
       'market_quotes',
       'news_search',
       'sanctions_screen',
+      'web_search',
       // Signal tools
       'glob_signals',
       'grep_signals',

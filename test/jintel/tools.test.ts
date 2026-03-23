@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { JintelClient, JintelResult } from '../../src/jintel/client.js';
 import { createJintelTools } from '../../src/jintel/tools.js';
-import type { Entity, MarketQuote, NewsArticle, SanctionsMatch } from '../../src/jintel/types.js';
+import type { Entity, MarketQuote, NewsArticle, SanctionsMatch, WebResult } from '../../src/jintel/types.js';
 import type { RawSignalInput, SignalIngestor } from '../../src/signals/ingestor.js';
 
 // ── Mock Helpers ─────────────────────────────────────────────────────────
@@ -142,6 +142,21 @@ const MOCK_SANCTIONS: SanctionsMatch[] = [
   },
 ];
 
+const MOCK_WEB_RESULTS: WebResult[] = [
+  {
+    title: 'Apple Inc. Company Profile',
+    url: 'https://example.com/apple-profile',
+    snippet: 'Apple designs, manufactures, and markets smartphones and personal computers.',
+    source: 'Wikipedia',
+    publishedAt: '2024-01-10T00:00:00Z',
+  },
+  {
+    title: 'Apple Q1 2024 Earnings Call Transcript',
+    url: 'https://example.com/apple-earnings-transcript',
+    source: 'Seeking Alpha',
+  },
+];
+
 function createMockClient(overrides: Partial<JintelClient> = {}): JintelClient {
   return {
     searchEntities: vi.fn().mockResolvedValue(ok(MOCK_ENTITIES)),
@@ -149,7 +164,7 @@ function createMockClient(overrides: Partial<JintelClient> = {}): JintelClient {
     quotes: vi.fn().mockResolvedValue(ok(MOCK_QUOTES)),
     newsSearch: vi.fn().mockResolvedValue(ok(MOCK_NEWS)),
     sanctionsScreen: vi.fn().mockResolvedValue(ok(MOCK_SANCTIONS)),
-    webSearch: vi.fn().mockResolvedValue(ok([])),
+    webSearch: vi.fn().mockResolvedValue(ok(MOCK_WEB_RESULTS)),
     healthCheck: vi.fn().mockResolvedValue({ healthy: true, latencyMs: 50 }),
     ...overrides,
   } as unknown as JintelClient;
@@ -294,6 +309,45 @@ describe('jintel tools', () => {
       expect(result.content).toContain('OFAC SDN');
       expect(result.content).toContain('John Smith LLC');
       expect(result.content).toContain('0.92');
+    });
+  });
+
+  describe('web_search', () => {
+    it('returns formatted web results', async () => {
+      const client = createMockClient();
+      const tool = findTool('web_search', client);
+
+      const result = await tool.execute({ query: 'Apple Inc' });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toContain('Apple Inc. Company Profile');
+      expect(result.content).toContain('Wikipedia');
+      expect(result.content).toContain('https://example.com/apple-profile');
+      expect(result.content).toContain('designs, manufactures');
+      expect(result.content).toContain('Apple Q1 2024 Earnings Call Transcript');
+      expect(result.content).toContain('Seeking Alpha');
+      expect(client.webSearch).toHaveBeenCalledWith('Apple Inc', undefined);
+    });
+
+    it('passes limit parameter', async () => {
+      const client = createMockClient();
+      const tool = findTool('web_search', client);
+
+      await tool.execute({ query: 'test', limit: 5 });
+
+      expect(client.webSearch).toHaveBeenCalledWith('test', 5);
+    });
+
+    it('returns empty message when no results', async () => {
+      const client = createMockClient({
+        webSearch: vi.fn().mockResolvedValue(ok([])),
+      });
+      const tool = findTool('web_search', client);
+
+      const result = await tool.execute({ query: 'nonexistent' });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toContain('No web results found');
     });
   });
 

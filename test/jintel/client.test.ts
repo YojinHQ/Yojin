@@ -226,6 +226,54 @@ describe('JintelClient.quotes', () => {
   });
 });
 
+describe('JintelClient.webSearch', () => {
+  it('returns web results on success', async () => {
+    const results = [
+      {
+        title: 'Apple Inc.',
+        url: 'https://example.com/apple',
+        snippet: 'Technology company',
+        source: 'Wikipedia',
+        publishedAt: '2026-01-01T00:00:00Z',
+      },
+    ];
+    mockFetch.mockResolvedValueOnce(jsonResponse({ data: { webSearch: results } }));
+
+    const client = makeClient();
+    const result = await client.webSearch('Apple');
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].title).toBe('Apple Inc.');
+      expect(result.data[0].source).toBe('Wikipedia');
+    }
+  });
+
+  it('passes limit variable', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ data: { webSearch: [] } }));
+
+    const client = makeClient();
+    await client.webSearch('test', 5);
+
+    const [, init] = mockFetch.mock.calls[0];
+    const body = JSON.parse(init?.body as string);
+    expect(body.variables.limit).toBe(5);
+  });
+
+  it('returns empty array when no results', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ data: { webSearch: [] } }));
+
+    const client = makeClient();
+    const result = await client.webSearch('nonexistent');
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual([]);
+    }
+  });
+});
+
 describe('JintelClient error handling', () => {
   it('returns auth error on 401', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ errors: [{ message: 'Unauthorized' }] }, 401));

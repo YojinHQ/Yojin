@@ -1,3 +1,5 @@
+import type { EnrichmentField } from './types.js';
+
 // ── Field Fragments ────────────────────────────────────────────────────────
 
 export const MARKET_QUOTE_FIELDS = `
@@ -155,7 +157,7 @@ export const WEB_SEARCH = `
 
 // ── Dynamic Query Builder ──────────────────────────────────────────────────
 
-const FIELD_BLOCK_MAP: Record<string, string> = {
+const FIELD_BLOCK_MAP: Record<EnrichmentField, string> = {
   market: `market {\n    ${MARKET_QUOTE_FIELDS.trim()}\n    ${FUNDAMENTALS_FIELDS.trim()}\n  }`,
   news: NEWS_FIELDS.trim(),
   risk: RISK_FIELDS.trim(),
@@ -163,7 +165,7 @@ const FIELD_BLOCK_MAP: Record<string, string> = {
   corporate: CORPORATE_FIELDS.trim(),
 };
 
-export function buildEnrichQuery(fields: string[]): string {
+export function buildEnrichQuery(fields: EnrichmentField[]): string {
   const blocks = fields
     .filter((f) => f in FIELD_BLOCK_MAP)
     .map((f) => `    ${FIELD_BLOCK_MAP[f]}`)
