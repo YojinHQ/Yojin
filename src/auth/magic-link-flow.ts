@@ -420,7 +420,11 @@ export async function completeMagicLinkFlow(magicLinkUrl: string): Promise<Magic
     await page.goto(magicLinkUrl, { waitUntil: 'networkidle' });
 
     // Wait for Turnstile to resolve on the magic link page too
-    await waitForTurnstile(page, 15000);
+    const linkPageReady = await waitForTurnstile(page, 15000);
+    if (!linkPageReady) {
+      await closeBrowser();
+      return { success: false, error: `Magic link page didn't load (Cloudflare protection). Please try again.` };
+    }
 
     await dismissCookieBanner(page);
 

@@ -195,7 +195,14 @@ export async function detectKeychainTokenQuery(): Promise<KeychainTokenResult> {
 // ---------------------------------------------------------------------------
 
 /** In-memory PKCE state keyed by `state` param to handle concurrent/double-click flows. */
-const pendingPkceByState = new Map<string, string>();
+const PKCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+interface PkceEntry {
+  codeVerifier: string;
+  createdAt: number;
+}
+
+const pendingPkceByState = new Map<string, PkceEntry>();
 
 interface OAuthFlowResult {
   authUrl: string;
@@ -207,8 +214,14 @@ interface OAuthFlowResult {
  * The frontend opens this URL in the user's browser.
  */
 export function startOAuthFlowMutation(): OAuthFlowResult {
+  // Prune expired PKCE entries from abandoned flows
+  const now = Date.now();
+  for (const [k, v] of pendingPkceByState) {
+    if (now - v.createdAt > PKCE_TTL_MS) pendingPkceByState.delete(k);
+  }
+
   const pkce = generatePkceParams();
-  pendingPkceByState.set(pkce.state, pkce.codeVerifier);
+  pendingPkceByState.set(pkce.state, { codeVerifier: pkce.codeVerifier, createdAt: now });
 
   const authUrl = buildClaudeOAuthUrl({
     codeChallenge: pkce.codeChallenge,
@@ -238,15 +251,15 @@ export async function completeOAuthFlowMutation(
   }
 
   const state = args.state.trim();
-  const codeVerifier = pendingPkceByState.get(state);
-  if (!codeVerifier) {
+  const entry = pendingPkceByState.get(state);
+  if (!entry) {
     return { success: false, error: 'No pending OAuth flow. Please start again.' };
   }
 
   try {
     const result = await exchangeClaudeOAuthCode({
       code,
-      codeVerifier,
+      codeVerifier: entry.codeVerifier,
       state,
     });
 
