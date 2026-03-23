@@ -76,9 +76,9 @@ describe('PII Tool Boundary E2E', () => {
     expect(llmOutput).toContain('1-10 units'); // BTC qty 1.5 → "1-10 units"
     expect(llmOutput).toContain('10-100 units'); // ETH qty 10 → "10-100 units"
     expect(llmOutput).toContain('10k+ units'); // DOGE qty 50000 → "10k+ units"
-    // Should NOT contain exact quantities
-    expect(llmOutput).not.toContain('1.5');
-    expect(llmOutput).not.toContain('50000');
+    // Should NOT contain exact quantities (use word boundary to avoid timestamp false positives)
+    expect(llmOutput).not.toMatch(/\b1\.5\b/);
+    expect(llmOutput).not.toMatch(/\b50000\b/);
 
     // Should show percentage P&L (not exact amounts)
     expect(llmOutput).toMatch(/[+-]?\d+\.\d+%/); // e.g. +60.7%

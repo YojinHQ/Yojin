@@ -23,9 +23,16 @@ import OnboardingPage from './pages/onboarding';
 import { ONBOARDING_STATUS_QUERY } from './api/documents';
 import type { OnboardingStatusQueryResult } from './api/types';
 
-const AgentationComponent = lazy(() => import('agentation').then((m) => ({ default: m.Agentation })));
+// Gate the lazy import behind the build-time env flag so Vite tree-shakes
+// the entire chunk when disabled — avoids 404 in production where
+// `agentation` (a devDependency) isn't installed.
+const AgentationComponent =
+  import.meta.env.VITE_AGENTATION_ENABLED === 'true'
+    ? lazy(() => import('agentation').then((m) => ({ default: m.Agentation })))
+    : null;
 
 function DevFeedbackTool() {
+  if (!AgentationComponent) return null;
   return (
     <Suspense fallback={null}>
       <AgentationComponent />
