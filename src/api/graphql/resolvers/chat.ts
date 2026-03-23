@@ -1,20 +1,31 @@
 /**
- * Chat resolvers — sendMessage mutation + onChatMessage subscription.
+ * Chat resolvers — sendMessage mutation + onChatMessage subscription + session queries.
  *
  * Streams agent responses via GraphQL subscriptions (SSE) using pubsub.
  * AgentRuntime is injected at startup via setChatAgentRuntime().
+ * SessionStore is injected via setSessionStore().
  */
 
 import type { AgentRuntime } from '../../../core/agent-runtime.js';
-import type { AgentLoopEvent, ImageMediaType } from '../../../core/types.js';
+import type { AgentLoopEvent, AgentMessage, ImageMediaType } from '../../../core/types.js';
+import type { SessionStore } from '../../../sessions/types.js';
 import { pubsub } from '../pubsub.js';
 import type { ChatEvent } from '../types.js';
 
 let runtime: AgentRuntime | undefined;
+let sessionStore: SessionStore | undefined;
+
+/** Track the most recently active web session threadId. */
+let activeThreadId: string | undefined;
 
 /** Inject the AgentRuntime — called once from Gateway at startup. */
 export function setChatAgentRuntime(agentRuntime: AgentRuntime): void {
   runtime = agentRuntime;
+}
+
+/** Inject the SessionStore — called once from Gateway at startup. */
+export function setSessionStore(store: SessionStore): void {
+  sessionStore = store;
 }
 
 // ---------------------------------------------------------------------------
@@ -38,6 +49,9 @@ export function sendMessageMutation(
 
   const { threadId, message, imageBase64, imageMediaType } = args;
   const messageId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  // Track the most recent web thread for activeSession query
+  activeThreadId = threadId;
 
   // Server-side size guard: reject base64 payloads over ~10 MB decoded
   // (base64 is ~4/3 of original size, so 14 MB base64 ≈ 10.5 MB decoded)
@@ -127,3 +141,161 @@ export const onChatMessageSubscription = {
   },
   resolve: (payload: ChatEvent) => payload,
 };
+
+// ---------------------------------------------------------------------------
+// Session queries + mutations
+// ---------------------------------------------------------------------------
+
+/** Derive a session title from the first user message (truncated to ~50 chars). */
+function deriveTitle(messages: AgentMessage[]): string {
+  const firstUserMsg = messages.find((m) => m.role === 'user');
+  if (!firstUserMsg) return 'New conversation';
+  const text =
+    typeof firstUserMsg.content === 'string'
+      ? firstUserMsg.content
+      : firstUserMsg.content
+          .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+          .map((b) => b.text)
+          .join(' ');
+  if (!text) return 'New conversation';
+  return text.length > 50 ? text.slice(0, 47) + '…' : text;
+}
+
+interface SessionSummaryGql {
+  id: string;
+  threadId: string;
+  title: string;
+  createdAt: string;
+  lastMessageAt: string | null;
+  messageCount: number;
+}
+
+export async function sessionsQuery(): Promise<SessionSummaryGql[]> {
+  if (!sessionStore) return [];
+
+  const ids = await sessionStore.list();
+  const summaries: SessionSummaryGql[] = [];
+
+  for (const id of ids) {
+    const meta = await sessionStore.get(id);
+    if (!meta) continue;
+    // Only show web channel sessions in the sidebar
+    if (meta.channelId !== 'web') continue;
+
+    const history = await sessionStore.getHistory(id);
+    const messages = history.map((e) => e.message);
+    const lastEntry = history[history.length - 1];
+
+    summaries.push({
+      id: meta.id,
+      threadId: meta.threadId ?? meta.id,
+      title: deriveTitle(messages),
+      createdAt: new Date(meta.createdAt).toISOString(),
+      lastMessageAt: lastEntry?.timestamp ?? null,
+      messageCount: history.length,
+    });
+  }
+
+  // Sort by most recent first
+  summaries.sort((a, b) => {
+    const aTime = a.lastMessageAt ?? a.createdAt;
+    const bTime = b.lastMessageAt ?? b.createdAt;
+    return bTime.localeCompare(aTime);
+  });
+
+  return summaries;
+}
+
+export async function sessionQuery(
+  _parent: unknown,
+  args: { id: string },
+): Promise<{
+  id: string;
+  threadId: string;
+  title: string;
+  createdAt: string;
+  lastMessageAt: string | null;
+  messages: { id: string; threadId: string; role: string; content: string; timestamp: string }[];
+} | null> {
+  if (!sessionStore) return null;
+
+  const meta = await sessionStore.get(args.id);
+  if (!meta) return null;
+
+  const history = await sessionStore.getHistory(args.id);
+  const agentMessages = history.map((e) => e.message);
+  const lastEntry = history[history.length - 1];
+
+  const gqlMessages = history.map((entry) => ({
+    id: `${entry.sessionId}-${entry.sequence}`,
+    threadId: meta.threadId ?? meta.id,
+    role: entry.message.role === 'user' ? 'USER' : 'ASSISTANT',
+    content:
+      typeof entry.message.content === 'string'
+        ? entry.message.content
+        : entry.message.content
+            .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+            .map((b) => b.text)
+            .join('\n'),
+    timestamp: entry.timestamp,
+  }));
+
+  return {
+    id: meta.id,
+    threadId: meta.threadId ?? meta.id,
+    title: deriveTitle(agentMessages),
+    createdAt: new Date(meta.createdAt).toISOString(),
+    lastMessageAt: lastEntry?.timestamp ?? null,
+    messages: gqlMessages,
+  };
+}
+
+export async function activeSessionQuery(): Promise<SessionSummaryGql | null> {
+  if (!sessionStore || !activeThreadId) return null;
+
+  const meta = await sessionStore.getByThread('web', activeThreadId);
+  if (!meta) return null;
+
+  const history = await sessionStore.getHistory(meta.id);
+  const messages = history.map((e) => e.message);
+  const lastEntry = history[history.length - 1];
+
+  return {
+    id: meta.id,
+    threadId: meta.threadId ?? meta.id,
+    title: deriveTitle(messages),
+    createdAt: new Date(meta.createdAt).toISOString(),
+    lastMessageAt: lastEntry?.timestamp ?? null,
+    messageCount: history.length,
+  };
+}
+
+export async function createSessionMutation(): Promise<SessionSummaryGql> {
+  if (!sessionStore) throw new Error('Session store not initialized');
+
+  const threadId = `web-${crypto.randomUUID()}`;
+  const meta = await sessionStore.create({
+    channelId: 'web',
+    threadId,
+    userId: 'web-user',
+    providerId: 'agent-runtime',
+    model: 'claude-sonnet-4-6',
+  });
+
+  activeThreadId = threadId;
+
+  return {
+    id: meta.id,
+    threadId,
+    title: 'New conversation',
+    createdAt: new Date(meta.createdAt).toISOString(),
+    lastMessageAt: null,
+    messageCount: 0,
+  };
+}
+
+export async function deleteSessionMutation(_parent: unknown, args: { id: string }): Promise<boolean> {
+  if (!sessionStore) throw new Error('Session store not initialized');
+  await sessionStore.delete(args.id);
+  return true;
+}

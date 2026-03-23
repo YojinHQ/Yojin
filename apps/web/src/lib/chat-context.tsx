@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { useMutation, useSubscription } from 'urql';
+import { useClient, useMutation, useSubscription } from 'urql';
+import { SESSION_DETAIL_QUERY } from './session-queries';
 
 export interface ChatMessage {
   id: string;
@@ -49,6 +50,13 @@ export interface ChatImageData {
   mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 }
 
+/** Session info exposed to consumers. */
+export interface ActiveSessionInfo {
+  sessionId: string | null;
+  threadId: string;
+  isReadOnly: boolean;
+}
+
 interface ChatContextValue {
   messages: ChatMessage[];
   pendingMessages: ChatMessage[];
@@ -57,7 +65,15 @@ interface ChatContextValue {
   isThinking: boolean;
   activeTools: string[];
   sendMessage: (content: string, image?: ChatImageData) => void;
+  /** Current session info. */
+  activeSession: ActiveSessionInfo;
+  /** Switch to a past session (read-only). Pass null to start a new session. */
+  switchSession: (sessionId: string | null, threadId?: string) => void;
+  /** Continue a past session (makes it the active live session). */
+  continueSession: () => void;
 }
+
+const STORAGE_KEY = 'yojin-active-thread';
 
 const ChatContext = createContext<ChatContextValue | null>(null);
 
@@ -69,13 +85,22 @@ export function useChatContext(): ChatContextValue {
 }
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
+  const client = useClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [activeTools, setActiveTools] = useState<string[]>([]);
-  const [threadId] = useState(() => `web-${crypto.randomUUID()}`);
+
+  // Session state — restored from localStorage or new
+  const [threadId, setThreadId] = useState(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored || `web-${crypto.randomUUID()}`;
+  });
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isReadOnly, setIsReadOnly] = useState(false);
+
   const completedMessagesRef = useRef(new Set<string>());
   const queueRef = useRef<string[]>([]);
   const isProcessingRef = useRef(false);
@@ -84,6 +109,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const [, sendMessageMutation] = useMutation(SEND_MESSAGE_MUTATION);
   const processQueueRef = useRef<() => void>(() => {});
+
+  // Persist active threadId to localStorage
+  useEffect(() => {
+    if (!isReadOnly) {
+      localStorage.setItem(STORAGE_KEY, threadId);
+    }
+  }, [threadId, isReadOnly]);
 
   const resetStreamingState = useCallback(() => {
     setStreamingContent('');
@@ -188,10 +220,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [processQueue, resetStreamingState],
   );
 
-  useSubscription({ query: CHAT_SUBSCRIPTION, variables: { threadId } }, handleSubscription);
+  // Only subscribe when not in read-only mode
+  useSubscription({ query: CHAT_SUBSCRIPTION, variables: { threadId }, pause: isReadOnly }, handleSubscription);
 
   const sendMessage = useCallback(
     (content: string, image?: ChatImageData) => {
+      if (isReadOnly) return;
       if (isProcessingRef.current) {
         queueRef.current.push(content);
         // Show queued message separately so it renders after the current streaming response.
@@ -201,8 +235,68 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         processMessage(content, image);
       }
     },
-    [processMessage],
+    [processMessage, isReadOnly],
   );
+
+  /** Switch to a session. Pass null to start a new session. */
+  const switchSession = useCallback(
+    (newSessionId: string | null, newThreadId?: string) => {
+      // Reset streaming state
+      resetStreamingState();
+      completedMessagesRef.current.clear();
+      queueRef.current = [];
+      setPendingMessages([]);
+
+      if (newSessionId === null) {
+        // New session
+        const fresh = `web-${crypto.randomUUID()}`;
+        setThreadId(fresh);
+        setSessionId(null);
+        setIsReadOnly(false);
+        setMessages([]);
+        localStorage.setItem(STORAGE_KEY, fresh);
+        return;
+      }
+
+      // Load past session
+      setSessionId(newSessionId);
+      setIsReadOnly(true);
+      setMessages([]);
+
+      // Fetch session messages
+      void (async () => {
+        const result = await client.query(SESSION_DETAIL_QUERY, { id: newSessionId }).toPromise();
+
+        if (result.data?.session) {
+          const session = result.data.session as {
+            threadId: string;
+            messages: { id: string; role: string; content: string }[];
+          };
+          setThreadId(newThreadId ?? session.threadId);
+          setMessages(
+            session.messages.map((m) => ({
+              id: m.id,
+              role: m.role === 'USER' ? ('user' as const) : ('assistant' as const),
+              content: m.content,
+            })),
+          );
+        }
+      })();
+    },
+    [client, resetStreamingState],
+  );
+
+  /** Continue the currently viewed session (switch from read-only to live). */
+  const continueSession = useCallback(() => {
+    setIsReadOnly(false);
+    localStorage.setItem(STORAGE_KEY, threadId);
+  }, [threadId]);
+
+  const activeSessionInfo: ActiveSessionInfo = {
+    sessionId,
+    threadId,
+    isReadOnly,
+  };
 
   const value: ChatContextValue = {
     messages,
@@ -212,6 +306,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     isThinking,
     activeTools,
     sendMessage,
+    activeSession: activeSessionInfo,
+    switchSession,
+    continueSession,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

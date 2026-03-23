@@ -10,6 +10,7 @@ import ChatInput from '../components/chat/chat-input';
 import type { ImageAttachment } from '../components/chat/chat-input';
 import ChatMessage from '../components/chat/chat-message';
 import ChatAvatar from '../components/chat/chat-avatar';
+import SessionSidebar from '../components/chat/session-sidebar';
 import { useChatContext } from '../lib/chat-context';
 
 /* ─── Message types for local-only UI messages (briefings, tool cards) ─── */
@@ -57,11 +58,21 @@ function parseToolAction(action: string): { tool: string; params: Record<string,
 /* ─── Page ─── */
 
 export default function Chat() {
-  const { messages, pendingMessages, streamingContent, isLoading, isThinking, activeTools, sendMessage } =
-    useChatContext();
+  const {
+    messages,
+    pendingMessages,
+    streamingContent,
+    isLoading,
+    isThinking,
+    activeTools,
+    sendMessage,
+    activeSession,
+    continueSession,
+  } = useChatContext();
   const [localMessages, setLocalMessages] = useState<LocalMessage[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -81,6 +92,21 @@ export default function Chat() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, localMessages, isLoading, streamingContent, isThinking, activeTools]);
+
+  // Reset local messages when session changes.
+  // Uses a stable ref-based approach to avoid re-triggering on the initial render.
+  const sessionThreadId = activeSession.threadId;
+  const prevSessionRef = useRef(sessionThreadId);
+  useEffect(() => {
+    if (prevSessionRef.current === sessionThreadId) return;
+    prevSessionRef.current = sessionThreadId;
+    const id = requestAnimationFrame(() => {
+      setLocalMessages([]);
+      setActiveCategory(null);
+      setActiveAction(null);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [sessionThreadId]);
 
   const handleSend = useCallback(
     (content: string, image?: ImageAttachment) => {
@@ -154,132 +180,155 @@ export default function Chat() {
   }, []);
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Messages area */}
-      <div ref={scrollRef} className="flex-1 overflow-auto px-6 py-6">
-        <div className="mx-auto max-w-3xl space-y-6">
-          {/* Morning briefing — always shown as first AI message */}
-          <ChatMessage role="assistant">
-            <MorningBriefing
-              date={new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-              updatedAt={`Updated ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`}
-              onViewFull={handleViewFullBriefing}
-            />
-          </ChatMessage>
+    <div className="flex flex-1 overflow-hidden">
+      {/* Sessions sidebar */}
+      <SessionSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((prev) => !prev)} />
 
-          {/* Server messages (from chat context) */}
-          {messages.map((msg) => (
-            <ChatMessage
-              key={msg.id}
-              id={msg.id}
-              role={msg.role}
-              content={msg.content}
-              piiProtected={msg.piiProtected}
-              piiTypes={msg.piiTypes}
-            />
-          ))}
+      {/* Main chat area */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Read-only banner for past sessions */}
+        {activeSession.isReadOnly && (
+          <div className="flex items-center justify-between border-b border-border bg-bg-tertiary px-4 py-2">
+            <span className="text-xs text-text-secondary">Viewing past conversation</span>
+            <button
+              onClick={continueSession}
+              className="cursor-pointer rounded-md bg-accent-primary px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-accent-secondary"
+            >
+              Continue conversation
+            </button>
+          </div>
+        )}
 
-          {/* Local-only messages (briefings, tool cards, user queries) */}
-          {localMessages.map((msg) => {
-            if (msg.type === 'user-query') {
-              return <ChatMessage key={msg.id} role="user" content={msg.content} />;
-            }
-            if (msg.type === 'tool-result') {
+        {/* Messages area */}
+        <div ref={scrollRef} className="flex-1 overflow-auto px-6 py-6">
+          <div className="mx-auto max-w-3xl space-y-6">
+            {/* Morning briefing — shown only for new/live sessions with no messages */}
+            {!activeSession.isReadOnly && messages.length === 0 && (
+              <ChatMessage role="assistant">
+                <MorningBriefing
+                  date={new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  updatedAt={`Updated ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`}
+                  onViewFull={handleViewFullBriefing}
+                />
+              </ChatMessage>
+            )}
+
+            {/* Server messages (from chat context) */}
+            {messages.map((msg) => (
+              <ChatMessage
+                key={msg.id}
+                id={msg.id}
+                role={msg.role}
+                content={msg.content}
+                piiProtected={msg.piiProtected}
+                piiTypes={msg.piiTypes}
+              />
+            ))}
+
+            {/* Local-only messages (briefings, tool cards, user queries) */}
+            {localMessages.map((msg) => {
+              if (msg.type === 'user-query') {
+                return <ChatMessage key={msg.id} role="user" content={msg.content} />;
+              }
+              if (msg.type === 'tool-result') {
+                return (
+                  <ChatMessage key={msg.id} role="assistant">
+                    <ToolRenderer tool={msg.tool} params={msg.params} />
+                  </ChatMessage>
+                );
+              }
+              // briefing
               return (
                 <ChatMessage key={msg.id} role="assistant">
-                  <ToolRenderer tool={msg.tool} params={msg.params} />
+                  <FullBriefingCard />
                 </ChatMessage>
               );
-            }
-            // briefing
-            return (
-              <ChatMessage key={msg.id} role="assistant">
-                <FullBriefingCard />
-              </ChatMessage>
-            );
-          })}
+            })}
 
-          {/* Streaming response */}
-          {streamingContent && <ChatMessage id="streaming" role="assistant" content={streamingContent} />}
+            {/* Streaming response */}
+            {streamingContent && <ChatMessage id="streaming" role="assistant" content={streamingContent} />}
 
-          {/* Pending queued messages — rendered after streaming so conversation order is preserved */}
-          {pendingMessages.map((msg) => (
-            <ChatMessage key={msg.id} role="user" content={msg.content} />
-          ))}
+            {/* Pending queued messages — rendered after streaming so conversation order is preserved */}
+            {pendingMessages.map((msg) => (
+              <ChatMessage key={msg.id} role="user" content={msg.content} />
+            ))}
 
-          {/* Loading / thinking / tool indicators */}
-          {isLoading && !streamingContent && (
-            <div className="flex items-start gap-3">
-              <ChatAvatar />
-              <div className="flex flex-col gap-2">
-                {isThinking && (
-                  <div className="inline-flex items-center gap-2 rounded-full border border-border bg-bg-card px-3 py-1.5">
-                    <div className="flex items-center gap-1">
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-primary" />
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-primary [animation-delay:0.2s]" />
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-primary [animation-delay:0.4s]" />
+            {/* Loading / thinking / tool indicators */}
+            {isLoading && !streamingContent && (
+              <div className="flex items-start gap-3">
+                <ChatAvatar />
+                <div className="flex flex-col gap-2">
+                  {isThinking && (
+                    <div className="inline-flex items-center gap-2 rounded-full border border-border bg-bg-card px-3 py-1.5">
+                      <div className="flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-primary" />
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-primary [animation-delay:0.2s]" />
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-primary [animation-delay:0.4s]" />
+                      </div>
+                      <span className="text-xs text-text-secondary">Thinking</span>
                     </div>
-                    <span className="text-xs text-text-secondary">Thinking</span>
-                  </div>
-                )}
+                  )}
 
-                {activeTools.map((tool, i) => (
-                  <div
-                    key={`${tool}-${i}`}
-                    className="inline-flex items-center gap-2 rounded-full border border-border bg-bg-card px-3 py-1.5"
-                  >
-                    <svg className="h-3.5 w-3.5 animate-spin text-accent-primary" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                      />
-                    </svg>
-                    <span className="font-mono text-xs text-text-secondary">{tool}</span>
-                  </div>
-                ))}
-
-                {!isThinking && activeTools.length === 0 && (
-                  <div className="rounded-2xl rounded-tl-sm border border-border bg-bg-card px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted [animation-delay:-0.3s]" />
-                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted [animation-delay:-0.15s]" />
-                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted" />
+                  {activeTools.map((tool, i) => (
+                    <div
+                      key={`${tool}-${i}`}
+                      className="inline-flex items-center gap-2 rounded-full border border-border bg-bg-card px-3 py-1.5"
+                    >
+                      <svg className="h-3.5 w-3.5 animate-spin text-accent-primary" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                        />
+                      </svg>
+                      <span className="font-mono text-xs text-text-secondary">{tool}</span>
                     </div>
-                  </div>
-                )}
+                  ))}
+
+                  {!isThinking && activeTools.length === 0 && (
+                    <div className="rounded-2xl rounded-tl-sm border border-border bg-bg-card px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted [animation-delay:-0.3s]" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted [animation-delay:-0.15s]" />
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted" />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Query builder / waterfall / manual entry — shown when no messages */}
-      {messages.length === 0 && !localMessages.some((m) => m.type === 'tool-result') && (
-        <div className="px-6 pb-4 pt-2">
-          <div className="mx-auto max-w-3xl">
-            {activeAction === 'add-asset' ? (
-              <ManualPositionFlow onComplete={handleActionComplete} onCancel={handleActionCancel} />
-            ) : activeCategory ? (
-              <WaterfallFlow
-                categoryId={activeCategory}
-                onComplete={handleWaterfallComplete}
-                onAction={handleWaterfallAction}
-                onCancel={handleWaterfallCancel}
-              />
-            ) : (
-              <QueryBuilder onSelect={handleQuerySelect} />
             )}
           </div>
         </div>
-      )}
 
-      {/* Chat input — pinned bottom */}
-      <div className="px-6 pb-6">
-        <div className="mx-auto max-w-3xl">
-          <ChatInput onSend={handleSend} disableAttachment={isLoading} initialValue={presetMessage} />
-        </div>
+        {/* Query builder / waterfall / manual entry — shown when no messages in live mode */}
+        {!activeSession.isReadOnly && messages.length === 0 && !localMessages.some((m) => m.type === 'tool-result') && (
+          <div className="px-6 pb-4 pt-2">
+            <div className="mx-auto max-w-3xl">
+              {activeAction === 'add-asset' ? (
+                <ManualPositionFlow onComplete={handleActionComplete} onCancel={handleActionCancel} />
+              ) : activeCategory ? (
+                <WaterfallFlow
+                  categoryId={activeCategory}
+                  onComplete={handleWaterfallComplete}
+                  onAction={handleWaterfallAction}
+                  onCancel={handleWaterfallCancel}
+                />
+              ) : (
+                <QueryBuilder onSelect={handleQuerySelect} />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Chat input — pinned bottom, hidden in read-only mode */}
+        {!activeSession.isReadOnly && (
+          <div className="px-6 pb-6">
+            <div className="mx-auto max-w-3xl">
+              <ChatInput onSend={handleSend} disableAttachment={isLoading} initialValue={presetMessage} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

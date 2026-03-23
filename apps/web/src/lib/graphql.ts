@@ -32,6 +32,8 @@ const cache = cacheExchange({
     Concentration: () => null,
     CorrelationCluster: () => null,
     PriceEvent: () => null,
+    SessionSummary: (data) => data.id as string,
+    SessionDetail: (data) => data.id as string,
   },
   updates: {
     Mutation: {
@@ -50,6 +52,12 @@ const cache = cacheExchange({
       },
       dismissAlert(_result, _args, cache) {
         cache.invalidate('Query', 'alerts');
+      },
+      createSession(_result, _args, cache) {
+        cache.invalidate('Query', 'sessions');
+      },
+      deleteSession(_result, _args, cache) {
+        cache.invalidate('Query', 'sessions');
       },
     },
   },

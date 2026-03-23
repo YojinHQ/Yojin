@@ -71,6 +71,7 @@ async function buildFullRuntime(): Promise<{
   agentRuntime: AgentRuntime;
   dataRoot: string;
   services: Awaited<ReturnType<typeof buildContext>>;
+  sessionStore: JsonlSessionStore;
 }> {
   const dataRoot = resolveDataRoot();
   const services = await buildContext({ dataRoot });
@@ -85,11 +86,13 @@ async function buildFullRuntime(): Promise<{
   setOnboardingProvider(providerRouter);
   setOnboardingClaudeCodeProvider(claudeProvider);
 
+  const sessionStore = new JsonlSessionStore(`${dataRoot}/sessions`);
+
   const agentRuntime = new AgentRuntime({
     agentRegistry: services.agentRegistry,
     toolRegistry: services.toolRegistry,
     guardRunner: services.guardRunner,
-    sessionStore: new JsonlSessionStore(`${dataRoot}/sessions`),
+    sessionStore,
     eventLog: new EventLog(`${dataRoot}/event-log`),
     provider: providerRouter,
     outputDlp: services.outputDlp,
@@ -98,15 +101,16 @@ async function buildFullRuntime(): Promise<{
     dataRoot,
   });
 
-  return { agentRuntime, dataRoot, services };
+  return { agentRuntime, dataRoot, services, sessionStore };
 }
 
 async function startGateway(): Promise<void> {
-  const { agentRuntime, services } = await buildFullRuntime();
+  const { agentRuntime, services, sessionStore } = await buildFullRuntime();
 
   const gateway = new Gateway(services.config, agentRuntime, {
     snapshotStore: services.snapshotStore,
     connectionManager: services.connectionManager,
+    sessionStore,
   });
 
   // Graceful shutdown
