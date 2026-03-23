@@ -30,7 +30,7 @@ export default function RightPanel({ title, tabs, children }: RightPanelProps) {
                   key={tab.label}
                   onClick={tab.onClick}
                   className={cn(
-                    'relative z-10 flex-1 rounded-md py-1.5 text-xs font-medium transition-colors duration-200',
+                    'relative z-10 flex-1 cursor-pointer rounded-md py-1.5 text-xs font-medium transition-colors duration-200',
                     tab.active ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary',
                   )}
                 >

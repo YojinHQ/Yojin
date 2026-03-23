@@ -499,7 +499,7 @@ export default function NewsFeed() {
                 setExpandedKey(null);
               }}
               className={cn(
-                'relative pb-2.5 pt-1.5 text-xs font-medium transition-colors',
+                'relative cursor-pointer pb-2.5 pt-1.5 text-xs font-medium transition-colors',
                 activeFilter === tab.value ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary',
               )}
             >

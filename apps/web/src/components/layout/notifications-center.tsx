@@ -108,7 +108,7 @@ export default function NotificationsCenter() {
       {/* Bell trigger */}
       <button
         onClick={() => setOpen(!open)}
-        className="relative flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-hover hover:text-text-secondary"
+        className="relative flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-hover hover:text-text-secondary"
       >
         <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
           <path
@@ -126,14 +126,14 @@ export default function NotificationsCenter() {
 
       {/* Dropdown panel */}
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 rounded-xl border border-border bg-bg-secondary shadow-lg shadow-black/30">
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-border bg-bg-secondary shadow-lg shadow-black/30">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <h3 className="text-sm font-medium text-text-primary">Notifications</h3>
             {unreadCount > 0 && (
               <button
                 onClick={markAllRead}
-                className="text-2xs text-accent-primary transition-colors hover:text-accent-secondary"
+                className="cursor-pointer text-2xs text-accent-primary transition-colors hover:text-accent-secondary"
               >
                 Mark all read
               </button>
@@ -149,7 +149,7 @@ export default function NotificationsCenter() {
                   key={n.id}
                   onClick={() => markRead(n.id)}
                   className={cn(
-                    'flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-bg-hover',
+                    'flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-bg-hover',
                     !n.read && 'bg-bg-primary/50',
                   )}
                 >
@@ -194,7 +194,7 @@ export default function NotificationsCenter() {
 
           {/* Footer */}
           <div className="border-t border-border px-4 py-2.5">
-            <button className="w-full text-center text-2xs text-text-muted transition-colors hover:text-text-secondary">
+            <button className="w-full cursor-pointer text-center text-2xs text-text-muted transition-colors hover:text-text-secondary">
               View all notifications
             </button>
           </div>

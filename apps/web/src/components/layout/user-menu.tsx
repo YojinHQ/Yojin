@@ -62,7 +62,7 @@ export default function UserMenu() {
       {/* Avatar trigger */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-bg-hover"
+        className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-bg-hover"
       >
         <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent-primary/15 text-2xs font-medium text-accent-primary">
           DS
@@ -80,7 +80,7 @@ export default function UserMenu() {
           <div className="p-1.5">
             <button
               onClick={() => goTo('/profile')}
-              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+              className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
             >
               <svg
                 className="h-3.5 w-3.5 flex-shrink-0"
@@ -100,7 +100,7 @@ export default function UserMenu() {
 
             <button
               onClick={() => goTo('/settings')}
-              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+              className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
             >
               <svg
                 className="h-3.5 w-3.5 flex-shrink-0"
@@ -123,7 +123,7 @@ export default function UserMenu() {
             <div className="relative" onMouseEnter={() => setThemeOpen(true)} onMouseLeave={() => setThemeOpen(false)}>
               <button
                 onClick={() => setThemeOpen(!themeOpen)}
-                className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+                className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
               >
                 <svg
                   className="h-3.5 w-3.5 flex-shrink-0"
@@ -161,7 +161,7 @@ export default function UserMenu() {
                           setThemeOpen(false);
                         }}
                         className={cn(
-                          'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors',
+                          'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors',
                           theme === opt.value
                             ? 'bg-bg-hover text-text-primary'
                             : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary',

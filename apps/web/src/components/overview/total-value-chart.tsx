@@ -70,7 +70,7 @@ export default function TotalValueChart() {
           key={range}
           onClick={() => setActiveRange(range)}
           className={cn(
-            'rounded px-1.5 py-px text-2xs font-medium transition-colors',
+            'cursor-pointer rounded px-1.5 py-px text-2xs font-medium transition-colors',
             activeRange === range ? 'bg-accent-primary text-white' : 'text-text-muted hover:text-text-secondary',
           )}
         >

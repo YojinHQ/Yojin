@@ -36,7 +36,7 @@ export default function MorningBriefing({
         {onViewFull && (
           <button
             onClick={onViewFull}
-            className="rounded-lg bg-white/15 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/25"
+            className="cursor-pointer rounded-lg bg-white/15 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/25"
           >
             View Full Briefing
           </button>

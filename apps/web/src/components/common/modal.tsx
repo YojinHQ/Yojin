@@ -50,7 +50,10 @@ export default function Modal({
         {title && (
           <div className="mb-4 flex items-center justify-between">
             <h2 className="font-headline text-lg text-text-primary">{title}</h2>
-            <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors">
+            <button
+              onClick={onClose}
+              className="cursor-pointer text-text-muted transition-colors hover:text-text-primary"
+            >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
               </svg>
