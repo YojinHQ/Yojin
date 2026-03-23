@@ -71,4 +71,6 @@ export interface Workflow {
   id: string;
   name: string;
   stages: WorkflowStage[];
+  /** Optional hooks keyed by stage index — run after the stage at that index completes. */
+  afterStageHooks?: Map<number, () => Promise<void>>;
 }

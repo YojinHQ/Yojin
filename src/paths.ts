@@ -24,6 +24,7 @@ const DATA_SUBDIRS = [
   'cron',
   'acp',
   'signals',
+  'memory',
 ] as const;
 
 /**

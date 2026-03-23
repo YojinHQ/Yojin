@@ -18,6 +18,9 @@ export function createRiskManagerProfile(): AgentProfile {
       // Diagnostics
       'diagnose_data_error',
       'check_api_health',
+      // Memory tools
+      'store_signal_memory',
+      'recall_signal_memories',
       // Utility
       'get_current_time',
       'calculate',
