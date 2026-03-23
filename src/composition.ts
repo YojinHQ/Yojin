@@ -18,9 +18,9 @@ import { setConnectionManager } from './api/graphql/resolvers/connections.js';
 import { runHealthChecks, setDataSourceConfigPath } from './api/graphql/resolvers/data-sources.js';
 import { setFetchDeps } from './api/graphql/resolvers/fetch-data-source.js';
 import {
+  onJintelKeyValidated,
   setOnboardingConnectionManager,
   setOnboardingDataRoot,
-  setOnboardingJintelCallback,
   setOnboardingPersonaManager,
   setOnboardingSnapshotStore,
   setOnboardingVault,
@@ -99,6 +99,8 @@ export interface YojinServices {
   pluginRegistry: PluginRegistry;
   dataSourceRegistry: DataSourceRegistry;
   jintelClient?: JintelClient;
+  /** Mutable ref — update `.client` to hot-swap the Jintel client in live tools. */
+  jintelToolOptions: JintelToolOptions;
   personaManager: PersonaManager;
   snapshotStore: PortfolioSnapshotStore;
   piiRedactor: DefaultPiiRedactor;
@@ -340,14 +342,14 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   }
 
   // Jintel tools (6 tools — always registered; return config error if client unavailable)
+  // Keep a mutable ref so the hot-swap callback can update the client without re-registering tools.
   const jintelToolOptions: JintelToolOptions = { client: jintelClient, ingestor: signalIngestor };
   for (const tool of createJintelTools(jintelToolOptions)) {
     toolRegistry.register(tool);
   }
 
-  // Hot-wire callback: when the user validates a Jintel key during onboarding,
-  // create a new client and swap it into the live tool options.
-  setOnboardingJintelCallback((apiKey: string) => {
+  // When Jintel key is validated post-startup, swap the client into live tools.
+  onJintelKeyValidated((apiKey: string) => {
     const newClient = new JintelClient({
       baseUrl: jintelBaseUrl,
       apiKey,
@@ -442,6 +444,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     pluginRegistry,
     dataSourceRegistry,
     jintelClient,
+    jintelToolOptions,
     personaManager: persona,
     snapshotStore,
     piiRedactor,

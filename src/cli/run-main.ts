@@ -13,7 +13,11 @@ import { AcpSessionStore } from '../acp/session-store.js';
 import { ClaudeCodeProvider } from '../ai-providers/claude-code.js';
 import { ProviderRouter } from '../ai-providers/router.js';
 import { VercelAIProvider } from '../ai-providers/vercel-ai.js';
-import { setOnboardingClaudeCodeProvider, setOnboardingProvider } from '../api/graphql/resolvers/onboarding.js';
+import {
+  onJintelKeyValidated,
+  setOnboardingClaudeCodeProvider,
+  setOnboardingProvider,
+} from '../api/graphql/resolvers/onboarding.js';
 import { buildContext } from '../composition.js';
 import { AgentRuntime } from '../core/agent-runtime.js';
 import { EventLog } from '../core/event-log.js';
@@ -90,9 +94,16 @@ async function buildFullRuntime(): Promise<{
   setOnboardingProvider(providerRouter);
   setOnboardingClaudeCodeProvider(claudeProvider);
 
-  // Late-wire ReflectionEngine now that we have both providerRouter and jintelClient
-  if (services.jintelClient) {
-    const priceProvider = createJintelPriceProvider(services.jintelClient);
+  // Wire ReflectionEngine when a JintelClient is available.
+  // Called at startup (if key exists) and post-startup (when key is validated via onboarding).
+  function wireReflection(): void {
+    if (services.reflectionEngine) return; // already wired
+    const client = services.jintelToolOptions.client;
+    if (!client) {
+      log.warn('ReflectionEngine not wired — Jintel client unavailable');
+      return;
+    }
+    const priceProvider = createJintelPriceProvider(client);
     services.reflectionEngine = createReflectionEngine({
       stores: services.memoryStores,
       providerRouter,
@@ -101,6 +112,11 @@ async function buildFullRuntime(): Promise<{
     });
     log.info('ReflectionEngine wired with Jintel PriceProvider');
   }
+
+  wireReflection();
+
+  // Composition handles tool hot-swap; here we wire ReflectionEngine post-startup.
+  onJintelKeyValidated(() => wireReflection());
 
   const agentRuntime = new AgentRuntime({
     agentRegistry: services.agentRegistry,

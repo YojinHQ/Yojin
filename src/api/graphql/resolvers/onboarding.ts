@@ -37,7 +37,7 @@ let connectionManager: ConnectionManager | undefined;
 let snapshotStore: PortfolioSnapshotStore | undefined;
 let claudeCodeProvider: ClaudeCodeProvider | undefined;
 let dataRoot = '.';
-let onJintelKeyValidated: ((apiKey: string) => void) | undefined;
+const jintelKeyListeners: Array<(apiKey: string) => void> = [];
 
 export function setOnboardingVault(v: EncryptedVault): void {
   vault = v;
@@ -68,8 +68,8 @@ export function setOnboardingDataRoot(root: string): void {
   dataRoot = root;
 }
 
-export function setOnboardingJintelCallback(cb: (apiKey: string) => void): void {
-  onJintelKeyValidated = cb;
+export function onJintelKeyValidated(cb: (apiKey: string) => void): void {
+  jintelKeyListeners.push(cb);
 }
 
 // ---------------------------------------------------------------------------
@@ -369,8 +369,8 @@ export async function validateJintelKeyMutation(
 
   try {
     await vault.set('jintel-api-key', apiKey);
-    // Hot-wire the new client so tools work immediately without restart
-    onJintelKeyValidated?.(apiKey);
+    // Notify listeners to hot-wire the new client without restart
+    for (const cb of jintelKeyListeners) cb(apiKey);
     return { success: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
