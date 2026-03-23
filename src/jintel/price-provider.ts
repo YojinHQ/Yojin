@@ -1,13 +1,22 @@
 import type { JintelClient } from './client.js';
 import type { PriceOutcome, PriceProvider } from '../memory/types.js';
 
-export function createJintelPriceProvider(client: JintelClient): PriceProvider {
+export interface PriceProviderOptions {
+  /** Mutable ref — reads client at call time so key rotation takes effect immediately. */
+  getClient: () => JintelClient | undefined;
+}
+
+export function createJintelPriceProvider(options: PriceProviderOptions): PriceProvider {
   // NOTE: The Jintel batchQuotes endpoint returns only the current-day snapshot.
   // `_since` is intentionally ignored because no historical endpoint is available.
   // As a result, `priceAtAnalysis` approximates the baseline as previousClose
   // (yesterday's close), and `highInPeriod` / `lowInPeriod` reflect today's
   // intraday range only — not the full range since `_since`.
   return async (ticker: string, _since: Date): Promise<PriceOutcome> => {
+    const client = options.getClient();
+    if (!client) {
+      throw new Error(`Failed to fetch price for ${ticker}: Jintel client not configured`);
+    }
     const result = await client.quotes([ticker]);
     if (!result.success) {
       throw new Error(`Failed to fetch price for ${ticker}: ${result.error}`);

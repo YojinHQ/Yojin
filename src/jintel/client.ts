@@ -140,7 +140,7 @@ export class JintelClient {
     try {
       const variables: Record<string, unknown> = { query };
       if (options?.type) variables.type = options.type;
-      if (options?.limit) variables.limit = options.limit;
+      if (options?.limit != null) variables.limit = options.limit;
 
       const response = await this.execute(SEARCH_ENTITIES, variables);
       const entities = this.extractData<Entity[]>(response, 'searchEntities');
@@ -178,7 +178,7 @@ export class JintelClient {
   async newsSearch(query: string, limit?: number): Promise<JintelResult<NewsArticle[]>> {
     try {
       const variables: Record<string, unknown> = { query };
-      if (limit) variables.limit = limit;
+      if (limit != null) variables.limit = limit;
 
       const response = await this.execute(NEWS_SEARCH, variables);
       const articles = this.extractData<NewsArticle[]>(response, 'newsSearch');
@@ -204,7 +204,7 @@ export class JintelClient {
   async webSearch(query: string, limit?: number): Promise<JintelResult<WebResult[]>> {
     try {
       const variables: Record<string, unknown> = { query };
-      if (limit) variables.limit = limit;
+      if (limit != null) variables.limit = limit;
 
       const response = await this.execute(WEB_SEARCH, variables);
       const results = this.extractData<WebResult[]>(response, 'webSearch');
