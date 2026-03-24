@@ -37,15 +37,16 @@ export default function Signals() {
   const highlightId = searchParams.get('highlight');
   const initialTicker = searchParams.get('ticker') ?? '';
   const initialType = searchParams.get('type') ?? 'ALL';
+  const initialSearch = searchParams.get('search') ?? '';
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const [typeFilter, setTypeFilter] = useState<string>(initialType);
   const [tickerFilter, setTickerFilter] = useState(initialTicker);
   const [minConfidence, setMinConfidence] = useState(0);
 
   // Date range: store days label, compute `since` via state initializer + callback
-  const [dateRangeLabel, setDateRangeLabel] = useState('7');
-  const [since, setSince] = useState<string | undefined>(() => new Date(Date.now() - 7 * 86_400_000).toISOString());
+  const [dateRangeLabel, setDateRangeLabel] = useState('');
+  const [since, setSince] = useState<string | undefined>(undefined);
   const setDateRange = useCallback((days: string) => {
     setDateRangeLabel(days);
     setSince(days ? new Date(Date.now() - Number(days) * 86_400_000).toISOString() : undefined);

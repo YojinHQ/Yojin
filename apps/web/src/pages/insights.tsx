@@ -429,7 +429,7 @@ function SignalGroup({ signals, impact }: { signals: SignalSummary[]; impact: st
         {signals.map((signal) => (
           <Link
             key={signal.signalId}
-            to={`/signals?highlight=${encodeURIComponent(signal.signalId)}`}
+            to={`/signals?search=${encodeURIComponent(signal.title)}`}
             className="flex items-center gap-2 group"
           >
             <Badge variant={signalTypeVariant[signal.type] ?? 'neutral'} size="xs">
