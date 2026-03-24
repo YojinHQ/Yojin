@@ -1,8 +1,7 @@
+import type { JintelClient, JintelResult, MarketQuote } from '@yojinhq/jintel-client';
 import { describe, expect, it } from 'vitest';
 
-import type { JintelClient, JintelResult } from '../../src/jintel/client.js';
 import { createJintelPriceProvider } from '../../src/jintel/price-provider.js';
-import type { MarketQuote } from '../../src/jintel/types.js';
 
 function makeQuote(overrides: Partial<MarketQuote> = {}): MarketQuote {
   return {

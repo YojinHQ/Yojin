@@ -1,3 +1,4 @@
+import type { JintelClient } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
 import { WatchlistEnrichment } from './watchlist-enrichment.js';
@@ -5,7 +6,6 @@ import { WatchlistStore } from './watchlist-store.js';
 import { AssetClassSchema } from '../api/graphql/types.js';
 import type { AssetClass } from '../api/graphql/types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
-import type { JintelClient } from '../jintel/client.js';
 import { getLogger } from '../logging/index.js';
 
 const log = getLogger().sub('watchlist-adapter');
@@ -155,7 +155,7 @@ function createWatchlistTools(deps: {
 
   const listTool: ToolDefinition = {
     name: 'watchlist.list',
-    description: 'List all watchlist symbols with enrichment data (quote, news, risk score).',
+    description: 'List all watchlist symbols with enrichment data (quote, risk score).',
     parameters: z.object({}),
     async execute(): Promise<ToolResult> {
       try {
@@ -179,13 +179,6 @@ function createWatchlistTools(deps: {
 
           if (cached?.riskScore != null) {
             line += `\n  Risk: ${bucketRiskScore(cached.riskScore)}`;
-          }
-
-          if (cached?.news && cached.news.length > 0) {
-            line += '\n  Recent News:';
-            for (const article of cached.news) {
-              line += `\n    - ${article.title} (${article.source})`;
-            }
           }
 
           lines.push(line);

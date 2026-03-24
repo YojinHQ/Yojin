@@ -1,16 +1,16 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
+import type { EnrichmentField, JintelClient } from '@yojinhq/jintel-client';
+
 import { EnrichmentCacheEntrySchema } from './types.js';
 import type { EnrichmentCacheEntry } from './types.js';
 import type { WatchlistStore } from './watchlist-store.js';
-import type { JintelClient } from '../jintel/client.js';
-import type { EnrichmentField } from '../jintel/types.js';
 import { getLogger } from '../logging/index.js';
 
 const log = getLogger().sub('watchlist-enrichment');
 
-const ENRICHMENT_FIELDS: EnrichmentField[] = ['market', 'news', 'risk'];
+const ENRICHMENT_FIELDS: EnrichmentField[] = ['market', 'risk'];
 const DEFAULT_TTL_SECONDS = 3600; // 1 hour
 const MIN_RESOLVE_RETRY_SECONDS = 60;
 
@@ -107,7 +107,6 @@ export class WatchlistEnrichment {
       symbol: key,
       enrichedAt: new Date().toISOString(),
       quote: entity.market?.quote ?? null,
-      news: (entity.news ?? []).slice(0, 3),
       riskScore: entity.risk?.overallScore ?? null,
     };
 
