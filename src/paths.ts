@@ -25,6 +25,7 @@ const DATA_SUBDIRS = [
   'acp',
   'signals',
   'memory',
+  'insights',
 ] as const;
 
 /**

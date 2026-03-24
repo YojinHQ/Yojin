@@ -98,6 +98,25 @@
   }
 }
 
+@keyframes pipeline-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 90, 94, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(255, 90, 94, 0);
+  }
+}
+
+@keyframes pipeline-data-flow {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
 /* ── Step 5 "Done" completion animations ── */
 
 @keyframes done-draw-stroke {

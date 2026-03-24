@@ -24,6 +24,8 @@ export function createStrategistProfile(): AgentProfile {
       // Memory tools
       'store_signal_memory',
       'recall_signal_memories',
+      // Insight tools
+      'save_insight_report',
       // Utility
       'get_current_time',
       'calculate',

@@ -10,9 +10,11 @@ import { setupToken } from './setup-token.js';
 import { LocalRuntimeBridge } from '../acp/runtime-bridge.js';
 import { startAcpServer } from '../acp/server.js';
 import { AcpSessionStore } from '../acp/session-store.js';
+import { Orchestrator, registerBuiltinWorkflows, setWorkflowProgressCallback } from '../agents/index.js';
 import { ClaudeCodeProvider } from '../ai-providers/claude-code.js';
 import { ProviderRouter } from '../ai-providers/router.js';
 import { VercelAIProvider } from '../ai-providers/vercel-ai.js';
+import { setInsightsOrchestrator } from '../api/graphql/resolvers/insights.js';
 import { setOnboardingClaudeCodeProvider, setOnboardingProvider } from '../api/graphql/resolvers/onboarding.js';
 import { buildContext } from '../composition.js';
 import { AgentRuntime } from '../core/agent-runtime.js';
@@ -51,6 +53,9 @@ export async function runMain(args: string[]): Promise<void> {
       break;
     case 'acp':
       await startAcp();
+      break;
+    case 'insights':
+      await runInsights();
       break;
 
     case 'version':
@@ -120,6 +125,18 @@ async function buildFullRuntime(): Promise<{
 async function startGateway(): Promise<void> {
   const { agentRuntime, services, sessionStore } = await buildFullRuntime();
 
+  // Wire the orchestrator for ProcessInsights mutation
+  const orchestrator = new Orchestrator(agentRuntime);
+  registerBuiltinWorkflows(orchestrator, {
+    reflectionEngine: services.reflectionEngine,
+    insightStore: services.insightStore,
+  });
+  setInsightsOrchestrator(orchestrator);
+
+  // Broadcast workflow progress events to GraphQL subscribers
+  const { pubsub } = await import('../api/graphql/pubsub.js');
+  setWorkflowProgressCallback((event) => pubsub.publish('workflowProgress', event));
+
   const gateway = new Gateway(services.config, agentRuntime, {
     snapshotStore: services.snapshotStore,
     connectionManager: services.connectionManager,
@@ -162,6 +179,45 @@ async function startAcp(): Promise<void> {
   process.on('SIGTERM', () => void gracefulShutdown());
 }
 
+async function runInsights(): Promise<void> {
+  console.log('Processing portfolio insights...\n');
+
+  const { agentRuntime, services } = await buildFullRuntime();
+  const orchestrator = new Orchestrator(agentRuntime);
+  registerBuiltinWorkflows(orchestrator, {
+    reflectionEngine: services.reflectionEngine,
+    insightStore: services.insightStore,
+  });
+
+  const startMs = Date.now();
+  const outputs = await orchestrator.execute('process-insights', {
+    message: 'Process portfolio insights',
+  });
+  const durationMs = Date.now() - startMs;
+
+  // Print summary
+  const strategistOutput = outputs.get('strategist')?.text ?? '';
+  console.log('--- Insight Report ---\n');
+  console.log(strategistOutput);
+  console.log(`\nCompleted in ${(durationMs / 1000).toFixed(1)}s`);
+
+  // Check if a report was persisted
+  const latest = await services.insightStore.getLatest();
+  if (latest) {
+    console.log(`Report saved: ${latest.id}`);
+    console.log(`Portfolio health: ${latest.portfolio.overallHealth}`);
+    console.log(`Positions analyzed: ${latest.positions.length}`);
+    if (latest.portfolio.actionItems.length > 0) {
+      console.log('\nAction items:');
+      for (const item of latest.portfolio.actionItems) {
+        console.log(`  - ${item}`);
+      }
+    }
+  }
+
+  process.exit(0);
+}
+
 function printHelp(): void {
   console.log(`
 Yojin — Your personal AI finance agent
@@ -173,6 +229,7 @@ Commands:
     --provider <id>      Provider to use (default: anthropic)
     --system <prompt>    System prompt
   yojin setup          Connect your Claude account
+  yojin insights       Process portfolio insights (multi-agent analysis)
 
 Advanced:
   yojin serve          Alias for start

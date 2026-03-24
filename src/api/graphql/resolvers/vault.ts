@@ -14,9 +14,17 @@ import type { EncryptedVault } from '../../../trust/vault/vault.js';
 
 let vault: EncryptedVault | undefined;
 
+/** Optional callback fired when a secret is added or updated. */
+let onSecretChanged: ((key: string, value: string) => void) | null = null;
+
 /** Called once during server startup to inject the vault. */
 export function setVault(v: EncryptedVault): void {
   vault = v;
+}
+
+/** Register a callback to react to secret changes (e.g. Jintel key hot-swap). */
+export function setVaultSecretChangedCallback(cb: (key: string, value: string) => void): void {
+  onSecretChanged = cb;
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +208,7 @@ export async function addVaultSecretMutation(
       return { success: false, error: `Secret "${args.input.key}" already exists. Use update instead.` };
     }
     await vault.set(args.input.key, args.input.value);
+    onSecretChanged?.(args.input.key, args.input.value);
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
@@ -219,6 +228,7 @@ export async function updateVaultSecretMutation(
       return { success: false, error: `Secret "${args.input.key}" not found` };
     }
     await vault.set(args.input.key, args.input.value);
+    onSecretChanged?.(args.input.key, args.input.value);
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };

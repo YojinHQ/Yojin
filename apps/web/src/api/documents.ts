@@ -585,6 +585,126 @@ export const DELETE_VAULT_SECRET_MUTATION = gql`
 `;
 
 // ---------------------------------------------------------------------------
+// Queries — Insights
+// ---------------------------------------------------------------------------
+
+export const LATEST_INSIGHT_REPORT_QUERY = gql`
+  query LatestInsightReport {
+    latestInsightReport {
+      id
+      snapshotId
+      positions {
+        symbol
+        name
+        rating
+        conviction
+        thesis
+        keySignals {
+          signalId
+          type
+          title
+          impact
+          confidence
+          url
+        }
+        risks
+        opportunities
+        memoryContext
+        priceTarget
+      }
+      portfolio {
+        overallHealth
+        summary
+        sectorThemes
+        macroContext
+        topRisks
+        topOpportunities
+        actionItems
+      }
+      emotionState {
+        confidence
+        riskAppetite
+        reason
+      }
+      createdAt
+      durationMs
+    }
+  }
+`;
+
+export const INSIGHT_REPORTS_QUERY = gql`
+  query InsightReports($limit: Int) {
+    insightReports(limit: $limit) {
+      id
+      snapshotId
+      portfolio {
+        overallHealth
+        summary
+      }
+      positions {
+        symbol
+        rating
+      }
+      emotionState {
+        confidence
+        riskAppetite
+        reason
+      }
+      createdAt
+      durationMs
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Mutations — Insights
+// ---------------------------------------------------------------------------
+
+export const PROCESS_INSIGHTS_MUTATION = gql`
+  mutation ProcessInsights {
+    processInsights {
+      id
+      snapshotId
+      positions {
+        symbol
+        name
+        rating
+        conviction
+        thesis
+        keySignals {
+          signalId
+          type
+          title
+          impact
+          confidence
+          url
+        }
+        risks
+        opportunities
+        memoryContext
+        priceTarget
+      }
+      portfolio {
+        overallHealth
+        summary
+        sectorThemes
+        macroContext
+        topRisks
+        topOpportunities
+        actionItems
+      }
+      emotionState {
+        confidence
+        riskAppetite
+        reason
+      }
+      createdAt
+      durationMs
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
 // Subscriptions
 // ---------------------------------------------------------------------------
 
@@ -634,6 +754,20 @@ export const ON_PRICE_MOVE_SUBSCRIPTION = gql`
       price
       change
       changePercent
+      timestamp
+    }
+  }
+`;
+
+export const ON_WORKFLOW_PROGRESS_SUBSCRIPTION = gql`
+  subscription OnWorkflowProgress($workflowId: String!) {
+    onWorkflowProgress(workflowId: $workflowId) {
+      workflowId
+      stage
+      stageIndex
+      totalStages
+      agentIds
+      error
       timestamp
     }
   }

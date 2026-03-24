@@ -8,12 +8,14 @@
 import { createPubSub } from 'graphql-yoga';
 
 import type { Alert, ChatEvent, PortfolioSnapshot, PriceEvent } from './types.js';
+import type { WorkflowProgressEvent } from '../../agents/orchestrator.js';
 import type { ConnectionEvent } from '../../scraper/types.js';
 
 export type PubSubEvents = {
   alert: [Alert];
   portfolioUpdate: [PortfolioSnapshot];
   priceMove: [PriceEvent];
+  workflowProgress: [WorkflowProgressEvent];
   [key: `chat:${string}`]: [ChatEvent];
   [key: `connectionStatus:${string}`]: [ConnectionEvent];
 };

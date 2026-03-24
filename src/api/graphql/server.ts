@@ -33,7 +33,18 @@ import {
   toggleDataSourceResolver,
 } from './resolvers/data-sources.js';
 import { fetchDataSourceResolver } from './resolvers/fetch-data-source.js';
-import { onAlertSubscription, onPortfolioUpdateSubscription, onPriceMoveSubscription } from './resolvers/live.js';
+import {
+  insightReportQuery,
+  insightReportsQuery,
+  latestInsightReportQuery,
+  processInsightsMutation,
+} from './resolvers/insights.js';
+import {
+  onAlertSubscription,
+  onPortfolioUpdateSubscription,
+  onPriceMoveSubscription,
+  onWorkflowProgressSubscription,
+} from './resolvers/live.js';
 import { newsQuery, quoteQuery, sectorExposureQuery } from './resolvers/market.js';
 import {
   completeMagicLinkMutation,
@@ -105,6 +116,9 @@ const schema = createSchema({
       sessions: sessionsQuery,
       session: sessionQuery,
       activeSession: activeSessionQuery,
+      latestInsightReport: latestInsightReportQuery,
+      insightReports: insightReportsQuery,
+      insightReport: insightReportQuery,
     },
     Position: positionFieldResolvers,
     Mutation: {
@@ -140,6 +154,7 @@ const schema = createSchema({
       completeOnboarding: completeOnboardingMutation,
       resetOnboarding: resetOnboardingMutation,
       validateJintelKey: validateJintelKeyMutation,
+      processInsights: processInsightsMutation,
     },
     Subscription: {
       onAlert: onAlertSubscription,
@@ -147,6 +162,7 @@ const schema = createSchema({
       onPriceMove: onPriceMoveSubscription,
       onChatMessage: onChatMessageSubscription,
       onConnectionStatus: onConnectionStatusSubscription,
+      onWorkflowProgress: onWorkflowProgressSubscription,
     },
   },
 });

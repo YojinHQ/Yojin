@@ -1,5 +1,21 @@
 [
   {
+    "id": "jintel",
+    "name": "Jintel Intelligence",
+    "type": "API",
+    "capabilities": [
+      "enrichment",
+      "news",
+      "quotes",
+      "sanctions",
+      "search"
+    ],
+    "enabled": true,
+    "priority": 1,
+    "baseUrl": "https://api.jintel.ai/api",
+    "secretRef": "jintel-api-key"
+  },
+  {
     "id": "curl-rss",
     "name": "RSS/Atom Feeds",
     "type": "CLI",

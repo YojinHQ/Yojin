@@ -488,6 +488,77 @@ export interface SignalsVariables {
 }
 
 // ---------------------------------------------------------------------------
+// Insights
+// ---------------------------------------------------------------------------
+
+export type InsightRating = 'STRONG_BUY' | 'BUY' | 'HOLD' | 'SELL' | 'STRONG_SELL';
+export type PortfolioHealth = 'STRONG' | 'HEALTHY' | 'CAUTIOUS' | 'WEAK' | 'CRITICAL';
+
+export interface SignalSummary {
+  signalId: string;
+  type: string;
+  title: string;
+  impact: string;
+  confidence: number;
+  url: string | null;
+}
+
+export interface PositionInsight {
+  symbol: string;
+  name: string;
+  rating: InsightRating;
+  conviction: number;
+  thesis: string;
+  keySignals: SignalSummary[];
+  risks: string[];
+  opportunities: string[];
+  memoryContext: string | null;
+  priceTarget: number | null;
+}
+
+export interface PortfolioInsight {
+  overallHealth: PortfolioHealth;
+  summary: string;
+  sectorThemes: string[];
+  macroContext: string;
+  topRisks: string[];
+  topOpportunities: string[];
+  actionItems: string[];
+}
+
+export interface EmotionState {
+  confidence: number;
+  riskAppetite: number;
+  reason: string;
+}
+
+export interface InsightReport {
+  id: string;
+  snapshotId: string;
+  positions: PositionInsight[];
+  portfolio: PortfolioInsight;
+  emotionState: EmotionState;
+  createdAt: string;
+  durationMs: number;
+}
+
+export interface LatestInsightReportQueryResult {
+  latestInsightReport: InsightReport | null;
+}
+
+export interface InsightReportsQueryResult {
+  insightReports: InsightReport[];
+}
+
+export interface InsightReportQueryResult {
+  insightReport: InsightReport | null;
+}
+
+export interface ProcessInsightsMutationResult {
+  processInsights: InsightReport | null;
+}
+
+// ---------------------------------------------------------------------------
 // Subscriptions
 // ---------------------------------------------------------------------------
 
@@ -627,6 +698,28 @@ export interface OnPortfolioUpdateSubscriptionResult {
 
 export interface OnPriceMoveSubscriptionResult {
   onPriceMove: PriceEvent;
+}
+
+// ---------------------------------------------------------------------------
+// Workflow Progress
+// ---------------------------------------------------------------------------
+
+export interface WorkflowProgressEvent {
+  workflowId: string;
+  stage: 'start' | 'stage_start' | 'stage_complete' | 'complete' | 'error';
+  stageIndex: number | null;
+  totalStages: number | null;
+  agentIds: string[] | null;
+  error: string | null;
+  timestamp: string;
+}
+
+export interface OnWorkflowProgressSubscriptionResult {
+  onWorkflowProgress: WorkflowProgressEvent;
+}
+
+export interface OnWorkflowProgressVariables {
+  workflowId: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -20,6 +20,7 @@ import Chat from './pages/chat';
 import Profile from './pages/profile';
 import Settings from './pages/settings';
 import Dashboard from './pages/dashboard';
+import Insights from './pages/insights';
 import Positions from './pages/positions';
 import OnboardingPage from './pages/onboarding';
 import { ONBOARDING_STATUS_QUERY } from './api/documents';
@@ -158,6 +159,7 @@ export default function App() {
                   <Route path="portfolio" element={<Positions />} />
                   <Route path="portfolio/:symbol" element={<Position />} />
                   <Route path="chat" element={<Chat />} />
+                  <Route path="insights" element={<Insights />} />
                   <Route path="skills" element={<Skills />} />
                   <Route path="profile" element={<Profile />} />
                   <Route path="settings" element={<Settings />} />

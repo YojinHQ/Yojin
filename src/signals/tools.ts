@@ -103,10 +103,12 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
 function formatSignalSummary(s: Signal): string {
   const tickers = s.assets.length > 0 ? ` [${s.assets.map((a) => a.ticker).join(', ')}]` : '';
   const sources = s.sources.map((src) => src.id).join(', ');
-  return `**${s.id}** [${s.type}] — ${s.title}${tickers}\n  ${s.publishedAt} | sources: ${sources}`;
+  const link = typeof s.metadata?.link === 'string' ? `\n  link: ${s.metadata.link}` : '';
+  return `**${s.id}** [${s.type}] — ${s.title}${tickers}\n  ${s.publishedAt} | sources: ${sources}${link}`;
 }
 
 function formatSignalFull(s: Signal): string {
+  const link = typeof s.metadata?.link === 'string' ? s.metadata.link : null;
   const parts = [
     `# ${s.title}`,
     `ID: ${s.id}`,
@@ -114,6 +116,7 @@ function formatSignalFull(s: Signal): string {
     `Published: ${s.publishedAt}`,
     `Ingested: ${s.ingestedAt}`,
     `Confidence: ${s.confidence}`,
+    link ? `Link: ${link}` : null,
     s.assets.length > 0
       ? `Assets: ${s.assets.map((a) => `${a.ticker} (${a.linkType}, relevance: ${a.relevance})`).join(', ')}`
       : null,

@@ -587,6 +587,74 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # ---------------------------------------------------------------------------
+  # Insights
+  # ---------------------------------------------------------------------------
+
+  enum InsightRating {
+    STRONG_BUY
+    BUY
+    HOLD
+    SELL
+    STRONG_SELL
+  }
+
+  enum PortfolioHealth {
+    STRONG
+    HEALTHY
+    CAUTIOUS
+    WEAK
+    CRITICAL
+  }
+
+  type SignalSummary {
+    signalId: String!
+    type: String!
+    title: String!
+    impact: String!
+    confidence: Float!
+    url: String
+  }
+
+  type PositionInsight {
+    symbol: String!
+    name: String!
+    rating: InsightRating!
+    conviction: Float!
+    thesis: String!
+    keySignals: [SignalSummary!]!
+    risks: [String!]!
+    opportunities: [String!]!
+    memoryContext: String
+    priceTarget: Float
+  }
+
+  type PortfolioInsight {
+    overallHealth: PortfolioHealth!
+    summary: String!
+    sectorThemes: [String!]!
+    macroContext: String!
+    topRisks: [String!]!
+    topOpportunities: [String!]!
+    actionItems: [String!]!
+  }
+
+  type EmotionState {
+    confidence: Float!
+    riskAppetite: Float!
+    reason: String!
+  }
+
+  type InsightReport {
+    id: ID!
+    snapshotId: String!
+    positions: [PositionInsight!]!
+    portfolio: PortfolioInsight!
+    emotionState: EmotionState!
+    createdAt: String!
+    durationMs: Float!
+  }
+
+  # ---------------------------------------------------------------------------
   # Root types
   # ---------------------------------------------------------------------------
 
@@ -643,6 +711,9 @@ export const typeDefs = /* GraphQL */ `
     sessions: [SessionSummary!]!
     session(id: ID!): SessionDetail
     activeSession: SessionSummary
+    latestInsightReport: InsightReport
+    insightReports(limit: Int): [InsightReport!]!
+    insightReport(id: ID!): InsightReport
   }
 
   type Mutation {
@@ -678,6 +749,21 @@ export const typeDefs = /* GraphQL */ `
     completeOnboarding: Boolean!
     resetOnboarding: Boolean!
     validateJintelKey(apiKey: String!): ValidateJintelKeyResult!
+    processInsights: InsightReport
+  }
+
+  # ---------------------------------------------------------------------------
+  # Workflow Progress
+  # ---------------------------------------------------------------------------
+
+  type WorkflowProgressEvent {
+    workflowId: String!
+    stage: String!
+    stageIndex: Int
+    totalStages: Int
+    agentIds: [String!]
+    error: String
+    timestamp: String!
   }
 
   type Subscription {
@@ -686,5 +772,6 @@ export const typeDefs = /* GraphQL */ `
     onPriceMove(symbol: String!, threshold: Float!): PriceEvent!
     onChatMessage(threadId: String!): ChatEvent!
     onConnectionStatus(platform: String!): ConnectionEvent!
+    onWorkflowProgress(workflowId: String!): WorkflowProgressEvent!
   }
 `;

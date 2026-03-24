@@ -15,8 +15,13 @@ import { createDefaultProfiles } from './agents/defaults.js';
 import { AgentRegistry } from './agents/registry.js';
 import { pubsub } from './api/graphql/pubsub.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
-import { runHealthChecks, setDataSourceConfigPath } from './api/graphql/resolvers/data-sources.js';
+import {
+  runHealthChecks,
+  setDataSourceConfigPath,
+  setDataSourceJintelClient,
+} from './api/graphql/resolvers/data-sources.js';
 import { setFetchDeps } from './api/graphql/resolvers/fetch-data-source.js';
+import { setInsightStore } from './api/graphql/resolvers/insights.js';
 import {
   setJintelKeyValidatedCallback,
   setOnboardingConnectionManager,
@@ -27,7 +32,7 @@ import {
 } from './api/graphql/resolvers/onboarding.js';
 import { setPortfolioConnectionManager } from './api/graphql/resolvers/portfolio.js';
 import { setSignalArchive } from './api/graphql/resolvers/signals.js';
-import { setVault } from './api/graphql/resolvers/vault.js';
+import { setVault, setVaultSecretChangedCallback } from './api/graphql/resolvers/vault.js';
 import { BrainStore } from './brain/brain.js';
 import { EmotionTracker } from './brain/emotion.js';
 import { FrontalLobe } from './brain/frontal-lobe.js';
@@ -43,6 +48,8 @@ import { POSTURE_CONFIGS } from './guards/posture.js';
 import { createDefaultGuards } from './guards/registry.js';
 import type { OutputDlpGuard } from './guards/security/output-dlp.js';
 import type { PostureName } from './guards/types.js';
+import { wireInsights } from './insights/adapter.js';
+import type { InsightStore } from './insights/insight-store.js';
 import { JintelClient } from './jintel/client.js';
 import { createJintelTools } from './jintel/tools.js';
 import type { JintelToolOptions } from './jintel/tools.js';
@@ -108,6 +115,7 @@ export interface YojinServices {
   piiScanner: ChatPiiScanner;
   memoryStores: Map<MemoryAgentRole, SignalMemoryStore>;
   reflectionEngine?: ReflectionEngine;
+  insightStore: InsightStore;
   brain: {
     persona: PersonaManager;
     frontalLobe: FrontalLobe;
@@ -269,13 +277,35 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   // 6. DataSourceRegistry (empty — no sources registered yet)
   const dataSourceRegistry = new DataSourceRegistry();
 
-  // 6a. Seed data-sources.json from factory defaults if missing
+  // 6a. Seed data-sources.json from factory defaults if missing, or add Jintel if absent
   const dsConfigPath = `${dataRoot}/config/data-sources.json`;
   if (!existsSync(dsConfigPath)) {
     const defaultDs = `${resolveDefaultsRoot()}/data-sources.default.json`;
     if (existsSync(defaultDs)) {
       await copyFile(defaultDs, dsConfigPath);
       log.info('Seeded data-sources.json from factory defaults');
+    }
+  } else {
+    // Ensure Jintel entry exists in existing configs (added in later version)
+    try {
+      const { readFile, writeFile } = await import('node:fs/promises');
+      const raw = JSON.parse(await readFile(dsConfigPath, 'utf-8')) as Record<string, unknown>[];
+      if (Array.isArray(raw) && !raw.some((ds) => ds.id === 'jintel')) {
+        raw.unshift({
+          id: 'jintel',
+          name: 'Jintel Intelligence',
+          type: 'API',
+          capabilities: ['enrichment', 'news', 'quotes', 'sanctions', 'search'],
+          enabled: true,
+          priority: 1,
+          baseUrl: 'https://api.jintel.ai/api',
+          secretRef: 'jintel-api-key',
+        });
+        await writeFile(dsConfigPath, JSON.stringify(raw, null, 2) + '\n', 'utf-8');
+        log.info('Added Jintel to data-sources.json');
+      }
+    } catch (err) {
+      log.warn('Failed to seed Jintel data source entry', { error: String(err) });
     }
   }
 
@@ -286,10 +316,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   setDataSourceConfigPath(dsConfigPath);
   setFetchDeps({ configPath: dsConfigPath, ingestor: signalIngestor, vault });
 
-  // 6c. Run data source health checks (non-blocking)
-  runHealthChecks().catch((err) => log.warn('Data source health check failed', { error: String(err) }));
-
-  // 6d. Jintel client (primary intelligence source)
+  // 6c. Jintel client (primary intelligence source)
   const jintelBaseUrl = process.env.JINTEL_API_URL ?? 'https://api.jintel.ai/api';
   let jintelClient: JintelClient | undefined;
   if (vault?.isUnlocked) {
@@ -312,6 +339,12 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
       log.warn(`Jintel client init failed: ${msg}`);
     }
   }
+
+  // Wire Jintel client into data source health checks
+  setDataSourceJintelClient(() => jintelClient);
+
+  // 6d. Run data source health checks (non-blocking — after Jintel client init)
+  runHealthChecks().catch((err) => log.warn('Data source health check failed', { error: String(err) }));
 
   // 7. ToolRegistry — register all tools
   const toolRegistry = new ToolRegistry();
@@ -362,8 +395,8 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     toolRegistry.register(tool);
   }
 
-  // Hot-swap Jintel client on key validation.
-  setJintelKeyValidatedCallback((apiKey: string) => {
+  // Shared hot-swap: create a new JintelClient and update all references.
+  const hotSwapJintelClient = (apiKey: string) => {
     const newClient = new JintelClient({
       baseUrl: jintelBaseUrl,
       apiKey,
@@ -373,7 +406,17 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     jintelClient = newClient;
     watchlistEnrichment.setJintelClient(newClient);
     watchlistToolOptions.client = newClient;
-    log.info('Jintel client hot-swapped after key validation');
+    log.info('Jintel client hot-swapped');
+  };
+
+  // Hot-swap on onboarding key validation.
+  setJintelKeyValidatedCallback(hotSwapJintelClient);
+
+  // Hot-swap when jintel-api-key is added/updated directly in the vault UI.
+  setVaultSecretChangedCallback((key, value) => {
+    if (key === 'jintel-api-key') {
+      hotSwapJintelClient(value);
+    }
   });
 
   // Signal tools (3 tools: glob_signals, grep_signals, read_signal)
@@ -414,6 +457,13 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   for (const tool of createDisplayTools()) {
     toolRegistry.register(tool);
   }
+
+  // Insight tools (1 tool: save_insight_report)
+  const { insightStore, tools: insightTools } = wireInsights({ dataRoot });
+  for (const tool of insightTools) {
+    toolRegistry.register(tool);
+  }
+  setInsightStore(insightStore);
 
   // Platform tools (3 tools if ConnectionManager available)
   if (connectionManager) {
@@ -472,6 +522,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     piiScanner,
     memoryStores: memoryResult.stores,
     reflectionEngine: memoryResult.reflectionEngine,
+    insightStore,
     brain: {
       persona,
       frontalLobe,
