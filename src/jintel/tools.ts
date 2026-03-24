@@ -269,22 +269,16 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       if (!options.client) return notConfigured();
       const fields = params.fields ?? ['market', 'risk'];
 
-      // Try batch endpoint first; fall back to individual calls if not available
-      const result = await options.client.batchEnrich(params.tickers, fields);
-      let entities: Entity[];
-
-      if (result.success) {
-        entities = result.data;
-      } else {
-        // Fallback: enrich each ticker individually (parallel)
-        const client = options.client;
-        const fallbackResults: JintelResult<Entity>[] = await Promise.all(
-          params.tickers.map((ticker) => client.enrichEntity(ticker, fields)),
-        );
-        entities = fallbackResults.filter((r): r is { success: true; data: Entity } => r.success).map((r) => r.data);
-        if (entities.length === 0) {
-          return failureResult(`Batch enrich failed and individual fallback returned no data`);
-        }
+      // Enrich each ticker individually (parallel)
+      const client = options.client;
+      const fallbackResults: JintelResult<Entity>[] = await Promise.all(
+        params.tickers.map((ticker) => client.enrichEntity(ticker, fields)),
+      );
+      const entities = fallbackResults
+        .filter((r): r is { success: true; data: Entity } => r.success)
+        .map((r) => r.data);
+      if (entities.length === 0) {
+        return failureResult(`Batch enrich returned no data for ${params.tickers.join(', ')}`);
       }
 
       const sections = entities.map((entity) => formatEnrichment(entity));

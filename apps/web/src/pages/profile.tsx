@@ -1,9 +1,13 @@
 import { useCallback, useState } from 'react';
+import { useQuery } from 'urql';
 
 import Card from '../components/common/card';
 import Spinner from '../components/common/spinner';
 import Button from '../components/common/button';
 import Badge from '../components/common/badge';
+import { JintelKeyForm } from '../components/jintel/jintel-key-form';
+import { ONBOARDING_STATUS_QUERY } from '../api/documents';
+import type { OnboardingStatusQueryResult } from '../api/types';
 import { DataSourceCard } from '../components/data-sources/data-source-card';
 import { AddDataSourceModal } from '../components/data-sources/add-data-source-modal';
 import { PlatformCard } from '../components/platforms/platform-card';
@@ -42,6 +46,10 @@ export default function Profile() {
   const [, removeDataSource] = useRemoveDataSource();
   const [, toggleDataSource] = useToggleDataSource();
   const [, fetchDataSource] = useFetchDataSource();
+  const [{ data: statusData }, reexecuteStatus] = useQuery<OnboardingStatusQueryResult>({
+    query: ONBOARDING_STATUS_QUERY,
+  });
+  const jintelConfigured = statusData?.onboardingStatus?.jintelConfigured ?? false;
 
   function openAddModal() {
     setAddModalKey((k: number) => k + 1);
@@ -237,6 +245,37 @@ export default function Profile() {
         onClose={() => setAddModalOpen(false)}
         connectedPlatforms={connectedPlatforms}
       />
+
+      {/* Jintel Intelligence */}
+      <section>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-headline text-lg text-text-primary">Jintel Intelligence</h2>
+        </div>
+
+        <Card>
+          {jintelConfigured ? (
+            <div className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-2.5 w-2.5 rounded-full bg-success" />
+                <span className="text-sm text-text-primary">Connected</span>
+              </div>
+              <a href="#vault" className="text-xs text-text-muted hover:text-text-secondary">
+                Manage in Vault
+              </a>
+            </div>
+          ) : (
+            <div className="space-y-4 p-4">
+              <div>
+                <h3 className="text-sm font-medium text-text-primary">Connect Jintel for full intelligence features</h3>
+                <p className="mt-1 text-xs text-text-secondary">
+                  Real-time quotes, enriched fundamentals, news sentiment, and risk screening.
+                </p>
+              </div>
+              <JintelKeyForm onSuccess={() => reexecuteStatus({ requestPolicy: 'network-only' })} />
+            </div>
+          )}
+        </Card>
+      </section>
 
       {/* Data Sources */}
       <Card title="Data Sources" section className="relative">

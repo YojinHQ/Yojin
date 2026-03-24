@@ -69,7 +69,7 @@ describe('buildContext', () => {
     // Watchlist tools
     expect(names).toContain('watchlist_add');
     expect(names).toContain('watchlist_remove');
-    expect(names).toContain('watchlist.list');
+    expect(names).toContain('watchlist_list');
     // Display tools
     expect(names).toContain('display_portfolio_overview');
     expect(names).toContain('display_positions_list');

@@ -1,11 +1,35 @@
 /**
  * Market resolvers — quote, news, sectorExposure.
+ *
+ * When JintelClient is injected, resolvers fetch live data and fall back to
+ * stubs on failure. Without a client, stubs are returned directly.
  */
 
+import type { JintelClient } from '@yojinhq/jintel-client';
+
+import { createSubsystemLogger } from '../../../logging/logger.js';
+import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { Article, Quote, SectorWeight } from '../types.js';
 
+const log = createSubsystemLogger('market-resolver');
+
 // ---------------------------------------------------------------------------
-// Stub data
+// Module-level state (injected via setters from composition root)
+// ---------------------------------------------------------------------------
+
+let jintelClient: JintelClient | undefined;
+let snapshotStore: PortfolioSnapshotStore | undefined;
+
+export function setMarketJintelClient(c: JintelClient | undefined): void {
+  jintelClient = c;
+}
+
+export function setMarketSnapshotStore(s: PortfolioSnapshotStore | undefined): void {
+  snapshotStore = s;
+}
+
+// ---------------------------------------------------------------------------
+// Stub data (fallback when Jintel is unavailable)
 // ---------------------------------------------------------------------------
 
 const stubQuotes: Record<string, Quote> = {
@@ -89,25 +113,72 @@ const stubSectorExposure: SectorWeight[] = [
 // Query resolvers
 // ---------------------------------------------------------------------------
 
-export function quoteQuery(_parent: unknown, args: { symbol: string }): Quote | null {
-  return stubQuotes[args.symbol.toUpperCase()] ?? null;
+export async function quoteQuery(_parent: unknown, args: { symbol: string }): Promise<Quote | null> {
+  const sym = args.symbol.toUpperCase();
+
+  if (jintelClient) {
+    const result = await jintelClient.quotes([sym]).catch(() => ({
+      success: false as const,
+      error: 'quotes threw',
+      data: [] as never[],
+    }));
+    if (result.success && result.data[0]) {
+      const q = result.data[0];
+      return {
+        symbol: q.ticker,
+        price: q.price,
+        change: q.change,
+        changePercent: q.changePercent,
+        volume: q.volume,
+        high: q.high ?? 0,
+        low: q.low ?? 0,
+        open: q.open ?? 0,
+        previousClose: q.previousClose ?? 0,
+        timestamp: q.timestamp,
+      };
+    }
+    if (!result.success) {
+      log.warn('Jintel quote failed, using stub', { symbol: sym, error: result.error });
+    }
+  }
+
+  return stubQuotes[sym] ?? null;
 }
 
 export function newsQuery(_parent: unknown, args: { symbol?: string; limit?: number }): Article[] {
   let articles = stubArticles;
-
   if (args.symbol) {
     const sym = args.symbol.toUpperCase();
     articles = articles.filter((a) => a.symbols.includes(sym));
   }
-
   if (args.limit && args.limit > 0) {
     articles = articles.slice(0, args.limit);
   }
-
   return articles;
 }
 
-export function sectorExposureQuery(): SectorWeight[] {
+export async function sectorExposureQuery(): Promise<SectorWeight[]> {
+  if (snapshotStore) {
+    const snapshot = await snapshotStore.getLatest();
+    if (snapshot && snapshot.positions.length > 0) {
+      const sectorMap = new Map<string, number>();
+      let total = 0;
+
+      for (const pos of snapshot.positions) {
+        const sector = pos.sector || 'Other';
+        sectorMap.set(sector, (sectorMap.get(sector) ?? 0) + pos.marketValue);
+        total += pos.marketValue;
+      }
+
+      if (total > 0) {
+        return Array.from(sectorMap.entries()).map(([sector, value]) => ({
+          sector,
+          weight: value / total,
+          value,
+        }));
+      }
+    }
+  }
+
   return stubSectorExposure;
 }

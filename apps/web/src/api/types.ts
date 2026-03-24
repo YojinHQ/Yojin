@@ -264,6 +264,16 @@ export interface OnboardingStatus {
   aiCredentialConfigured: boolean;
   connectedPlatforms: string[];
   briefingConfigured: boolean;
+  jintelConfigured: boolean;
+}
+
+export interface ValidateJintelKeyResult {
+  success: boolean;
+  error?: string;
+}
+
+export interface ValidateJintelKeyMutationResult {
+  validateJintelKey: ValidateJintelKeyResult;
 }
 
 export interface OnboardingStatusQueryResult {

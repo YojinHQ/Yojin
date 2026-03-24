@@ -118,9 +118,9 @@ function StatusLed({ active, label, detail, index }: StatusLedProps) {
   );
 }
 
-/* ─── Step 5: Done ──────────────────────────────────────────────── */
+/* ─── Step 6: Done ──────────────────────────────────────────────── */
 
-export function Step5Done() {
+export function Step6Done() {
   const { state, completeOnboarding } = useOnboarding();
   const navigate = useNavigate();
   const [, executeComplete] = useMutation(COMPLETE_ONBOARDING_MUTATION);
@@ -164,7 +164,7 @@ export function Step5Done() {
   ];
 
   return (
-    <OnboardingShell currentStep={5}>
+    <OnboardingShell currentStep={6}>
       <div className="flex w-full max-w-lg flex-col items-center">
         {/* ── Animated emblem ── */}
         <div className="mb-6">

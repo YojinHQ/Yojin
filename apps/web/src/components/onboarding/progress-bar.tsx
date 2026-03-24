@@ -5,9 +5,9 @@ interface ProgressBarProps {
   totalSteps?: number;
 }
 
-const STEP_LABELS = ['AI Brain', 'Persona', 'Platforms', 'Briefing', 'Done'];
+const STEP_LABELS = ['AI Brain', 'Persona', 'Platforms', 'Jintel', 'Briefing', 'Done'];
 
-export function ProgressBar({ currentStep, totalSteps = 5 }: ProgressBarProps) {
+export function ProgressBar({ currentStep, totalSteps = 6 }: ProgressBarProps) {
   return (
     <div className="flex items-center justify-center gap-2">
       {Array.from({ length: totalSteps }, (_, i) => {

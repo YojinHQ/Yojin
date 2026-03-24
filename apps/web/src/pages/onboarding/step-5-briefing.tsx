@@ -62,7 +62,7 @@ function detectTimezone(): string {
   }
 }
 
-export function Step4Briefing() {
+export function Step5Briefing() {
   const { state, updateState, nextStep, prevStep } = useOnboarding();
 
   const [time, setTime] = useState(state.briefing?.time ?? '08:00');
@@ -110,7 +110,7 @@ export function Step4Briefing() {
   }, [time, timezone, sections, updateState, nextStep]);
 
   return (
-    <OnboardingShell currentStep={4}>
+    <OnboardingShell currentStep={5}>
       <div className="w-full max-w-lg">
         {/* Header */}
         <div

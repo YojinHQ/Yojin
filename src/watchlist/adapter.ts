@@ -154,8 +154,9 @@ function createWatchlistTools(deps: {
   };
 
   const listTool: ToolDefinition = {
-    name: 'watchlist.list',
+    name: 'watchlist_list',
     description: 'List all watchlist symbols with enrichment data (quote, risk score).',
+
     parameters: z.object({}),
     async execute(): Promise<ToolResult> {
       try {
