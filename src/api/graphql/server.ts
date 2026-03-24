@@ -86,6 +86,7 @@ import {
   updateVaultSecretMutation,
   vaultStatusQuery,
 } from './resolvers/vault.js';
+import { addToWatchlistMutation, removeFromWatchlistMutation, watchlistQuery } from './resolvers/watchlist.js';
 import { typeDefs } from './schema.js';
 
 const schema = createSchema({
@@ -119,6 +120,7 @@ const schema = createSchema({
       latestInsightReport: latestInsightReportQuery,
       insightReports: insightReportsQuery,
       insightReport: insightReportQuery,
+      watchlist: watchlistQuery,
     },
     Position: positionFieldResolvers,
     Mutation: {
@@ -155,6 +157,8 @@ const schema = createSchema({
       resetOnboarding: resetOnboardingMutation,
       validateJintelKey: validateJintelKeyMutation,
       processInsights: processInsightsMutation,
+      addToWatchlist: addToWatchlistMutation,
+      removeFromWatchlist: removeFromWatchlistMutation,
     },
     Subscription: {
       onAlert: onAlertSubscription,
