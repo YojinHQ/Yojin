@@ -72,32 +72,30 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
       search?: string;
       limit: number;
     }): Promise<ToolResult> {
-      // Batch mode: query all tickers at once, group results
-      if (params.tickers && params.tickers.length > 0) {
-        const signals = await archive.query({
-          type: params.type,
-          tickers: params.tickers,
-          sourceId: params.sourceId,
-          since: params.since,
-          until: params.until,
-          search: params.search,
-          limit: params.limit * params.tickers.length, // allow limit per ticker
-        });
-
-        if (signals.length === 0) {
-          return { content: `No signals found for tickers: ${params.tickers.join(', ')}` };
-        }
-
-        // Group by ticker for readability
+      // Batch mode: query per ticker to guarantee limit per ticker
+      if (params.tickers) {
         const byTicker = new Map<string, Signal[]>();
-        for (const s of signals) {
-          for (const asset of s.assets) {
-            if (params.tickers.includes(asset.ticker)) {
-              const group = byTicker.get(asset.ticker) ?? [];
-              group.push(s);
-              byTicker.set(asset.ticker, group);
+
+        // Query each ticker individually to guarantee per-ticker limits
+        await Promise.all(
+          params.tickers.map(async (ticker) => {
+            const signals = await archive.query({
+              type: params.type,
+              tickers: [ticker],
+              sourceId: params.sourceId,
+              since: params.since,
+              until: params.until,
+              search: params.search,
+              limit: params.limit,
+            });
+            if (signals.length > 0) {
+              byTicker.set(ticker, signals);
             }
-          }
+          }),
+        );
+
+        if (byTicker.size === 0) {
+          return { content: `No signals found for tickers: ${params.tickers.join(', ')}` };
         }
 
         const sections: string[] = [];
