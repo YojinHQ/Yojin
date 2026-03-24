@@ -234,6 +234,16 @@ export const ONBOARDING_STATUS_QUERY = gql`
       aiCredentialConfigured
       connectedPlatforms
       briefingConfigured
+      jintelConfigured
+    }
+  }
+`;
+
+export const VALIDATE_JINTEL_KEY_MUTATION = gql`
+  mutation ValidateJintelKey($apiKey: String!) {
+    validateJintelKey(apiKey: $apiKey) {
+      success
+      error
     }
   }
 `;

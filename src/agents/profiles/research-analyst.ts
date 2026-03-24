@@ -33,9 +33,9 @@ export function createResearchAnalystProfile(): AgentProfile {
       'store_signal_memory',
       'recall_signal_memories',
       // Watchlist
-      'watchlist.add',
-      'watchlist.remove',
-      'watchlist.list',
+      'watchlist_add',
+      'watchlist_remove',
+      'watchlist_list',
       // Utility
       'get_current_time',
       'calculate',

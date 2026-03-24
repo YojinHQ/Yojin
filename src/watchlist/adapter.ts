@@ -78,7 +78,7 @@ function createWatchlistTools(deps: {
   });
 
   const addTool: ToolDefinition = {
-    name: 'watchlist.add',
+    name: 'watchlist_add',
     description: 'Add a symbol to the watchlist. Resolves company name and enriches via Jintel automatically.',
     parameters: addSchema,
     async execute(params): Promise<ToolResult> {
@@ -130,7 +130,7 @@ function createWatchlistTools(deps: {
   });
 
   const removeTool: ToolDefinition = {
-    name: 'watchlist.remove',
+    name: 'watchlist_remove',
     description: 'Remove a symbol from the watchlist.',
     parameters: removeSchema,
     async execute(params): Promise<ToolResult> {
@@ -154,7 +154,7 @@ function createWatchlistTools(deps: {
   };
 
   const listTool: ToolDefinition = {
-    name: 'watchlist.list',
+    name: 'watchlist_list',
     description: 'List all watchlist symbols with enrichment data (quote, news, risk score).',
     parameters: z.object({}),
     async execute(): Promise<ToolResult> {

@@ -7,8 +7,9 @@ import { Step0Welcome } from './onboarding/step-0-welcome';
 import { Step1AiBrain } from './onboarding/step-1-ai-brain';
 import { Step2Persona } from './onboarding/step-2-persona';
 import { Step3Platforms } from './onboarding/step-3-platforms';
-import { Step4Briefing } from './onboarding/step-4-briefing';
-import { Step5Done } from './onboarding/step-5-done';
+import { Step4Jintel } from './onboarding/step-4-jintel';
+import { Step5Briefing } from './onboarding/step-5-briefing';
+import { Step6Done } from './onboarding/step-6-done';
 
 /**
  * Determines the first incomplete onboarding step based on backend status.
@@ -21,7 +22,7 @@ function resolveResumeStep(status: OnboardingStatusQueryResult['onboardingStatus
   if (!status) return undefined;
 
   // If onboarding was completed, the guard should have redirected — but just in case
-  if (status.completed) return 5;
+  if (status.completed) return 6;
 
   // Only resume if the user actually went through onboarding steps (persona confirmed).
   // Env-var auto-detection alone is not "progress" — the user never interacted with the flow.
@@ -29,9 +30,9 @@ function resolveResumeStep(status: OnboardingStatusQueryResult['onboardingStatus
 
   // Persona exists but onboarding wasn't completed — resume at first missing step
   if (status.connectedPlatforms.length === 0) return 3;
-  if (!status.briefingConfigured) return 4;
+  if (!status.briefingConfigured) return 5;
 
-  return 5;
+  return 6;
 }
 
 function OnboardingRouter() {
@@ -47,9 +48,11 @@ function OnboardingRouter() {
     case 3:
       return <Step3Platforms />;
     case 4:
-      return <Step4Briefing />;
+      return <Step4Jintel />;
     case 5:
-      return <Step5Done />;
+      return <Step5Briefing />;
+    case 6:
+      return <Step6Done />;
     default:
       return <Step0Welcome />;
   }

@@ -5,6 +5,7 @@
  * empty state when no snapshots have been imported yet.
  */
 
+import type { JintelClient } from '../../../jintel/client.js';
 import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { ConnectionManager } from '../../../scraper/connection-manager.js';
 import { pubsub } from '../pubsub.js';
@@ -20,6 +21,11 @@ import type {
 
 let snapshotStore: PortfolioSnapshotStore | undefined;
 let connectionManager: ConnectionManager | undefined;
+let jintelClient: JintelClient | undefined;
+
+export function setPortfolioJintelClient(c: JintelClient | undefined): void {
+  jintelClient = c;
+}
 
 // ---------------------------------------------------------------------------
 // Mock sparkline / day-change generation (until real market data is wired)
@@ -128,18 +134,29 @@ export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> 
 
 export async function enrichedSnapshotQuery(): Promise<EnrichedSnapshot> {
   const snapshot = await getSnapshot();
-  const enriched: EnrichedPosition[] = snapshot.positions.map((p) => ({
-    ...p,
-    sentimentScore: undefined,
-    sentimentLabel: undefined,
-    analystRating: undefined,
-    targetPrice: undefined,
-    peRatio: undefined,
-    dividendYield: undefined,
-    beta: undefined,
-    fiftyTwoWeekHigh: undefined,
-    fiftyTwoWeekLow: undefined,
-  }));
+  const enriched: EnrichedPosition[] = await Promise.all(
+    snapshot.positions.map(async (p): Promise<EnrichedPosition> => {
+      if (!jintelClient) {
+        return { ...p };
+      }
+
+      const result = await jintelClient.enrichEntity(p.symbol, ['market']);
+      if (!result.success || !result.data.market?.fundamentals) {
+        return { ...p };
+      }
+
+      const f = result.data.market.fundamentals;
+      return {
+        ...p,
+        peRatio: f.peRatio ?? undefined,
+        dividendYield: f.dividendYield ?? undefined,
+        beta: f.beta ?? undefined,
+        fiftyTwoWeekHigh: f.fiftyTwoWeekHigh ?? undefined,
+        fiftyTwoWeekLow: f.fiftyTwoWeekLow ?? undefined,
+        sector: f.sector ?? undefined,
+      };
+    }),
+  );
 
   return {
     id: `enriched-${Date.now()}`,

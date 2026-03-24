@@ -33,10 +33,16 @@ export interface BriefingState {
   channel: 'web';
 }
 
+export interface JintelState {
+  configured: boolean;
+  skipped: boolean;
+}
+
 export interface OnboardingState {
   aiProvider?: AiProviderState;
   persona?: PersonaState;
   platforms?: PlatformsState;
+  jintel?: JintelState;
   briefing?: BriefingState;
 }
 
@@ -64,7 +70,7 @@ const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 function readStep(): number {
   const raw = localStorage.getItem(STEP_KEY);
   const n = raw ? parseInt(raw, 10) : 0;
-  return Number.isNaN(n) ? 0 : Math.min(Math.max(n, 0), 5);
+  return Number.isNaN(n) ? 0 : Math.min(Math.max(n, 0), 6);
 }
 
 function readState(): OnboardingState {
@@ -112,11 +118,11 @@ export function OnboardingProvider({
   }, []);
 
   const goToStep = useCallback((step: number) => {
-    setCurrentStep(Math.min(Math.max(step, 0), 5));
+    setCurrentStep(Math.min(Math.max(step, 0), 6));
   }, []);
 
   const nextStep = useCallback(() => {
-    setCurrentStep((prev) => Math.min(prev + 1, 5));
+    setCurrentStep((prev) => Math.min(prev + 1, 6));
   }, []);
 
   const prevStep = useCallback(() => {

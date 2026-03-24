@@ -17,6 +17,7 @@ import { pubsub } from './api/graphql/pubsub.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
 import { runHealthChecks, setDataSourceConfigPath } from './api/graphql/resolvers/data-sources.js';
 import { setFetchDeps } from './api/graphql/resolvers/fetch-data-source.js';
+import { setMarketJintelClient, setMarketSnapshotStore } from './api/graphql/resolvers/market.js';
 import {
   setJintelKeyValidatedCallback,
   setOnboardingConnectionManager,
@@ -25,7 +26,7 @@ import {
   setOnboardingSnapshotStore,
   setOnboardingVault,
 } from './api/graphql/resolvers/onboarding.js';
-import { setPortfolioConnectionManager } from './api/graphql/resolvers/portfolio.js';
+import { setPortfolioConnectionManager, setPortfolioJintelClient } from './api/graphql/resolvers/portfolio.js';
 import { setSignalArchive } from './api/graphql/resolvers/signals.js';
 import { setVault } from './api/graphql/resolvers/vault.js';
 import { BrainStore } from './brain/brain.js';
@@ -233,6 +234,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
 
   // 4b. Portfolio snapshot store (created early — ConnectionManager needs it)
   const snapshotStore = new PortfolioSnapshotStore(dataRoot);
+  setMarketSnapshotStore(snapshotStore);
 
   // 4c. ConnectionManager (requires unlocked vault)
   let connectionManager: ConnectionManager | undefined;
@@ -302,6 +304,10 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
           debug: process.env.JINTEL_DEBUG === '1',
         });
         log.info('Jintel client ready');
+
+        // Inject Jintel client into GraphQL resolvers
+        setMarketJintelClient(jintelClient);
+        setPortfolioJintelClient(jintelClient);
       } else {
         log.warn(
           'Jintel API key not configured — intelligence features disabled. Complete onboarding or add key "jintel-api-key" in Settings → Vault.',
@@ -348,7 +354,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     toolRegistry.register(tool);
   }
 
-  // Watchlist tools (3 tools: watchlist.add, watchlist.remove, watchlist.list)
+  // Watchlist tools (3 tools: watchlist_add, watchlist_remove, watchlist_list)
   const {
     enrichment: watchlistEnrichment,
     toolOptions: watchlistToolOptions,
@@ -373,6 +379,8 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     jintelClient = newClient;
     watchlistEnrichment.setJintelClient(newClient);
     watchlistToolOptions.client = newClient;
+    setMarketJintelClient(newClient);
+    setPortfolioJintelClient(newClient);
     log.info('Jintel client hot-swapped after key validation');
   });
 
