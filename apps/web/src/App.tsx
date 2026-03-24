@@ -35,9 +35,22 @@ function RedirectPositionSymbol() {
  * from anywhere via useOnboardingModal().
  */
 function OnboardingGuard() {
+  // Allow ?reset query param to clear onboarding state for testing
+  const [didReset] = useState(() => {
+    if (new URLSearchParams(window.location.search).has('reset')) {
+      localStorage.removeItem(ONBOARDING_KEYS.COMPLETE_KEY);
+      localStorage.removeItem(ONBOARDING_KEYS.SKIPPED_KEY);
+      localStorage.removeItem(ONBOARDING_KEYS.STEP_KEY);
+      localStorage.removeItem(ONBOARDING_KEYS.STATE_KEY);
+      window.history.replaceState({}, '', window.location.pathname);
+      return true;
+    }
+    return false;
+  });
+
   const [modalOpen, setModalOpen] = useState(false);
-  const [completed, setCompleted] = useState(() => isOnboardingComplete());
-  const [skipped, setSkipped] = useState(() => isOnboardingSkipped());
+  const [completed, setCompleted] = useState(() => (didReset ? false : isOnboardingComplete()));
+  const [skipped, setSkipped] = useState(() => (didReset ? false : isOnboardingSkipped()));
 
   const [result] = useQuery<OnboardingStatusQueryResult>({
     query: ONBOARDING_STATUS_QUERY,

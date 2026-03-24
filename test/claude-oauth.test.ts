@@ -32,7 +32,7 @@ describe('buildClaudeOAuthUrl', () => {
       codeChallenge: 'test-challenge',
       state: 'test-state',
     });
-    expect(url).toContain('https://claude.ai/oauth/authorize?');
+    expect(url).toContain('https://platform.claude.com/oauth/authorize?');
     expect(url).toContain('code_challenge=test-challenge');
     expect(url).toContain('state=test-state');
     expect(url).toContain('response_type=code');
@@ -158,7 +158,7 @@ describe('loginClaudeOAuth', () => {
       onProgress: () => {},
     });
 
-    expect(capturedUrl).toContain('https://claude.ai/oauth/authorize?');
+    expect(capturedUrl).toContain('https://platform.claude.com/oauth/authorize?');
     expect(result.accessToken).toBe('sk-ant-oat01-login-token');
     expect(result.refreshToken).toBe('rt-login');
     vi.unstubAllGlobals();

@@ -135,6 +135,8 @@ async function activateOAuthToken(token: string): Promise<void> {
  * Validate an OAuth token with a lightweight API call.
  */
 async function validateOAuthToken(token: string): Promise<boolean> {
+  // Use claude-3-haiku for validation — lightweight and available on all OAuth plans
+  // (newer models like claude-sonnet-4 may return 400 on Max/subscription OAuth tokens)
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -145,7 +147,7 @@ async function validateOAuthToken(token: string): Promise<boolean> {
         'anthropic-beta': 'claude-code-20250219,oauth-2025-04-20',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-3-haiku-20240307',
         max_tokens: 1,
         messages: [{ role: 'user', content: 'hi' }],
       }),
@@ -555,6 +557,13 @@ export async function completeMagicLinkMutation(
   if (result.success && result.token) {
     // Store, set env, and reconfigure provider so the token is usable immediately
     await activateOAuthToken(result.token);
+    // Store refresh token for auto-refresh (same as regular OAuth flow)
+    if (result.refreshToken) {
+      if (vault?.isUnlocked) {
+        await vault.set('anthropic_oauth_refresh_token', result.refreshToken);
+      }
+      process.env.CLAUDE_CODE_OAUTH_REFRESH_TOKEN = result.refreshToken;
+    }
     return { success: true, model: result.model || 'Claude (OAuth)' };
   }
 

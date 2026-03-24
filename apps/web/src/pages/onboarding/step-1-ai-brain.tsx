@@ -21,26 +21,18 @@ const PROVIDERS: ProviderConfig[] = [
   { id: 'openrouter', name: 'OpenRouter', subtitle: 'Multi-model gateway', logo: '/ai-providers/openrouter.png' },
 ];
 
-type AuthMode = 'api-key' | 'oauth';
+// Auth mode removed — only API key + auto-detection (env/keychain) supported
 
 export function Step1AiBrain() {
   const { state, updateState, nextStep, prevStep, isReset } = useOnboarding();
 
   const [provider, setProvider] = useState<Provider>('claude');
-  const [authMode, setAuthMode] = useState<AuthMode>('oauth');
   const [apiKey, setApiKey] = useState('');
   const [validating, setValidating] = useState(false);
   const [validated, setValidated] = useState(state.aiProvider?.validated ?? false);
   const [validatedModel, setValidatedModel] = useState(state.aiProvider?.model ?? '');
   const [error, setError] = useState('');
   const [autoDetected, setAutoDetected] = useState(false);
-
-  // OAuth flow state
-  const [oauthMode, setOauthMode] = useState<'choose' | 'browser' | 'magic_link' | 'magic_link_waiting'>('choose');
-  const [authCode, setAuthCode] = useState('');
-  const [oauthEmail, setOauthEmail] = useState('');
-  const [oauthState, setOauthState] = useState('');
-  const [magicLinkUrl, setMagicLinkUrl] = useState('');
 
   // Auto-detect credentials from env vars, vault, and macOS Keychain on mount.
   useEffect(() => {
@@ -101,14 +93,8 @@ export function Step1AiBrain() {
   const handleSelectProvider = (p: Provider) => {
     if (p === provider) return;
     setProvider(p);
-    setAuthMode(p === 'claude' ? 'oauth' : 'api-key');
     setApiKey('');
     setError('');
-    setOauthMode('choose');
-    setAuthCode('');
-    setOauthEmail('');
-    setOauthState('');
-    setMagicLinkUrl('');
     if (!autoDetected) {
       setValidated(false);
       setValidatedModel('');
@@ -152,149 +138,6 @@ export function Step1AiBrain() {
       setValidating(false);
     }
   }, [apiKey, provider, updateState]);
-
-  // ── Browser OAuth PKCE handlers ────────────────────────────────────────────
-
-  const handleOpenBrowserOAuth = useCallback(async () => {
-    setError('');
-    setValidating(true);
-    try {
-      const res = await fetch('/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `mutation { startOAuthFlow { authUrl state } }`,
-        }),
-      });
-      const json = await res.json();
-      const result = json?.data?.startOAuthFlow;
-      if (result?.authUrl) {
-        window.open(result.authUrl, '_blank', 'noopener,noreferrer');
-        setOauthState(result.state);
-        setOauthMode('browser');
-        setAuthCode('');
-      } else {
-        setError('Failed to generate authorization URL.');
-      }
-    } catch {
-      setError('Connection failed. Make sure the backend is running.');
-    } finally {
-      setValidating(false);
-    }
-  }, []);
-
-  const handleSubmitAuthCode = useCallback(async () => {
-    const code = authCode.trim();
-    if (!code) {
-      setError('Please paste the authorization code.');
-      return;
-    }
-    setError('');
-    setValidating(true);
-    try {
-      const res = await fetch('/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `mutation ($code: String!, $state: String!) { completeOAuthFlow(code: $code, state: $state) { success model error } }`,
-          variables: { code, state: oauthState },
-        }),
-      });
-      const json = await res.json();
-      const result = json?.data?.completeOAuthFlow;
-      if (result?.success) {
-        setValidated(true);
-        setValidatedModel(result.model || 'Claude (OAuth)');
-        updateState({ aiProvider: { method: 'oauth', model: result.model || 'Claude (OAuth)', validated: true } });
-        setOauthMode('choose');
-        setAuthCode('');
-      } else {
-        setError(result?.error || 'Failed to exchange authorization code.');
-      }
-    } catch {
-      setError('Connection failed. Make sure the backend is running.');
-    } finally {
-      setValidating(false);
-    }
-  }, [authCode, oauthState, updateState]);
-
-  const handleCancelOAuth = useCallback(() => {
-    setOauthMode('choose');
-    setAuthCode('');
-    setOauthEmail('');
-    setOauthState('');
-    setMagicLinkUrl('');
-    setError('');
-  }, []);
-
-  /** Magic link: launch server-side Playwright browser to enter email on Claude's login page. */
-  const handleMagicLinkStart = useCallback(async () => {
-    const email = oauthEmail.trim().toLowerCase();
-    if (!email || !email.includes('@')) {
-      setError('Please enter a valid email address.');
-      return;
-    }
-    setError('');
-    setValidating(true);
-    try {
-      const res = await fetch('/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `mutation ($email: String!) { sendMagicLink(email: $email) { success error } }`,
-          variables: { email },
-        }),
-      });
-      const json = await res.json();
-      const result = json?.data?.sendMagicLink;
-      if (result?.success) {
-        setOauthMode('magic_link_waiting');
-        setMagicLinkUrl('');
-      } else {
-        setError(result?.error || 'Failed to send magic link.');
-      }
-    } catch {
-      setError('Connection failed. Make sure the backend is running.');
-    } finally {
-      setValidating(false);
-    }
-  }, [oauthEmail]);
-
-  /** Complete magic link flow: user pastes the magic link URL from their email. */
-  const handleSubmitMagicLink = useCallback(async () => {
-    const url = magicLinkUrl.trim();
-    if (!url) {
-      setError('Please paste the magic link URL from your email.');
-      return;
-    }
-    setError('');
-    setValidating(true);
-    try {
-      const res = await fetch('/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `mutation ($magicLinkUrl: String!) { completeMagicLink(magicLinkUrl: $magicLinkUrl) { success model error } }`,
-          variables: { magicLinkUrl: url },
-        }),
-      });
-      const json = await res.json();
-      const result = json?.data?.completeMagicLink;
-      if (result?.success) {
-        setValidated(true);
-        setValidatedModel(result.model || 'Claude (OAuth)');
-        updateState({ aiProvider: { method: 'oauth', model: result.model || 'Claude (OAuth)', validated: true } });
-        setOauthMode('choose');
-        setMagicLinkUrl('');
-      } else {
-        setError(result?.error || 'Failed to complete magic link flow.');
-      }
-    } catch {
-      setError('Connection failed. Make sure the backend is running.');
-    } finally {
-      setValidating(false);
-    }
-  }, [magicLinkUrl, updateState]);
 
   // ── Navigation ─────────────────────────────────────────────────────────────
 
@@ -425,272 +268,30 @@ export function Step1AiBrain() {
               </div>
             )}
 
-            {/* Claude: OAuth or API key */}
+            {/* Claude: API key only */}
             {!validated && provider === 'claude' && (
-              <div className="space-y-4">
-                {/* Auth mode toggle */}
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMode('oauth');
-                      setError('');
-                    }}
-                    className={cn(
-                      'cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
-                      authMode === 'oauth'
-                        ? 'bg-bg-tertiary text-text-primary'
-                        : 'text-text-muted hover:bg-bg-hover/50 hover:text-text-secondary',
-                    )}
-                  >
-                    OAuth
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMode('api-key');
-                      setError('');
-                    }}
-                    className={cn(
-                      'cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
-                      authMode === 'api-key'
-                        ? 'bg-bg-tertiary text-text-primary'
-                        : 'text-text-muted hover:bg-bg-hover/50 hover:text-text-secondary',
-                    )}
-                  >
-                    API key
-                  </button>
-                </div>
-
-                {/* OAuth flow */}
-                {authMode === 'oauth' && (
-                  <div className="space-y-3">
-                    {/* Choose: browser sign-in or magic link */}
-                    {oauthMode === 'choose' && (
-                      <>
-                        <div className="rounded-lg bg-bg-tertiary/50 p-3">
-                          <div className="mb-2 flex items-center gap-2">
-                            <svg
-                              className="h-4 w-4 text-text-secondary"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              strokeWidth={1.5}
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"
-                              />
-                            </svg>
-                            <p className="text-xs font-medium text-text-primary">Sign in with Claude</p>
-                          </div>
-                          <p className="text-[11px] leading-relaxed text-text-muted">
-                            Authorize Yojin to use your Claude account. No API key needed.
-                          </p>
-                        </div>
-                        <Button
-                          variant="primary"
-                          size="md"
-                          loading={validating}
-                          onClick={handleOpenBrowserOAuth}
-                          className="w-full"
-                        >
-                          <svg
-                            className="mr-1.5 h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            strokeWidth={1.5}
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
-                            />
-                          </svg>
-                          Open in browser
-                        </Button>
-                        <div className="relative flex items-center gap-3">
-                          <div className="h-px flex-1 bg-border" />
-                          <span className="text-[10px] uppercase tracking-wider text-text-muted">or</span>
-                          <div className="h-px flex-1 bg-border" />
-                        </div>
-                        <Button
-                          variant="secondary"
-                          size="md"
-                          onClick={() => {
-                            setOauthMode('magic_link');
-                            setError('');
-                          }}
-                          className="w-full"
-                        >
-                          <svg
-                            className="mr-1.5 h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            strokeWidth={1.5}
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"
-                            />
-                          </svg>
-                          Use magic link instead
-                        </Button>
-                        {error && <p className="text-xs text-error">{error}</p>}
-                      </>
-                    )}
-
-                    {/* Magic link: enter email to trigger server-side flow */}
-                    {oauthMode === 'magic_link' && (
-                      <>
-                        <div className="rounded-lg bg-bg-tertiary/50 p-3">
-                          <p className="text-[11px] leading-relaxed text-text-muted">
-                            Enter your Anthropic email. We'll submit it to Claude's login page and you'll receive a
-                            magic link in your inbox. Paste the link back here to complete sign-in.
-                          </p>
-                        </div>
-                        <Input
-                          label="Anthropic email"
-                          type="email"
-                          placeholder="you@example.com"
-                          hint="The email you use to log in to claude.ai"
-                          value={oauthEmail}
-                          onChange={(e) => setOauthEmail(e.target.value)}
-                          error={error || undefined}
-                          size="md"
-                          onKeyDown={(e) => e.key === 'Enter' && handleMagicLinkStart()}
-                        />
-                        <div className="flex gap-2">
-                          <Button
-                            variant="primary"
-                            size="md"
-                            loading={validating}
-                            disabled={!oauthEmail.trim()}
-                            onClick={handleMagicLinkStart}
-                            className="flex-1"
-                          >
-                            Send magic link
-                          </Button>
-                          <Button variant="secondary" size="md" onClick={handleCancelOAuth}>
-                            Back
-                          </Button>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Magic link waiting: paste the URL from the email */}
-                    {oauthMode === 'magic_link_waiting' && (
-                      <>
-                        <div className="rounded-lg border border-accent-primary/20 bg-accent-primary/[0.04] p-3">
-                          <p className="mb-2 text-xs font-medium text-text-primary">Check your email</p>
-                          <div className="space-y-1 text-[11px] leading-relaxed text-text-muted">
-                            <p>1. Anthropic sent a magic link to your email</p>
-                            <p>2. Open the email and copy the magic link URL</p>
-                            <p>3. Paste the full URL below</p>
-                          </div>
-                        </div>
-                        <Input
-                          label="Magic link URL"
-                          type="text"
-                          placeholder="https://claude.ai/magic-link/..."
-                          value={magicLinkUrl}
-                          onChange={(e) => setMagicLinkUrl(e.target.value)}
-                          error={error || undefined}
-                          size="md"
-                          onKeyDown={(e) => e.key === 'Enter' && handleSubmitMagicLink()}
-                        />
-                        <div className="flex gap-2">
-                          <Button
-                            variant="primary"
-                            size="md"
-                            loading={validating}
-                            disabled={!magicLinkUrl.trim()}
-                            onClick={handleSubmitMagicLink}
-                            className="flex-1"
-                          >
-                            Verify link
-                          </Button>
-                          <Button variant="secondary" size="md" onClick={handleCancelOAuth}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Paste authorization code (shared by both flows) */}
-                    {oauthMode === 'browser' && (
-                      <>
-                        <div className="rounded-lg border border-accent-primary/20 bg-accent-primary/[0.04] p-3">
-                          <p className="mb-2 text-xs font-medium text-text-primary">Authorize in your browser</p>
-                          <div className="space-y-1 text-[11px] leading-relaxed text-text-muted">
-                            <p>1. A new tab opened with the Claude authorization page</p>
-                            <p>
-                              2. Sign in if needed, then click{' '}
-                              <strong className="text-text-secondary">Authorize</strong>
-                            </p>
-                            <p>3. Copy the code from the redirect page and paste it below</p>
-                          </div>
-                        </div>
-                        <Input
-                          label="Authorization code"
-                          type="text"
-                          placeholder="Paste the code from the redirect page"
-                          value={authCode}
-                          onChange={(e) => setAuthCode(e.target.value)}
-                          error={error || undefined}
-                          size="md"
-                          onKeyDown={(e) => e.key === 'Enter' && handleSubmitAuthCode()}
-                        />
-                        <div className="flex gap-2">
-                          <Button
-                            variant="primary"
-                            size="md"
-                            loading={validating}
-                            disabled={!authCode.trim()}
-                            onClick={handleSubmitAuthCode}
-                            className="flex-1"
-                          >
-                            Verify code
-                          </Button>
-                          <Button variant="secondary" size="md" onClick={handleCancelOAuth}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* API key form */}
-                {authMode === 'api-key' && (
-                  <div className="space-y-3">
-                    <Input
-                      label="Anthropic API key"
-                      type="password"
-                      placeholder="sk-ant-..."
-                      hint="console.anthropic.com"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      error={error || undefined}
-                      size="md"
-                      onKeyDown={(e) => e.key === 'Enter' && handleValidateApiKey()}
-                    />
-                    <Button
-                      variant="primary"
-                      size="md"
-                      loading={validating}
-                      disabled={!apiKey.trim()}
-                      onClick={handleValidateApiKey}
-                      className="w-full"
-                    >
-                      Verify key
-                    </Button>
-                  </div>
-                )}
+              <div className="space-y-3">
+                <Input
+                  label="Anthropic API key"
+                  type="password"
+                  placeholder="sk-ant-..."
+                  hint="console.anthropic.com"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  error={error || undefined}
+                  size="md"
+                  onKeyDown={(e) => e.key === 'Enter' && handleValidateApiKey()}
+                />
+                <Button
+                  variant="primary"
+                  size="md"
+                  loading={validating}
+                  disabled={!apiKey.trim()}
+                  onClick={handleValidateApiKey}
+                  className="w-full"
+                >
+                  Verify key
+                </Button>
               </div>
             )}
 
