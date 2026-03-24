@@ -123,7 +123,7 @@ async function buildFullRuntime(): Promise<{
 }
 
 async function startGateway(): Promise<void> {
-  const { agentRuntime, services, sessionStore } = await buildFullRuntime();
+  const { agentRuntime, dataRoot, services, sessionStore } = await buildFullRuntime();
 
   // Wire the orchestrator for ProcessInsights mutation
   const orchestrator = new Orchestrator(agentRuntime);
@@ -133,9 +133,18 @@ async function startGateway(): Promise<void> {
   });
   setInsightsOrchestrator(orchestrator);
 
-  // Broadcast workflow progress events to GraphQL subscribers
+  // Broadcast workflow progress events to GraphQL subscribers + persist to log file
   const { pubsub } = await import('../api/graphql/pubsub.js');
-  setWorkflowProgressCallback((event) => pubsub.publish('workflowProgress', event));
+  const debugMode = process.env.YOJIN_DEBUG === 'true';
+  let workflowLog: import('../insights/workflow-log.js').WorkflowLog | null = null;
+  if (debugMode) {
+    const { WorkflowLog } = await import('../insights/workflow-log.js');
+    workflowLog = new WorkflowLog(dataRoot);
+  }
+  setWorkflowProgressCallback((event) => {
+    pubsub.publish('workflowProgress', event);
+    workflowLog?.write(event);
+  });
 
   const gateway = new Gateway(services.config, agentRuntime, {
     snapshotStore: services.snapshotStore,
