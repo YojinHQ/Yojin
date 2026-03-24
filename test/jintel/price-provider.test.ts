@@ -1,4 +1,4 @@
-import type { JintelClient, JintelResult, MarketQuote } from 'jintel-client';
+import type { JintelClient, JintelResult, MarketQuote } from '@yojinhq/jintel-client';
 import { describe, expect, it } from 'vitest';
 
 import { createJintelPriceProvider } from '../../src/jintel/price-provider.js';

@@ -1,4 +1,4 @@
-import type { JintelClient } from 'jintel-client';
+import type { JintelClient } from '@yojinhq/jintel-client';
 
 import type { PriceOutcome, PriceProvider } from '../memory/types.js';
 

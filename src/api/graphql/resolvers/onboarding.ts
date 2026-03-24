@@ -360,7 +360,7 @@ export async function validateJintelKeyMutation(
   }
 
   // Create a temporary client to test the key
-  const { JintelClient } = await import('jintel-client');
+  const { JintelClient } = await import('@yojinhq/jintel-client');
   const testClient = new JintelClient({ apiKey });
   const health = await testClient.healthCheck();
 

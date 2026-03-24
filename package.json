@@ -74,7 +74,7 @@
     "@slack/web-api": "7.15.0",
     "ai": "6.0.116",
     "dotenv": "17.3.1",
-    "jintel-client": "link:../Jintel/packages/client",
+    "@yojinhq/jintel-client": "link:../Jintel/packages/client",
     "graphql": "16.13.1",
     "graphql-yoga": "5.18.1",
     "hono": "4.12.8",

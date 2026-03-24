@@ -9,7 +9,7 @@
 import { existsSync } from 'node:fs';
 import { copyFile } from 'node:fs/promises';
 
-import { JintelClient } from 'jintel-client';
+import { JintelClient } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
 import { createDefaultProfiles } from './agents/defaults.js';
