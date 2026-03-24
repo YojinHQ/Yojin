@@ -23,6 +23,7 @@ const logger = createSubsystemLogger('snapshot-store');
 export interface SaveSnapshotParams {
   positions: Position[];
   platform: Platform;
+  existingSnapshot?: PortfolioSnapshot | null;
 }
 
 export class PortfolioSnapshotStore {
@@ -32,18 +33,22 @@ export class PortfolioSnapshotStore {
     this.filePath = join(dataRoot, 'snapshots', 'portfolio.jsonl');
   }
 
-  /** Append a new snapshot. Returns the saved snapshot with computed totals. */
+  /**
+   * Save positions for a single platform. Merges with existing snapshot:
+   * positions from other platforms are preserved, positions for `params.platform`
+   * are replaced wholesale. All incoming positions are stamped with the declared
+   * platform. Returns the merged snapshot with recomputed totals.
+   */
   async save(params: SaveSnapshotParams): Promise<PortfolioSnapshot> {
     await mkdir(join(this.filePath, '..'), { recursive: true });
 
-    const { positions, platform } = params;
+    const { positions, platform: rawPlatform } = params;
+    const platform = rawPlatform.toUpperCase();
 
-    // Stamp all incoming positions with the declared platform
     const stamped = positions.map((p) => ({ ...p, platform }));
 
-    // Platform-scoped merge: keep positions from other platforms, replace this platform's
-    const existing = await this.getLatest();
-    const otherPlatformPositions = (existing?.positions ?? []).filter((p) => p.platform !== platform);
+    const existing = params.existingSnapshot !== undefined ? params.existingSnapshot : await this.getLatest();
+    const otherPlatformPositions = (existing?.positions ?? []).filter((p) => p.platform?.toUpperCase() !== platform);
     const merged = [...otherPlatformPositions, ...stamped];
 
     const totalValue = merged.reduce((sum, p) => sum + p.marketValue, 0);

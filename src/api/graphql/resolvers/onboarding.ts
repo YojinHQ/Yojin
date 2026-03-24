@@ -713,8 +713,8 @@ export async function confirmPositionsMutation(
   const platform = rawPlatform.toUpperCase();
 
   if (snapshotStore) {
-    const CRYPTO_PLATFORMS = new Set(['binance', 'coinbase', 'metamask', 'phantom', 'polymarket']);
-    const inferredClass = CRYPTO_PLATFORMS.has(platform.toLowerCase()) ? 'CRYPTO' : 'EQUITY';
+    const CRYPTO_PLATFORMS = new Set(['BINANCE', 'COINBASE', 'METAMASK', 'PHANTOM', 'POLYMARKET']);
+    const inferredClass = CRYPTO_PLATFORMS.has(platform) ? 'CRYPTO' : 'EQUITY';
 
     const snapshotPositions = positions.map((p) => ({
       symbol: p.symbol,

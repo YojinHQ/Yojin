@@ -219,10 +219,10 @@ export async function addManualPositionMutation(
       ? samePlatformPositions.map((p, i) => (i === existingIdx ? newPosition : p))
       : [...samePlatformPositions, newPosition];
 
-  // save() handles cross-platform merge — only pass this platform's positions
   const snapshot = await snapshotStore.save({
     positions: updatedPlatformPositions,
     platform: effectivePlatform,
+    existingSnapshot: existing,
   });
   pubsub.publish('portfolioUpdate', snapshot);
   return snapshot;
