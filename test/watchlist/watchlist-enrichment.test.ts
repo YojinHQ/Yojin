@@ -2,9 +2,9 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { JintelClient } from '@yojinhq/jintel-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { JintelClient } from '../../src/jintel/client.js';
 import { WatchlistEnrichment } from '../../src/watchlist/watchlist-enrichment.js';
 import { WatchlistStore } from '../../src/watchlist/watchlist-store.js';
 
@@ -44,16 +44,6 @@ const MOCK_ENRICHED = {
       source: 'jintel',
     },
   },
-  news: [
-    {
-      title: 'Apple announces new product',
-      url: 'https://example.com/news/1',
-      source: 'Reuters',
-      publishedAt: '2026-03-23T10:00:00Z',
-      snippet: 'Apple today announced...',
-      sentiment: 'POSITIVE',
-    },
-  ],
   risk: {
     overallScore: 25,
     signals: [],
@@ -168,7 +158,6 @@ describe('WatchlistEnrichment', () => {
 
       expect(result).not.toBeNull();
       expect(result!.quote?.price).toBe(175.5);
-      expect(result!.news).toHaveLength(1);
       expect(result!.riskScore).toBe(25);
 
       const cacheRaw = await readFile(join(dir, 'watchlist', 'enrichment-cache.jsonl'), 'utf-8');

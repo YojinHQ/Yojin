@@ -1,6 +1,6 @@
 import PortfolioValueCard from '../components/overview/portfolio-value-card';
 import ConnectedAccountsCard from '../components/overview/connected-accounts-card';
-import TotalValueChart from '../components/overview/total-value-chart';
+import { PortfolioOverview } from '../components/portfolio/portfolio-overview';
 import PositionsPreview from '../components/overview/positions-preview';
 import YojinSnapCard from '../components/overview/yojin-snap-card';
 import YojinActionsCard from '../components/overview/yojin-actions-card';
@@ -19,7 +19,7 @@ export default function Dashboard() {
 
         {/* Row 2: Total Value chart + Top Positions */}
         <div className="grid min-h-[280px] flex-1 grid-cols-2 gap-5">
-          <TotalValueChart />
+          <PortfolioOverview />
           <PositionsPreview />
         </div>
 

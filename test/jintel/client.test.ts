@@ -1,7 +1,5 @@
+import { EntitySchema, JintelClient, MarketQuoteSchema } from '@yojinhq/jintel-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { JintelClient } from '../../src/jintel/client.js';
-import { EntitySchema, MarketQuoteSchema } from '../../src/jintel/types.js';
 
 const mockFetch = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>();
 beforeEach(() => {
@@ -212,7 +210,7 @@ describe('JintelClient.quotes', () => {
         source: 'AV',
       },
     ];
-    mockFetch.mockResolvedValueOnce(jsonResponse({ data: { batchQuotes: quotes } }));
+    mockFetch.mockResolvedValueOnce(jsonResponse({ data: { quotes } }));
 
     const client = makeClient();
     const result = await client.quotes(['AAPL', 'GOOGL']);
@@ -222,54 +220,6 @@ describe('JintelClient.quotes', () => {
       expect(result.data).toHaveLength(2);
       expect(result.data[0].ticker).toBe('AAPL');
       expect(result.data[1].ticker).toBe('GOOGL');
-    }
-  });
-});
-
-describe('JintelClient.webSearch', () => {
-  it('returns web results on success', async () => {
-    const results = [
-      {
-        title: 'Apple Inc.',
-        url: 'https://example.com/apple',
-        snippet: 'Technology company',
-        source: 'Wikipedia',
-        publishedAt: '2026-01-01T00:00:00Z',
-      },
-    ];
-    mockFetch.mockResolvedValueOnce(jsonResponse({ data: { webSearch: results } }));
-
-    const client = makeClient();
-    const result = await client.webSearch('Apple');
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data).toHaveLength(1);
-      expect(result.data[0].title).toBe('Apple Inc.');
-      expect(result.data[0].source).toBe('Wikipedia');
-    }
-  });
-
-  it('passes limit variable', async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse({ data: { webSearch: [] } }));
-
-    const client = makeClient();
-    await client.webSearch('test', 5);
-
-    const [, init] = mockFetch.mock.calls[0];
-    const body = JSON.parse(init?.body as string);
-    expect(body.variables.limit).toBe(5);
-  });
-
-  it('returns empty array when no results', async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse({ data: { webSearch: [] } }));
-
-    const client = makeClient();
-    const result = await client.webSearch('nonexistent');
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data).toEqual([]);
     }
   });
 });

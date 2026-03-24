@@ -1,24 +1,24 @@
 /**
  * Jintel agent tools — search_entities, enrich_entity, market_quotes,
- * news_search, sanctions_screen, web_search.
+ * sanctions_screen.
  *
  * Wraps JintelClient for agent use. When the client is not configured,
  * tools return a helpful error guiding the user to set up their API key.
  */
 
+import {
+  type EnrichmentField,
+  type Entity,
+  type EntityType,
+  EntityTypeSchema,
+  type JintelClient,
+  type JintelResult,
+  type MarketQuote,
+  type RiskSignal,
+  type SanctionsMatch,
+} from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
-import type { JintelClient, JintelResult } from './client.js';
-import { EntityTypeSchema } from './types.js';
-import type {
-  EnrichmentField,
-  Entity,
-  MarketQuote,
-  NewsArticle,
-  RiskSignal,
-  SanctionsMatch,
-  WebResult,
-} from './types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
 
@@ -36,7 +36,7 @@ const NOT_CONFIGURED_MSG =
 
 const FALLBACK_SUFFIX = '\n\nJintel unavailable. Use query_data_source with configured sources for fallback data.';
 
-const ENRICHMENT_FIELDS = z.enum(['market', 'news', 'risk', 'regulatory', 'corporate']);
+const ENRICHMENT_FIELDS = z.enum(['market', 'risk', 'regulatory', 'corporate']);
 
 const SEVERITY_CONFIDENCE: Record<string, number> = {
   CRITICAL: 0.95,
@@ -60,21 +60,6 @@ type HandleResult<T> = { ok: true; data: T } | { ok: false; toolResult: ToolResu
 function handleResult<T>(result: JintelResult<T>): HandleResult<T> {
   if (!result.success) return { ok: false, toolResult: failureResult(result.error) };
   return { ok: true, data: result.data };
-}
-
-function newsToSignals(articles: NewsArticle[]): RawSignalInput[] {
-  return articles.map((a) => ({
-    sourceId: 'jintel',
-    sourceName: 'Jintel',
-    sourceType: 'API' as const,
-    reliability: 0.8,
-    title: a.title,
-    content: a.snippet ?? undefined,
-    link: a.url,
-    publishedAt: a.publishedAt,
-    type: 'NEWS' as const,
-    ...(a.sentiment ? { metadata: { sentiment: a.sentiment } } : {}),
-  }));
 }
 
 function riskSignalsToRaw(signals: RiskSignal[], tickers: string[]): RawSignalInput[] {
@@ -138,11 +123,6 @@ function formatEnrichment(entity: Entity): string {
     }
   }
 
-  if (entity.news?.length) {
-    const newsLines = entity.news.map((a) => `- [${a.source}] ${a.title}${a.sentiment ? ` (${a.sentiment})` : ''}`);
-    sections.push(`## News (${entity.news.length})\n${newsLines.join('\n')}`);
-  }
-
   if (entity.risk) {
     const { overallScore, signals } = entity.risk;
     const signalLines = signals.map((s) => `- [${s.severity}] ${s.type}: ${s.description}`);
@@ -186,15 +166,6 @@ function formatQuotes(quotes: MarketQuote[]): string {
     .join('\n');
 }
 
-function formatNews(articles: NewsArticle[]): string {
-  if (articles.length === 0) return 'No news found.';
-  return articles
-    .map(
-      (a) => `- **${a.title}**\n  ${a.source} | ${a.publishedAt}${a.sentiment ? ` | ${a.sentiment}` : ''}\n  ${a.url}`,
-    )
-    .join('\n');
-}
-
 function formatSanctions(matches: SanctionsMatch[]): string {
   if (matches.length === 0) return 'No sanctions matches found.';
   return matches
@@ -203,16 +174,6 @@ function formatSanctions(matches: SanctionsMatch[]): string {
         `⚠ WARNING: Match on **${m.listName}**\n  Matched name: ${m.matchedName} (score: ${m.score.toFixed(2)})${m.details ? `\n  ${m.details}` : ''}`,
     )
     .join('\n\n');
-}
-
-function formatWebResults(results: WebResult[]): string {
-  if (results.length === 0) return 'No web results found.';
-  return results
-    .map(
-      (r) =>
-        `- **${r.title}**\n  ${r.source}${r.publishedAt ? ` | ${r.publishedAt}` : ''}${r.snippet ? `\n  ${r.snippet}` : ''}\n  ${r.url}`,
-    )
-    .join('\n');
 }
 
 function formatNumber(n: number): string {
@@ -236,7 +197,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       type: EntityTypeSchema.optional().describe('Filter by entity type'),
       limit: z.number().int().min(1).max(50).optional().describe('Max results (default 10)'),
     }),
-    async execute(params: { query: string; type?: string; limit?: number }): Promise<ToolResult> {
+    async execute(params: { query: string; type?: EntityType; limit?: number }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const result = await options.client.searchEntities(params.query, {
         type: params.type,
@@ -251,7 +212,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
   const enrichEntity: ToolDefinition = {
     name: 'enrich_entity',
     description:
-      'Get detailed enrichment data for an entity by ticker. Includes market data, news (up to 10 articles), ' +
+      'Get detailed enrichment data for an entity by ticker. Includes market data, ' +
       'risk profile, regulatory filings, and corporate info. Select specific fields or get all.',
     parameters: z.object({
       ticker: z.string().describe('Entity ticker or ID (e.g. AAPL, BTC)'),
@@ -266,16 +227,11 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       const entity = handled.data;
       const content = formatEnrichment(entity);
 
-      // Best-effort signal ingestion
-      const signals: RawSignalInput[] = [];
-      if (entity.news?.length) {
-        signals.push(...newsToSignals(entity.news));
-      }
+      // Best-effort signal ingestion for risk signals
       if (entity.risk?.signals?.length) {
         const tickers = entity.tickers ?? [params.ticker];
-        signals.push(...riskSignalsToRaw(entity.risk.signals, tickers));
+        await bestEffortIngest(options.ingestor, riskSignalsToRaw(entity.risk.signals, tickers));
       }
-      await bestEffortIngest(options.ingestor, signals);
 
       return { content };
     },
@@ -296,29 +252,6 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     },
   };
 
-  const newsSearch: ToolDefinition = {
-    name: 'news_search',
-    description: 'Search recent news articles by keyword or topic. Results include title, source, date, and sentiment.',
-    parameters: z.object({
-      query: z.string().describe('News search query'),
-      limit: z.number().int().min(1).max(50).optional().describe('Max articles (default 10)'),
-    }),
-    async execute(params: { query: string; limit?: number }): Promise<ToolResult> {
-      if (!options.client) return notConfigured();
-      const result = await options.client.newsSearch(params.query, params.limit);
-      const handled = handleResult(result);
-      if (!handled.ok) return handled.toolResult;
-
-      const articles = handled.data;
-      const content = formatNews(articles);
-
-      // Best-effort signal ingestion
-      await bestEffortIngest(options.ingestor, newsToSignals(articles));
-
-      return { content };
-    },
-  };
-
   const sanctionsScreen: ToolDefinition = {
     name: 'sanctions_screen',
     description:
@@ -336,23 +269,5 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     },
   };
 
-  const webSearch: ToolDefinition = {
-    name: 'web_search',
-    description:
-      'Search the web for general information, company details, or recent events. ' +
-      'Returns titles, snippets, sources, and URLs.',
-    parameters: z.object({
-      query: z.string().describe('Web search query'),
-      limit: z.number().int().min(1).max(50).optional().describe('Max results (default 10)'),
-    }),
-    async execute(params: { query: string; limit?: number }): Promise<ToolResult> {
-      if (!options.client) return notConfigured();
-      const result = await options.client.webSearch(params.query, params.limit);
-      const handled = handleResult(result);
-      if (!handled.ok) return handled.toolResult;
-      return { content: formatWebResults(handled.data) };
-    },
-  };
-
-  return [searchEntities, enrichEntity, marketQuotes, newsSearch, sanctionsScreen, webSearch];
+  return [searchEntities, enrichEntity, marketQuotes, sanctionsScreen];
 }

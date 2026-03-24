@@ -9,6 +9,7 @@
 import { existsSync } from 'node:fs';
 import { copyFile } from 'node:fs/promises';
 
+import { JintelClient } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
 import { createDefaultProfiles } from './agents/defaults.js';
@@ -44,7 +45,6 @@ import { POSTURE_CONFIGS } from './guards/posture.js';
 import { createDefaultGuards } from './guards/registry.js';
 import type { OutputDlpGuard } from './guards/security/output-dlp.js';
 import type { PostureName } from './guards/types.js';
-import { JintelClient } from './jintel/client.js';
 import { createJintelTools } from './jintel/tools.js';
 import type { JintelToolOptions } from './jintel/tools.js';
 import { getLogger } from './logging/index.js';
@@ -292,15 +292,14 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   runHealthChecks().catch((err) => log.warn('Data source health check failed', { error: String(err) }));
 
   // 6d. Jintel client (primary intelligence source)
-  const jintelBaseUrl = process.env.JINTEL_API_URL ?? 'https://api.jintel.ai/api';
   let jintelClient: JintelClient | undefined;
   if (vault?.isUnlocked) {
     try {
       const jintelApiKey = await vault.get('jintel-api-key');
       if (jintelApiKey) {
         jintelClient = new JintelClient({
-          baseUrl: jintelBaseUrl,
           apiKey: jintelApiKey,
+          baseUrl: process.env.JINTEL_API_URL,
           debug: process.env.JINTEL_DEBUG === '1',
         });
         log.info('Jintel client ready');
@@ -371,7 +370,6 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   // Hot-swap Jintel client on key validation.
   setJintelKeyValidatedCallback((apiKey: string) => {
     const newClient = new JintelClient({
-      baseUrl: jintelBaseUrl,
       apiKey,
       debug: process.env.JINTEL_DEBUG === '1',
     });
