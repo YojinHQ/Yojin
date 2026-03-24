@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { useMutation, useQuery, useSubscription } from 'urql';
 import { cn } from '../lib/utils';
 import {
@@ -281,12 +282,10 @@ function PositionInsightCard({ position }: { position: PositionInsight }) {
               {position.keySignals.map((signal) => {
                 const variant =
                   signal.impact === 'POSITIVE' ? 'success' : signal.impact === 'NEGATIVE' ? 'error' : 'neutral';
-                return signal.url ? (
-                  <a
+                return (
+                  <Link
                     key={signal.signalId}
-                    href={signal.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    to={`/signals?highlight=${encodeURIComponent(signal.signalId)}`}
                     className="inline-flex items-center hover:opacity-80 transition-opacity"
                   >
                     <Badge variant={variant as BadgeVariant} size="sm">
@@ -305,11 +304,7 @@ function PositionInsightCard({ position }: { position: PositionInsight }) {
                         />
                       </svg>
                     </Badge>
-                  </a>
-                ) : (
-                  <Badge key={signal.signalId} variant={variant as BadgeVariant} size="sm">
-                    {signal.title}
-                  </Badge>
+                  </Link>
                 );
               })}
             </div>
