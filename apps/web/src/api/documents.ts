@@ -223,6 +223,47 @@ export const NEWS_QUERY = gql`
 `;
 
 // ---------------------------------------------------------------------------
+// Queries — Watchlist
+// ---------------------------------------------------------------------------
+
+export const WATCHLIST_QUERY = gql`
+  query Watchlist {
+    watchlist {
+      symbol
+      name
+      assetClass
+      addedAt
+      price
+      change
+      changePercent
+      enrichedAt
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Mutations — Watchlist
+// ---------------------------------------------------------------------------
+
+export const ADD_TO_WATCHLIST_MUTATION = gql`
+  mutation AddToWatchlist($symbol: String!, $name: String!, $assetClass: AssetClass!) {
+    addToWatchlist(symbol: $symbol, name: $name, assetClass: $assetClass) {
+      success
+      error
+    }
+  }
+`;
+
+export const REMOVE_FROM_WATCHLIST_MUTATION = gql`
+  mutation RemoveFromWatchlist($symbol: String!) {
+    removeFromWatchlist(symbol: $symbol) {
+      success
+      error
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
 // Queries — Onboarding
 // ---------------------------------------------------------------------------
 

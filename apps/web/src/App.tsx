@@ -22,6 +22,7 @@ import Dashboard from './pages/dashboard';
 import Insights from './pages/insights';
 import Signals from './pages/signals';
 import Positions from './pages/positions';
+import Watchlist from './pages/watchlist';
 import OnboardingPage from './pages/onboarding';
 import { ONBOARDING_STATUS_QUERY } from './api/documents';
 import type { OnboardingStatusQueryResult } from './api/types';
@@ -161,6 +162,7 @@ export default function App() {
                   <Route path="chat" element={<Chat />} />
                   <Route path="insights" element={<Insights />} />
                   <Route path="signals" element={<Signals />} />
+                  <Route path="watchlist" element={<Watchlist />} />
                   <Route path="profile" element={<Profile />} />
                   <Route path="settings" element={<Settings />} />
 

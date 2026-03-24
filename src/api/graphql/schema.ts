@@ -678,6 +678,26 @@ export const typeDefs = /* GraphQL */ `
     available: Boolean!
   }
 
+  # ---------------------------------------------------------------------------
+  # Watchlist
+  # ---------------------------------------------------------------------------
+
+  type WatchlistEntry {
+    symbol: String!
+    name: String!
+    assetClass: AssetClass!
+    addedAt: String!
+    price: Float
+    change: Float
+    changePercent: Float
+    enrichedAt: String
+  }
+
+  type WatchlistResult {
+    success: Boolean!
+    error: String
+  }
+
   type Query {
     deviceInfo: DeviceInfo!
     portfolio: PortfolioSnapshot
@@ -715,6 +735,7 @@ export const typeDefs = /* GraphQL */ `
     latestInsightReport: InsightReport
     insightReports(limit: Int): [InsightReport!]!
     insightReport(id: ID!): InsightReport
+    watchlist: [WatchlistEntry!]!
   }
 
   type Mutation {
@@ -751,6 +772,8 @@ export const typeDefs = /* GraphQL */ `
     resetOnboarding: Boolean!
     validateJintelKey(apiKey: String!): ValidateJintelKeyResult!
     processInsights: InsightReport
+    addToWatchlist(symbol: String!, name: String!, assetClass: AssetClass!): WatchlistResult!
+    removeFromWatchlist(symbol: String!): WatchlistResult!
   }
 
   # ---------------------------------------------------------------------------

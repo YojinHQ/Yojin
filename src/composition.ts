@@ -35,6 +35,7 @@ import {
 import { setPortfolioConnectionManager, setPortfolioJintelClient } from './api/graphql/resolvers/portfolio.js';
 import { setSignalArchive } from './api/graphql/resolvers/signals.js';
 import { setVault, setVaultSecretChangedCallback } from './api/graphql/resolvers/vault.js';
+import { setWatchlistEnrichment, setWatchlistStore } from './api/graphql/resolvers/watchlist.js';
 import { BrainStore } from './brain/brain.js';
 import { EmotionTracker } from './brain/emotion.js';
 import { FrontalLobe } from './brain/frontal-lobe.js';
@@ -392,6 +393,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
 
   // Watchlist tools (3 tools: watchlist_add, watchlist_remove, watchlist_list)
   const {
+    store: watchlistStore,
     enrichment: watchlistEnrichment,
     toolOptions: watchlistToolOptions,
     tools: watchlistTools,
@@ -400,6 +402,8 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     jintelClient,
     ttlSeconds: config.watchlist.enrichmentTtlSeconds,
   });
+  setWatchlistStore(watchlistStore);
+  setWatchlistEnrichment(watchlistEnrichment);
   for (const tool of watchlistTools) {
     toolRegistry.register(tool);
   }

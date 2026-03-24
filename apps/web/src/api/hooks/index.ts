@@ -26,6 +26,7 @@ export {
   useSignals,
   useCheckCliCommands,
 } from './use-data-sources.js';
+export { useWatchlist, useAddToWatchlist, useRemoveFromWatchlist } from './use-watchlist.js';
 export {
   useVaultStatus,
   useListVaultSecrets,
