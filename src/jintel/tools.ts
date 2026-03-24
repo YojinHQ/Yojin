@@ -268,14 +268,29 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     async execute(params: { tickers: string[]; fields?: EnrichmentField[] }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const fields = params.fields ?? ['market', 'risk'];
-      const result = await options.client.batchEnrich(params.tickers, fields);
-      const handled = handleResult(result);
-      if (!handled.ok) return handled.toolResult;
 
-      const sections = handled.data.map((entity) => formatEnrichment(entity));
+      // Try batch endpoint first; fall back to individual calls if not available
+      const result = await options.client.batchEnrich(params.tickers, fields);
+      let entities: Entity[];
+
+      if (result.success) {
+        entities = result.data;
+      } else {
+        // Fallback: enrich each ticker individually (parallel)
+        const client = options.client;
+        const fallbackResults: JintelResult<Entity>[] = await Promise.all(
+          params.tickers.map((ticker) => client.enrichEntity(ticker, fields)),
+        );
+        entities = fallbackResults.filter((r): r is { success: true; data: Entity } => r.success).map((r) => r.data);
+        if (entities.length === 0) {
+          return failureResult(`Batch enrich failed and individual fallback returned no data`);
+        }
+      }
+
+      const sections = entities.map((entity) => formatEnrichment(entity));
 
       // Best-effort signal ingestion for risk signals in all entities
-      for (const entity of handled.data) {
+      for (const entity of entities) {
         if (entity.risk?.signals?.length) {
           const tickers = entity.tickers ?? [];
           await bestEffortIngest(options.ingestor, riskSignalsToRaw(entity.risk.signals, tickers));
