@@ -31,7 +31,8 @@ let pkceCodeVerifier = '';
 let pkceState = '';
 let flowInProgress = false;
 
-const OAUTH_CALLBACK_URI = 'https://console.anthropic.com/oauth/code/callback';
+const OAUTH_CALLBACK_URI = 'https://platform.claude.com/oauth/code/callback';
+const OAUTH_SUCCESS_URI = 'https://platform.claude.com/oauth/code/success';
 
 // Chrome user-agent — keep current to avoid Cloudflare flagging outdated browsers
 const CHROME_USER_AGENT =
@@ -305,15 +306,31 @@ export async function startMagicLinkFlow(email: string): Promise<MagicLinkStartR
     }
 
     if (emailInput) {
-      await emailInput.click();
-      await emailInput.fill(email);
-      await page.waitForTimeout(500);
+      // Clear any existing value and type with delay (more reliable than fill for SPAs)
+      await emailInput.click({ clickCount: 3 });
+      await emailInput.pressSequentially(email, { delay: 30 });
+      await page.waitForTimeout(1000);
 
-      // Try clicking a submit/continue button first, fall back to Enter key
+      // Try clicking a submit/continue button first, fall back to Enter key.
+      // Skip SSO buttons (Google, GitHub, etc.) — always prefer email login.
       const submitted = await page.evaluate(() => {
         const buttons = Array.from(document.querySelectorAll('button[type="submit"], button'));
+        const ssoKeywords = ['google', 'github', 'apple', 'microsoft', 'sso', 'saml'];
+
+        // Priority 1: "Continue with email"
+        const emailBtn = buttons.find((b) => {
+          const text = (b as HTMLElement).textContent?.toLowerCase() || '';
+          return text.includes('email') && text.includes('continue');
+        });
+        if (emailBtn) {
+          (emailBtn as HTMLElement).click();
+          return true;
+        }
+
+        // Priority 2: Other submit buttons, skipping SSO
         const submitBtn = buttons.find((b) => {
           const text = (b as HTMLElement).textContent?.toLowerCase() || '';
+          if (ssoKeywords.some((sso) => text.includes(sso))) return false;
           return (
             text.includes('continue') ||
             text.includes('submit') ||
@@ -374,12 +391,12 @@ export async function startMagicLinkFlow(email: string): Promise<MagicLinkStartR
       return { success: true };
     }
 
-    // No positive signal — include page URL for debugging
+    // No positive signal — but keep browser open for completeMagicLinkFlow.
+    // The email may still have been sent even if we didn't detect the confirmation text.
     const finalUrl = page.url();
-    await closeBrowser();
     return {
-      success: false,
-      error: `Email submitted but no confirmation detected (${finalUrl}). Check the email address and try again.`,
+      success: true,
+      error: `Email submitted but no confirmation detected (${finalUrl}). Check your inbox anyway.`,
     };
   } catch (err) {
     await closeBrowser();
@@ -394,99 +411,168 @@ export async function startMagicLinkFlow(email: string): Promise<MagicLinkStartR
 export interface MagicLinkCompleteResult {
   success: boolean;
   token?: string;
+  refreshToken?: string;
   model?: string;
   error?: string;
 }
 
 export async function completeMagicLinkFlow(magicLinkUrl: string): Promise<MagicLinkCompleteResult> {
+  // Same browser must be reused from startMagicLinkFlow — magic links are single-use
+  // and the PKCE session is tied to this browser instance.
   if (!browser || !page) {
-    return { success: false, error: 'No browser session active. Start the flow first.' };
+    await closeBrowser();
+    return { success: false, error: 'No browser session. Please enter your email and send a new magic link.' };
+  }
+
+  if (page.isClosed()) {
+    await closeBrowser();
+    return { success: false, error: 'Browser window was closed. Please enter your email and send a new magic link.' };
   }
 
   if (!pkceCodeVerifier || !pkceState) {
-    return { success: false, error: 'PKCE parameters missing. Start the flow first.' };
+    await closeBrowser();
+    return { success: false, error: 'PKCE session expired. Please enter your email and send a new magic link.' };
   }
 
+  const p = page;
+
   try {
-    // Set up route interception BEFORE any navigation so fast redirects are captured
+    // Set up route interception BEFORE any navigation so fast redirects are captured.
+    // Claude may redirect to either /oauth/code/callback?code=X or /oauth/code/success?app=claude-code
     let interceptedCallbackUrl: string | null = null;
 
-    await page.route(`${OAUTH_CALLBACK_URI}**`, (route) => {
+    await p.route(`${OAUTH_CALLBACK_URI}**`, (route) => {
       interceptedCallbackUrl = route.request().url();
       route.fulfill({ status: 200, contentType: 'text/html', body: 'Token captured.' });
     });
 
-    // Navigate to the magic link URL
-    await page.goto(magicLinkUrl, { waitUntil: 'networkidle' });
+    // Also intercept the success page (newer Claude flow)
+    await p.route(`${OAUTH_SUCCESS_URI}**`, (route) => {
+      interceptedCallbackUrl = route.request().url();
+      // Let this one through so we can scrape the code from the page if needed
+      route.continue();
+    });
+
+    // Navigate to the magic link URL — this authenticates the user on claude.ai
+    await p.goto(magicLinkUrl, { waitUntil: 'networkidle' });
 
     // Wait for Turnstile to resolve on the magic link page too
-    const linkPageReady = await waitForTurnstile(page, 15000);
+    const linkPageReady = await waitForTurnstile(p, 15000);
     if (!linkPageReady) {
       await closeBrowser();
       return { success: false, error: `Magic link page didn't load (Cloudflare protection). Please try again.` };
     }
 
-    await dismissCookieBanner(page);
+    await dismissCookieBanner(p);
 
-    let currentUrl = page.url();
+    let currentUrl = p.url();
 
-    // Handle magic link verification page — click verify/continue button
-    if (currentUrl.includes('/magic-link')) {
-      const clicked = await page.evaluate(() => {
-        const targets = ['Continue', 'Verify', 'Sign in', 'Log in', 'Confirm', 'Yes', 'Approve'];
-        const buttons = Array.from(document.querySelectorAll('button, a'));
-        for (const btn of buttons) {
-          const text = btn.textContent?.trim() || '';
-          for (const target of targets) {
-            if (text.toLowerCase().includes(target.toLowerCase())) {
+    // Handle magic link verification page OR login page — click through any
+    // "Continue with email", "Verify", "Sign in", etc. buttons.
+    // The magic link URL can land on /magic-link, /login, or other intermediate pages.
+    if (!currentUrl.includes('/oauth/authorize')) {
+      // Click through up to 3 intermediate pages (login → verify → authorize)
+      for (let clickStep = 0; clickStep < 3; clickStep++) {
+        if (interceptedCallbackUrl) break;
+        currentUrl = p.url();
+        if (currentUrl.includes('/oauth/authorize')) break;
+
+        const clicked = await p.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+          // SSO providers to skip — we always want email-based login
+          const ssoKeywords = ['google', 'github', 'apple', 'microsoft', 'sso', 'saml'];
+
+          // Priority 1: "Continue with email" — exact match
+          for (const btn of buttons) {
+            const text = (btn as HTMLElement).textContent?.trim().toLowerCase() || '';
+            if (text.includes('email') && text.includes('continue')) {
               (btn as HTMLElement).click();
-              return text;
+              (btn as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              return (btn as HTMLElement).textContent?.trim() ?? null;
             }
           }
-        }
-        // Fallback: submit button
-        const submit = document.querySelector('button[type="submit"]') as HTMLElement | null;
-        if (submit) {
-          submit.click();
-          return submit.textContent?.trim();
-        }
-        return null;
-      });
 
-      if (clicked) {
+          // Priority 2: Other action buttons — skip anything with SSO keywords
+          const targets = ['verify', 'sign in', 'log in', 'confirm', 'approve', 'continue'];
+          for (const btn of buttons) {
+            const text = (btn as HTMLElement).textContent?.trim().toLowerCase() || '';
+            if (ssoKeywords.some((sso) => text.includes(sso))) continue;
+            for (const target of targets) {
+              if (text.includes(target)) {
+                (btn as HTMLElement).click();
+                (btn as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                return (btn as HTMLElement).textContent?.trim() ?? null;
+              }
+            }
+          }
+
+          // Fallback: submit button
+          const submit = document.querySelector('button[type="submit"]') as HTMLElement | null;
+          if (submit) {
+            submit.click();
+            return submit.textContent?.trim() ?? null;
+          }
+          return null;
+        });
+
+        if (!clicked) break;
+
         // Wait for navigation after button click
         await Promise.race([
-          page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 }).catch(() => {}),
-          page.waitForTimeout(15000),
+          p.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 }).catch(() => {}),
+          p.waitForTimeout(15000),
         ]);
       }
 
-      currentUrl = page.url();
+      currentUrl = p.url();
     }
 
     // Loop through authorize flow (org selection → authorize → callback)
     for (let step = 0; step < 5; step++) {
       if (interceptedCallbackUrl) break;
 
-      currentUrl = page.url();
+      currentUrl = p.url();
 
       if (!currentUrl.includes('/oauth/authorize')) {
-        await page.waitForTimeout(3000);
+        await p.waitForTimeout(3000);
         if (interceptedCallbackUrl) break;
         continue;
       }
 
       // Wait for React hydration
-      await page.waitForTimeout(3000);
-      await dismissCookieBanner(page);
+      await p.waitForTimeout(3000);
+      await dismissCookieBanner(p);
 
-      const pageText = await page.evaluate(() => document.body.innerText);
+      const pageText = await p.evaluate(() => document.body.innerText);
 
       // Handle org selection page
       if (pageText.includes('Select') && (pageText.includes('organization') || pageText.includes('Organisation'))) {
-        await page.evaluate(() => {
+        const lowerPageText = pageText.toLowerCase();
+        const hasSubscription =
+          lowerPageText.includes('subscription') ||
+          lowerPageText.includes('max plan') ||
+          lowerPageText.includes('pro plan');
+
+        await p.evaluate((preferSubscriptionLogin: boolean) => {
+          // Priority 1: For subscription users, click the subscription/chat account login link
+          if (preferSubscriptionLogin) {
+            const links = Array.from(document.querySelectorAll('a, button'));
+            const subLink = links.find((el) => {
+              const text = el.textContent?.toLowerCase() || '';
+              return text.includes('subscription') || text.includes('chat account') || text.includes('login with your');
+            });
+            if (subLink && subLink instanceof HTMLElement) {
+              subLink.click();
+              subLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              return;
+            }
+          }
+
+          // Priority 2: Click an organization name
           const clickTargets = Array.from(
-            document.querySelectorAll('button, a, [role="button"], [role="option"], li, div[class*="item"]'),
+            document.querySelectorAll(
+              'button, a, [role="button"], [role="option"], li, div[class*="item"], div[class*="option"]',
+            ),
           );
           for (const el of clickTargets) {
             const text = (el as HTMLElement).textContent?.trim() || '';
@@ -496,51 +582,150 @@ export async function completeMagicLinkFlow(magicLinkUrl: string): Promise<Magic
               !text.toLowerCase().includes('cookie') &&
               !text.toLowerCase().includes('reject') &&
               !text.toLowerCase().includes('accept') &&
-              !text.toLowerCase().includes('select')
+              !text.toLowerCase().includes('customize') &&
+              !text.toLowerCase().includes('select') &&
+              !text.toLowerCase().includes('login with') &&
+              !text.toLowerCase().includes('check your email') &&
+              !text.toLowerCase().includes("can't find") &&
+              !text.toLowerCase().includes('max plan')
             ) {
               (el as HTMLElement).click();
+              (el as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
               return;
             }
           }
-        });
+        }, hasSubscription);
 
         await Promise.race([
-          page.waitForNavigation({ waitUntil: 'networkidle', timeout: 10000 }).catch(() => {}),
-          page.waitForTimeout(10000),
+          p.waitForNavigation({ waitUntil: 'networkidle', timeout: 10000 }).catch(() => {}),
+          p.waitForTimeout(10000),
         ]);
         continue;
       }
 
-      // Click Authorize button
-      await page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button, a, [role="button"]'));
-        const authBtn = buttons.find(
-          (b) => b.textContent?.trim() === 'Authorize' || b.textContent?.toLowerCase().includes('authorize'),
-        );
-        if (authBtn) (authBtn as HTMLElement).click();
-      });
+      // Click Authorize button — try multiple methods for reliability
+      let clicked = false;
 
-      await page.waitForTimeout(5000);
+      // Method 1: Playwright text locator
+      try {
+        const authLocator = p.getByRole('button', { name: 'Authorize' });
+        if (await authLocator.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await authLocator.click();
+          clicked = true;
+        }
+      } catch {
+        // fall through to next method
+      }
+
+      // Method 2: DOM tree walk + MouseEvent dispatch (most reliable for React apps)
+      if (!clicked) {
+        clicked = await p.evaluate(() => {
+          // Tree walker for exact text match
+          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          let node: Node | null;
+          while ((node = walker.nextNode())) {
+            if (node.textContent?.trim() === 'Authorize') {
+              const el = node.parentElement;
+              if (el) {
+                el.click();
+                el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                return true;
+              }
+            }
+          }
+          // Fallback: query selector
+          const buttons = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+          const authBtn = buttons.find(
+            (b) => b.textContent?.trim() === 'Authorize' || b.textContent?.toLowerCase().includes('authorize'),
+          );
+          if (authBtn && authBtn instanceof HTMLElement) {
+            authBtn.click();
+            authBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            return true;
+          }
+          return false;
+        });
+      }
+
+      await p.waitForTimeout(5000);
     }
 
-    // Extract code from intercepted callback
+    // Extract code from intercepted callback or success page
     if (!interceptedCallbackUrl) {
+      // Last resort: check if the page navigated to a success/callback URL we missed
+      const finalUrl = p.url();
+      if (finalUrl.includes('code=') || finalUrl.includes('/oauth/code/')) {
+        interceptedCallbackUrl = finalUrl;
+      }
+    }
+
+    if (!interceptedCallbackUrl) {
+      // Try to scrape the code from the current page (newer flow shows code on-screen)
+      const scrapedCode = await p
+        .evaluate(() => {
+          // Look for the code in common display patterns
+          const codeEl = document.querySelector('code, pre, [data-testid*="code"]');
+          if (codeEl?.textContent?.trim()) return codeEl.textContent.trim();
+          // Look for "Paste this into Claude Code" pattern
+          const allText = document.body.innerText;
+          const codeMatch = allText.match(/[A-Za-z0-9_-]{30,}/);
+          return codeMatch?.[0] ?? null;
+        })
+        .catch(() => null);
+
+      if (scrapedCode) {
+        // Exchange scraped code for token
+        let tokenResult: ClaudeOAuthResult;
+        try {
+          tokenResult = await exchangeClaudeOAuthCode({
+            code: scrapedCode,
+            codeVerifier: pkceCodeVerifier,
+            state: pkceState,
+          });
+        } catch (err) {
+          await closeBrowser();
+          return { success: false, error: err instanceof Error ? err.message : 'Token exchange failed.' };
+        }
+        await closeBrowser();
+        return {
+          success: true,
+          token: tokenResult.accessToken,
+          refreshToken: tokenResult.refreshToken,
+          model: 'Claude (OAuth)',
+        };
+      }
+
       await closeBrowser();
       return { success: false, error: 'Authorization flow did not complete. Try again.' };
     }
 
     const url = new URL(interceptedCallbackUrl);
-    const authCode = url.searchParams.get('code');
+    let authCode = url.searchParams.get('code');
     const returnedState = url.searchParams.get('state');
 
-    if (returnedState !== pkceState) {
+    // For success page URLs, state won't be in the URL — skip state check
+    if (returnedState && returnedState !== pkceState) {
       await closeBrowser();
       return { success: false, error: 'State mismatch — possible CSRF. Try again.' };
     }
 
     if (!authCode) {
+      // Success page: code might be displayed on the page, not in URL
+      await p.waitForTimeout(2000);
+      authCode = await p
+        .evaluate(() => {
+          const codeEl = document.querySelector('code, pre, [data-testid*="code"]');
+          if (codeEl?.textContent?.trim()) return codeEl.textContent.trim();
+          const allText = document.body.innerText;
+          const codeMatch = allText.match(/[A-Za-z0-9_-]{30,}/);
+          return codeMatch?.[0] ?? null;
+        })
+        .catch(() => null);
+    }
+
+    if (!authCode) {
       await closeBrowser();
-      return { success: false, error: 'No authorization code in callback.' };
+      return { success: false, error: 'No authorization code found. Try again.' };
     }
 
     // Exchange code for token
@@ -557,7 +742,12 @@ export async function completeMagicLinkFlow(magicLinkUrl: string): Promise<Magic
     }
 
     await closeBrowser();
-    return { success: true, token: tokenResult.accessToken, model: 'Claude (OAuth)' };
+    return {
+      success: true,
+      token: tokenResult.accessToken,
+      refreshToken: tokenResult.refreshToken,
+      model: 'Claude (OAuth)',
+    };
   } catch (err) {
     await closeBrowser();
     return { success: false, error: err instanceof Error ? err.message : 'Failed to complete OAuth flow.' };

@@ -24,13 +24,13 @@ describe('buildContext', () => {
     const schemas = services.toolRegistry.toSchemas();
 
     // 2 starter + 4 credential stubs + 8 brain + 1 security audit
+    // + 6 jintel tools + 3 watchlist tools + 3 signal tools
     // + 1 error analysis + 1 api health + 1 portfolio reasoning
     // + 2 portfolio tools (save_portfolio_positions, get_portfolio)
     // + 2 data source query tools (query_data_source, list_data_sources)
     // + 2 memory tools (store_signal_memory, recall_signal_memories)
-    // + 6 jintel tools + 3 signal tools
-    // + 4 display tools (display_portfolio_overview, display_positions_list, display_allocation, display_morning_briefing) = 37
-    expect(schemas.length).toBe(37);
+    // + 4 display tools (display_portfolio_overview, display_positions_list, display_allocation, display_morning_briefing) = 40
+    expect(schemas.length).toBe(40);
 
     const names = schemas.map((s) => s.name).sort();
     expect(names).toContain('get_current_time');
@@ -64,6 +64,10 @@ describe('buildContext', () => {
     expect(names).toContain('glob_signals');
     expect(names).toContain('grep_signals');
     expect(names).toContain('read_signal');
+    // Watchlist tools
+    expect(names).toContain('watchlist.add');
+    expect(names).toContain('watchlist.remove');
+    expect(names).toContain('watchlist.list');
     // Display tools
     expect(names).toContain('display_portfolio_overview');
     expect(names).toContain('display_positions_list');

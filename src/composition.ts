@@ -74,6 +74,7 @@ import { ChatPiiScanner } from './trust/pii/chat-scanner.js';
 import { DefaultPiiRedactor } from './trust/pii/redactor.js';
 import { createSecretTools } from './trust/vault/secure-input.js';
 import { EncryptedVault } from './trust/vault/vault.js';
+import { wireWatchlist } from './watchlist/adapter.js';
 
 const log = getLogger().sub('composition');
 
@@ -347,6 +348,20 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     toolRegistry.register(tool);
   }
 
+  // Watchlist tools (3 tools: watchlist.add, watchlist.remove, watchlist.list)
+  const {
+    enrichment: watchlistEnrichment,
+    toolOptions: watchlistToolOptions,
+    tools: watchlistTools,
+  } = await wireWatchlist({
+    dataDir: dataRoot,
+    jintelClient,
+    ttlSeconds: config.watchlist.enrichmentTtlSeconds,
+  });
+  for (const tool of watchlistTools) {
+    toolRegistry.register(tool);
+  }
+
   // Hot-swap Jintel client on key validation.
   setJintelKeyValidatedCallback((apiKey: string) => {
     const newClient = new JintelClient({
@@ -356,6 +371,8 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     });
     jintelToolOptions.client = newClient;
     jintelClient = newClient;
+    watchlistEnrichment.setJintelClient(newClient);
+    watchlistToolOptions.client = newClient;
     log.info('Jintel client hot-swapped after key validation');
   });
 

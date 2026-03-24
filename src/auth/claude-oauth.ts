@@ -11,8 +11,8 @@ import { spawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 
 const CLAUDE_CODE_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
-const OAUTH_TOKEN_URL = 'https://console.anthropic.com/v1/oauth/token';
-const OAUTH_REDIRECT_URI = 'https://console.anthropic.com/oauth/code/callback';
+const OAUTH_TOKEN_URL = 'https://platform.claude.com/v1/oauth/token';
+const OAUTH_REDIRECT_URI = 'https://platform.claude.com/oauth/code/callback';
 const OAUTH_SCOPES = 'org:create_api_key user:profile user:inference';
 
 export interface ClaudeOAuthResult {
@@ -43,7 +43,7 @@ export function buildClaudeOAuthUrl(params: { codeChallenge: string; state: stri
     code_challenge_method: 'S256',
     state: params.state,
   });
-  return `https://claude.ai/oauth/authorize?${searchParams.toString()}`;
+  return `https://platform.claude.com/oauth/authorize?${searchParams.toString()}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,8 +69,8 @@ export async function exchangeClaudeOAuthCode(params: {
     Accept: 'application/json',
     'User-Agent':
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    Referer: 'https://claude.ai/',
-    Origin: 'https://claude.ai',
+    Referer: 'https://platform.claude.com/',
+    Origin: 'https://platform.claude.com',
   };
 
   const response = await fetch(OAUTH_TOKEN_URL, {
