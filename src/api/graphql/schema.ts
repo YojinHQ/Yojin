@@ -763,6 +763,7 @@ export const typeDefs = /* GraphQL */ `
     totalStages: Int
     agentIds: [String!]
     error: String
+    message: String
     timestamp: String!
   }
 

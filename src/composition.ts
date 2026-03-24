@@ -381,7 +381,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     toolRegistry.register(tool);
   }
 
-  // Watchlist tools (3 tools: watchlist.add, watchlist.remove, watchlist.list)
+  // Watchlist tools (3 tools: watchlist_add, watchlist_remove, watchlist_list)
   const {
     enrichment: watchlistEnrichment,
     toolOptions: watchlistToolOptions,

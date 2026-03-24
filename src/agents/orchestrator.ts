@@ -13,11 +13,13 @@ const logger = createSubsystemLogger('orchestrator');
 
 export interface WorkflowProgressEvent {
   workflowId: string;
-  stage: 'start' | 'stage_start' | 'stage_complete' | 'complete' | 'error';
+  stage: 'start' | 'stage_start' | 'stage_complete' | 'complete' | 'error' | 'activity';
   stageIndex?: number;
   totalStages?: number;
   agentIds?: string[];
   error?: string;
+  /** Human-readable activity message (e.g. "Research Analyst → enrich_entity(AAPL)") */
+  message?: string;
   timestamp: string;
 }
 
@@ -42,6 +44,27 @@ function emitProgress(event: WorkflowProgressEvent): void {
 /** Extract agent IDs from a workflow stage (single step or parallel steps). */
 function stageAgentIds(stage: WorkflowStep | WorkflowStep[]): string[] {
   return Array.isArray(stage) ? stage.map((s) => s.agentId) : [stage.agentId];
+}
+
+/** Format agent ID for display (e.g. "research-analyst" → "Research Analyst"). */
+function formatAgentName(agentId: string): string {
+  return agentId
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+/** Summarize tool params into a short hint string like "(AAPL)" or "(ticker: MSFT)". */
+function summarizeToolParams(input: unknown): string {
+  if (!input || typeof input !== 'object') return '';
+  const obj = input as Record<string, unknown>;
+  // Pick the most informative param to show
+  for (const key of ['symbol', 'ticker', 'query', 'id', 'search', 'type']) {
+    if (typeof obj[key] === 'string' && obj[key]) {
+      return `(${obj[key]})`;
+    }
+  }
+  return '';
 }
 
 export class Orchestrator {
@@ -87,12 +110,14 @@ export class Orchestrator {
         });
 
         if (Array.isArray(stage)) {
-          const results = await Promise.all(stage.map((step) => this.executeStep(step, outputs, trigger, true)));
+          const results = await Promise.all(
+            stage.map((step) => this.executeStep(step, outputs, trigger, true, workflowId, stageIndex)),
+          );
           for (const result of results) {
             outputs.set(result.agentId, result);
           }
         } else {
-          const result = await this.executeStep(stage, outputs, trigger);
+          const result = await this.executeStep(stage, outputs, trigger, false, workflowId, stageIndex);
           outputs.set(result.agentId, result);
         }
 
@@ -137,6 +162,8 @@ export class Orchestrator {
     previousOutputs: Map<string, AgentStepResult>,
     trigger: { message?: string; sessionKey?: string },
     parallel = false,
+    workflowId?: string,
+    stageIndex?: number,
   ): Promise<AgentStepResult> {
     const message = step.buildMessage(previousOutputs, trigger.message);
 
@@ -145,6 +172,34 @@ export class Orchestrator {
       message,
       // Parallel steps must not share a session — concurrent appends would interleave writes.
       sessionKey: parallel ? undefined : trigger.sessionKey,
+      onEvent:
+        workflowId != null
+          ? (event) => {
+              if (event.type === 'action') {
+                for (const tc of event.toolCalls) {
+                  const paramHint = summarizeToolParams(tc.input);
+                  emitProgress({
+                    workflowId,
+                    stage: 'activity',
+                    stageIndex,
+                    agentIds: [step.agentId],
+                    message: `${formatAgentName(step.agentId)} → ${tc.name}${paramHint}`,
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+              } else if (event.type === 'thought' && event.text.length > 0) {
+                const snippet = event.text.length > 120 ? event.text.slice(0, 120) + '…' : event.text;
+                emitProgress({
+                  workflowId,
+                  stage: 'activity',
+                  stageIndex,
+                  agentIds: [step.agentId],
+                  message: `${formatAgentName(step.agentId)}: ${snippet}`,
+                  timestamp: new Date().toISOString(),
+                });
+              }
+            }
+          : undefined,
     });
   }
 }

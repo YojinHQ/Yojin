@@ -768,6 +768,7 @@ export const ON_WORKFLOW_PROGRESS_SUBSCRIPTION = gql`
       totalStages
       agentIds
       error
+      message
       timestamp
     }
   }

@@ -706,11 +706,12 @@ export interface OnPriceMoveSubscriptionResult {
 
 export interface WorkflowProgressEvent {
   workflowId: string;
-  stage: 'start' | 'stage_start' | 'stage_complete' | 'complete' | 'error';
+  stage: 'start' | 'stage_start' | 'stage_complete' | 'complete' | 'error' | 'activity';
   stageIndex: number | null;
   totalStages: number | null;
   agentIds: string[] | null;
   error: string | null;
+  message: string | null;
   timestamp: string;
 }
 

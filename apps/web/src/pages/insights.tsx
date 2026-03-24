@@ -406,6 +406,7 @@ function WorkflowDiagram({ events }: { events: WorkflowProgressEvent[] }) {
   let activeStage = 0;
   const completedStages = new Set<number>();
   let workflowError: string | null = null;
+  const activities: string[] = [];
 
   if (hasRealEvents) {
     for (const evt of events) {
@@ -415,6 +416,8 @@ function WorkflowDiagram({ events }: { events: WorkflowProgressEvent[] }) {
         completedStages.add(evt.stageIndex);
       } else if (evt.stage === 'error') {
         workflowError = evt.error ?? 'Unknown error';
+      } else if (evt.stage === 'activity' && evt.message) {
+        activities.push(evt.message);
       }
     }
   } else {
@@ -422,6 +425,10 @@ function WorkflowDiagram({ events }: { events: WorkflowProgressEvent[] }) {
     if (elapsed >= STAGE_TIMING_SEC[2]) activeStage = 2;
     else if (elapsed >= STAGE_TIMING_SEC[1]) activeStage = 1;
   }
+
+  // Show last N activities (most recent at bottom)
+  const MAX_VISIBLE_ACTIVITIES = 6;
+  const visibleActivities = activities.slice(-MAX_VISIBLE_ACTIVITIES);
 
   return (
     <div className="py-8">
@@ -553,8 +560,31 @@ function WorkflowDiagram({ events }: { events: WorkflowProgressEvent[] }) {
           </div>
         )}
 
+        {/* Live activity feed */}
+        {visibleActivities.length > 0 && (
+          <div className="mt-5 border-t border-border pt-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-primary animate-pulse" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Live Activity</span>
+            </div>
+            <div className="space-y-1 font-mono text-xs text-text-secondary max-h-40 overflow-y-auto">
+              {visibleActivities.map((msg, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    'px-2 py-1 rounded transition-opacity duration-300',
+                    i === visibleActivities.length - 1 ? 'bg-bg-hover text-text-primary' : 'opacity-60',
+                  )}
+                >
+                  {msg}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Elapsed time + live indicator */}
-        <div className="mt-6 flex items-center justify-center gap-3">
+        <div className="mt-4 flex items-center justify-center gap-3">
           <p className="text-sm text-text-muted">
             {elapsed}s elapsed
             <span className="ml-2 inline-block w-1.5 h-1.5 rounded-full bg-accent-primary animate-pulse" />
