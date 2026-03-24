@@ -2,7 +2,7 @@
  * E2E test — ProcessInsights workflow.
  *
  * Validates the full pipeline: buildContext → Orchestrator → 3 stages
- * (Research Analyst → [Research Analyst, Risk Manager] → Strategist)
+ * (Research Analyst → Risk Manager → Strategist)
  * → save_insight_report tool execution → InsightStore persistence.
  *
  * Uses a mock provider with scripted responses per agent.
@@ -122,11 +122,12 @@ function createInsightsMockProvider(): AgentLoopProvider {
       const system = (params.system ?? '') as string;
 
       // Determine which agent is being invoked based on system prompt or call order
-      const isStrategist = system.toLowerCase().includes('strategist') || callCount >= 4;
+      // 3 agent runs: RA (call 1), RM (call 2), Strategist (calls 3+)
+      const isStrategist = system.toLowerCase().includes('strategist') || callCount >= 3;
 
       if (isStrategist) {
         // First Strategist call: invoke save_insight_report tool
-        if (callCount === 4) {
+        if (callCount === 3) {
           return {
             content: [
               { type: 'text' as const, text: 'Synthesizing portfolio insights...' },
@@ -156,8 +157,8 @@ function createInsightsMockProvider(): AgentLoopProvider {
         };
       }
 
-      // Research Analyst and Risk Manager return text-only responses
-      const agentName = callCount <= 2 ? 'Research Analyst' : 'Risk Manager';
+      // Research Analyst (call 1) and Risk Manager (call 2)
+      const agentName = callCount === 1 ? 'Research Analyst' : 'Risk Manager';
       return {
         content: [
           {
@@ -220,8 +221,7 @@ describe('E2E ProcessInsights workflow', () => {
       message: 'Process portfolio insights',
     });
 
-    // All 3 unique agents should have produced output
-    // (research-analyst runs twice but output map is keyed by agentId, so last wins)
+    // All 3 agents should have produced output (one run each)
     expect(results.has('research-analyst')).toBe(true);
     expect(results.has('risk-manager')).toBe(true);
     expect(results.has('strategist')).toBe(true);
@@ -262,15 +262,16 @@ describe('E2E ProcessInsights workflow', () => {
     expect(strategist!.iterations).toBe(2);
   });
 
-  it('Research Analyst runs in both Stage 0 and Stage 1', async () => {
+  it('Research Analyst runs once with combined data gathering + analysis', async () => {
     const results = await orchestrator.execute('process-insights', {
       message: 'Process portfolio insights',
     });
 
-    // Research analyst text should be from Stage 1 (overwrites Stage 0 in the map)
     const research = results.get('research-analyst');
     expect(research).toBeDefined();
     expect(research!.text).toContain('analysis');
+    // RA runs once (1 iteration), not twice
+    expect(research!.iterations).toBe(1);
   });
 
   it('InsightReport schema validates correctly', async () => {

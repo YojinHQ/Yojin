@@ -48,6 +48,7 @@ interface PositionInsightGql {
   opportunities: string[];
   memoryContext: string | null;
   priceTarget: number | null;
+  carriedForward: boolean;
 }
 
 interface PortfolioInsightGql {
@@ -83,6 +84,7 @@ function toGql(report: InsightReport): InsightReportGql {
     positions: report.positions.map((p) => ({
       ...p,
       keySignals: p.keySignals.map((s) => ({ ...s, url: s.url ?? null })),
+      carriedForward: p.carriedForward ?? false,
     })),
     portfolio: report.portfolio,
     emotionState: report.emotionState,

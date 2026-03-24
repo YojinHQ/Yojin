@@ -626,6 +626,7 @@ export const typeDefs = /* GraphQL */ `
     opportunities: [String!]!
     memoryContext: String
     priceTarget: Float
+    carriedForward: Boolean!
   }
 
   type PortfolioInsight {

@@ -159,6 +159,30 @@ describe('SignalArchive', () => {
     expect(hashes.has('hash-b')).toBe(true);
   });
 
+  it('filters by tickers array (matches any)', async () => {
+    await archive.appendBatch([
+      makeSignal({ id: 's1', assets: [{ ticker: 'AAPL', relevance: 0.9, linkType: 'DIRECT' }] }),
+      makeSignal({ id: 's2', assets: [{ ticker: 'TSLA', relevance: 0.8, linkType: 'DIRECT' }] }),
+      makeSignal({ id: 's3', assets: [{ ticker: 'MSFT', relevance: 0.7, linkType: 'DIRECT' }] }),
+      makeSignal({ id: 's4', assets: [{ ticker: 'GOOG', relevance: 0.6, linkType: 'DIRECT' }] }),
+    ]);
+    const results = await archive.query({ tickers: ['AAPL', 'MSFT'] });
+    expect(results).toHaveLength(2);
+    const ids = results.map((r) => r.id).sort();
+    expect(ids).toEqual(['s1', 's3']);
+  });
+
+  it('tickers filter takes precedence over single ticker', async () => {
+    await archive.appendBatch([
+      makeSignal({ id: 's1', assets: [{ ticker: 'AAPL', relevance: 0.9, linkType: 'DIRECT' }] }),
+      makeSignal({ id: 's2', assets: [{ ticker: 'TSLA', relevance: 0.8, linkType: 'DIRECT' }] }),
+    ]);
+    // tickers should take precedence — ticker='AAPL' is ignored
+    const results = await archive.query({ ticker: 'AAPL', tickers: ['TSLA'] });
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe('s2');
+  });
+
   it('returns empty results for empty archive', async () => {
     expect(await archive.query({})).toHaveLength(0);
     expect(await archive.listDates()).toHaveLength(0);

@@ -33,6 +33,8 @@ export interface SignalQueryFilter {
   type?: string;
   /** Filter by ticker symbol (case-sensitive). */
   ticker?: string;
+  /** Filter by multiple ticker symbols (matches any). Takes precedence over `ticker`. */
+  tickers?: string[];
   /** Filter by data source ID. */
   sourceId?: string;
   /** ISO date string — only signals on or after this date. */
@@ -200,7 +202,12 @@ export class SignalArchive {
   private matchesFilter(signal: Signal, filter: SignalQueryFilter): boolean {
     if (filter.id && signal.id !== filter.id) return false;
     if (filter.type && signal.type !== filter.type) return false;
-    if (filter.ticker && !signal.assets.some((a) => a.ticker === filter.ticker)) return false;
+    if (filter.tickers && filter.tickers.length > 0) {
+      const tickerSet = new Set(filter.tickers);
+      if (!signal.assets.some((a) => tickerSet.has(a.ticker))) return false;
+    } else if (filter.ticker && !signal.assets.some((a) => a.ticker === filter.ticker)) {
+      return false;
+    }
     if (filter.sourceId && !signal.sources.some((s) => s.id === filter.sourceId)) return false;
     if (filter.since) {
       // When since is a date-only string (no 'T'), match from start of day

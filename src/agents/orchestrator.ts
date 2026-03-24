@@ -1,5 +1,6 @@
 import type { AgentStepResult, Workflow, WorkflowStep } from './types.js';
 import type { AgentRuntime } from '../core/agent-runtime.js';
+import type { DataGathererOptions } from '../insights/data-gatherer.js';
 import type { InsightStore } from '../insights/insight-store.js';
 import { registerProcessInsightsWorkflow } from '../insights/workflow.js';
 import { createSubsystemLogger } from '../logging/logger.js';
@@ -96,6 +97,10 @@ export class Orchestrator {
     const outputs = new Map<string, AgentStepResult>();
 
     try {
+      // Run beforeWorkflow hook (e.g., data pre-aggregation)
+      if (workflow.beforeWorkflow) {
+        await workflow.beforeWorkflow(outputs);
+      }
       let stageIndex = 0;
       for (const stage of workflow.stages) {
         const agentIds = stageAgentIds(stage);
@@ -138,6 +143,11 @@ export class Orchestrator {
         stageIndex++;
       }
 
+      // Run afterWorkflow hook (e.g., cold position merge)
+      if (workflow.afterWorkflow) {
+        await workflow.afterWorkflow(outputs);
+      }
+
       logger.info(`Workflow complete: ${workflow.name}`, {
         workflowId,
         agentsRun: [...outputs.keys()],
@@ -172,6 +182,7 @@ export class Orchestrator {
       message,
       // Parallel steps must not share a session — concurrent appends would interleave writes.
       sessionKey: parallel ? undefined : trigger.sessionKey,
+      disabledTools: step.disabledTools,
       onEvent:
         workflowId != null
           ? (event) => {
@@ -206,7 +217,7 @@ export class Orchestrator {
 
 export function registerBuiltinWorkflows(
   orchestrator: Orchestrator,
-  options?: { reflectionEngine?: ReflectionEngine; insightStore?: InsightStore },
+  options?: { reflectionEngine?: ReflectionEngine; insightStore?: InsightStore; gathererOptions?: DataGathererOptions },
 ): void {
   const afterStageHooks = new Map<number, () => Promise<void>>();
 
@@ -298,6 +309,9 @@ export function registerBuiltinWorkflows(
 
   // Process Insights workflow (requires insightStore)
   if (options?.insightStore) {
-    registerProcessInsightsWorkflow(orchestrator, { insightStore: options.insightStore });
+    registerProcessInsightsWorkflow(orchestrator, {
+      insightStore: options.insightStore,
+      gathererOptions: options.gathererOptions,
+    });
   }
 }

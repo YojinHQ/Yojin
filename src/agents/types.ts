@@ -63,6 +63,8 @@ export interface AgentStepResult {
 export interface WorkflowStep {
   agentId: string;
   buildMessage: (previousOutputs: Map<string, AgentStepResult>, triggerMessage?: string) => string;
+  /** Tool names to exclude from this step (prevents agents from calling redundant data-gathering tools). */
+  disabledTools?: string[];
 }
 
 export type WorkflowStage = WorkflowStep | WorkflowStep[];
@@ -73,4 +75,8 @@ export interface Workflow {
   stages: WorkflowStage[];
   /** Optional hooks keyed by stage index — run after the stage at that index completes. */
   afterStageHooks?: Map<number, () => Promise<void>>;
+  /** Optional hook that runs before workflow stages — use to pre-aggregate data. */
+  beforeWorkflow?: (outputs: Map<string, AgentStepResult>) => Promise<void>;
+  /** Optional hook that runs after all workflow stages — use for post-processing (e.g. merge). */
+  afterWorkflow?: (outputs: Map<string, AgentStepResult>) => Promise<void>;
 }
