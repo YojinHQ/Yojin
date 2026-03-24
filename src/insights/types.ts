@@ -34,7 +34,7 @@ export const SignalSummarySchema = z.object({
   title: z.string().min(1),
   impact: SignalImpactSchema,
   confidence: z.number().min(0).max(1),
-  url: z.string().url().nullable().optional(),
+  url: z.string().nullable().optional(),
 });
 export type SignalSummary = z.infer<typeof SignalSummarySchema>;
 
@@ -59,6 +59,23 @@ export const PositionInsightSchema = z.object({
 export type PositionInsight = z.infer<typeof PositionInsightSchema>;
 
 // ---------------------------------------------------------------------------
+// PortfolioItem — structured portfolio-level item with signal references
+// ---------------------------------------------------------------------------
+
+export const PortfolioItemSchema = z.object({
+  text: z.string().min(1),
+  signalIds: z.array(z.string()).default([]),
+});
+export type PortfolioItem = z.infer<typeof PortfolioItemSchema>;
+
+/** Parse legacy `string[]` or new `PortfolioItem[]` for backward compatibility. */
+function portfolioItemArray() {
+  return z
+    .array(z.union([z.string(), PortfolioItemSchema]))
+    .transform((items) => items.map((item) => (typeof item === 'string' ? { text: item, signalIds: [] } : item)));
+}
+
+// ---------------------------------------------------------------------------
 // PortfolioInsight — portfolio-level synthesis
 // ---------------------------------------------------------------------------
 
@@ -67,9 +84,9 @@ export const PortfolioInsightSchema = z.object({
   summary: z.string().min(1),
   sectorThemes: z.array(z.string()),
   macroContext: z.string(),
-  topRisks: z.array(z.string()),
-  topOpportunities: z.array(z.string()),
-  actionItems: z.array(z.string()),
+  topRisks: portfolioItemArray(),
+  topOpportunities: portfolioItemArray(),
+  actionItems: portfolioItemArray(),
 });
 export type PortfolioInsight = z.infer<typeof PortfolioInsightSchema>;
 

@@ -132,7 +132,7 @@ Jintel is accessed via the `@yojinhq/jintel-client` npm package. PII redaction r
 
 **Signal Ingestion** — background pipeline in `src/signals/` that pulls from Jintel, deduplicates entries by content hash, extracts ticker mentions via `TickerExtractor`, and writes to the local archive. Agents query the archive at reasoning time rather than hitting the API inline.
 
-**ProcessInsights Workflow** — multi-agent pipeline in `src/insights/` that runs Research Analyst → Risk Manager → Strategist against the portfolio and recent signals. Produces structured `InsightReport`s with per-position ratings (STRONG_BUY to STRONG_SELL), conviction scores, key signals, risks, and opportunities. Reports are stored as append-only JSONL and surfaced in the Web UI.
+**ProcessInsights Workflow** — multi-agent pipeline in `src/insights/` that pre-aggregates portfolio data, triages positions (hot/warm/cold), then runs Research Analyst → Risk Manager → Strategist. Produces structured `InsightReport`s with per-position ratings, conviction scores, key signals, risks, and opportunities. Portfolio-level items (action items, risks, opportunities) are structured objects with deterministically-assigned signal references — signal IDs are matched to positions by ticker mention, not by the LLM. Reports are stored as append-only JSONL and surfaced in the Web UI via GraphQL.
 
 **GraphQL API** — graphql-yoga on Hono; exposes typed queries, mutations, and real-time subscriptions for the Web UI. The schema is the single contract between the backend and frontend — the React app reads portfolio state, risk data, agent activity, and signal feeds exclusively through this API.
 
@@ -348,7 +348,7 @@ yojin/
 │   ├── agents/         # Multi-agent profiles and orchestrator
 │   ├── brain/          # Strategist's persistent memory, persona, emotion
 │   ├── memory/         # BM25 memory store, reflection engine, per-role learning
-│   ├── insights/       # ProcessInsights workflow, insight reports, per-position analysis
+│   ├── insights/       # ProcessInsights workflow, insight reports, data gatherer, triage, signal assignment
 │   ├── signals/        # Signal ingestion, archive, ticker extraction
 │   ├── jintel/         # Jintel client (price provider, tools)
 │   ├── data-sources/   # Data source registry and interfaces (Jintel)

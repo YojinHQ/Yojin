@@ -668,9 +668,18 @@ export const LATEST_INSIGHT_REPORT_QUERY = gql`
         summary
         sectorThemes
         macroContext
-        topRisks
-        topOpportunities
-        actionItems
+        topRisks {
+          text
+          signalIds
+        }
+        topOpportunities {
+          text
+          signalIds
+        }
+        actionItems {
+          text
+          signalIds
+        }
       }
       emotionState {
         confidence
@@ -711,6 +720,15 @@ export const INSIGHT_REPORTS_QUERY = gql`
 // Mutations — Insights
 // ---------------------------------------------------------------------------
 
+export const INSIGHTS_WORKFLOW_STATUS_QUERY = gql`
+  query InsightsWorkflowStatus {
+    insightsWorkflowStatus {
+      running
+      startedAt
+    }
+  }
+`;
+
 export const PROCESS_INSIGHTS_MUTATION = gql`
   mutation ProcessInsights {
     processInsights {
@@ -740,9 +758,18 @@ export const PROCESS_INSIGHTS_MUTATION = gql`
         summary
         sectorThemes
         macroContext
-        topRisks
-        topOpportunities
-        actionItems
+        topRisks {
+          text
+          signalIds
+        }
+        topOpportunities {
+          text
+          signalIds
+        }
+        actionItems {
+          text
+          signalIds
+        }
       }
       emotionState {
         confidence

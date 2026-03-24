@@ -237,7 +237,7 @@ async function runInsights(): Promise<void> {
     if (latest.portfolio.actionItems.length > 0) {
       console.log('\nAction items:');
       for (const item of latest.portfolio.actionItems) {
-        console.log(`  - ${item}`);
+        console.log(`  - ${item.text}`);
       }
     }
   }

@@ -34,6 +34,7 @@ import {
 } from './resolvers/data-sources.js';
 import { fetchDataSourceResolver } from './resolvers/fetch-data-source.js';
 import {
+  getInsightsWorkflowStatus,
   insightReportQuery,
   insightReportsQuery,
   latestInsightReportQuery,
@@ -121,6 +122,7 @@ const schema = createSchema({
       insightReports: insightReportsQuery,
       insightReport: insightReportQuery,
       watchlist: watchlistQuery,
+      insightsWorkflowStatus: () => getInsightsWorkflowStatus(),
     },
     Position: positionFieldResolvers,
     Mutation: {

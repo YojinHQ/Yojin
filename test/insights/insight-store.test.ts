@@ -38,9 +38,9 @@ function makeReport(overrides?: Partial<InsightReport>): InsightReport {
       summary: 'Portfolio is well-positioned with strong equity performance.',
       sectorThemes: ['Tech leadership', 'Crypto recovery'],
       macroContext: 'Fed holding rates steady, soft landing expected.',
-      topRisks: ['Concentration in tech sector'],
-      topOpportunities: ['Emerging market exposure'],
-      actionItems: ['Consider diversifying into healthcare'],
+      topRisks: [{ text: 'Concentration in tech sector', signalIds: [] }],
+      topOpportunities: [{ text: 'Emerging market exposure', signalIds: [] }],
+      actionItems: [{ text: 'Consider diversifying into healthcare', signalIds: [] }],
     },
     agentOutputs: {
       researchAnalyst: 'Research analyst output text',

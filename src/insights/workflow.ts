@@ -12,7 +12,7 @@
  */
 
 import type { DataGathererOptions } from './data-gatherer.js';
-import { formatBriefsForContext, gatherDataBriefs } from './data-gatherer.js';
+import { formatBriefsForContext, formatRiskMetrics, gatherDataBriefs } from './data-gatherer.js';
 import type { InsightStore } from './insight-store.js';
 import { mergeColdPositions } from './merge.js';
 import type { ColdPosition } from './triage.js';
@@ -52,21 +52,29 @@ const RA_DISABLED_TOOLS = [
   'watchlist_list',
   'resolve_symbol',
   'run_technical',
-  // Keep: get_current_time, calculate, store_signal_memory
+  'store_signal_memory',
+  // Keep: get_current_time, calculate
 ];
 
 const RM_DISABLED_TOOLS = [
   'recall_signal_memories',
+  'store_signal_memory',
   'check_api_health',
   'diagnose_data_error',
   'sanctions_screen',
   'security_audit_check',
-  // Keep: risk tools (analyze_exposure, etc.), calculate, get_current_time, store_signal_memory
+  'analyze_exposure', // Pre-computed in risk metrics
+  'calculate', // Pre-computed in risk metrics
+  // Keep: get_current_time
 ];
 
 const STRATEGIST_DISABLED_TOOLS = [
   'get_portfolio', // Data already in context
-  // Keep: brain tools, save_insight_report, recall_signal_memories, portfolio_reasoning, etc.
+  'recall_signal_memories', // Memories already in RA briefs
+  'brain_get_memory', // Not needed — synthesize from RA/RM output
+  'brain_get_emotion', // Not needed — set new emotion based on analysis
+  'get_current_time', // Not needed for report
+  // Keep: save_insight_report, brain_update_memory, brain_update_emotion, store_signal_memory
 ];
 
 export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, options: ProcessInsightsOptions): void {
@@ -83,6 +91,7 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
       // Stage 0: Research Analyst — analyzes pre-aggregated data (no tool calls for data)
       {
         agentId: 'research-analyst',
+        maxIterations: hasGatherer ? 2 : undefined,
         disabledTools: hasGatherer ? RA_DISABLED_TOOLS : undefined,
         buildMessage: (prev) => {
           const dataBriefs = prev.get('__data_briefs')?.text;
@@ -95,14 +104,15 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
               `All portfolio data has been pre-aggregated below — no data-gathering tools are available. ` +
               `Analyze ONLY using the data provided.\n\n` +
               `## Positions Requiring Deep Analysis\n\n${dataBriefs}\n\n` +
-              `## Instructions\n` +
-              `For each position, produce a focused analysis in ONE pass:\n` +
+              `## Instructions — complete in 1 iteration\n` +
+              `Analyze ALL positions and output a structured brief per position:\n` +
               `- Rating direction (STRONG_BUY/BUY/HOLD/SELL/STRONG_SELL) and conviction (0-1)\n` +
               `- Key thesis (1-2 sentences)\n` +
               `- Conflicting signals and sentiment shifts\n` +
               `- Catalysts and risks\n` +
-              `- Preserve signal IDs (sig-xxx) and source URLs for provenance\n` +
-              `\nBe concise — output a structured brief per position, not lengthy prose.\n`;
+              `- IMPORTANT: Preserve signal IDs (sig-xxx) and source URLs — the Strategist needs these for the report\n` +
+              `\nDo NOT call store_signal_memory — the Strategist handles memory persistence.\n` +
+              `Be concise — output a structured brief per position, not lengthy prose.\n`;
 
             if (warmBriefs) {
               prompt +=
@@ -145,16 +155,20 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
       // Stage 1: Risk Manager — portfolio risk from research brief
       {
         agentId: 'risk-manager',
+        maxIterations: hasGatherer ? 2 : undefined,
         disabledTools: hasGatherer ? RM_DISABLED_TOOLS : undefined,
         buildMessage: (prev) => {
           const dataBriefs = prev.get('__data_briefs')?.text;
+          const riskMetrics = prev.get('__risk_metrics')?.text;
           const raOutput = prev.get('research-analyst')?.text ?? '';
 
           return (
             `Analyze full portfolio risk using ONLY the data provided below.\n` +
-            `Compute: sector exposure, concentration (HHI), correlation detection, drawdown.\n` +
-            `Use your risk tools (analyze_exposure, score_concentration, etc.) and calculate.\n` +
-            `Be concise — output structured risk metrics, not lengthy narrative.\n\n` +
+            `Risk metrics (weights, HHI, sector exposure) are already pre-computed — do NOT recalculate them.\n` +
+            `Focus on: interpreting the metrics, detecting correlations, identifying risk-adjusted themes.\n` +
+            `Complete in 1 iteration. Do NOT call any tools — all data is provided. Output analysis only.\n` +
+            `Be concise — output structured risk assessment, not lengthy narrative.\n\n` +
+            (riskMetrics ? `${riskMetrics}\n\n` : '') +
             (dataBriefs ? `## Pre-Aggregated Position Data\n${dataBriefs}\n\n` : '') +
             `## Research Analysis\n${raOutput}`
           );
@@ -164,32 +178,39 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
       // Stage 2: Strategist synthesizes and persists
       {
         agentId: 'strategist',
+        maxIterations: hasGatherer ? 3 : undefined,
+        maxTokens: hasGatherer ? 16384 : undefined,
         disabledTools: hasGatherer ? STRATEGIST_DISABLED_TOOLS : undefined,
         buildMessage: (prev) => {
           const researchOutput = prev.get('research-analyst')?.text ?? '';
           const riskOutput = prev.get('risk-manager')?.text ?? '';
           const coldSummary = prev.get('__cold_summary')?.text;
+          const snapshotId = prev.get('__snapshot_id')?.text ?? '';
+
+          // Truncate agent outputs to reduce context — keep most important content
+          const maxChars = 3000;
+          const research =
+            researchOutput.length > maxChars ? researchOutput.slice(0, maxChars) + '\n[truncated]' : researchOutput;
+          const risk = riskOutput.length > maxChars ? riskOutput.slice(0, maxChars) + '\n[truncated]' : riskOutput;
 
           let prompt =
-            `Synthesize insights for the entire portfolio.\n\n` +
-            `## Research Analysis\n${researchOutput}\n\n` +
-            `## Risk Analysis\n${riskOutput}\n\n`;
+            `Synthesize insights and save a report. Be extremely concise in all string fields.\n\n` +
+            `## Research\n${research}\n\n` +
+            `## Risk\n${risk}\n\n`;
 
           if (coldSummary) {
-            prompt += `## Carried-Forward Positions\n${coldSummary}\n\n`;
+            prompt += `## Carried-Forward\n${coldSummary}\n\n`;
           }
 
           prompt +=
-            `## Instructions — complete in 2 iterations\n` +
-            `**Iteration 1** — Gather your context (batch ALL these calls together):\n` +
-            `  recall_signal_memories, brain_get_memory, brain_get_emotion, get_current_time\n\n` +
-            `**Iteration 2** — Analyze and persist (batch ALL these calls together):\n` +
-            `  - For each position: rating (STRONG_BUY/BUY/HOLD/SELL/STRONG_SELL), ` +
-            `conviction (0-1), thesis, key signals (include signal ID + source URL), risks, opportunities\n` +
-            `  - Include carried-forward positions with their previous ratings\n` +
-            `  - Portfolio-level: overall health, summary, sector themes, macro context, top risks, top opportunities, action items\n` +
-            `  - Call save_insight_report, brain_update_memory, brain_update_emotion, store_signal_memory ALL in one batch\n` +
-            `\nBe concise. Do NOT call get_portfolio — all position data is in the research/risk analysis above.`;
+            `## Instructions — 1 iteration, batch ALL tool calls\n` +
+            `Call save_insight_report with snapshotId="${snapshotId}":\n` +
+            `- positions[]: symbol, name, rating, conviction, thesis (1 sentence MAX), keySignals[] (top 2 per position), risks[] (1-2 items), opportunities[] (1-2 items), memoryContext: null, priceTarget: null\n` +
+            `- keySignals: { signalId: "sig-xxx" (copy EXACT ID), type, title (short), impact: "POSITIVE"|"NEGATIVE"|"NEUTRAL", confidence, url: null }\n` +
+            `- portfolio: overallHealth, summary (2 sentences MAX), sectorThemes[], macroContext (1 sentence), topRisks[], topOpportunities[], actionItems[]\n` +
+            `- emotionState: { confidence, riskAppetite, reason (1 sentence) }\n` +
+            `Also call brain_update_memory and brain_update_emotion in the SAME batch.\n` +
+            `Keep ALL string values SHORT. Do NOT write lengthy prose.`;
 
           return prompt;
         },
@@ -255,6 +276,16 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
               compactions: 0,
             });
           }
+
+          // Pre-compute risk metrics so RM doesn't waste iterations on arithmetic
+          outputs.set('__risk_metrics', {
+            agentId: '__risk_metrics',
+            text: formatRiskMetrics(result.briefs),
+            messages: [],
+            iterations: 0,
+            usage: { inputTokens: 0, outputTokens: 0 },
+            compactions: 0,
+          });
 
           // Store snapshot ID for the insight report
           outputs.set('__snapshot_id', {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatBriefsForContext } from '../../src/insights/data-gatherer.js';
+import { formatBriefsForContext, formatRiskMetrics } from '../../src/insights/data-gatherer.js';
 import type { DataBrief } from '../../src/insights/data-gatherer.js';
 
 function makeBrief(overrides?: Partial<DataBrief>): DataBrief {
@@ -138,6 +138,10 @@ describe('formatBriefsForContext', () => {
     expect(memoryLines).toHaveLength(2);
   });
 
+  it('handles empty briefs in formatRiskMetrics', () => {
+    expect(formatRiskMetrics([])).toBe('No positions.');
+  });
+
   it('omits fundamentals section when no data available', () => {
     const brief = makeBrief({
       sector: null,
@@ -151,5 +155,41 @@ describe('formatBriefsForContext', () => {
     expect(result).toContain('Price:');
     expect(result).not.toContain('Sector:');
     expect(result).not.toContain('MCap:');
+  });
+});
+
+describe('formatRiskMetrics', () => {
+  it('computes position weights and sector exposure', () => {
+    const briefs = [
+      makeBrief({ symbol: 'AAPL', marketValue: 5000, enrichmentSector: 'Technology' }),
+      makeBrief({ symbol: 'MSFT', marketValue: 3000, enrichmentSector: 'Technology' }),
+      makeBrief({ symbol: 'JPM', marketValue: 2000, enrichmentSector: 'Financials' }),
+    ];
+    const result = formatRiskMetrics(briefs);
+
+    expect(result).toContain('AAPL: 50.0%');
+    expect(result).toContain('MSFT: 30.0%');
+    expect(result).toContain('JPM: 20.0%');
+    expect(result).toContain('Technology: 80.0%');
+    expect(result).toContain('Financials: 20.0%');
+  });
+
+  it('flags concentration warnings', () => {
+    const briefs = [
+      makeBrief({ symbol: 'AAPL', marketValue: 8000, enrichmentSector: 'Technology' }),
+      makeBrief({ symbol: 'MSFT', marketValue: 2000, enrichmentSector: 'Technology' }),
+    ];
+    const result = formatRiskMetrics(briefs);
+
+    expect(result).toContain('WARNING: Technology sector at 100.0%');
+    expect(result).toContain('CRITICAL: AAPL at 80.0%');
+  });
+
+  it('computes HHI correctly', () => {
+    const briefs = Array.from({ length: 4 }, (_, i) => makeBrief({ symbol: `S${i}`, marketValue: 2500 }));
+    const result = formatRiskMetrics(briefs);
+
+    expect(result).toContain('HHI: 2500');
+    expect(result).toContain('Effective positions (1/HHI): 4.0');
   });
 });

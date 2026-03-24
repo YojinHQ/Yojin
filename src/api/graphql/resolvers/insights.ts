@@ -51,14 +51,19 @@ interface PositionInsightGql {
   carriedForward: boolean;
 }
 
+interface PortfolioItemGql {
+  text: string;
+  signalIds: string[];
+}
+
 interface PortfolioInsightGql {
   overallHealth: string;
   summary: string;
   sectorThemes: string[];
   macroContext: string;
-  topRisks: string[];
-  topOpportunities: string[];
-  actionItems: string[];
+  topRisks: PortfolioItemGql[];
+  topOpportunities: PortfolioItemGql[];
+  actionItems: PortfolioItemGql[];
 }
 
 interface EmotionStateGql {
@@ -120,10 +125,17 @@ export async function insightReportQuery(_parent: unknown, args: { id: string })
 // ---------------------------------------------------------------------------
 
 let activeRun: Promise<InsightReportGql | null> | null = null;
+let activeRunStartedAt: string | null = null;
+
+/** Returns the ISO timestamp when the current run started, or null if idle. */
+export function getInsightsWorkflowStatus(): { running: boolean; startedAt: string | null } {
+  return { running: activeRun !== null, startedAt: activeRunStartedAt };
+}
 
 export async function processInsightsMutation(): Promise<InsightReportGql | null> {
   if (activeRun) return activeRun;
 
+  activeRunStartedAt = new Date().toISOString();
   activeRun = (async () => {
     if (!orchestrator) {
       throw new Error('Orchestrator not available — cannot process insights');
@@ -143,5 +155,6 @@ export async function processInsightsMutation(): Promise<InsightReportGql | null
     return await activeRun;
   } finally {
     activeRun = null;
+    activeRunStartedAt = null;
   }
 }

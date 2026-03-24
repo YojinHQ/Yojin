@@ -90,6 +90,10 @@ export class AgentRuntime {
     abortSignal?: AbortSignal;
     /** Tool names to exclude from this invocation (e.g. data-gathering tools when data is pre-aggregated). */
     disabledTools?: string[];
+    /** Maximum LLM iterations for this invocation. */
+    maxIterations?: number;
+    /** Max output tokens per LLM call. */
+    maxTokens?: number;
   }): Promise<AgentStepResult> {
     const profile = this.agentRegistry.get(params.agentId);
     if (!profile) {
@@ -118,6 +122,8 @@ export class AgentRuntime {
         model: profile.model ?? DEFAULT_MODEL,
         systemPrompt,
         tools: guardedTools,
+        maxIterations: params.maxIterations,
+        maxTokens: params.maxTokens,
         onEvent: params.onEvent,
         abortSignal: params.abortSignal,
         piiScanner: this.piiScanner,

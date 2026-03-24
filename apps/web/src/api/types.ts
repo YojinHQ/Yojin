@@ -568,14 +568,19 @@ export interface PositionInsight {
   priceTarget: number | null;
 }
 
+export interface PortfolioItem {
+  text: string;
+  signalIds: string[];
+}
+
 export interface PortfolioInsight {
   overallHealth: PortfolioHealth;
   summary: string;
   sectorThemes: string[];
   macroContext: string;
-  topRisks: string[];
-  topOpportunities: string[];
-  actionItems: string[];
+  topRisks: PortfolioItem[];
+  topOpportunities: PortfolioItem[];
+  actionItems: PortfolioItem[];
 }
 
 export interface EmotionState {
@@ -608,6 +613,15 @@ export interface InsightReportQueryResult {
 
 export interface ProcessInsightsMutationResult {
   processInsights: InsightReport | null;
+}
+
+export interface WorkflowStatus {
+  running: boolean;
+  startedAt: string | null;
+}
+
+export interface InsightsWorkflowStatusQueryResult {
+  insightsWorkflowStatus: WorkflowStatus;
 }
 
 // ---------------------------------------------------------------------------

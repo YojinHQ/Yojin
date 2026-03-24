@@ -629,14 +629,19 @@ export const typeDefs = /* GraphQL */ `
     carriedForward: Boolean!
   }
 
+  type PortfolioItem {
+    text: String!
+    signalIds: [String!]!
+  }
+
   type PortfolioInsight {
     overallHealth: PortfolioHealth!
     summary: String!
     sectorThemes: [String!]!
     macroContext: String!
-    topRisks: [String!]!
-    topOpportunities: [String!]!
-    actionItems: [String!]!
+    topRisks: [PortfolioItem!]!
+    topOpportunities: [PortfolioItem!]!
+    actionItems: [PortfolioItem!]!
   }
 
   type EmotionState {
@@ -736,6 +741,7 @@ export const typeDefs = /* GraphQL */ `
     insightReports(limit: Int): [InsightReport!]!
     insightReport(id: ID!): InsightReport
     watchlist: [WatchlistEntry!]!
+    insightsWorkflowStatus: WorkflowStatus!
   }
 
   type Mutation {
@@ -779,6 +785,11 @@ export const typeDefs = /* GraphQL */ `
   # ---------------------------------------------------------------------------
   # Workflow Progress
   # ---------------------------------------------------------------------------
+
+  type WorkflowStatus {
+    running: Boolean!
+    startedAt: String
+  }
 
   type WorkflowProgressEvent {
     workflowId: String!

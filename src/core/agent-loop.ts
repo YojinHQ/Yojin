@@ -120,12 +120,14 @@ export async function runAgentLoop(
     }
 
     // ── Thought: ask the LLM (streaming when available) ───────────────
+    const maxTokens = options.maxTokens;
     const response = provider.streamWithTools
       ? await provider.streamWithTools({
           model,
           system: systemPrompt,
           messages,
           tools: toolSchemas.length > 0 ? toolSchemas : undefined,
+          ...(maxTokens ? { maxTokens } : {}),
           onTextDelta: (text) => emit(onEvent, { type: 'text_delta', text }),
         })
       : await provider.completeWithTools({
@@ -133,6 +135,7 @@ export async function runAgentLoop(
           system: systemPrompt,
           messages,
           tools: toolSchemas.length > 0 ? toolSchemas : undefined,
+          ...(maxTokens ? { maxTokens } : {}),
         });
 
     if (response.usage) {

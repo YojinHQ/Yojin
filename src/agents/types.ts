@@ -65,6 +65,10 @@ export interface WorkflowStep {
   buildMessage: (previousOutputs: Map<string, AgentStepResult>, triggerMessage?: string) => string;
   /** Tool names to exclude from this step (prevents agents from calling redundant data-gathering tools). */
   disabledTools?: string[];
+  /** Maximum LLM iterations for this step. Agent stops after this many rounds regardless of tool calls. */
+  maxIterations?: number;
+  /** Max output tokens per LLM call for this step (default: provider default). */
+  maxTokens?: number;
 }
 
 export type WorkflowStage = WorkflowStep | WorkflowStep[];

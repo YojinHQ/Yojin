@@ -200,6 +200,71 @@ export function formatBriefsForContext(briefs: DataBrief[]): string {
 }
 
 // ---------------------------------------------------------------------------
+// Pre-computed risk metrics (eliminates RM's 12+ calculate calls)
+// ---------------------------------------------------------------------------
+
+export function formatRiskMetrics(briefs: DataBrief[]): string {
+  if (briefs.length === 0) return 'No positions.';
+
+  const totalValue = briefs.reduce((s, b) => s + b.marketValue, 0);
+  if (totalValue === 0) return 'Portfolio value is zero.';
+
+  // Position weights
+  const weights = briefs.map((b) => ({
+    symbol: b.symbol,
+    weight: b.marketValue / totalValue,
+    marketValue: b.marketValue,
+    sector: b.enrichmentSector ?? b.sector ?? 'Unknown',
+  }));
+
+  // Sector exposure
+  const sectorMap = new Map<string, number>();
+  for (const w of weights) {
+    sectorMap.set(w.sector, (sectorMap.get(w.sector) ?? 0) + w.weight);
+  }
+  const sectors = [...sectorMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([s, w]) => `${s}: ${(w * 100).toFixed(1)}%`);
+
+  // HHI (concentration)
+  const hhi = weights.reduce((s, w) => s + w.weight ** 2, 0);
+  const effectivePositions = 1 / hhi;
+
+  // Top concentrations
+  const sorted = [...weights].sort((a, b) => b.weight - a.weight);
+  const topConc = sorted.slice(0, 5).map((w) => `${w.symbol}: ${(w.weight * 100).toFixed(1)}%`);
+
+  // Flags
+  const flags: string[] = [];
+  for (const w of weights) {
+    if (w.weight > 0.25) flags.push(`CRITICAL: ${w.symbol} at ${(w.weight * 100).toFixed(1)}% (>25%)`);
+    else if (w.weight > 0.1) flags.push(`WARNING: ${w.symbol} at ${(w.weight * 100).toFixed(1)}% (>10%)`);
+  }
+  for (const [sector, weight] of sectorMap) {
+    if (weight > 0.4) flags.push(`WARNING: ${sector} sector at ${(weight * 100).toFixed(1)}% (>40%)`);
+  }
+
+  const lines = [
+    `## Pre-Computed Risk Metrics`,
+    `Total portfolio value: $${formatLargeNumber(totalValue)}`,
+    `Positions: ${briefs.length} | Effective positions (1/HHI): ${effectivePositions.toFixed(1)}`,
+    `HHI: ${(hhi * 10000).toFixed(0)} (${hhi < 0.15 ? 'diversified' : hhi < 0.25 ? 'moderate' : 'concentrated'})`,
+    ``,
+    `### Position Weights`,
+    ...topConc.map((c) => `- ${c}`),
+    ``,
+    `### Sector Exposure`,
+    ...sectors.map((s) => `- ${s}`),
+  ];
+
+  if (flags.length > 0) {
+    lines.push(``, `### Concentration Flags`, ...flags.map((f) => `- ${f}`));
+  }
+
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

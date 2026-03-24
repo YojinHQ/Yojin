@@ -62,7 +62,7 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
                   title: z.string().min(1).describe('Signal title'),
                   impact: SignalImpactSchema.describe('Impact: POSITIVE, NEGATIVE, or NEUTRAL'),
                   confidence: z.number().min(0).max(1).describe('Signal confidence'),
-                  url: z.string().url().nullable().optional().describe('Source URL for this signal'),
+                  url: z.string().nullable().optional().describe('Source URL for this signal'),
                 }),
               )
               .describe('Key signals that informed this rating'),
@@ -96,37 +96,79 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
     async execute(params: {
       snapshotId: string;
       positions: z.infer<typeof PositionInsightSchema>[];
-      portfolio: z.infer<typeof PortfolioInsightSchema>;
+      portfolio: {
+        overallHealth: string;
+        summary: string;
+        sectorThemes: string[];
+        macroContext: string;
+        topRisks: string[];
+        topOpportunities: string[];
+        actionItems: string[];
+      };
       emotionState: { confidence: number; riskAppetite: number; reason: string };
     }): Promise<ToolResult> {
       const startMs = Date.now();
 
-      // Validate nested schemas
+      // Validate position schemas
       const positions = params.positions.map((p) => PositionInsightSchema.parse(p));
-      const portfolio = PortfolioInsightSchema.parse(params.portfolio);
 
-      // Validate signal IDs against the archive and copy canonical titles/URLs
-      let validatedCount = 0;
+      // Enrich position keySignals with canonical data from archive.
+      // Drop signals that belong to a different position (LLM misattribution).
+      let enrichedCount = 0;
       let droppedCount = 0;
       if (signalArchive) {
         for (const position of positions) {
-          const validated = [];
+          const baseSymbol = position.symbol.split('-')[0].toUpperCase();
+          const validSignals = [];
+
           for (const sig of position.keySignals) {
             const archived = await signalArchive.getById(sig.signalId);
             if (archived) {
-              // Use the canonical title and source URL from the archive
+              const signalTickers = archived.assets.map((a) => a.ticker.split('-')[0].toUpperCase());
+              if (signalTickers.length > 0 && !signalTickers.includes(baseSymbol)) {
+                droppedCount++;
+                log.warn('Dropped misattributed signal', {
+                  signalId: sig.signalId,
+                  signalTickers,
+                  positionSymbol: position.symbol,
+                  signalTitle: archived.title,
+                });
+                continue;
+              }
               sig.title = archived.title;
               sig.url = (typeof archived.metadata?.link === 'string' ? archived.metadata.link : null) ?? sig.url;
-              validated.push(sig);
-              validatedCount++;
-            } else {
-              log.warn(`Dropping signal with non-existent ID: ${sig.signalId} ("${sig.title}")`);
-              droppedCount++;
+              enrichedCount++;
             }
+            validSignals.push(sig);
           }
-          position.keySignals = validated;
+          position.keySignals = validSignals;
         }
       }
+
+      // Deterministically assign signalIds to portfolio items.
+      // Build a symbol → signalIds map from validated position keySignals.
+      const symbolToSignalIds = new Map<string, string[]>();
+      for (const position of positions) {
+        const baseSymbol = position.symbol.split('-')[0].toUpperCase();
+        const ids = position.keySignals.map((s) => s.signalId);
+        symbolToSignalIds.set(baseSymbol, ids);
+      }
+      const allSymbols = [...symbolToSignalIds.keys()];
+
+      function assignSignalIds(text: string): string[] {
+        const textUpper = text.toUpperCase();
+        const mentioned = allSymbols.filter((sym) => textUpper.includes(sym));
+        if (mentioned.length === 0) return []; // no tickers mentioned = no signals
+        return mentioned.flatMap((sym) => symbolToSignalIds.get(sym) ?? []);
+      }
+
+      // Convert plain strings → structured PortfolioItems with auto-assigned signalIds
+      const portfolio = PortfolioInsightSchema.parse({
+        ...params.portfolio,
+        topRisks: params.portfolio.topRisks.map((text) => ({ text, signalIds: assignSignalIds(text) })),
+        topOpportunities: params.portfolio.topOpportunities.map((text) => ({ text, signalIds: assignSignalIds(text) })),
+        actionItems: params.portfolio.actionItems.map((text) => ({ text, signalIds: assignSignalIds(text) })),
+      });
 
       const report = {
         id: `insight-${randomUUID().slice(0, 8)}`,
@@ -145,10 +187,9 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
 
       await insightStore.save(report);
 
-      const validationNote =
-        signalArchive && droppedCount > 0
-          ? `\nSignal validation: ${validatedCount} verified, ${droppedCount} dropped (invalid IDs)`
-          : '';
+      const enrichNote = enrichedCount > 0 ? `\nSignal enrichment: ${enrichedCount} matched` : '';
+      const dropNote = droppedCount > 0 ? `, ${droppedCount} misattributed signals dropped` : '';
+      const validationNote = signalArchive ? `${enrichNote}${dropNote}` : '';
 
       return {
         content:

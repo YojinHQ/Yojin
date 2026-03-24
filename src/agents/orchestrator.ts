@@ -183,6 +183,8 @@ export class Orchestrator {
       // Parallel steps must not share a session — concurrent appends would interleave writes.
       sessionKey: parallel ? undefined : trigger.sessionKey,
       disabledTools: step.disabledTools,
+      maxIterations: step.maxIterations,
+      maxTokens: step.maxTokens,
       onEvent:
         workflowId != null
           ? (event) => {

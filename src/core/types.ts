@@ -143,6 +143,8 @@ export interface AgentLoopOptions {
   systemPrompt?: string;
   tools?: ToolDefinition[];
   maxIterations?: number;
+  /** Max output tokens per LLM call (default: provider default, usually 4096). */
+  maxTokens?: number;
   memory?: MemoryConfig;
   onEvent?: AgentLoopEventHandler;
   /** Agent identity — included in guard audit logs. */
