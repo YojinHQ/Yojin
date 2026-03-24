@@ -130,6 +130,13 @@ async function startGateway(): Promise<void> {
   registerBuiltinWorkflows(orchestrator, {
     reflectionEngine: services.reflectionEngine,
     insightStore: services.insightStore,
+    gathererOptions: {
+      snapshotStore: services.snapshotStore,
+      signalArchive: services.signalArchive,
+      insightStore: services.insightStore,
+      jintelClient: services.jintelClient,
+      memoryStores: services.memoryStores,
+    },
   });
   setInsightsOrchestrator(orchestrator);
 
@@ -200,6 +207,13 @@ async function runInsights(): Promise<void> {
   registerBuiltinWorkflows(orchestrator, {
     reflectionEngine: services.reflectionEngine,
     insightStore: services.insightStore,
+    gathererOptions: {
+      snapshotStore: services.snapshotStore,
+      signalArchive: services.signalArchive,
+      insightStore: services.insightStore,
+      jintelClient: services.jintelClient,
+      memoryStores: services.memoryStores,
+    },
   });
 
   const startMs = Date.now();

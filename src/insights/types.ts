@@ -53,6 +53,8 @@ export const PositionInsightSchema = z.object({
   opportunities: z.array(z.string().min(1)),
   memoryContext: z.string().nullable(),
   priceTarget: z.number().nullable(),
+  /** True when this insight was carried forward from a previous report (cold position). */
+  carriedForward: z.boolean().optional(),
 });
 export type PositionInsight = z.infer<typeof PositionInsightSchema>;
 

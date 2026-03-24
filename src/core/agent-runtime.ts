@@ -88,6 +88,8 @@ export class AgentRuntime {
     context?: string;
     onEvent?: AgentLoopEventHandler;
     abortSignal?: AbortSignal;
+    /** Tool names to exclude from this invocation (e.g. data-gathering tools when data is pre-aggregated). */
+    disabledTools?: string[];
   }): Promise<AgentStepResult> {
     const profile = this.agentRegistry.get(params.agentId);
     if (!profile) {
@@ -95,7 +97,9 @@ export class AgentRuntime {
     }
 
     const systemPrompt = await this.assembleSystemPrompt(profile, params.context);
-    const scopedTools = this.toolRegistry.subset(profile.tools);
+    const disabled = params.disabledTools;
+    const toolNames = disabled?.length ? profile.tools.filter((t) => !disabled.includes(t)) : profile.tools;
+    const scopedTools = this.toolRegistry.subset(toolNames);
     const guardedTools = this.wrapToolsWithGuards(scopedTools, params.agentId);
 
     const history = params.sessionKey
