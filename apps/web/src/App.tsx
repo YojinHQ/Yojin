@@ -15,7 +15,6 @@ import { AddPositionModalProvider } from './lib/add-position-modal-context';
 import AddPositionModal from './components/portfolio/add-position-modal';
 import AppShell from './components/layout/app-shell';
 import Position from './pages/position';
-import Skills from './pages/skills';
 import Chat from './pages/chat';
 import Profile from './pages/profile';
 import Settings from './pages/settings';
@@ -162,14 +161,14 @@ export default function App() {
                   <Route path="chat" element={<Chat />} />
                   <Route path="insights" element={<Insights />} />
                   <Route path="signals" element={<Signals />} />
-                  <Route path="skills" element={<Skills />} />
                   <Route path="profile" element={<Profile />} />
                   <Route path="settings" element={<Settings />} />
 
                   {/* Redirects for old paths */}
                   <Route path="positions" element={<Navigate to="/portfolio" replace />} />
                   <Route path="positions/:symbol" element={<RedirectPositionSymbol />} />
-                  <Route path="alerts" element={<Navigate to="/skills" replace />} />
+                  <Route path="skills" element={<Navigate to="/" replace />} />
+                  <Route path="alerts" element={<Navigate to="/" replace />} />
                 </Route>
               </Routes>
               <AddPositionModal />
