@@ -15,6 +15,9 @@ export {
   useQuote,
   useNews,
   useOnPriceMove,
+  useWatchlist,
+  useAddToWatchlist,
+  useRemoveFromWatchlist,
 } from './hooks/index.js';
 
 // Types — for components that need to type props or local state
@@ -41,6 +44,8 @@ export type {
   AlertStatus,
   AlertRuleType,
   Direction,
+  WatchlistEntry,
+  WatchlistResult,
 } from './types.js';
 
 export { KNOWN_PLATFORMS, isKnownPlatform } from './types.js';

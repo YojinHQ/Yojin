@@ -142,7 +142,11 @@ export default function PositionsPreview() {
                   {/* Asset: logo + symbol + name */}
                   <td className="px-3 py-2">
                     <div className="flex min-w-0 items-center gap-2">
-                      <SymbolLogo symbol={pos.symbol} size="sm" />
+                      <SymbolLogo
+                        symbol={pos.symbol}
+                        assetClass={pos.assetClass.toLowerCase() as 'equity' | 'crypto'}
+                        size="sm"
+                      />
                       <div className="flex min-w-0 flex-col">
                         <span className="text-xs font-semibold leading-tight text-text-primary">{pos.symbol}</span>
                         <span className="truncate text-2xs leading-tight text-text-muted">{pos.name}</span>

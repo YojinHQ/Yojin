@@ -364,6 +364,48 @@ export interface DeleteVaultSecretVariables {
 }
 
 // ---------------------------------------------------------------------------
+// Watchlist
+// ---------------------------------------------------------------------------
+
+export interface WatchlistEntry {
+  symbol: string;
+  name: string;
+  assetClass: AssetClass;
+  addedAt: string;
+  price: number | null;
+  change: number | null;
+  changePercent: number | null;
+  enrichedAt: string | null;
+}
+
+export interface WatchlistResult {
+  success: boolean;
+  error: string | null;
+}
+
+export interface WatchlistQueryResult {
+  watchlist: WatchlistEntry[];
+}
+
+export interface AddToWatchlistMutationResult {
+  addToWatchlist: WatchlistResult;
+}
+
+export interface AddToWatchlistVariables {
+  symbol: string;
+  name: string;
+  assetClass: AssetClass;
+}
+
+export interface RemoveFromWatchlistMutationResult {
+  removeFromWatchlist: WatchlistResult;
+}
+
+export interface RemoveFromWatchlistVariables {
+  symbol: string;
+}
+
+// ---------------------------------------------------------------------------
 // Data Sources
 // ---------------------------------------------------------------------------
 
