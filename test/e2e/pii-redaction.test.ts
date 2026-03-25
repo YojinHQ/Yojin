@@ -41,7 +41,7 @@ describe('PII Redaction E2E', () => {
   });
 
   it('addManualPosition saves exact values accessible via GraphQL', async ({ skip }) => {
-    if (!serverAvailable) skip();
+    if (!serverAvailable) return skip();
 
     // Add a position via mutation
     const mutation = `
@@ -67,7 +67,9 @@ describe('PII Redaction E2E', () => {
       },
     });
 
+    expect(result.data).toBeTruthy();
     const snapshot = result.data.addManualPosition;
+    expect(snapshot).toBeTruthy();
 
     // UI should see EXACT numeric values — not range strings like "$50k-$100k"
     expect(typeof snapshot.totalValue).toBe('number');
@@ -83,7 +85,7 @@ describe('PII Redaction E2E', () => {
   });
 
   it('portfolio query returns exact numeric values for UI', async ({ skip }) => {
-    if (!serverAvailable) skip();
+    if (!serverAvailable) return skip();
 
     const query = `
       query Portfolio {
@@ -97,7 +99,9 @@ describe('PII Redaction E2E', () => {
     `;
 
     const result = await gql(query);
+    expect(result.data).toBeTruthy();
     const portfolio = result.data.portfolio;
+    expect(portfolio).toBeTruthy();
 
     // All values should be exact numbers, not strings/ranges
     expect(typeof portfolio.totalValue).toBe('number');
