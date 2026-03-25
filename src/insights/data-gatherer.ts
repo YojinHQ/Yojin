@@ -120,19 +120,21 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
       ingested: fetchResult.totalIngested,
       duplicates: fetchResult.totalDuplicates,
       sources: fetchResult.sourcesAttempted,
+      errors: fetchResult.errors.length > 0 ? fetchResult.errors : undefined,
     });
+    if (fetchResult.errors.length > 0) {
+      logger.warn('Data source fetch had errors', { errors: fetchResult.errors });
+    }
   } catch (err) {
     logger.warn('Data source fetch failed — continuing with existing signals', {
       error: err instanceof Error ? err.message : String(err),
     });
   }
 
-  // 3. Parallel lookups — signals (now fresh), quotes, enrichments, memories
+  // 3. Parallel lookups — quotes, enrichments, memories (signal query deferred until after ingestion)
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const [signals, quotes, enrichments, memories, previousReport] = await Promise.all([
-    // Signals (local, fast)
-    signalArchive.query({ tickers, since: sevenDaysAgo, limit: 100 * tickers.length }),
+  const [quotes, enrichments, memories, previousReport] = await Promise.all([
     // Quotes (1 API call)
     jintelClient
       ? jintelClient.quotes(tickers).catch(() => ({ success: false as const, error: 'quotes failed' }))
@@ -145,7 +147,7 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
     insightStore.getLatest(),
   ]);
 
-  // 4. Ingest Jintel risk signals into the signal archive
+  // 4. Ingest Jintel risk signals into the signal archive BEFORE querying it
   if (signalIngestor && enrichments.length > 0) {
     try {
       const rawSignals = enrichments.flatMap((entity) => {
@@ -167,13 +169,16 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
     }
   }
 
-  // 5. Index data by ticker for O(1) lookup
+  // 5. Query signals (now includes freshly ingested Jintel risk signals)
+  const signals = await signalArchive.query({ tickers, since: sevenDaysAgo, limit: 100 * tickers.length });
+
+  // 6. Index data by ticker for O(1) lookup
   const signalsByTicker = groupSignalsByTicker(signals, tickers);
   const quotesByTicker = indexQuotes(quotes);
   const enrichmentByTicker = indexEnrichments(enrichments);
   const memoriesByTicker = indexMemories(memories, tickers);
 
-  // 6. Build compact briefs
+  // 7. Build compact briefs
   const briefs: DataBrief[] = snapshot.positions.map((pos) => {
     const tickerSignals = signalsByTicker.get(pos.symbol) ?? [];
     const quote = quotesByTicker.get(pos.symbol);

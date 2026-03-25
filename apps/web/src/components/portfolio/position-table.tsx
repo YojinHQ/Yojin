@@ -230,6 +230,7 @@ function EditPositionModal({ position, onClose }: { position: Position; onClose:
       platform: position.platform,
       input: {
         symbol: position.symbol,
+        name: position.name,
         quantity: q,
         costBasis: p,
         assetClass: position.assetClass,

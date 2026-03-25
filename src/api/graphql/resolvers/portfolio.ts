@@ -288,21 +288,17 @@ export async function editPositionMutation(
     platform: ((platform as Position['platform']) ?? targetPlatform).toUpperCase(),
   };
 
-  // Replace the matching position, keep everything else
-  const positions = existing.positions.map((p) =>
-    p.symbol.toUpperCase() === targetSymbol && (p.platform ?? '').toUpperCase() === targetPlatform
-      ? updatedPosition
-      : p,
-  );
+  // Replace the matching position within the target platform only
+  const targetPlatformPositions = existing.positions
+    .filter((p) => (p.platform ?? '').toUpperCase() === targetPlatform)
+    .map((p) => (p.symbol.toUpperCase() === targetSymbol ? updatedPosition : p));
 
   const snapshot = await snapshotStore.save({
-    positions,
+    positions: targetPlatformPositions,
     platform: updatedPosition.platform,
     existingSnapshot: {
       ...existing,
-      positions: existing.positions.filter(
-        (p) => (p.platform ?? '').toUpperCase() !== updatedPosition.platform.toUpperCase(),
-      ),
+      positions: existing.positions.filter((p) => (p.platform ?? '').toUpperCase() !== targetPlatform),
     },
   });
   pubsub.publish('portfolioUpdate', snapshot);
