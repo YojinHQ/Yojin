@@ -154,7 +154,8 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
       for (const position of positions) {
         const baseSymbol = position.symbol.split('-')[0].toUpperCase();
         const ids = position.keySignals.map((s) => s.signalId);
-        symbolToSignalIds.set(baseSymbol, ids);
+        const existing = symbolToSignalIds.get(baseSymbol) ?? [];
+        symbolToSignalIds.set(baseSymbol, [...existing, ...ids]);
       }
       const allSymbols = [...symbolToSignalIds.keys()];
 
