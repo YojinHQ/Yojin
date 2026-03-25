@@ -28,19 +28,20 @@ describe('extractTickers', () => {
     expect(extractTickers('NYSE:BA dropped after grounding')).toEqual(['BA']);
   });
 
-  it('extracts crypto pairs as -USD tickers', () => {
-    expect(extractTickers('BTC-USD broke $70k resistance')).toEqual(['BTC-USD']);
+  it('extracts crypto pairs as -USD tickers plus base name', () => {
+    // "BTC" in "BTC-USD" also matches the name map → both BTC and BTC-USD
+    expect(extractTickers('BTC-USD broke $70k resistance')).toEqual(['BTC', 'BTC-USD']);
   });
 
   it('preserves crypto pair quote currency', () => {
-    expect(extractTickers('ETH-USDT trading at $3500')).toEqual(['ETH-USDT']);
-    expect(extractTickers('BTC-EUR trading at 50000')).toEqual(['BTC-EUR']);
-    expect(extractTickers('SOL-USD price update')).toEqual(['SOL-USD']);
+    expect(extractTickers('ETH-USDT trading at $3500')).toEqual(['ETH', 'ETH-USDT']);
+    expect(extractTickers('BTC-EUR trading at 50000')).toEqual(['BTC', 'BTC-EUR']);
+    expect(extractTickers('SOL-USD price update')).toEqual(['SOL', 'SOL-USD']);
   });
 
   it('combines cashtags, exchange-prefixed, and crypto pairs', () => {
     const text = '$AAPL rallied while NASDAQ:MSFT was flat. BTC-USD surged past $70k.';
-    expect(extractTickers(text)).toEqual(['AAPL', 'BTC-USD', 'MSFT']);
+    expect(extractTickers(text)).toEqual(['AAPL', 'BTC', 'BTC-USD', 'MSFT']);
   });
 
   it('returns empty array for text with no tickers', () => {
@@ -61,5 +62,36 @@ describe('extractTickers', () => {
   it('removes all tickers if resolver rejects them', () => {
     const resolver: SymbolResolver = { isKnownSymbol: () => false };
     expect(extractTickers('$AAPL $TSLA', resolver)).toEqual([]);
+  });
+
+  // Name-to-ticker extraction
+  it('extracts "bitcoin" as BTC', () => {
+    expect(extractTickers("GameStop's move to add bitcoin as a treasury asset")).toEqual(['BTC', 'GME']);
+  });
+
+  it('extracts crypto names case-insensitively', () => {
+    expect(extractTickers('Bitcoin and Ethereum are both up today')).toEqual(['BTC', 'ETH']);
+  });
+
+  it('extracts multi-word names like "shiba inu"', () => {
+    expect(extractTickers('Shiba Inu surges 20% on exchange listing')).toEqual(['SHIB']);
+  });
+
+  it('extracts equity names like "gamestop" and "nvidia"', () => {
+    expect(extractTickers('Nvidia earnings beat expectations while GameStop fell')).toEqual(['GME', 'NVDA']);
+  });
+
+  it('deduplicates name-extracted and cashtag-extracted tickers', () => {
+    expect(extractTickers('$BTC bitcoin price surges')).toEqual(['BTC']);
+  });
+
+  it('extracts "microstrategy" and "strategy" as MSTR', () => {
+    expect(extractTickers("MicroStrategy's bitcoin holdings grow")).toEqual(['BTC', 'MSTR']);
+    expect(extractTickers('Strategy adds more bitcoin to treasury')).toEqual(['BTC', 'MSTR']);
+  });
+
+  it('does not match names as substrings of other words', () => {
+    // "meta" should not match in "metadata" or "metaphor"
+    expect(extractTickers('The metadata contains no useful metaphor')).toEqual([]);
   });
 });

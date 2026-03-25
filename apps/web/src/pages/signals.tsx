@@ -1,12 +1,20 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { useQuery } from 'urql';
+import { useQuery, useSubscription } from 'urql';
 import { Link, useSearchParams } from 'react-router';
 import { cn } from '../lib/utils';
-import { SIGNALS_QUERY, LATEST_INSIGHT_REPORT_QUERY } from '../api/documents';
-import type { Signal, SignalsQueryResult, SignalsVariables, LatestInsightReportQueryResult } from '../api/types';
+import { SIGNALS_QUERY, LATEST_INSIGHT_REPORT_QUERY, ON_WORKFLOW_PROGRESS_SUBSCRIPTION } from '../api/documents';
+import type {
+  Signal,
+  SignalsQueryResult,
+  SignalsVariables,
+  LatestInsightReportQueryResult,
+  OnWorkflowProgressSubscriptionResult,
+  OnWorkflowProgressVariables,
+} from '../api/types';
 import Badge from '../components/common/badge';
 import type { BadgeVariant } from '../components/common/badge';
 import Card from '../components/common/card';
+import { collectInsightSignalIds } from '../lib/insight-signals';
 
 const SIGNAL_TYPES = ['ALL', 'NEWS', 'FUNDAMENTAL', 'SENTIMENT', 'TECHNICAL', 'MACRO'] as const;
 
@@ -61,27 +69,39 @@ export default function Signals() {
     ...(minConfidence > 0 ? { minConfidence } : {}),
   };
 
-  const [result] = useQuery<SignalsQueryResult, SignalsVariables>({
+  const [result, reexecuteSignals] = useQuery<SignalsQueryResult, SignalsVariables>({
     query: SIGNALS_QUERY,
     variables,
   });
 
   // Cross-reference with latest insight report to show which signals were used
-  const [insightResult] = useQuery<LatestInsightReportQueryResult>({
+  const [insightResult, reexecuteInsights] = useQuery<LatestInsightReportQueryResult>({
     query: LATEST_INSIGHT_REPORT_QUERY,
   });
 
-  const insightSignalIds = useMemo(() => {
-    const report = insightResult.data?.latestInsightReport;
-    if (!report) return new Set<string>();
-    const ids = new Set<string>();
-    for (const pos of report.positions) {
-      for (const sig of pos.keySignals) {
-        ids.add(sig.signalId);
-      }
+  // Auto-refresh when Process Insights completes
+  const [progressResult] = useSubscription<
+    OnWorkflowProgressSubscriptionResult,
+    OnWorkflowProgressSubscriptionResult,
+    OnWorkflowProgressVariables
+  >({
+    query: ON_WORKFLOW_PROGRESS_SUBSCRIPTION,
+    variables: { workflowId: 'process-insights' },
+  });
+
+  const lastProgressStage = progressResult.data?.onWorkflowProgress.stage;
+  useEffect(() => {
+    if (lastProgressStage === 'complete') {
+      reexecuteSignals({ requestPolicy: 'network-only' });
+      reexecuteInsights({ requestPolicy: 'network-only' });
     }
-    return ids;
-  }, [insightResult.data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reexecute functions are stable
+  }, [lastProgressStage]);
+
+  const insightSignalIds = useMemo(
+    () => collectInsightSignalIds(insightResult.data?.latestInsightReport),
+    [insightResult.data],
+  );
 
   // Build a map of signalId → impact from the insight report
   const insightSignalImpact = useMemo(() => {

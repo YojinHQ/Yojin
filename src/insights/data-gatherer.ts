@@ -147,12 +147,10 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
     });
   }
 
-  // 3. Parallel lookups — signals (now fresh), quotes, enrichments, memories
+  // 3. Parallel lookups — quotes, enrichments, memories, previous report
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const [signals, quotes, enrichments, memories, previousReport] = await Promise.all([
-    // Signals (local, fast)
-    signalArchive.query({ tickers, since: sevenDaysAgo, limit: 100 * tickers.length }),
+  const [quotes, enrichments, memories, previousReport] = await Promise.all([
     // Quotes (1 API call)
     jintelClient
       ? jintelClient.quotes(tickers).catch(() => ({ success: false as const, error: 'quotes failed' }))
@@ -165,32 +163,55 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
     insightStore.getLatest(),
   ]);
 
-  // 4. Ingest Jintel enrichment data into the signal archive
-  if (signalIngestor && enrichments.length > 0) {
-    try {
-      const rawSignals = enrichments.flatMap((entity) => enrichmentToSignals(entity));
-      if (rawSignals.length > 0) {
+  // 4. Ingest Jintel enrichment data + news into the signal archive
+  if (signalIngestor) {
+    const rawSignals: RawSignalInput[] = [];
+
+    // 4a. Enrichment-derived signals (fundamentals, risk, filings, price moves)
+    if (enrichments.length > 0) {
+      rawSignals.push(...enrichments.flatMap((entity) => enrichmentToSignals(entity)));
+    }
+
+    // 4b. Jintel ticker news — each article is already associated with its entity's tickers.
+    //     The structure of the response IS the relationship; no content parsing needed.
+    if (jintelClient) {
+      try {
+        const newsSignals = await fetchTickerNews(jintelClient, tickers);
+        rawSignals.push(...newsSignals);
+        logger.info('Jintel ticker news fetched', { tickers: tickers.length, articles: newsSignals.length });
+      } catch (err) {
+        logger.warn('Jintel ticker news fetch failed — continuing without', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    if (rawSignals.length > 0) {
+      try {
         const ingestResult = await signalIngestor.ingest(rawSignals);
-        logger.info('Jintel enrichment signals ingested', {
+        logger.info('Jintel signals ingested', {
           ingested: ingestResult.ingested,
           duplicates: ingestResult.duplicates,
           total: rawSignals.length,
         });
+      } catch (err) {
+        logger.warn('Jintel signal ingestion failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
-    } catch (err) {
-      logger.warn('Jintel enrichment signal ingestion failed', {
-        error: err instanceof Error ? err.message : String(err),
-      });
     }
   }
 
-  // 5. Index data by ticker for O(1) lookup
+  // 5. Query signals AFTER enrichment ingestion so freshly-created signals are included
+  const signals = await signalArchive.query({ tickers, since: sevenDaysAgo, limit: 100 * tickers.length });
+
+  // 6. Index data by ticker for O(1) lookup
   const signalsByTicker = groupSignalsByTicker(signals, tickers);
   const quotesByTicker = indexQuotes(quotes);
   const enrichmentByTicker = indexEnrichments(enrichments);
   const memoriesByTicker = indexMemories(memories, tickers);
 
-  // 6. Build compact briefs
+  // 7. Build compact briefs
   const briefs: DataBrief[] = snapshot.positions.map((pos) => {
     const tickerSignals = signalsByTicker.get(pos.symbol) ?? [];
     const quote = quotesByTicker.get(pos.symbol);
@@ -470,6 +491,95 @@ function enrichmentToSignals(entity: Entity): RawSignalInput[] {
         volume: quote.volume,
       },
     });
+  }
+
+  return signals;
+}
+
+// ---------------------------------------------------------------------------
+// Jintel ticker news — uses response structure for ticker association
+// ---------------------------------------------------------------------------
+
+/** GraphQL query that fetches news articles per entity. */
+const TICKER_NEWS_QUERY = `
+  query TickerNews($tickers: [String!]!) {
+    entitiesByTickers(tickers: $tickers) {
+      tickers
+      name
+      news {
+        title
+        url
+        source
+        publishedAt
+        snippet
+        sentiment
+      }
+    }
+  }
+`;
+
+interface TickerNewsEntity {
+  tickers: string[] | null;
+  name: string;
+  news?: Array<{
+    title: string;
+    url: string;
+    source: string;
+    publishedAt: string;
+    snippet?: string | null;
+    sentiment?: string | null;
+  }> | null;
+}
+
+/**
+ * Fetch news for tickers via Jintel's entitiesByTickers query.
+ * Each article comes back under its entity — the response structure IS the
+ * ticker association. No content parsing needed.
+ */
+async function fetchTickerNews(client: JintelClient, tickers: string[]): Promise<RawSignalInput[]> {
+  const CHUNK_SIZE = 20;
+  const signals: RawSignalInput[] = [];
+
+  for (let i = 0; i < tickers.length; i += CHUNK_SIZE) {
+    const chunk = tickers.slice(i, i + CHUNK_SIZE);
+    try {
+      const entities = await client.request<TickerNewsEntity[]>(TICKER_NEWS_QUERY, { tickers: chunk });
+
+      for (const entity of entities) {
+        const entityTickers = entity.tickers ?? [];
+        if (entityTickers.length === 0 || !entity.news?.length) continue;
+
+        for (const article of entity.news) {
+          if (!article.title) continue;
+          signals.push({
+            sourceId: `jintel-news-${article.source.toLowerCase().replace(/\s+/g, '-')}`,
+            sourceName: `Jintel News (${article.source})`,
+            sourceType: 'API',
+            reliability: 0.8,
+            title: article.title,
+            content: article.snippet ?? undefined,
+            link: article.url,
+            publishedAt: article.publishedAt,
+            // Tickers come from the entity structure, not content parsing
+            tickers: entityTickers,
+            confidence: 0.8,
+            metadata: {
+              source: article.source,
+              sentiment: article.sentiment,
+              link: article.url,
+            },
+          });
+        }
+      }
+    } catch (err) {
+      // If Jintel doesn't support news field yet, log and continue
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('Cannot query field') || msg.includes('news')) {
+        logger.info('Jintel news field not available on server — skipping');
+        return signals; // stop trying further chunks
+      }
+      logger.warn('Jintel news chunk failed', { chunk: chunk.slice(0, 3), error: msg });
+    }
   }
 
   return signals;
