@@ -262,6 +262,83 @@ export async function addManualPositionMutation(
   return snapshot;
 }
 
+export async function editPositionMutation(
+  _parent: unknown,
+  args: { symbol: string; platform: string; input: ManualPositionInput },
+): Promise<PortfolioSnapshot> {
+  if (!snapshotStore) throw new Error('Snapshot store not available');
+
+  const existing = await snapshotStore.getLatest();
+  if (!existing) throw new Error('No portfolio snapshot exists');
+
+  const targetSymbol = args.symbol.toUpperCase();
+  const targetPlatform = args.platform.toUpperCase();
+  const { symbol, name, quantity, costBasis, assetClass, platform } = args.input;
+
+  const updatedPosition: Position = {
+    symbol: symbol.toUpperCase(),
+    name: name ?? symbol.toUpperCase(),
+    quantity,
+    costBasis,
+    currentPrice: costBasis,
+    marketValue: quantity * costBasis,
+    unrealizedPnl: 0,
+    unrealizedPnlPercent: 0,
+    assetClass: (assetClass as AssetClass) ?? 'EQUITY',
+    platform: ((platform as Position['platform']) ?? targetPlatform).toUpperCase(),
+  };
+
+  // Replace the matching position, keep everything else
+  const positions = existing.positions.map((p) =>
+    p.symbol.toUpperCase() === targetSymbol && (p.platform ?? '').toUpperCase() === targetPlatform
+      ? updatedPosition
+      : p,
+  );
+
+  const snapshot = await snapshotStore.save({
+    positions,
+    platform: updatedPosition.platform,
+    existingSnapshot: {
+      ...existing,
+      positions: existing.positions.filter(
+        (p) => (p.platform ?? '').toUpperCase() !== updatedPosition.platform.toUpperCase(),
+      ),
+    },
+  });
+  pubsub.publish('portfolioUpdate', snapshot);
+  return snapshot;
+}
+
+export async function removePositionMutation(
+  _parent: unknown,
+  args: { symbol: string; platform: string },
+): Promise<PortfolioSnapshot> {
+  if (!snapshotStore) throw new Error('Snapshot store not available');
+
+  const existing = await snapshotStore.getLatest();
+  if (!existing) throw new Error('No portfolio snapshot exists');
+
+  const targetSymbol = args.symbol.toUpperCase();
+  const targetPlatform = args.platform.toUpperCase();
+
+  const remaining = existing.positions.filter(
+    (p) => !(p.symbol.toUpperCase() === targetSymbol && (p.platform ?? '').toUpperCase() === targetPlatform),
+  );
+
+  // Save the filtered positions for this platform
+  const platformPositions = remaining.filter((p) => (p.platform ?? '').toUpperCase() === targetPlatform);
+  const snapshot = await snapshotStore.save({
+    positions: platformPositions,
+    platform: targetPlatform,
+    existingSnapshot: {
+      ...existing,
+      positions: existing.positions.filter((p) => (p.platform ?? '').toUpperCase() !== targetPlatform),
+    },
+  });
+  pubsub.publish('portfolioUpdate', snapshot);
+  return snapshot;
+}
+
 export async function refreshPositionsMutation(
   _parent: unknown,
   args: { platform: Platform },

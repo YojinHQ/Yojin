@@ -750,6 +750,25 @@ export interface AddManualPositionVariables {
   input: ManualPositionInput;
 }
 
+export interface EditPositionMutationResult {
+  editPosition: PortfolioSnapshot;
+}
+
+export interface EditPositionVariables {
+  symbol: string;
+  platform: string;
+  input: ManualPositionInput;
+}
+
+export interface RemovePositionMutationResult {
+  removePosition: PortfolioSnapshot;
+}
+
+export interface RemovePositionVariables {
+  symbol: string;
+  platform: string;
+}
+
 // ---------------------------------------------------------------------------
 // Subscription result wrappers
 // ---------------------------------------------------------------------------

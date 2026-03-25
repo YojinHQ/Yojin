@@ -5,6 +5,8 @@ export {
   useEnrichedSnapshot,
   useRefreshPositions,
   useAddManualPosition,
+  useEditPosition,
+  useRemovePosition,
 } from './use-portfolio.js';
 export { useRiskReport, useSectorExposure } from './use-risk.js';
 export { useAlerts, useCreateAlert, useDismissAlert, useOnAlert } from './use-alerts.js';

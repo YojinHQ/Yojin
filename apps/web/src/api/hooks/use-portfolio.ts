@@ -7,6 +7,8 @@ import {
   ENRICHED_SNAPSHOT_QUERY,
   REFRESH_POSITIONS_MUTATION,
   ADD_MANUAL_POSITION_MUTATION,
+  EDIT_POSITION_MUTATION,
+  REMOVE_POSITION_MUTATION,
 } from '../documents.js';
 import type {
   PortfolioQueryResult,
@@ -17,6 +19,10 @@ import type {
   RefreshPositionsVariables,
   AddManualPositionMutationResult,
   AddManualPositionVariables,
+  EditPositionMutationResult,
+  EditPositionVariables,
+  RemovePositionMutationResult,
+  RemovePositionVariables,
 } from '../types.js';
 
 /** Full portfolio snapshot with positions, totals, and P&L. */
@@ -47,4 +53,14 @@ export function useRefreshPositions() {
 /** Add a manual position to the portfolio. */
 export function useAddManualPosition() {
   return useMutation<AddManualPositionMutationResult, AddManualPositionVariables>(ADD_MANUAL_POSITION_MUTATION);
+}
+
+/** Edit an existing position in the portfolio. */
+export function useEditPosition() {
+  return useMutation<EditPositionMutationResult, EditPositionVariables>(EDIT_POSITION_MUTATION);
+}
+
+/** Remove a position from the portfolio. */
+export function useRemovePosition() {
+  return useMutation<RemovePositionMutationResult, RemovePositionVariables>(REMOVE_POSITION_MUTATION);
 }

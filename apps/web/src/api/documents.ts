@@ -393,6 +393,42 @@ export const ADD_MANUAL_POSITION_MUTATION = gql`
   ${POSITION_FIELDS}
 `;
 
+export const EDIT_POSITION_MUTATION = gql`
+  mutation EditPosition($symbol: String!, $platform: String!, $input: ManualPositionInput!) {
+    editPosition(symbol: $symbol, platform: $platform, input: $input) {
+      id
+      positions {
+        ...PositionFields
+      }
+      totalValue
+      totalCost
+      totalPnl
+      totalPnlPercent
+      timestamp
+      platform
+    }
+  }
+  ${POSITION_FIELDS}
+`;
+
+export const REMOVE_POSITION_MUTATION = gql`
+  mutation RemovePosition($symbol: String!, $platform: String!) {
+    removePosition(symbol: $symbol, platform: $platform) {
+      id
+      positions {
+        ...PositionFields
+      }
+      totalValue
+      totalCost
+      totalPnl
+      totalPnlPercent
+      timestamp
+      platform
+    }
+  }
+  ${POSITION_FIELDS}
+`;
+
 // ---------------------------------------------------------------------------
 // Device Identity
 // ---------------------------------------------------------------------------

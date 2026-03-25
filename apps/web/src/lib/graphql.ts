@@ -47,6 +47,16 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'positions');
         cache.invalidate('Query', 'enrichedSnapshot');
       },
+      editPosition(_result, _args, cache) {
+        cache.invalidate('Query', 'portfolio');
+        cache.invalidate('Query', 'positions');
+        cache.invalidate('Query', 'enrichedSnapshot');
+      },
+      removePosition(_result, _args, cache) {
+        cache.invalidate('Query', 'portfolio');
+        cache.invalidate('Query', 'positions');
+        cache.invalidate('Query', 'enrichedSnapshot');
+      },
       createAlert(_result, _args, cache) {
         cache.invalidate('Query', 'alerts');
       },
