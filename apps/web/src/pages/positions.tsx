@@ -56,7 +56,12 @@ export default function Positions() {
 
   return (
     <div className="flex-1 overflow-auto p-6 space-y-6 max-w-5xl mx-auto">
-      <PortfolioStats portfolio={portfolio} />
+      <div className="flex items-center justify-between">
+        <PortfolioStats portfolio={portfolio} />
+        <Button variant="primary" size="sm" onClick={openAddPosition}>
+          Add Position
+        </Button>
+      </div>
       <PositionTable positions={positions} />
     </div>
   );
