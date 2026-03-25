@@ -86,7 +86,8 @@ export interface DataGathererOptions {
   snapshotStore: PortfolioSnapshotStore;
   signalArchive: SignalArchive;
   insightStore: InsightStore;
-  jintelClient?: JintelClient;
+  /** Getter to resolve the current Jintel client (may be hot-swapped after vault unlock). */
+  getJintelClient?: () => JintelClient | undefined;
   signalIngestor?: SignalIngestor;
   memoryStores: Map<string, SignalMemoryStore>;
 }
@@ -97,7 +98,8 @@ export interface DataGathererOptions {
 
 export async function gatherDataBriefs(options: DataGathererOptions): Promise<GatherResult> {
   const start = Date.now();
-  const { snapshotStore, signalArchive, insightStore, jintelClient, signalIngestor, memoryStores } = options;
+  const { snapshotStore, signalArchive, insightStore, getJintelClient, signalIngestor, memoryStores } = options;
+  const jintelClient = getJintelClient?.();
 
   // 1. Get current portfolio
   const snapshot = await snapshotStore.getLatest();
