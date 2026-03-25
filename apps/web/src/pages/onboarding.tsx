@@ -6,8 +6,8 @@ import type { OnboardingStatusQueryResult } from '../api/types';
 import { Step0Welcome } from './onboarding/step-0-welcome';
 import { Step1AiBrain } from './onboarding/step-1-ai-brain';
 import { Step2Persona } from './onboarding/step-2-persona';
-import { Step3Platforms } from './onboarding/step-3-platforms';
-import { Step4Jintel } from './onboarding/step-4-jintel';
+import { Step3Jintel } from './onboarding/step-3-jintel';
+import { Step4Platforms } from './onboarding/step-4-platforms';
 import { Step5Briefing } from './onboarding/step-5-briefing';
 import { Step6Done } from './onboarding/step-6-done';
 
@@ -29,8 +29,8 @@ function resolveResumeStep(status: OnboardingStatusQueryResult['onboardingStatus
   if (!status.personaExists) return undefined;
 
   // Persona exists but onboarding wasn't completed — resume at first missing step
-  if (status.connectedPlatforms.length === 0) return 3;
-  if (!status.jintelConfigured) return 4;
+  if (!status.jintelConfigured) return 3;
+  if (status.connectedPlatforms.length === 0) return 4;
   if (!status.briefingConfigured) return 5;
 
   return 6;
@@ -47,9 +47,9 @@ function OnboardingRouter() {
     case 2:
       return <Step2Persona />;
     case 3:
-      return <Step3Platforms />;
+      return <Step3Jintel />;
     case 4:
-      return <Step4Jintel />;
+      return <Step4Platforms />;
     case 5:
       return <Step5Briefing />;
     case 6:

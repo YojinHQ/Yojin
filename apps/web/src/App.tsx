@@ -63,6 +63,7 @@ function OnboardingGuard() {
       localStorage.removeItem(ONBOARDING_KEYS.SKIPPED_KEY);
       localStorage.removeItem(ONBOARDING_KEYS.STEP_KEY);
       localStorage.removeItem(ONBOARDING_KEYS.STATE_KEY);
+      localStorage.removeItem(ONBOARDING_KEYS.PERSONA_NAME_KEY);
       window.history.replaceState({}, '', window.location.pathname);
       return true;
     }
@@ -87,6 +88,17 @@ function OnboardingGuard() {
   }, []);
 
   const markCompleted = useCallback(() => {
+    // Persist the persona name before clearing onboarding state
+    try {
+      const raw = localStorage.getItem(ONBOARDING_KEYS.STATE_KEY);
+      if (raw) {
+        const name = (JSON.parse(raw) as { persona?: { name?: string } })?.persona?.name;
+        if (name) localStorage.setItem(ONBOARDING_KEYS.PERSONA_NAME_KEY, name);
+      }
+    } catch {
+      /* best-effort */
+    }
+
     localStorage.setItem(ONBOARDING_KEYS.COMPLETE_KEY, 'true');
     localStorage.removeItem(ONBOARDING_KEYS.SKIPPED_KEY);
     localStorage.removeItem(ONBOARDING_KEYS.STEP_KEY);
@@ -101,6 +113,7 @@ function OnboardingGuard() {
     localStorage.removeItem(ONBOARDING_KEYS.SKIPPED_KEY);
     localStorage.removeItem(ONBOARDING_KEYS.STEP_KEY);
     localStorage.removeItem(ONBOARDING_KEYS.STATE_KEY);
+    localStorage.removeItem(ONBOARDING_KEYS.PERSONA_NAME_KEY);
     setCompleted(false);
     setSkipped(false);
   }, []);

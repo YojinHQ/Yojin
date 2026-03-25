@@ -5,6 +5,7 @@ import { useQuery } from 'urql';
 import { LATEST_INSIGHT_REPORT_QUERY } from '../../api/documents';
 import type { LatestInsightReportQueryResult } from '../../api/types';
 import { cn, timeAgo } from '../../lib/utils';
+import { CardEmptyState } from '../common/card-empty-state';
 import { DashboardCard } from '../common/dashboard-card';
 import { SignalChips } from './signal-chips';
 
@@ -58,12 +59,19 @@ export default function YojinSnapCard() {
   if (!report) {
     return (
       <DashboardCard title="Yojin Snap" variant="feature" className="flex-1">
-        <div className="flex flex-1 items-center justify-center px-5 pb-5">
-          <p className="max-w-xs text-center text-base leading-relaxed text-text-secondary">
-            Run <span className="font-medium text-text-primary">Process Insights</span> to see your portfolio
-            intelligence.
-          </p>
-        </div>
+        <CardEmptyState
+          icon={
+            <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456Z"
+              />
+            </svg>
+          }
+          title="No insights yet"
+          description="Run Process Insights to see your portfolio intelligence."
+        />
       </DashboardCard>
     );
   }

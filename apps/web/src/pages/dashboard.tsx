@@ -12,7 +12,7 @@ export default function Dashboard() {
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-auto p-6 gap-5">
         {/* Row 1: Portfolio value + Connected accounts */}
-        <div className="grid flex-shrink-0 grid-cols-2 gap-5">
+        <div className="grid max-h-[140px] flex-shrink-0 grid-cols-2 gap-5">
           <PortfolioValueCard />
           <ConnectedAccountsCard />
         </div>

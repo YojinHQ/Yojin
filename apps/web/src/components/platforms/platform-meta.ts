@@ -62,6 +62,30 @@ const PLATFORM_META: Record<KnownPlatform, PlatformMeta> = {
     color: 'bg-platform-violet/20 text-platform-violet',
     description: 'Solana wallet',
   },
+  METAMASK: {
+    label: 'MetaMask',
+    initials: 'ME',
+    color: 'bg-warning/20 text-warning',
+    description: 'Ethereum wallet',
+  },
+  WEBULL: {
+    label: 'WeBull',
+    initials: 'WB',
+    color: 'bg-info/20 text-info',
+    description: 'Stocks, options, crypto',
+  },
+  SOFI: {
+    label: 'SoFi',
+    initials: 'SF',
+    color: 'bg-accent-primary/20 text-accent-primary',
+    description: 'Stocks, ETFs, crypto',
+  },
+  MOOMOO: {
+    label: 'Moomoo',
+    initials: 'MO',
+    color: 'bg-warning/20 text-warning',
+    description: 'Stocks, options, ETFs',
+  },
   MANUAL: {
     label: 'Manual',
     initials: 'MA',

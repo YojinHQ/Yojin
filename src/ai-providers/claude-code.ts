@@ -211,7 +211,16 @@ export class ClaudeCodeProvider implements AIProvider {
       return this.completeWithSdk(this.client, params);
     }
 
-    // CLI mode: strip tools — text only, no images.
+    // CLI mode: text only — fail fast if messages contain image blocks
+    const hasImages = params.messages.some(
+      (m) => Array.isArray(m.content) && m.content.some((b) => b.type === 'image'),
+    );
+    if (hasImages) {
+      throw new Error(
+        'Vision (image) content requires an API key or OAuth token. ' +
+          'CLI mode does not support image blocks. Set ANTHROPIC_API_KEY or log in via Claude Code OAuth.',
+      );
+    }
     return this.completeWithCli(params);
   }
 

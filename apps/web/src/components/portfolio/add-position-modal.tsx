@@ -6,6 +6,7 @@ import { cn } from '../../lib/utils';
 import { useAddPositionModal } from '../../lib/add-position-modal-context';
 import { useAddManualPosition } from '../../api';
 import type { AssetClass, Platform } from '../../api';
+import { lookupSymbolName } from '../../lib/symbol-names';
 
 type Screen = 'form' | 'confirm' | 'success';
 
@@ -43,27 +44,8 @@ const ACCOUNT_TO_PLATFORM: Record<string, Platform> = {
   Fidelity: 'FIDELITY',
 };
 
-/** Common symbol → company name lookup. */
-const SYMBOL_NAMES: Record<string, string> = {
-  AAPL: 'Apple Inc.',
-  MSFT: 'Microsoft Corp.',
-  GOOGL: 'Alphabet Inc.',
-  AMZN: 'Amazon.com Inc.',
-  META: 'Meta Platforms Inc.',
-  NVDA: 'NVIDIA Corp.',
-  TSLA: 'Tesla Inc.',
-  JPM: 'JPMorgan Chase',
-  V: 'Visa Inc.',
-  BTC: 'Bitcoin',
-  ETH: 'Ethereum',
-  SOL: 'Solana',
-  SPY: 'SPDR S&P 500 ETF',
-  QQQ: 'Invesco QQQ Trust',
-  VOO: 'Vanguard S&P 500',
-};
-
 function lookupName(symbol: string): string {
-  return SYMBOL_NAMES[symbol.toUpperCase().trim()] ?? '';
+  return lookupSymbolName(symbol);
 }
 
 function inferAssetClass(symbol: string): AssetClass {

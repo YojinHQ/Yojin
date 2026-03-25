@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useTheme } from '../../lib/theme';
 import type { ThemeChoice } from '../../lib/theme';
 import { cn } from '../../lib/utils';
+import { ONBOARDING_KEYS } from '../../lib/onboarding-context';
 
 const themeOptions: { value: ThemeChoice; label: string; icon: string }[] = [
   {
@@ -22,12 +23,41 @@ const themeOptions: { value: ThemeChoice; label: string; icon: string }[] = [
   },
 ];
 
+function readPersonaName(): string {
+  try {
+    // Prefer the persisted name (survives onboarding state cleanup)
+    const persisted = localStorage.getItem(ONBOARDING_KEYS.PERSONA_NAME_KEY);
+    if (persisted) return persisted;
+
+    // Fallback: read from in-progress onboarding state
+    const raw = localStorage.getItem(ONBOARDING_KEYS.STATE_KEY);
+    if (!raw) return '';
+    const state = JSON.parse(raw);
+    return (state?.persona?.name as string) ?? '';
+  } catch {
+    return '';
+  }
+}
+
 export default function UserMenu() {
   const [open, setOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  const personaName = readPersonaName();
+  const { displayName, initials, handle } = (() => {
+    const name = personaName.trim();
+    if (!name) return { displayName: 'User', initials: 'U', handle: '@user' };
+    const parts = name.split(/\s+/);
+    const init = parts
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() ?? '')
+      .join('');
+    const hdl = '@' + name.toLowerCase().replace(/\s+/g, '');
+    return { displayName: name, initials: init, handle: hdl };
+  })();
 
   useEffect(() => {
     if (!open) return;
@@ -65,11 +95,11 @@ export default function UserMenu() {
         className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-bg-hover"
       >
         <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent-primary/15 text-2xs font-medium text-accent-primary">
-          DS
+          {initials}
         </span>
         <span className="flex-1 text-left">
-          <span className="block text-xs font-medium text-text-primary">Dean</span>
-          <span className="block text-2xs text-text-muted">@dean</span>
+          <span className="block text-xs font-medium text-text-primary">{displayName}</span>
+          <span className="block text-2xs text-text-muted">{handle}</span>
         </span>
       </button>
 

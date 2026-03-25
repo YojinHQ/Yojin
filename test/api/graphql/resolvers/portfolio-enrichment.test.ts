@@ -295,6 +295,26 @@ describe('live quote enrichment', () => {
     expect(goog.marketValue).toBe(700);
   });
 
+  it('handles null entries in quotes response', async () => {
+    // Jintel can return null for symbols it doesn't recognize
+    const quotesWithNull = vi.fn().mockResolvedValue({
+      success: true,
+      data: [makeQuotes()[0], null],
+    });
+    setPortfolioJintelClient(createQuoteMockClient(quotesWithNull));
+
+    const positions = await positionsQuery();
+
+    // AAPL gets live price from the valid quote
+    const aapl = positions.find((p) => p.symbol === 'AAPL')!;
+    expect(aapl.currentPrice).toBe(190);
+
+    // GOOG retains original price (its quote was null)
+    const goog = positions.find((p) => p.symbol === 'GOOG')!;
+    expect(goog.currentPrice).toBe(140);
+    expect(goog.marketValue).toBe(700);
+  });
+
   it('makes one batch call with deduplicated symbols', async () => {
     const quotesFn = vi.fn().mockResolvedValue({ success: true, data: makeQuotes() });
     setPortfolioJintelClient(createQuoteMockClient(quotesFn));

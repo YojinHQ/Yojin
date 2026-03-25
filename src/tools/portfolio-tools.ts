@@ -42,7 +42,7 @@ export function createPortfolioTools(options: PortfolioToolsOptions): ToolDefini
       'This persists the positions so the user can track their portfolio over time.',
     parameters: z.object({
       platform: PlatformSchema.describe('Platform the positions were imported from'),
-      positions: z.array(PositionInputSchema).min(1).describe('Array of positions to save'),
+      positions: z.array(PositionInputSchema).describe('Array of positions to save (empty array clears the platform)'),
     }),
     async execute(params: {
       platform: Platform;

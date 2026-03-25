@@ -457,6 +457,17 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       maxTokens?: number;
     }) {
       if (authMode === 'cli') {
+        // CLI mode cannot forward image blocks — fail fast if any are present
+        const hasImages = params.messages.some(
+          (m) => Array.isArray(m.content) && m.content.some((b) => b.type === 'image'),
+        );
+        if (hasImages) {
+          throw new Error(
+            'Vision (image) content requires an API key or OAuth token. ' +
+              'CLI mode does not support image blocks. Set ANTHROPIC_API_KEY or log in via Claude Code OAuth.',
+          );
+        }
+
         log.warn(
           'CLI mode: completeWithTools falls back to single-turn text completion — ' +
             'conversation history, system prompt, tools, and image blocks are not forwarded.',

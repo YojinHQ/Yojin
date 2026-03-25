@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import { cn } from '../../lib/utils';
 import { usePositions } from '../../api';
 import { useOnboardingStatus } from '../../lib/onboarding-context';
 import Spinner from '../common/spinner';
 import Button from '../common/button';
+import { CardEmptyState } from '../common/card-empty-state';
 import { DashboardCard } from '../common/dashboard-card';
 import AddAccountModal from './add-account-modal';
+import { PlatformLogo } from '../platforms/platform-logos';
 
 const PLATFORM_DISPLAY: Record<string, string> = {
   INTERACTIVE_BROKERS: 'IBKR',
@@ -49,16 +50,21 @@ function formatCurrency(n: number): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 }
 
-function formatChange(n: number): string {
-  const sign = n > 0 ? '+' : n < 0 ? '' : '';
-  return `${sign}${n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}`;
-}
-
-function DonutTooltip({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) {
+function DonutTooltip({
+  active,
+  payload,
+  total,
+}: {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number }>;
+  total: number;
+}) {
   if (!active || !payload?.[0]) return null;
+  const pct = total > 0 ? ((payload[0].value / total) * 100).toFixed(1) : '0';
   return (
     <div className="rounded-lg border border-border bg-bg-card px-2.5 py-1.5 text-2xs shadow-lg">
       <span className="text-text-primary">{payload[0].name}</span>
+      <span className="ml-1.5 text-text-muted">{pct}%</span>
     </div>
   );
 }
@@ -66,7 +72,7 @@ function DonutTooltip({ active, payload }: { active?: boolean; payload?: Array<{
 export default function ConnectedAccountsCard() {
   const [{ data, fetching, error }, reexecuteQuery] = usePositions();
   const [modalOpen, setModalOpen] = useState(false);
-  const { openOnboarding } = useOnboardingStatus();
+  const { openOnboarding, completed: onboardingComplete, skipped: onboardingSkipped } = useOnboardingStatus();
 
   const accounts = useMemo<AccountSummary[]>(() => {
     const positions = data?.positions ?? [];
@@ -99,6 +105,8 @@ export default function ConnectedAccountsCard() {
       color: PLATFORM_PALETTE[idx % PLATFORM_PALETTE.length],
     }));
   }, [accounts]);
+
+  const allocationTotal = useMemo(() => allocation.reduce((s, a) => s + a.value, 0), [allocation]);
 
   const connectedPlatformIds = accounts.map((a) => a.platform);
 
@@ -136,14 +144,29 @@ export default function ConnectedAccountsCard() {
   }
 
   if (error || accounts.length === 0) {
+    const showContinueSetup = !onboardingComplete && !onboardingSkipped;
     return (
-      <DashboardCard title="Connected Accounts" headerAction={addButton}>
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 pb-4">
-          <p className="text-xs text-text-muted">No accounts connected yet</p>
-          <Button variant="primary" size="sm" onClick={openOnboarding}>
-            Continue setup
-          </Button>
-        </div>
+      <DashboardCard title="Connected Accounts">
+        <CardEmptyState
+          icon={
+            <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"
+              />
+            </svg>
+          }
+          title="No accounts connected"
+          description="Link your investment platforms to track positions."
+          action={
+            showContinueSetup ? (
+              <Button variant="primary" size="sm" onClick={openOnboarding}>
+                Continue setup
+              </Button>
+            ) : undefined
+          }
+        />
         {modal}
       </DashboardCard>
     );
@@ -154,26 +177,15 @@ export default function ConnectedAccountsCard() {
       <div className="flex min-h-0 flex-1 items-start gap-6 px-4 pb-4">
         {/* Account list */}
         <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-          {accounts.map((account) => {
-            const isPositive = account.change > 0;
-            const isNeutral = account.change === 0;
-            return (
-              <div key={account.platform} className="flex items-baseline gap-2">
-                <span className="text-xs font-medium text-text-primary">{account.name}</span>
-                <span className="text-xs font-medium text-text-primary tabular-nums">
-                  {formatCurrency(account.totalValue)}
-                </span>
-                <span
-                  className={cn(
-                    'text-xs tabular-nums',
-                    isNeutral ? 'text-text-muted' : isPositive ? 'text-success' : 'text-error',
-                  )}
-                >
-                  {formatChange(account.change)}
-                </span>
-              </div>
-            );
-          })}
+          {accounts.map((account) => (
+            <div key={account.platform} className="flex items-center gap-2">
+              <PlatformLogo platform={account.platform} size="xs" className="flex-shrink-0" />
+              <span className="text-xs font-medium text-text-primary">{account.name}</span>
+              <span className="text-xs font-medium text-text-primary tabular-nums">
+                {formatCurrency(account.totalValue)}
+              </span>
+            </div>
+          ))}
         </div>
 
         {/* Donut chart — labels only on hover */}
@@ -196,7 +208,7 @@ export default function ConnectedAccountsCard() {
                       <Cell key={slice.name} fill={slice.color} />
                     ))}
                   </Pie>
-                  <Tooltip content={<DonutTooltip />} />
+                  <Tooltip content={<DonutTooltip total={allocationTotal} />} />
                 </PieChart>
               </ResponsiveContainer>
             </div>

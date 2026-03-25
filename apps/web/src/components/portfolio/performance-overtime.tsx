@@ -9,6 +9,7 @@ const RED = '#f87171';
 
 interface PerformanceOvertimeProps {
   scale: TimeScale;
+  empty?: boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Recharts tooltip payload type
@@ -29,8 +30,16 @@ function PnlTooltip({ active, payload, label }: any) {
   );
 }
 
-export function PerformanceOvertime({ scale }: PerformanceOvertimeProps) {
+export function PerformanceOvertime({ scale, empty }: PerformanceOvertimeProps) {
   const data = useMemo(() => getPnlData(scale), [scale]);
+
+  if (empty) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center text-center">
+        <p className="text-2xs text-text-muted/60">No P&L data yet</p>
+      </div>
+    );
+  }
 
   return (
     <ResponsiveContainer width="100%" height="100%">

@@ -63,7 +63,9 @@ const STATE_KEY = 'onboarding_state';
 const COMPLETE_KEY = 'onboarding_complete';
 const SKIPPED_KEY = 'onboarding_skipped';
 
-export const ONBOARDING_KEYS = { STEP_KEY, STATE_KEY, COMPLETE_KEY, SKIPPED_KEY } as const;
+const PERSONA_NAME_KEY = 'yojin_persona_name';
+
+export const ONBOARDING_KEYS = { STEP_KEY, STATE_KEY, COMPLETE_KEY, SKIPPED_KEY, PERSONA_NAME_KEY } as const;
 
 const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 

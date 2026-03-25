@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { tooltipStyle } from '../../lib/mock-chart-data';
 import { usePortfolioHistory } from '../../api';
+import { CardEmptyState } from '../common/card-empty-state';
 import Spinner from '../common/spinner';
 import type { TimeScale } from '../../data/mocks/performance';
 
@@ -81,10 +82,19 @@ export function TotalValueGraph({ scale }: TotalValueGraphProps) {
 
   if (error || chartData.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center">
-        <p className="text-xs text-text-muted">No history available</p>
-        <p className="mt-0.5 text-2xs text-text-muted/60">Import portfolio snapshots to see value over time</p>
-      </div>
+      <CardEmptyState
+        icon={
+          <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605"
+            />
+          </svg>
+        }
+        title="No history available"
+        description="Import portfolio snapshots to see value over time."
+      />
     );
   }
 

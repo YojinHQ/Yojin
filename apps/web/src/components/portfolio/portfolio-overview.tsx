@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { cn } from '../../lib/utils';
+import { usePortfolioHistory } from '../../api';
+import { CardEmptyState } from '../common/card-empty-state';
 import { timeScales, type TimeScale } from '../../data/mocks/performance';
 import { DashboardCard } from '../common/dashboard-card';
 import { TotalValueGraph } from './total-value-graph';
@@ -7,6 +9,8 @@ import { PerformanceOvertime } from './performance-overtime';
 
 export function PortfolioOverview() {
   const [scale, setScale] = useState<TimeScale>('7D');
+  const [{ data: historyData }] = usePortfolioHistory();
+  const hasHistory = (historyData?.portfolioHistory?.length ?? 0) > 0;
 
   const timeScaleButtons = (
     <div className="flex gap-0.5">
@@ -24,6 +28,26 @@ export function PortfolioOverview() {
       ))}
     </div>
   );
+
+  if (!hasHistory) {
+    return (
+      <DashboardCard title="Total Value" className="min-h-[120px] flex-1">
+        <CardEmptyState
+          icon={
+            <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605"
+              />
+            </svg>
+          }
+          title="No history available"
+          description="Import portfolio snapshots to see value and P&L over time."
+        />
+      </DashboardCard>
+    );
+  }
 
   return (
     <DashboardCard title="Total Value" headerAction={timeScaleButtons} className="min-h-[120px] flex-1">

@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { useMutation } from 'urql';
 import { useOnboarding } from '../../lib/onboarding-context';
 import { OnboardingShell } from '../../components/onboarding/onboarding-shell';
 import { PlatformTile, PLATFORMS } from '../../components/onboarding/platform-tile';
@@ -7,6 +8,7 @@ import { EditableTable } from '../../components/onboarding/editable-table';
 import type { ExtractedPosition } from '../../components/onboarding/editable-table';
 import Button from '../../components/common/button';
 import Input from '../../components/common/input';
+import { CONFIRM_POSITIONS_MUTATION } from '../../api/documents';
 
 type Screen = 'grid' | 'detail' | 'manual' | 'custom' | 'verify';
 
@@ -15,15 +17,24 @@ interface ManualEntry {
   name: string;
   quantity: string;
   avgEntry: string;
+  marketPrice: string;
   marketValue: string;
 }
 
-const EMPTY_MANUAL: ManualEntry = { symbol: '', name: '', quantity: '', avgEntry: '', marketValue: '' };
+const EMPTY_MANUAL: ManualEntry = {
+  symbol: '',
+  name: '',
+  quantity: '',
+  avgEntry: '',
+  marketPrice: '',
+  marketValue: '',
+};
 
 const CRYPTO_PLATFORMS = new Set(['COINBASE', 'BINANCE', 'METAMASK', 'PHANTOM']);
 
-export function Step3Platforms() {
+export function Step4Platforms() {
   const { state, updateState, nextStep, prevStep } = useOnboarding();
+  const [, executeConfirmPositions] = useMutation(CONFIRM_POSITIONS_MUTATION);
 
   const [screen, setScreen] = useState<Screen>('grid');
   const [selectedPlatformId, setSelectedPlatformId] = useState<string | null>(null);
@@ -73,20 +84,21 @@ export function Step3Platforms() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            query: `mutation ($input: ScreenshotInput!) { parsePortfolioScreenshot(input: $input) { success positions { symbol name quantity avgEntry marketValue } confidence warnings error } }`,
+            query: `mutation ($input: ScreenshotInput!) { parsePortfolioScreenshot(input: $input) { success positions { symbol name quantity avgEntry marketPrice marketValue } confidence warnings error } }`,
             variables: {
               input: { image: base64, mediaType: file.type, platform: selectedPlatformId },
             },
           }),
         });
         const json = await res.json();
+        const gqlError = json?.errors?.[0]?.message;
         const result = json?.data?.parsePortfolioScreenshot;
         if (result?.success && result.positions?.length) {
           setExtractedPositions(result.positions);
           setScreen('verify');
         } else {
           setUploadError(
-            result?.error || 'Could not extract positions from this screenshot. Try again or add manually.',
+            result?.error || gqlError || 'Could not extract positions from this screenshot. Try again or add manually.',
           );
         }
       } catch {
@@ -106,6 +118,7 @@ export function Step3Platforms() {
         name: e.name.trim(),
         quantity: e.quantity ? parseFloat(e.quantity) : null,
         avgEntry: e.avgEntry ? parseFloat(e.avgEntry) : null,
+        marketPrice: e.marketPrice ? parseFloat(e.marketPrice) : null,
         marketValue: e.marketValue ? parseFloat(e.marketValue) : null,
       }));
     if (positions.length) {
@@ -118,27 +131,21 @@ export function Step3Platforms() {
     if (!selectedPlatformId || extractedPositions.length === 0) return;
     setConfirming(true);
     try {
-      const res = await fetch('/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `mutation ($input: ConfirmPositionsInput!) { confirmPositions(input: $input) }`,
-          variables: {
-            input: {
-              platform: selectedPlatformId,
-              positions: extractedPositions.map((p) => ({
-                symbol: p.symbol,
-                name: p.name,
-                quantity: p.quantity,
-                avgEntry: p.avgEntry,
-                marketValue: p.marketValue,
-              })),
-            },
-          },
-        }),
+      const result = await executeConfirmPositions({
+        input: {
+          platform: selectedPlatformId,
+          positions: extractedPositions.map((p) => ({
+            symbol: p.symbol,
+            name: p.name,
+            quantity: p.quantity,
+            avgEntry: p.avgEntry,
+            marketPrice: p.marketPrice,
+            marketValue:
+              p.marketValue ?? (p.quantity != null && p.marketPrice != null ? p.quantity * p.marketPrice : undefined),
+          })),
+        },
       });
-      const json = await res.json();
-      if (json?.data?.confirmPositions) {
+      if (result.data?.confirmPositions) {
         const updated = [
           ...connectedPlatforms.filter((p) => p.platform !== selectedPlatformId),
           { platform: selectedPlatformId, positionCount: extractedPositions.length },
@@ -146,13 +153,15 @@ export function Step3Platforms() {
         updateState({ platforms: { connected: updated, skipped: false } });
         setScreen('grid');
         setSelectedPlatformId(null);
+      } else if (result.error) {
+        setUploadError(result.error.message || 'Failed to save positions. Please try again.');
       }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Failed to save positions. Please try again.');
     } finally {
       setConfirming(false);
     }
-  }, [selectedPlatformId, extractedPositions, connectedPlatforms, updateState]);
+  }, [selectedPlatformId, extractedPositions, connectedPlatforms, updateState, executeConfirmPositions]);
 
   const handleSkip = () => {
     updateState({ platforms: { connected: connectedPlatforms, skipped: connectedPlatforms.length === 0 } });
@@ -190,6 +199,7 @@ export function Step3Platforms() {
         name: e.name.trim(),
         quantity: e.quantity ? parseFloat(e.quantity) : null,
         avgEntry: e.avgEntry ? parseFloat(e.avgEntry) : null,
+        marketPrice: e.marketPrice ? parseFloat(e.marketPrice) : null,
         marketValue: e.marketValue ? parseFloat(e.marketValue) : null,
       }));
     if (positions.length && platformId) {
@@ -211,7 +221,7 @@ export function Step3Platforms() {
   // Platform Grid
   if (screen === 'grid') {
     return (
-      <OnboardingShell currentStep={3}>
+      <OnboardingShell currentStep={4}>
         <div className="w-full max-w-2xl">
           <div
             className="mb-8 text-center opacity-0 [animation:onboarding-fade-up_0.5s_ease-out_forwards]"
@@ -306,19 +316,13 @@ export function Step3Platforms() {
   // Platform Detail
   if (screen === 'detail' && selectedPlatform) {
     return (
-      <OnboardingShell currentStep={3}>
+      <OnboardingShell currentStep={4}>
         <div className="w-full max-w-lg">
           <div
             className="mb-6 opacity-0 [animation:onboarding-fade-up_0.5s_ease-out_forwards]"
             style={{ animationDelay: '0ms' }}
           >
-            <div className="mb-2 flex items-center gap-3">
-              {selectedPlatform.logo && (
-                <img src={selectedPlatform.logo} alt={selectedPlatform.name} className="h-9 w-9 rounded-lg" />
-              )}
-              <h1 className="font-headline text-2xl text-text-primary">{selectedPlatform.name}</h1>
-            </div>
-            <p className="mb-4 text-sm text-text-secondary">Add with screenshot</p>
+            <h1 className="font-headline text-2xl text-text-primary">{selectedPlatform.name}</h1>
             <ol className="mb-6 space-y-2">
               {selectedPlatform.instructions.map((step, i) => (
                 <li key={i} className="flex gap-3 text-sm text-text-secondary">
@@ -358,7 +362,7 @@ export function Step3Platforms() {
   if (screen === 'manual') {
     const hasValidEntries = manualEntries.some((e) => e.symbol.trim());
     return (
-      <OnboardingShell currentStep={3}>
+      <OnboardingShell currentStep={4}>
         <div className="w-full max-w-2xl">
           <div className="mb-6">
             <h1 className="mb-2 font-headline text-2xl text-text-primary">Add positions — {selectedPlatform?.name}</h1>
@@ -397,6 +401,14 @@ export function Step3Platforms() {
                   placeholder="150.00"
                   value={entry.avgEntry}
                   onChange={(e) => updateManualEntry(idx, 'avgEntry', e.target.value)}
+                  size="sm"
+                  className="w-24"
+                />
+                <Input
+                  label={idx === 0 ? 'Mkt Price' : undefined}
+                  placeholder="175.00"
+                  value={entry.marketPrice}
+                  onChange={(e) => updateManualEntry(idx, 'marketPrice', e.target.value)}
                   size="sm"
                   className="w-24"
                 />
@@ -457,7 +469,7 @@ export function Step3Platforms() {
     const hasValidEntries = manualEntries.some((e) => e.symbol.trim());
     const hasName = customPlatformName.trim().length > 0;
     return (
-      <OnboardingShell currentStep={3}>
+      <OnboardingShell currentStep={4}>
         <div className="w-full max-w-2xl">
           <div className="mb-6">
             <h1 className="mb-2 font-headline text-2xl text-text-primary">Add custom platform</h1>
@@ -510,6 +522,14 @@ export function Step3Platforms() {
                   placeholder="150.00"
                   value={entry.avgEntry}
                   onChange={(e) => updateManualEntry(idx, 'avgEntry', e.target.value)}
+                  size="sm"
+                  className="w-24"
+                />
+                <Input
+                  label={idx === 0 ? 'Mkt Price' : undefined}
+                  placeholder="175.00"
+                  value={entry.marketPrice}
+                  onChange={(e) => updateManualEntry(idx, 'marketPrice', e.target.value)}
                   size="sm"
                   className="w-24"
                 />
@@ -569,7 +589,7 @@ export function Step3Platforms() {
   const verifyPlatformName = selectedPlatform?.name ?? customPlatformName.trim();
   if (screen === 'verify' && (selectedPlatform || verifyPlatformName)) {
     return (
-      <OnboardingShell currentStep={3}>
+      <OnboardingShell currentStep={4}>
         <div className="w-full max-w-2xl">
           <div className="mb-6">
             <h1 className="mb-2 font-headline text-2xl text-text-primary">

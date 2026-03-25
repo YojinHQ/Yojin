@@ -524,6 +524,7 @@ export const typeDefs = /* GraphQL */ `
     name: String
     quantity: Float
     avgEntry: Float
+    marketPrice: Float
     marketValue: Float
   }
 
@@ -540,6 +541,7 @@ export const typeDefs = /* GraphQL */ `
     name: String
     quantity: Float
     avgEntry: Float
+    marketPrice: Float
     marketValue: Float
   }
 

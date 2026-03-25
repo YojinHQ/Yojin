@@ -4,7 +4,7 @@ import { cn } from '../../lib/utils';
 interface ModalProps {
   open: boolean;
   onClose: () => void;
-  title?: string;
+  title?: React.ReactNode;
   children: React.ReactNode;
   maxWidth?: string;
   /** Override the dialog container classes (merged via cn) */
@@ -39,7 +39,7 @@ export default function Modal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={!ariaLabelledBy ? title : undefined}
+        aria-label={!ariaLabelledBy && typeof title === 'string' ? title : undefined}
         aria-labelledby={ariaLabelledBy}
         className={cn(
           'relative w-full max-h-[80vh] overflow-auto rounded-2xl border border-border bg-bg-secondary p-6',

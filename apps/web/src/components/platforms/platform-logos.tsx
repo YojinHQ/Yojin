@@ -7,11 +7,12 @@ import { getPlatformMeta } from './platform-meta';
 
 interface PlatformLogoProps {
   platform: Platform;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   className?: string;
 }
 
 const sizeStyles = {
+  xs: 'h-5 w-5 text-[9px]',
   sm: 'h-8 w-8 text-xs',
   md: 'h-10 w-10 text-sm',
   lg: 'h-12 w-12 text-base',
@@ -27,6 +28,10 @@ const LOGO_FILES: Record<KnownPlatform, string> = {
   FIDELITY: 'fidelity.png',
   POLYMARKET: 'polymarket.png',
   PHANTOM: 'phantom.png',
+  METAMASK: 'metamask.png',
+  WEBULL: 'webull.png',
+  SOFI: 'sofi.png',
+  MOOMOO: 'moomoo.png',
   MANUAL: '',
 };
 

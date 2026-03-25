@@ -41,7 +41,7 @@ export default function RightPanel({ title, tabs, children }: RightPanelProps) {
           )}
         </div>
       )}
-      <div className="flex-1 overflow-auto">{children}</div>
+      <div className="flex flex-1 flex-col overflow-auto">{children}</div>
     </aside>
   );
 }

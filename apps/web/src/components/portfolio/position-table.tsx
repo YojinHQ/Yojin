@@ -36,6 +36,10 @@ const platformLabels: Record<KnownPlatform, string> = {
   FIDELITY: 'Fidelity',
   POLYMARKET: 'Polymarket',
   PHANTOM: 'Phantom',
+  METAMASK: 'MetaMask',
+  WEBULL: 'Webull',
+  SOFI: 'SoFi',
+  MOOMOO: 'Moomoo',
   MANUAL: 'Manual',
 };
 

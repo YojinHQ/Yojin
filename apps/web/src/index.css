@@ -28,6 +28,43 @@
   --animate-waterfall-in: waterfall-in 0.25s ease-out;
   --animate-shimmer: shimmer 2s ease-in-out infinite;
   --animate-card-in: card-in 0.4s ease-out both;
+  --animate-wave: wave 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Yojin hand-wave: damped oscillation with organic breathing pause */
+@keyframes wave {
+  0% {
+    transform: rotate(0deg) scale(1) translateY(0);
+  }
+  /* — wave burst (damped spring) — */
+  6% {
+    transform: rotate(16deg) scale(1.04) translateY(-2px);
+  }
+  12% {
+    transform: rotate(-10deg) scale(1.02) translateY(0);
+  }
+  18% {
+    transform: rotate(12deg) scale(1.03) translateY(-1px);
+  }
+  24% {
+    transform: rotate(-4deg) scale(1.01) translateY(0);
+  }
+  30% {
+    transform: rotate(6deg) scale(1.01) translateY(-1px);
+  }
+  36% {
+    transform: rotate(0deg) scale(1) translateY(0);
+  }
+  /* — rest: gentle breathing — */
+  60% {
+    transform: rotate(0deg) scale(0.97) translateY(1px);
+  }
+  80% {
+    transform: rotate(0deg) scale(1.01) translateY(0);
+  }
+  100% {
+    transform: rotate(0deg) scale(1) translateY(0);
+  }
 }
 
 @keyframes shimmer {

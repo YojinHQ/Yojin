@@ -47,6 +47,19 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'positions');
         cache.invalidate('Query', 'enrichedSnapshot');
       },
+      confirmPositions(_result, _args, cache) {
+        cache.invalidate('Query', 'portfolio');
+        cache.invalidate('Query', 'positions');
+        cache.invalidate('Query', 'portfolioHistory');
+        cache.invalidate('Query', 'enrichedSnapshot');
+      },
+      completeOnboarding(_result, _args, cache) {
+        cache.invalidate('Query', 'portfolio');
+        cache.invalidate('Query', 'positions');
+        cache.invalidate('Query', 'portfolioHistory');
+        cache.invalidate('Query', 'enrichedSnapshot');
+        cache.invalidate('Query', 'listConnections');
+      },
       createAlert(_result, _args, cache) {
         cache.invalidate('Query', 'alerts');
       },

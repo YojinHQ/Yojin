@@ -327,7 +327,7 @@ export async function onboardingStatusQuery(): Promise<OnboardingStatusResult> {
   const alertsConfigPath = `${dataRoot}/config/alerts.json`;
   const briefingConfigured = existsSync(alertsConfigPath);
 
-  const jintelConfigured = vault?.isUnlocked ? !!(await vault.get('jintel-api-key')) : false;
+  const jintelConfigured = vault?.isUnlocked ? await vault.has('jintel-api-key') : false;
 
   return { completed, personaExists, aiCredentialConfigured, connectedPlatforms, briefingConfigured, jintelConfigured };
 }
@@ -359,13 +359,28 @@ export async function validateJintelKeyMutation(
     return { success: false, error: 'Vault is locked. Unlock it first.' };
   }
 
-  // Create a temporary client to test the key
-  const { JintelClient } = await import('@yojinhq/jintel-client');
-  const testClient = new JintelClient({ apiKey, baseUrl: process.env.JINTEL_API_URL });
-  const health = await testClient.healthCheck();
-
-  if (!health.healthy) {
-    return { success: false, error: health.error ?? 'Failed to connect to Jintel API.' };
+  // Validate the key against the Jintel REST API (GET /api/v1/me).
+  // The GraphQL endpoint exempts introspection from auth, so healthCheck() and
+  // even searchEntities can pass with invalid keys. The REST /me endpoint
+  // always requires a valid Bearer token — 401 means bad key.
+  const { JINTEL_API_URL } = await import('@yojinhq/jintel-client');
+  const baseUrl = process.env.JINTEL_API_URL ?? JINTEL_API_URL;
+  // baseUrl is e.g. "https://api.jintel.ai/api" — REST lives at /api/v1/me
+  const meUrl = `${baseUrl.replace(/\/graphql$/, '')}/v1/me`;
+  try {
+    const res = await fetch(meUrl, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (res.status === 401) {
+      return { success: false, error: 'Invalid API key.' };
+    }
+    if (!res.ok) {
+      return { success: false, error: `Jintel API returned ${res.status}.` };
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Jintel API is unreachable: ${msg}` };
   }
 
   try {
@@ -681,6 +696,7 @@ export async function parsePortfolioScreenshotMutation(
           name: p.name,
           quantity: p.quantity,
           avgEntry: p.costBasis,
+          marketPrice: p.currentPrice,
           marketValue: p.marketValue,
         })),
         confidence: result.metadata.confidence,
@@ -701,6 +717,7 @@ interface ConfirmPositionsInput {
     name?: string;
     quantity?: number;
     avgEntry?: number;
+    marketPrice?: number;
     marketValue?: number;
   }>;
 }
@@ -721,7 +738,8 @@ export async function confirmPositionsMutation(
       name: p.name || p.symbol,
       quantity: p.quantity || 0,
       costBasis: p.avgEntry || 0,
-      currentPrice: p.quantity && p.quantity > 0 ? (p.marketValue ?? 0) / p.quantity : (p.avgEntry ?? 0),
+      currentPrice:
+        p.marketPrice ?? (p.quantity && p.quantity > 0 ? (p.marketValue ?? 0) / p.quantity : (p.avgEntry ?? 0)),
       marketValue: p.marketValue || 0,
       unrealizedPnl: 0,
       unrealizedPnlPercent: 0,

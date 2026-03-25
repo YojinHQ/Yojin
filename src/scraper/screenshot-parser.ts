@@ -135,7 +135,7 @@ ${platformLine}
 
 Return a JSON object with this exact structure:
 {
-  "platform": "COINBASE" | "ROBINHOOD" | "INTERACTIVE_BROKERS" | "MANUAL",
+  "platform": "COINBASE" | "ROBINHOOD" | "INTERACTIVE_BROKERS" | "METAMASK" | "PHANTOM" | "BINANCE" | "MANUAL",
   "positions": [
     {
       "symbol": "BTC",

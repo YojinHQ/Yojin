@@ -64,6 +64,31 @@ describe('Portfolio tools', () => {
       expect(snapshot!.positions[0].symbol).toBe('AAPL');
     });
 
+    it('accepts empty positions array to clear a platform', async () => {
+      const saveTool = tools.find((t) => t.name === 'save_portfolio_positions')!;
+
+      // First save some positions
+      await saveTool.execute({
+        platform: 'COINBASE',
+        positions: [
+          { symbol: 'BTC', name: 'Bitcoin', quantity: 1, costBasis: 50000, currentPrice: 67000, marketValue: 67000 },
+        ],
+      });
+
+      // Clear by saving empty positions for that platform
+      const result = await saveTool.execute({
+        platform: 'COINBASE',
+        positions: [],
+      });
+
+      expect(result.content).toContain('Portfolio saved successfully');
+      expect(result.content).toContain('Positions: 0');
+
+      const snapshot = await store.getLatest();
+      expect(snapshot).not.toBeNull();
+      expect(snapshot!.positions).toHaveLength(0);
+    });
+
     it('computes missing market value', async () => {
       const saveTool = tools.find((t) => t.name === 'save_portfolio_positions')!;
       await saveTool.execute({

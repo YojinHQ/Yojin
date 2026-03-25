@@ -289,6 +289,12 @@ export const VALIDATE_JINTEL_KEY_MUTATION = gql`
   }
 `;
 
+export const CONFIRM_POSITIONS_MUTATION = gql`
+  mutation ConfirmPositions($input: ConfirmPositionsInput!) {
+    confirmPositions(input: $input)
+  }
+`;
+
 export const COMPLETE_ONBOARDING_MUTATION = gql`
   mutation CompleteOnboarding {
     completeOnboarding

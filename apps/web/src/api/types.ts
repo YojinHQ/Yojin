@@ -21,6 +21,10 @@ export const KNOWN_PLATFORMS = [
   'FIDELITY',
   'POLYMARKET',
   'PHANTOM',
+  'METAMASK',
+  'WEBULL',
+  'SOFI',
+  'MOOMOO',
   'MANUAL',
 ] as const;
 
