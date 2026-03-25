@@ -366,7 +366,8 @@ export async function validateJintelKeyMutation(
   const { JINTEL_API_URL } = await import('@yojinhq/jintel-client');
   const baseUrl = process.env.JINTEL_API_URL ?? JINTEL_API_URL;
   // baseUrl is e.g. "https://api.jintel.ai/api" — REST lives at /api/v1/me
-  const meUrl = `${baseUrl.replace(/\/graphql$/, '')}/v1/me`;
+  const apiBase = baseUrl.replace(/\/graphql\/?$/, '').replace(/\/$/, '');
+  const meUrl = `${apiBase}/v1/me`;
   try {
     const res = await fetch(meUrl, {
       headers: { Authorization: `Bearer ${apiKey}` },
@@ -739,7 +740,8 @@ export async function confirmPositionsMutation(
       quantity: p.quantity || 0,
       costBasis: p.avgEntry || 0,
       currentPrice:
-        p.marketPrice ?? (p.quantity && p.quantity > 0 ? (p.marketValue ?? 0) / p.quantity : (p.avgEntry ?? 0)),
+        p.marketPrice ??
+        (p.marketValue != null && p.quantity && p.quantity > 0 ? p.marketValue / p.quantity : (p.avgEntry ?? 0)),
       marketValue: p.marketValue || 0,
       unrealizedPnl: 0,
       unrealizedPnlPercent: 0,
