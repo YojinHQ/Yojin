@@ -325,7 +325,7 @@ function indexQuotes(result: { success: boolean; data?: MarketQuote[] } | null):
   const map = new Map<string, MarketQuote>();
   if (!result || !('data' in result) || !result.data) return map;
   for (const q of result.data) {
-    map.set(q.ticker, q);
+    if (q?.ticker) map.set(q.ticker, q);
   }
   return map;
 }
