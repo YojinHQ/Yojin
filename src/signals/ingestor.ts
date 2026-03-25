@@ -148,16 +148,17 @@ export class SignalIngestor {
     }
 
     if (signals.length > 0) {
-      await this.archive.appendBatch(signals);
+      if (this.clustering) {
+        try {
+          await this.clustering.processSignals(signals);
+        } catch (err) {
+          logger.warn('Signal clustering failed, writing raw signals as fallback', { error: err });
+          await this.archive.appendBatch(signals);
+        }
+      } else {
+        await this.archive.appendBatch(signals);
+      }
       logger.info(`Ingested ${signals.length} signals`);
-    }
-
-    // Fire-and-forget: cluster ingested signals (fuzzy dedup + tier generation).
-    // Clustering is best-effort — signal ingest never fails due to clustering.
-    if (this.clustering && signals.length > 0) {
-      this.clustering.processSignals(signals).catch((err) => {
-        logger.warn('Signal clustering failed (signals ingested successfully)', { error: err });
-      });
     }
 
     return result;
@@ -286,9 +287,11 @@ export class SignalIngestor {
     return createHash('sha256').update(`${normalized}|${publishedAt}`).digest('hex');
   }
 
-  /** Weighted confidence from multiple sources — higher reliability + more sources = higher confidence. */
+  /** Weighted confidence — bonus scales with average reliability so low-quality sources can't inflate score. */
   private weightedConfidence(sources: Signal['sources']): number {
     const totalReliability = sources.reduce((sum, s) => sum + s.reliability, 0);
-    return Math.min(1, totalReliability / sources.length + 0.05 * (sources.length - 1));
+    const avgReliability = totalReliability / sources.length;
+    const multiSourceBonus = avgReliability * 0.1 * (sources.length - 1);
+    return Math.min(1, avgReliability + multiSourceBonus);
   }
 }

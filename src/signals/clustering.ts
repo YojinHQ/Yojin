@@ -96,10 +96,19 @@ export class SignalClustering {
       try {
         await this.processOne(signal);
       } catch (error) {
-        logger.error('SignalClustering: failed to process signal', {
+        logger.error('SignalClustering: failed to process signal, writing raw', {
           signalId: signal.id,
           error: error instanceof Error ? error.message : String(error),
         });
+        // Write raw signal so it isn't lost — ingestor relies on us for all writes
+        try {
+          await this.options.archive.append(signal);
+        } catch (writeErr) {
+          logger.error('SignalClustering: fallback write also failed', {
+            signalId: signal.id,
+            error: writeErr instanceof Error ? writeErr.message : String(writeErr),
+          });
+        }
       }
     }
   }
@@ -114,7 +123,7 @@ export class SignalClustering {
 
     const candidates = await this.options.archive.query({
       tickers,
-      since: sixHoursAgo.slice(0, 10),
+      since: sixHoursAgo,
       limit: 20,
     });
 
