@@ -187,8 +187,9 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
           const coldSummary = prev.get('__cold_summary')?.text;
           const snapshotId = prev.get('__snapshot_id')?.text ?? '';
 
-          // Truncate agent outputs to reduce context — keep most important content
-          const maxChars = 3000;
+          // Truncate agent outputs to reduce context — keep most important content.
+          // Must be high enough to preserve signal IDs (sig-xxx) for all positions.
+          const maxChars = 12000;
           const research =
             researchOutput.length > maxChars ? researchOutput.slice(0, maxChars) + '\n[truncated]' : researchOutput;
           const risk = riskOutput.length > maxChars ? riskOutput.slice(0, maxChars) + '\n[truncated]' : riskOutput;

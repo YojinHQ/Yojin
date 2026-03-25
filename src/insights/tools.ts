@@ -162,7 +162,8 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
         const textUpper = text.toUpperCase();
         const mentioned = allSymbols.filter((sym) => {
           // Match only when the symbol appears as a whole word (not a substring of another word)
-          const re = new RegExp(`(?<![A-Z0-9])${sym}(?![A-Z0-9])`);
+          const escaped = sym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const re = new RegExp(`(?<![A-Z0-9])${escaped}(?![A-Z0-9])`);
           return re.test(textUpper);
         });
         if (mentioned.length === 0) return []; // no tickers mentioned = no signals

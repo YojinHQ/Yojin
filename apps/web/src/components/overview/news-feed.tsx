@@ -8,6 +8,7 @@ import { cn, timeAgo } from '../../lib/utils';
 import Button from '../common/button';
 import FeedDetailModal from './feed-detail-modal';
 import type { FeedDetailData } from './feed-detail-modal';
+import { SignalChips } from './signal-chips';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -293,6 +294,14 @@ export default function NewsFeed() {
     });
   };
 
+  if (reportResult.fetching) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-6">
+        <p className="text-sm text-text-muted">Loading...</p>
+      </div>
+    );
+  }
+
   if (!report) {
     return (
       <div className="flex flex-1 items-center justify-center p-6">
@@ -403,40 +412,12 @@ export default function NewsFeed() {
                           <div className="border-t border-border/30 px-3 pb-3">
                             <p className="mt-2 text-xs leading-relaxed text-text-secondary">{item.preview}</p>
                             {item.signals.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1.5">
-                                {item.signals.map((sig) => (
-                                  <a
-                                    key={sig.signalId}
-                                    href={sig.url ?? `/signals?highlight=${sig.signalId}`}
-                                    target={sig.url ? '_blank' : undefined}
-                                    rel={sig.url ? 'noopener noreferrer' : undefined}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (!sig.url) {
-                                        e.preventDefault();
-                                        navigate(`/signals?highlight=${sig.signalId}`);
-                                      }
-                                    }}
-                                    className="inline-flex items-center gap-1 rounded-md bg-bg-secondary px-2 py-1 text-[11px] text-accent-primary transition-colors hover:bg-accent-primary/10"
-                                    title={sig.title}
-                                  >
-                                    <svg
-                                      className="h-3 w-3 flex-shrink-0"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth={1.5}
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"
-                                      />
-                                    </svg>
-                                    <span className="max-w-[140px] truncate">{sig.title}</span>
-                                  </a>
-                                ))}
-                              </div>
+                              <SignalChips
+                                signals={item.signals}
+                                navigate={navigate}
+                                className="mt-2 flex flex-wrap gap-1.5"
+                                onClick={(e) => e.stopPropagation()}
+                              />
                             )}
                             <div className="mt-3 flex items-center gap-2">
                               <Button

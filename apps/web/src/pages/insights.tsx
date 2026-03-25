@@ -98,7 +98,7 @@ export default function Insights() {
   const [mutationResult, processInsights] = useMutation<ProcessInsightsMutationResult>(PROCESS_INSIGHTS_MUTATION);
 
   // Check if a workflow is already running (e.g. user navigated away and back)
-  const [statusResult] = useQuery<InsightsWorkflowStatusQueryResult>({
+  const [statusResult, reexecuteStatusQuery] = useQuery<InsightsWorkflowStatusQueryResult>({
     query: INSIGHTS_WORKFLOW_STATUS_QUERY,
     requestPolicy: 'network-only',
   });
@@ -142,14 +142,15 @@ export default function Insights() {
     if (lastEvent?.stage === 'complete' || lastEvent?.stage === 'error') {
       setReconnecting(false);
       reexecuteQuery({ requestPolicy: 'network-only' });
+      reexecuteStatusQuery({ requestPolicy: 'network-only' });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reexecuteQuery is stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reexecuteQuery/reexecuteStatusQuery are stable
   }, [lastEvent?.stage]);
 
   const handleProcess = async () => {
     setReconnecting(false);
     await processInsights({});
-    reexecuteQuery({ requestPolicy: 'network-only' });
+    // reexecuteQuery is triggered by the subscription 'complete' event
   };
 
   const report = mutationResult.data?.processInsights ?? queryResult.data?.latestInsightReport ?? null;

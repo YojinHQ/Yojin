@@ -5,21 +5,38 @@ export interface SignalMapEntry {
   url: string | null;
 }
 
-export function SignalChips({
-  signalIds,
-  signalMap,
-  navigate,
-}: {
-  signalIds: string[];
-  signalMap: Map<string, SignalMapEntry>;
+export interface ResolvedSignal {
+  signalId: string;
+  title: string;
+  url: string | null;
+}
+
+type SignalChipsProps = {
   navigate: ReturnType<typeof useNavigate>;
-}) {
-  if (signalIds.length === 0) return null;
-  const resolved = signalIds.map((id) => ({ id, ...signalMap.get(id) })).filter((s) => s.title);
+  className?: string;
+  onClick?: (e: React.MouseEvent) => void;
+} & (
+  | { signalIds: string[]; signalMap: Map<string, SignalMapEntry>; signals?: never }
+  | { signals: ResolvedSignal[]; signalIds?: never; signalMap?: never }
+);
+
+export function SignalChips(props: SignalChipsProps) {
+  const { navigate, className, onClick } = props;
+
+  const resolved =
+    'signals' in props && props.signals
+      ? props.signals.map((s) => ({ id: s.signalId, title: s.title, url: s.url }))
+      : (props.signalIds ?? [])
+          .map((id) => {
+            const entry = (props.signalMap ?? new Map<string, SignalMapEntry>()).get(id);
+            return { id, title: entry?.title, url: entry?.url ?? null };
+          })
+          .filter((s): s is { id: string; title: string; url: string | null } => !!s.title);
+
   if (resolved.length === 0) return null;
 
   return (
-    <div className="mt-1 flex flex-wrap gap-1">
+    <div className={className ?? 'mt-1 flex flex-wrap gap-1'}>
       {resolved.map((sig) => (
         <a
           key={sig.id}
@@ -27,6 +44,7 @@ export function SignalChips({
           target={sig.url ? '_blank' : undefined}
           rel={sig.url ? 'noopener noreferrer' : undefined}
           onClick={(e) => {
+            onClick?.(e);
             if (!sig.url) {
               e.preventDefault();
               navigate(`/signals?highlight=${sig.id}`);
