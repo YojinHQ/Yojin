@@ -124,6 +124,7 @@ export class SignalClustering {
     const candidates = await this.options.archive.query({
       tickers,
       since: sixHoursAgo,
+      until: signal.publishedAt,
       limit: 20,
     });
 
@@ -247,7 +248,7 @@ export class SignalClustering {
           signalIds: Array.from(new Set([...group.signalIds, existing.id, incoming.id])),
           tickers: Array.from(new Set([...group.tickers, ...allTickers])),
           summary: groupSummary,
-          lastEventAt: now,
+          lastEventAt: incoming.publishedAt > group.lastEventAt ? incoming.publishedAt : group.lastEventAt,
           version: group.version + 1,
           updatedAt: now,
         };
