@@ -8,6 +8,7 @@ import {
   ON_WORKFLOW_PROGRESS_SUBSCRIPTION,
   PROCESS_INSIGHTS_MUTATION,
 } from '../api/documents';
+import { usePositions } from '../api/hooks/use-portfolio';
 import type {
   InsightRating,
   InsightReport,
@@ -97,6 +98,10 @@ export default function Insights() {
 
   const [mutationResult, processInsights] = useMutation<ProcessInsightsMutationResult>(PROCESS_INSIGHTS_MUTATION);
 
+  // Check if the user has positions in their portfolio
+  const [positionsResult] = usePositions();
+  const hasPositions = (positionsResult.data?.positions?.length ?? 0) > 0;
+
   // Check if a workflow is already running (e.g. user navigated away and back)
   const [statusResult, reexecuteStatusQuery] = useQuery<InsightsWorkflowStatusQueryResult>({
     query: INSIGHTS_WORKFLOW_STATUS_QUERY,
@@ -166,9 +171,19 @@ export default function Insights() {
             </p>
           )}
         </div>
-        <Button size="lg" onClick={handleProcess} loading={loading}>
-          {loading ? 'Processing...' : 'Process Insights'}
-        </Button>
+        <div className="flex flex-col items-end gap-1">
+          <Button size="lg" onClick={handleProcess} loading={loading} disabled={!hasPositions && !loading}>
+            {loading ? 'Processing...' : 'Process Insights'}
+          </Button>
+          {!hasPositions && !positionsResult.fetching && (
+            <p className="text-xs text-text-muted">
+              <Link to="/portfolio" className="text-accent-primary hover:underline">
+                Add positions
+              </Link>{' '}
+              to your portfolio first
+            </p>
+          )}
+        </div>
       </header>
 
       <div className="flex-1 overflow-auto px-6 pb-6">
