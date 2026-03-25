@@ -69,10 +69,12 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
   log.info('Jintel quotes received', {
     requested: symbols.length,
     received: result.data.length,
-    tickers: result.data.map((q) => q.ticker),
+    tickers: result.data.filter((q) => q?.ticker).map((q) => q.ticker),
   });
 
-  const quoteMap = new Map<string, MarketQuote>(result.data.map((q) => [q.ticker, q]));
+  const quoteMap = new Map<string, MarketQuote>(
+    result.data.filter((q): q is MarketQuote => q?.ticker != null).map((q) => [q.ticker, q]),
+  );
 
   const positions: Position[] = snapshot.positions.map((pos) => {
     const quote = quoteMap.get(pos.symbol);
