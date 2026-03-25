@@ -89,12 +89,15 @@ describe('extractTickers', () => {
     expect(extractTickers("MicroStrategy's bitcoin holdings grow")).toEqual(['BTC', 'MSTR']);
   });
 
-  it('does not false-positive on common words like "strategy" and "meta"', () => {
+  it('does not false-positive on common words like "strategy", "meta", and "optimism"', () => {
     // "strategy" is too common in financial text — should not tag MSTR
     expect(extractTickers('investment strategy for 2026')).toEqual([]);
     // "meta" as a standalone word or hyphenated prefix — should not tag META
     expect(extractTickers('The metadata contains no useful metaphor')).toEqual([]);
     expect(extractTickers('A meta-analysis of hedge fund returns')).toEqual([]);
+    // "optimism" is common in financial writing — should not tag OP
+    expect(extractTickers('market optimism lifted equities')).toEqual([]);
+    expect(extractTickers('cautious optimism about rate cuts')).toEqual([]);
   });
 
   it('extracts "meta platforms" as META', () => {

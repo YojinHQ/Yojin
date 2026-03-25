@@ -162,21 +162,24 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
 
         // Group signal IDs by ticker (1 pass, pre-compiled Set)
         const tickerSet = new Set(allTickers.map((t) => t.split('-')[0].toUpperCase()));
-        const signalIdsByTicker = new Map<string, string[]>();
+        const signalIdsByTicker = new Map<string, Set<string>>();
         for (const signal of allSignals) {
           for (const asset of signal.assets) {
             const base = asset.ticker.split('-')[0].toUpperCase();
             if (tickerSet.has(base)) {
-              const ids = signalIdsByTicker.get(base) ?? [];
-              ids.push(signal.id);
-              signalIdsByTicker.set(base, ids);
+              let ids = signalIdsByTicker.get(base);
+              if (!ids) {
+                ids = new Set();
+                signalIdsByTicker.set(base, ids);
+              }
+              ids.add(signal.id);
             }
           }
         }
 
         for (const position of positions) {
           const base = position.symbol.split('-')[0].toUpperCase();
-          position.allSignalIds = signalIdsByTicker.get(base) ?? [];
+          position.allSignalIds = [...(signalIdsByTicker.get(base) ?? [])];
         }
       }
 

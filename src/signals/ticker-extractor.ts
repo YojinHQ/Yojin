@@ -267,7 +267,7 @@ const NAME_TO_TICKER: ReadonlyMap<string, string> = new Map([
   ['celestia', 'TIA'],
   ['lido', 'LDO'],
   ['near protocol', 'NEAR'],
-  ['optimism', 'OP'],
+  ['optimism protocol', 'OP'],
   ['zcash', 'ZEC'],
   ['qubic', 'QUBIC'],
   // Mega-cap equities commonly referenced by name

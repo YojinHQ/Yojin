@@ -392,8 +392,6 @@ function enrichmentToSignals(entity: EntityWithNews, inputTicker: string): RawSi
   const tickers = entityTickers.some((t) => t.toUpperCase() === inputTicker.toUpperCase())
     ? entityTickers
     : [inputTicker, ...entityTickers];
-  if (tickers.length === 0) return [];
-
   const now = new Date().toISOString();
   const signals: RawSignalInput[] = [];
 
@@ -618,7 +616,7 @@ async function batchEnrichAllChunked(client: JintelClient, tickers: string[]): P
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       // If the server doesn't support news field yet, fall back to standard enrichment
-      if (newsSupported && (msg.includes('Cannot query field') || msg.includes('validation error'))) {
+      if (newsSupported && msg.includes('Cannot query field')) {
         logger.info('Jintel news field not available — falling back to standard enrichment');
         newsSupported = false;
         // Retry this chunk without news
