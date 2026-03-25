@@ -26,13 +26,13 @@ export default function YojinActionsCard() {
   const report = result.data?.latestInsightReport;
   const navigate = useNavigate();
 
-  // Build signalId → { title, url } lookup from all position keySignals
+  // Build signalId → { title, url, sourceCount } lookup from all position keySignals
   const signalMap = useMemo(() => {
-    const map = new Map<string, { title: string; url: string | null }>();
+    const map = new Map<string, { title: string; url: string | null; sourceCount?: number }>();
     if (!report) return map;
     for (const pos of report.positions) {
       for (const sig of pos.keySignals ?? []) {
-        map.set(sig.signalId, { title: sig.title, url: sig.url });
+        map.set(sig.signalId, { title: sig.title, url: sig.url, sourceCount: sig.sourceCount });
       }
     }
     return map;

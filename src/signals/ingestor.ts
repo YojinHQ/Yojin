@@ -16,6 +16,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import type { SignalArchive } from './archive.js';
+import type { SignalClustering } from './clustering.js';
 import { extractTickers } from './ticker-extractor.js';
 import type { SymbolResolver } from './ticker-extractor.js';
 import { SignalSchema } from './types.js';
@@ -61,23 +62,39 @@ export interface IngestResult {
 export interface IngestorOptions {
   archive: SignalArchive;
   symbolResolver?: SymbolResolver;
+  clustering?: SignalClustering;
 }
 
 export class SignalIngestor {
   private readonly archive: SignalArchive;
   private readonly symbolResolver?: SymbolResolver;
-  private knownHashes = new Set<string>();
+  private clustering?: SignalClustering;
+  private knownHashes = new Map<string, string>(); // contentHash → signalId
   private initialized = false;
 
   constructor(options: IngestorOptions) {
     this.archive = options.archive;
     this.symbolResolver = options.symbolResolver;
+    this.clustering = options.clustering;
+  }
+
+  /** Late-wire clustering after LLM provider becomes available. */
+  setClustering(clustering: SignalClustering): void {
+    this.clustering = clustering;
   }
 
   /** Load existing content hashes from archive for dedup. */
   async initialize(): Promise<void> {
     if (this.initialized) return;
-    this.knownHashes = await this.archive.loadContentHashes();
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const recentSignals = await this.archive.query({ since: ninetyDaysAgo });
+    for (const sig of recentSignals) {
+      this.knownHashes.set(sig.contentHash, sig.id);
+      const currentHash = this.computeHash(sig.title, sig.publishedAt);
+      if (currentHash !== sig.contentHash) {
+        this.knownHashes.set(currentHash, sig.id);
+      }
+    }
     logger.info(`Loaded ${this.knownHashes.size} existing content hashes`);
     this.initialized = true;
   }
@@ -87,6 +104,8 @@ export class SignalIngestor {
     await this.initialize();
 
     const result: IngestResult = { ingested: 0, duplicates: 0, errors: [] };
+    // Pending signals not yet flushed to archive (keyed by id for fast lookup during same-batch merges)
+    const pendingById = new Map<string, Signal>();
     const signals: Signal[] = [];
 
     for (const item of items) {
@@ -94,12 +113,36 @@ export class SignalIngestor {
         const signal = this.toSignal(item);
         if (!signal) continue;
 
-        if (this.knownHashes.has(signal.contentHash)) {
+        const existingId = this.knownHashes.get(signal.contentHash);
+        if (existingId) {
+          // Check pending batch first (signal not yet flushed), then archive
+          const existing = pendingById.get(existingId) ?? (await this.archive.getById(existingId));
+          if (existing) {
+            const newSource = signal.sources[0];
+            if (!existing.sources.some((s) => s.id === newSource.id)) {
+              const merged: Signal = {
+                ...existing,
+                sources: [...existing.sources, newSource],
+                confidence: this.weightedConfidence([...existing.sources, newSource]),
+                version: (existing.version ?? 1) + 1,
+              };
+              // Update pending map so subsequent same-batch dupes see the merged version
+              if (pendingById.has(existingId)) {
+                pendingById.set(existingId, merged);
+                // Replace in signals array so appendBatch writes the merged version
+                const idx = signals.findIndex((s) => s.id === existingId);
+                if (idx !== -1) signals[idx] = merged;
+              } else {
+                await this.archive.appendUpdate(merged);
+              }
+            }
+          }
           result.duplicates++;
           continue;
         }
 
-        this.knownHashes.add(signal.contentHash);
+        this.knownHashes.set(signal.contentHash, signal.id);
+        pendingById.set(signal.id, signal);
         signals.push(signal);
         result.ingested++;
       } catch (error) {
@@ -109,7 +152,16 @@ export class SignalIngestor {
     }
 
     if (signals.length > 0) {
-      await this.archive.appendBatch(signals);
+      if (this.clustering) {
+        try {
+          await this.clustering.processSignals(signals);
+        } catch (err) {
+          logger.warn('Signal clustering failed, writing raw signals as fallback', { error: err });
+          await this.archive.appendBatch(signals);
+        }
+      } else {
+        await this.archive.appendBatch(signals);
+      }
       logger.info(`Ingested ${signals.length} signals`);
     }
 
@@ -125,7 +177,7 @@ export class SignalIngestor {
     if (isNaN(pubDate.getTime())) return null;
     const publishedAt = pubDate.toISOString();
 
-    const contentHash = this.computeHash(title, input.sourceId, publishedAt);
+    const contentHash = this.computeHash(title, publishedAt);
     const textForTickers = `${title} ${input.content ?? ''}`;
 
     const tickers = input.tickers ?? extractTickers(textForTickers, this.symbolResolver);
@@ -233,8 +285,17 @@ export class SignalIngestor {
     return 'NEWS';
   }
 
-  /** SHA-256 content hash for dedup. */
-  private computeHash(title: string, sourceId: string, publishedAt: string): string {
-    return createHash('sha256').update(`${title}|${sourceId}|${publishedAt}`).digest('hex');
+  /** SHA-256 content hash for dedup. Source-agnostic — same event from different sources yields the same hash. */
+  private computeHash(title: string, publishedAt: string): string {
+    const normalized = title.trim().toLowerCase();
+    return createHash('sha256').update(`${normalized}|${publishedAt}`).digest('hex');
+  }
+
+  /** Weighted confidence — bonus scales with average reliability so low-quality sources can't inflate score. */
+  private weightedConfidence(sources: Signal['sources']): number {
+    const totalReliability = sources.reduce((sum, s) => sum + s.reliability, 0);
+    const avgReliability = totalReliability / sources.length;
+    const multiSourceBonus = avgReliability * 0.1 * (sources.length - 1);
+    return Math.min(1, avgReliability + multiSourceBonus);
   }
 }

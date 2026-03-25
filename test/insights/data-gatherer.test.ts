@@ -38,15 +38,27 @@ function makeBrief(overrides?: Partial<DataBrief>): DataBrief {
         id: 'sig-001',
         type: 'EARNINGS',
         title: 'Q4 earnings beat estimates by 5%',
+        tier2: 'Apple reported strong Q4 results.',
+        sourceCount: 1,
+        sourceNames: ['Reuters'],
+        sentiment: 'BULLISH',
+        outputType: 'INSIGHT',
         publishedAt: '2026-03-20T10:00:00Z',
         link: 'https://example.com/aapl-earnings',
+        groupId: null,
       },
       {
         id: 'sig-002',
         type: 'NEWS',
         title: 'Apple announces new AI features',
+        tier2: null,
+        sourceCount: 1,
+        sourceNames: ['Bloomberg'],
+        sentiment: null,
+        outputType: 'INSIGHT',
         publishedAt: '2026-03-19T14:00:00Z',
         link: null,
+        groupId: null,
       },
     ],
     sentimentDirection: 'BULLISH',
@@ -82,8 +94,8 @@ describe('formatBriefsForContext', () => {
     expect(result).toContain('Risk: 3.5/100');
     expect(result).toContain('Signals (7d): 2');
     expect(result).toContain('sentiment: BULLISH');
-    expect(result).toContain('[EARNINGS] Q4 earnings beat estimates');
-    expect(result).toContain('sig-001');
+    expect(result).toContain('[INSIGHT] Q4 earnings beat estimates by 5% (Reuters) (id:sig-001)');
+    expect(result).toContain('[INSIGHT] Apple announces new AI features (Bloomberg) (id:sig-002)');
     expect(result).toContain('Past analysis:');
     expect(result).toContain('Hold position with trailing stop');
   });
@@ -122,13 +134,19 @@ describe('formatBriefsForContext', () => {
         id: `sig-${i}`,
         type: 'NEWS',
         title: `Signal ${i}`,
+        tier2: null,
+        sourceCount: 1,
+        sourceNames: ['TestSource'],
+        sentiment: null,
+        outputType: 'INSIGHT',
         publishedAt: '2026-03-20T10:00:00Z',
         link: null,
+        groupId: null,
       })),
     });
 
     const result = formatBriefsForContext([brief]);
-    const signalLines = result.split('\n').filter((l) => l.includes('[NEWS] Signal'));
+    const signalLines = result.split('\n').filter((l) => l.match(/Signal \d/));
     expect(signalLines).toHaveLength(5);
   });
 

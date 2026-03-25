@@ -5,12 +5,14 @@ import { safeHref } from '../../lib/utils';
 export interface SignalMapEntry {
   title: string;
   url: string | null;
+  sourceCount?: number;
 }
 
 export interface ResolvedSignal {
   signalId: string;
   title: string;
   url: string | null;
+  sourceCount?: number;
 }
 
 type SignalChipsProps = {
@@ -27,13 +29,15 @@ export function SignalChips(props: SignalChipsProps) {
 
   const resolved =
     'signals' in props && props.signals
-      ? props.signals.map((s) => ({ id: s.signalId, title: s.title, url: s.url }))
+      ? props.signals.map((s) => ({ id: s.signalId, title: s.title, url: s.url, sourceCount: s.sourceCount }))
       : (props.signalIds ?? [])
           .map((id) => {
             const entry = (props.signalMap ?? new Map<string, SignalMapEntry>()).get(id);
-            return { id, title: entry?.title, url: entry?.url ?? null };
+            return { id, title: entry?.title, url: entry?.url ?? null, sourceCount: entry?.sourceCount };
           })
-          .filter((s): s is { id: string; title: string; url: string | null } => !!s.title);
+          .filter(
+            (s): s is { id: string; title: string; url: string | null; sourceCount: number | undefined } => !!s.title,
+          );
 
   if (resolved.length === 0) return null;
 
@@ -73,6 +77,9 @@ export function SignalChips(props: SignalChipsProps) {
               />
             </svg>
             <span className="max-w-[120px] truncate">{sig.title}</span>
+            {sig.sourceCount != null && sig.sourceCount > 1 && (
+              <span className="ml-1 text-[10px] text-text-muted">×{sig.sourceCount}</span>
+            )}
           </a>
         );
       })}

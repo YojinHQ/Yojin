@@ -78,6 +78,7 @@ import {
 } from './resolvers/portfolio.js';
 import { clearAppDataMutation, deviceInfoResolver } from './resolvers/profile.js';
 import { riskReportQuery } from './resolvers/risk.js';
+import { signalGroupFieldResolvers, signalGroupResolver, signalGroupsResolver } from './resolvers/signal-groups.js';
 import { signalsResolver } from './resolvers/signals.js';
 import {
   addVaultSecretMutation,
@@ -109,6 +110,8 @@ const schema = createSchema({
       checkDataSourceHealth: checkDataSourceHealthResolver,
       checkCliCommands: checkCliCommandsResolver,
       signals: signalsResolver,
+      signalGroups: signalGroupsResolver,
+      signalGroup: signalGroupResolver,
       listConnections: listConnectionsResolver,
       detectAvailableTiers: detectAvailableTiersResolver,
       deviceInfo: deviceInfoResolver,
@@ -127,6 +130,7 @@ const schema = createSchema({
       insightsWorkflowStatus: () => getInsightsWorkflowStatus(),
     },
     Position: positionFieldResolvers,
+    SignalGroup: signalGroupFieldResolvers,
     Mutation: {
       refreshPositions: refreshPositionsMutation,
       addManualPosition: addManualPositionMutation,

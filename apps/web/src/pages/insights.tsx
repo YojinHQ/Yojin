@@ -485,6 +485,9 @@ function SignalGroup({ signals, impact }: { signals: SignalSummary[]; impact: st
             <span className="text-xs text-text-secondary group-hover:text-text-primary transition-colors flex-1 min-w-0 truncate">
               {signal.title}
             </span>
+            {signal.sourceCount > 1 && (
+              <span className="text-[10px] text-text-muted flex-shrink-0">{signal.sourceCount} sources</span>
+            )}
             <SignalConfidenceDot confidence={signal.confidence} />
             <svg
               className="h-3 w-3 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"

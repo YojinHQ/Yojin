@@ -7,7 +7,7 @@
  */
 
 import { existsSync } from 'node:fs';
-import { copyFile } from 'node:fs/promises';
+import { copyFile, readFile, writeFile } from 'node:fs/promises';
 
 import { JintelClient } from '@yojinhq/jintel-client';
 import { z } from 'zod';
@@ -33,6 +33,7 @@ import {
   setOnboardingVault,
 } from './api/graphql/resolvers/onboarding.js';
 import { setPortfolioConnectionManager, setPortfolioJintelClient } from './api/graphql/resolvers/portfolio.js';
+import { setGroupSignalArchive, setSignalGroupArchive } from './api/graphql/resolvers/signal-groups.js';
 import { setSignalArchive } from './api/graphql/resolvers/signals.js';
 import { setVault, setVaultSecretChangedCallback } from './api/graphql/resolvers/vault.js';
 import { setWatchlistEnrichment, setWatchlistStore } from './api/graphql/resolvers/watchlist.js';
@@ -68,6 +69,7 @@ import { ConnectionManager } from './scraper/connection-manager.js';
 import { loadCredentialLookup } from './scraper/platform-credentials.js';
 import { registerAllConnectors } from './scraper/platforms/index.js';
 import { SignalArchive } from './signals/archive.js';
+import { SignalGroupArchive } from './signals/group-archive.js';
 import { SignalIngestor } from './signals/ingestor.js';
 import { createSignalTools } from './signals/tools.js';
 import { createApiHealthTools } from './tools/api-health.js';
@@ -119,6 +121,7 @@ export interface YojinServices {
   reflectionEngine?: ReflectionEngine;
   insightStore: InsightStore;
   signalArchive: SignalArchive;
+  signalGroupArchive: SignalGroupArchive;
   signalIngestor: SignalIngestor;
   brain: {
     persona: PersonaManager;
@@ -293,7 +296,6 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   } else {
     // Ensure Jintel entry exists in existing configs (added in later version)
     try {
-      const { readFile, writeFile } = await import('node:fs/promises');
       const raw = JSON.parse(await readFile(dsConfigPath, 'utf-8')) as Record<string, unknown>[];
       if (Array.isArray(raw) && !raw.some((ds) => ds.id === 'jintel')) {
         raw.unshift({
@@ -314,17 +316,18 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     }
   }
 
-  // 6b. Signal Archive + Ingestor
+  // 6b. Signal Archive + Group Archive + Ingestor
   const signalArchive = new SignalArchive({ dir: `${dataRoot}/signals/by-date` });
+  const signalGroupArchive = new SignalGroupArchive({ dir: `${dataRoot}/signals/groups/by-date` });
+  // Clustering is wired after LLM provider is available (see below)
   const signalIngestor = new SignalIngestor({ archive: signalArchive });
   setSignalArchive(signalArchive);
+  setSignalGroupArchive(signalGroupArchive);
+  setGroupSignalArchive(signalArchive);
   setDataSourceConfigPath(dsConfigPath);
   setFetchDeps({ configPath: dsConfigPath, ingestor: signalIngestor, vault });
 
-  // 6c. Run data source health checks (non-blocking)
-  runHealthChecks().catch((err) => log.warn('Data source health check failed', { error: String(err) }));
-
-  // 6d. Jintel client (primary intelligence source)
+  // 6c. Jintel client (primary intelligence source)
   let jintelClient: JintelClient | undefined;
   if (vault?.isUnlocked) {
     try {
@@ -539,6 +542,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     reflectionEngine: memoryResult.reflectionEngine,
     insightStore,
     signalArchive,
+    signalGroupArchive,
     signalIngestor,
     brain: {
       persona,

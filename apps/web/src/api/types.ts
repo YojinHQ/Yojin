@@ -514,6 +514,13 @@ export interface FetchDataSourceVariables {
 // Signals
 // ---------------------------------------------------------------------------
 
+export interface SignalSource {
+  id: string;
+  name: string;
+  type: string;
+  reliability: number;
+}
+
 export interface Signal {
   id: string;
   type: string;
@@ -522,10 +529,17 @@ export interface Signal {
   publishedAt: string;
   ingestedAt: string;
   confidence: number;
+  contentHash: string;
   tickers: string[];
-  sourceId: string;
-  sourceName: string;
+  sources: SignalSource[];
+  sourceCount: number;
   link: string | null;
+  tier1: string | null;
+  tier2: string | null;
+  sentiment: string | null;
+  outputType: string;
+  groupId: string | null;
+  version: number;
 }
 
 export interface SignalsQueryResult {
@@ -540,6 +554,7 @@ export interface SignalsVariables {
   until?: string;
   search?: string;
   minConfidence?: number;
+  outputType?: string;
   limit?: number;
 }
 
@@ -557,6 +572,9 @@ export interface SignalSummary {
   impact: string;
   confidence: number;
   url: string | null;
+  sourceCount: number;
+  detail: string | null;
+  outputType: string;
 }
 
 export interface PositionInsight {

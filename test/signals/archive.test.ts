@@ -152,7 +152,10 @@ describe('SignalArchive', () => {
   });
 
   it('loads all content hashes for dedup', async () => {
-    await archive.appendBatch([makeSignal({ contentHash: 'hash-a' }), makeSignal({ contentHash: 'hash-b' })]);
+    await archive.appendBatch([
+      makeSignal({ id: 's-hash-a', contentHash: 'hash-a' }),
+      makeSignal({ id: 's-hash-b', contentHash: 'hash-b' }),
+    ]);
     const hashes = await archive.loadContentHashes();
     expect(hashes.size).toBe(2);
     expect(hashes.has('hash-a')).toBe(true);

@@ -23,7 +23,7 @@ import type { MemoryEntry } from '../memory/types.js';
 import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
 import type { SignalArchive } from '../signals/archive.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
-import type { Signal } from '../signals/types.js';
+import type { Signal, SignalOutputType, SignalSentiment } from '../signals/types.js';
 
 const logger = createSubsystemLogger('data-gatherer');
 
@@ -68,7 +68,7 @@ export interface DataBrief {
   // Signals
   signalCount: number;
   signals: SignalBrief[];
-  sentimentDirection: 'BULLISH' | 'BEARISH' | 'MIXED' | 'NEUTRAL';
+  sentimentDirection: SignalSentiment;
   // Memory
   memories: MemoryBrief[];
 }
@@ -84,8 +84,14 @@ export interface SignalBrief {
   id: string;
   type: string;
   title: string;
+  tier2: string | null;
+  sourceCount: number;
+  sourceNames: string[];
+  sentiment: SignalSentiment | null;
+  outputType: SignalOutputType;
   publishedAt: string;
   link: string | null;
+  groupId: string | null;
 }
 
 export interface MemoryBrief {
@@ -275,8 +281,11 @@ export function formatBriefsForContext(briefs: DataBrief[]): string {
     // Signals
     lines.push(`Signals (7d): ${b.signalCount} — sentiment: ${b.sentimentDirection}`);
     for (const sig of b.signals.slice(0, 5)) {
-      const link = sig.link ? ` ${sig.link}` : '';
-      lines.push(`  - [${sig.type}] ${sig.title} (${sig.id})${link}`);
+      const sources =
+        sig.sourceCount > 1
+          ? ` (${sig.sourceCount} sources: ${sig.sourceNames.join(', ')})`
+          : ` (${sig.sourceNames[0] ?? 'unknown'})`;
+      lines.push(`  - [${sig.outputType}] ${sig.title}${sources} (id:${sig.id})`);
     }
 
     // Memories
@@ -706,20 +715,36 @@ function buildBrief(
   entity: EntityWithNews | undefined,
   memories: MemoryBrief[],
 ): DataBrief {
-  // Compute sentiment direction from signals
+  // Compute sentiment direction from signal-level sentiment (with keyword fallback)
   let positive = 0;
   let negative = 0;
   for (const s of signals) {
-    const title = s.title.toLowerCase();
-    if (title.includes('beat') || title.includes('upgrade') || title.includes('bullish') || title.includes('record')) {
-      positive++;
-    } else if (
-      title.includes('miss') ||
-      title.includes('downgrade') ||
-      title.includes('bearish') ||
-      title.includes('decline')
-    ) {
-      negative++;
+    if (s.sentiment) {
+      // Use LLM-classified sentiment when available
+      if (s.sentiment === 'BULLISH') positive++;
+      else if (s.sentiment === 'BEARISH') negative++;
+      else if (s.sentiment === 'MIXED') {
+        positive++;
+        negative++;
+      }
+    } else {
+      // Fallback: keyword heuristic for pre-enhancement signals
+      const title = s.title.toLowerCase();
+      if (
+        title.includes('beat') ||
+        title.includes('upgrade') ||
+        title.includes('bullish') ||
+        title.includes('record')
+      ) {
+        positive++;
+      } else if (
+        title.includes('miss') ||
+        title.includes('downgrade') ||
+        title.includes('bearish') ||
+        title.includes('decline')
+      ) {
+        negative++;
+      }
     }
   }
   let sentimentDirection: DataBrief['sentimentDirection'] = 'NEUTRAL';
@@ -764,9 +789,15 @@ function buildBrief(
     signals: signals.slice(0, 10).map((s) => ({
       id: s.id,
       type: s.type,
-      title: s.title,
+      title: s.tier1 ?? s.title,
+      tier2: s.tier2 ?? null,
+      sourceCount: s.sources.length,
+      sourceNames: s.sources.map((src) => src.name),
+      sentiment: s.sentiment ?? null,
+      outputType: s.outputType ?? 'INSIGHT',
       publishedAt: s.publishedAt,
       link: typeof s.metadata?.link === 'string' ? s.metadata.link : null,
+      groupId: s.groupId ?? null,
     })),
     sentimentDirection,
     memories,

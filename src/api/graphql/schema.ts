@@ -427,6 +427,18 @@ export const typeDefs = /* GraphQL */ `
   # Signals
   # ---------------------------------------------------------------------------
 
+  type SignalSource {
+    id: String!
+    name: String!
+    type: String!
+    reliability: Float!
+  }
+
+  enum SignalOutputType {
+    INSIGHT
+    ALERT
+  }
+
   type Signal {
     id: String!
     type: String!
@@ -437,9 +449,25 @@ export const typeDefs = /* GraphQL */ `
     confidence: Float!
     contentHash: String!
     tickers: [String!]!
-    sourceId: String!
-    sourceName: String!
+    sources: [SignalSource!]!
+    sourceCount: Int!
     link: String
+    tier1: String
+    tier2: String
+    sentiment: String
+    outputType: SignalOutputType!
+    groupId: String
+    version: Int!
+  }
+
+  type SignalGroup {
+    id: String!
+    signals: [Signal!]!
+    tickers: [String!]!
+    summary: String!
+    outputType: SignalOutputType!
+    firstEventAt: String!
+    lastEventAt: String!
   }
 
   input DataSourceInput {
@@ -615,6 +643,9 @@ export const typeDefs = /* GraphQL */ `
     impact: String!
     confidence: Float!
     url: String
+    sourceCount: Int!
+    detail: String
+    outputType: SignalOutputType!
   }
 
   type PositionInsight {
@@ -733,8 +764,11 @@ export const typeDefs = /* GraphQL */ `
       until: String
       search: String
       minConfidence: Float
+      outputType: SignalOutputType
       limit: Int
     ): [Signal!]!
+    signalGroups(ticker: String, since: String, limit: Int): [SignalGroup!]!
+    signalGroup(id: ID!): SignalGroup
     vaultStatus: VaultStatus!
     listVaultSecrets: [VaultSecret!]!
     detectAiCredential: DetectedCredential

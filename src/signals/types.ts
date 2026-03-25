@@ -32,6 +32,12 @@ export const LinkTypeSchema = z.enum([
 ]);
 export type LinkType = z.infer<typeof LinkTypeSchema>;
 
+export const SignalSentimentSchema = z.enum(['BULLISH', 'BEARISH', 'MIXED', 'NEUTRAL']);
+export type SignalSentiment = z.infer<typeof SignalSentimentSchema>;
+
+export const SignalOutputTypeSchema = z.enum(['INSIGHT', 'ALERT']);
+export type SignalOutputType = z.infer<typeof SignalOutputTypeSchema>;
+
 // ---------------------------------------------------------------------------
 // DataSource — provenance tracking for where a signal came from
 // ---------------------------------------------------------------------------
@@ -85,6 +91,17 @@ export const SignalSchema = z.object({
   ingestedAt: z.string().datetime(), // when Yojin captured it
   confidence: z.number().min(0).max(1), // source confidence
   metadata: z.record(z.unknown()).optional(), // extensible domain-specific fields
+  // Tiered summaries (LLM-generated at ingest/merge time)
+  tier1: z.string().optional(),
+  tier2: z.string().optional(),
+  // LLM-classified sentiment
+  sentiment: SignalSentimentSchema.optional(),
+  // Feed classification
+  outputType: SignalOutputTypeSchema.default('INSIGHT'),
+  // Causal chain linking
+  groupId: z.string().nullable().optional(),
+  // Append-only versioning for multi-source merge
+  version: z.number().int().min(1).default(1),
 });
 export type Signal = z.infer<typeof SignalSchema>;
 

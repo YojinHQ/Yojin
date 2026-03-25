@@ -63,6 +63,9 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
                   impact: SignalImpactSchema.describe('Impact: POSITIVE, NEGATIVE, or NEUTRAL'),
                   confidence: z.number().min(0).max(1).describe('Signal confidence'),
                   url: z.string().nullable().optional().describe('Source URL for this signal'),
+                  sourceCount: z.number().int().min(1).optional().describe('Number of contributing sources'),
+                  detail: z.string().nullable().optional().describe('Portfolio-contextualized explanation (tier3)'),
+                  outputType: z.enum(['INSIGHT', 'ALERT']).optional().describe('Feed classification'),
                 }),
               )
               .describe('Key signals that informed this rating'),

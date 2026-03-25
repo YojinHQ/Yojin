@@ -11,6 +11,8 @@
 
 import { z } from 'zod';
 
+import { SignalOutputTypeSchema } from '../signals/types.js';
+
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
@@ -35,6 +37,9 @@ export const SignalSummarySchema = z.object({
   impact: SignalImpactSchema,
   confidence: z.number().min(0).max(1),
   url: z.string().nullable().optional(),
+  sourceCount: z.number().int().min(1).default(1),
+  detail: z.string().nullable().optional(),
+  outputType: SignalOutputTypeSchema.default('INSIGHT'),
 });
 export type SignalSummary = z.infer<typeof SignalSummarySchema>;
 

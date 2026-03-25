@@ -124,13 +124,17 @@ export default function Signals() {
   const sources = useMemo(() => {
     const map = new Map<string, string>();
     for (const s of signals) {
-      if (!map.has(s.sourceId)) map.set(s.sourceId, s.sourceName);
+      for (const src of s.sources) {
+        if (!map.has(src.id)) map.set(src.id, src.name);
+      }
     }
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [signals]);
   const [sourceFilter, setSourceFilter] = useState('');
 
-  const filteredSignals = sourceFilter ? signals.filter((s) => s.sourceId === sourceFilter) : signals;
+  const filteredSignals = sourceFilter
+    ? signals.filter((s) => s.sources.some((src) => src.id === sourceFilter))
+    : signals;
 
   // Stats for header
   const usedInInsights = filteredSignals.filter((s) => insightSignalIds.has(s.id)).length;
@@ -347,7 +351,10 @@ function SignalRow({
                 </Link>
               ))}
               <span className="text-xs text-text-muted">{timeAgo}</span>
-              <span className="text-xs text-text-muted">· {signal.sourceName}</span>
+              <span className="text-xs text-text-muted">
+                · {signal.sources.map((s) => s.name).join(', ')}
+                {signal.sourceCount > 1 && ` (${signal.sourceCount})`}
+              </span>
               {/* "Used in Insights" indicator */}
               {usedInInsight && (
                 <Link
@@ -408,7 +415,7 @@ function SignalRow({
             <div className="flex items-center gap-3 text-xs text-text-muted flex-wrap">
               <span>Published: {date.toLocaleString()}</span>
               <span>· Ingested: {new Date(signal.ingestedAt).toLocaleString()}</span>
-              <span>· Source: {signal.sourceName}</span>
+              <span>· Source: {signal.sources.map((s) => s.name).join(', ')}</span>
             </div>
 
             <div className="flex items-center gap-3">

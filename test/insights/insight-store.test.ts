@@ -25,6 +25,8 @@ function makeReport(overrides?: Partial<InsightReport>): InsightReport {
             title: 'Q4 earnings beat estimates',
             impact: 'POSITIVE',
             confidence: 0.9,
+            sourceCount: 1,
+            outputType: 'INSIGHT',
           },
         ],
         allSignalIds: [],

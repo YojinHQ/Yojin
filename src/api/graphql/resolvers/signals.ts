@@ -18,10 +18,17 @@ export function setSignalArchive(a: SignalArchive): void {
 }
 
 // ---------------------------------------------------------------------------
-// GraphQL shapes (flattened for the wire)
+// GraphQL shapes
 // ---------------------------------------------------------------------------
 
-interface SignalGql {
+export interface SignalSourceGql {
+  id: string;
+  name: string;
+  type: string;
+  reliability: number;
+}
+
+export interface SignalGql {
   id: string;
   type: string;
   title: string;
@@ -31,12 +38,18 @@ interface SignalGql {
   confidence: number;
   contentHash: string;
   tickers: string[];
-  sourceId: string;
-  sourceName: string;
+  sources: SignalSourceGql[];
+  sourceCount: number;
   link: string | null;
+  tier1: string | null;
+  tier2: string | null;
+  sentiment: string | null;
+  outputType: string;
+  groupId: string | null;
+  version: number;
 }
 
-function toGql(signal: Signal): SignalGql {
+export function toGql(signal: Signal): SignalGql {
   return {
     id: signal.id,
     type: signal.type,
@@ -47,9 +60,20 @@ function toGql(signal: Signal): SignalGql {
     confidence: signal.confidence,
     contentHash: signal.contentHash,
     tickers: signal.assets.map((a) => a.ticker),
-    sourceId: signal.sources[0].id,
-    sourceName: signal.sources[0].name,
+    sources: signal.sources.map((s) => ({
+      id: s.id,
+      name: s.name,
+      type: s.type,
+      reliability: s.reliability,
+    })),
+    sourceCount: signal.sources.length,
     link: typeof signal.metadata?.link === 'string' ? signal.metadata.link : null,
+    tier1: signal.tier1 ?? null,
+    tier2: signal.tier2 ?? null,
+    sentiment: signal.sentiment ?? null,
+    outputType: signal.outputType ?? 'INSIGHT',
+    groupId: signal.groupId ?? null,
+    version: signal.version ?? 1,
   };
 }
 
@@ -67,6 +91,7 @@ export async function signalsResolver(
     until?: string;
     search?: string;
     minConfidence?: number;
+    outputType?: string;
     limit?: number;
   },
 ): Promise<SignalGql[]> {
@@ -80,6 +105,7 @@ export async function signalsResolver(
   if (args.until) filter.until = args.until;
   if (args.search) filter.search = args.search;
   if (args.minConfidence != null) filter.minConfidence = args.minConfidence;
+  if (args.outputType) filter.outputType = args.outputType;
   filter.limit = args.limit ?? 50;
 
   const signals = await archive.query(filter);
