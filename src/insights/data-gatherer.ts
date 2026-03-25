@@ -13,15 +13,12 @@ import type { Entity, JintelClient, MarketQuote } from '@yojinhq/jintel-client';
 
 import type { InsightStore } from './insight-store.js';
 import type { InsightReport } from './types.js';
-import { fetchAllEnabledSources } from '../api/graphql/resolvers/fetch-data-source.js';
 import type { Position } from '../api/graphql/types.js';
-import { riskSignalsToRaw } from '../jintel/tools.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { SignalMemoryStore } from '../memory/memory-store.js';
 import type { MemoryEntry } from '../memory/types.js';
 import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
 import type { SignalArchive } from '../signals/archive.js';
-import type { SignalIngestor } from '../signals/ingestor.js';
 import type { Signal } from '../signals/types.js';
 
 const logger = createSubsystemLogger('data-gatherer');
@@ -86,9 +83,7 @@ export interface DataGathererOptions {
   snapshotStore: PortfolioSnapshotStore;
   signalArchive: SignalArchive;
   insightStore: InsightStore;
-  /** Getter to resolve the current Jintel client (may be hot-swapped after vault unlock). */
-  getJintelClient?: () => JintelClient | undefined;
-  signalIngestor?: SignalIngestor;
+  jintelClient?: JintelClient;
   memoryStores: Map<string, SignalMemoryStore>;
 }
 
@@ -98,11 +93,7 @@ export interface DataGathererOptions {
 
 export async function gatherDataBriefs(options: DataGathererOptions): Promise<GatherResult> {
   const start = Date.now();
-  const { snapshotStore, signalArchive, insightStore, getJintelClient, signalIngestor, memoryStores } = options;
-  const jintelClient = getJintelClient?.();
-  if (!jintelClient) {
-    logger.warn('Jintel client not available — skipping enrichment and quotes');
-  }
+  const { snapshotStore, signalArchive, insightStore, jintelClient, memoryStores } = options;
 
   // 1. Get current portfolio
   const snapshot = await snapshotStore.getLatest();
@@ -113,28 +104,12 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
   const tickers = snapshot.positions.map((p) => p.symbol);
   logger.info('Gathering data briefs', { positionCount: tickers.length });
 
-  // 2. Fetch fresh signals from all enabled data sources
-  try {
-    const fetchResult = await fetchAllEnabledSources();
-    logger.info('Data source fetch complete', {
-      ingested: fetchResult.totalIngested,
-      duplicates: fetchResult.totalDuplicates,
-      sources: fetchResult.sourcesAttempted,
-      errors: fetchResult.errors.length > 0 ? fetchResult.errors : undefined,
-    });
-    if (fetchResult.errors.length > 0) {
-      logger.warn('Data source fetch had errors', { errors: fetchResult.errors });
-    }
-  } catch (err) {
-    logger.warn('Data source fetch failed — continuing with existing signals', {
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-
-  // 3. Parallel lookups — quotes, enrichments, memories (signal query deferred until after ingestion)
+  // 2. Parallel data fetching — all independent calls at once
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const [quotes, enrichments, memories, previousReport] = await Promise.all([
+  const [signals, quotes, enrichments, memories, previousReport] = await Promise.all([
+    // Signals (local, fast)
+    signalArchive.query({ tickers, since: sevenDaysAgo, limit: 100 * tickers.length }),
     // Quotes (1 API call)
     jintelClient
       ? jintelClient.quotes(tickers).catch(() => ({ success: false as const, error: 'quotes failed' }))
@@ -147,38 +122,13 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
     insightStore.getLatest(),
   ]);
 
-  // 4. Ingest Jintel risk signals into the signal archive BEFORE querying it
-  if (signalIngestor && enrichments.length > 0) {
-    try {
-      const rawSignals = enrichments.flatMap((entity) => {
-        if (!entity.risk?.signals?.length) return [];
-        const entityTickers = entity.tickers ?? [];
-        return riskSignalsToRaw(entity.risk.signals, entityTickers);
-      });
-      if (rawSignals.length > 0) {
-        const ingestResult = await signalIngestor.ingest(rawSignals);
-        logger.info('Jintel risk signals ingested', {
-          ingested: ingestResult.ingested,
-          duplicates: ingestResult.duplicates,
-        });
-      }
-    } catch (err) {
-      logger.warn('Jintel risk signal ingestion failed', {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  // 5. Query signals (now includes freshly ingested Jintel risk signals)
-  const signals = await signalArchive.query({ tickers, since: sevenDaysAgo, limit: 100 * tickers.length });
-
-  // 6. Index data by ticker for O(1) lookup
+  // 3. Index data by ticker for O(1) lookup
   const signalsByTicker = groupSignalsByTicker(signals, tickers);
   const quotesByTicker = indexQuotes(quotes);
   const enrichmentByTicker = indexEnrichments(enrichments);
   const memoriesByTicker = indexMemories(memories, tickers);
 
-  // 7. Build compact briefs
+  // 4. Build compact briefs
   const briefs: DataBrief[] = snapshot.positions.map((pos) => {
     const tickerSignals = signalsByTicker.get(pos.symbol) ?? [];
     const quote = quotesByTicker.get(pos.symbol);
@@ -328,14 +278,6 @@ async function batchEnrichChunked(client: JintelClient, tickers: string[]): Prom
       const result = await client.batchEnrich(chunk, ['market', 'risk']);
       if (result.success) {
         entities.push(...result.data);
-        const riskCount = result.data.reduce((n, e) => n + (e.risk?.signals?.length ?? 0), 0);
-        logger.info('Batch enrich succeeded', {
-          tickers: chunk,
-          entities: result.data.length,
-          riskSignals: riskCount,
-        });
-      } else {
-        logger.warn('Batch enrich returned failure', { tickers: chunk, error: result.error });
       }
     } catch (err) {
       logger.warn('Batch enrich chunk failed', { chunk: chunk.slice(0, 3), error: err });

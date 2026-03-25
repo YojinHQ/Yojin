@@ -3,7 +3,7 @@
  * portfolio against recent signals and produces structured InsightReports.
  *
  * Pipeline:
- *   0. Data Gathering (code, no LLM) — fetches data sources, ingests signals, gathers data in parallel
+ *   0. Data Gathering (code, no LLM) — fetches all data in parallel
  *   1. Triage (code, no LLM) — scores positions → hot / warm / cold
  *   2. Research Analyst (LLM) — deep analysis on hot + quick pass on warm
  *   3. Risk Manager (LLM) — portfolio risk from research brief

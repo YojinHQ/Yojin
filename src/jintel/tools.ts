@@ -62,7 +62,7 @@ function handleResult<T>(result: JintelResult<T>): HandleResult<T> {
   return { ok: true, data: result.data };
 }
 
-export function riskSignalsToRaw(signals: RiskSignal[], tickers: string[]): RawSignalInput[] {
+function riskSignalsToRaw(signals: RiskSignal[], tickers: string[]): RawSignalInput[] {
   return signals.map((s) => ({
     sourceId: 'jintel',
     sourceName: 'Jintel',
