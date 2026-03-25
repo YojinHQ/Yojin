@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useOnboarding } from '../../lib/onboarding-context';
 import { OnboardingShell } from '../../components/onboarding/onboarding-shell';
 import { PlatformTile, PLATFORMS } from '../../components/onboarding/platform-tile';
@@ -20,6 +20,8 @@ interface ManualEntry {
 
 const EMPTY_MANUAL: ManualEntry = { symbol: '', name: '', quantity: '', avgEntry: '', marketValue: '' };
 
+const CRYPTO_PLATFORMS = new Set(['COINBASE', 'BINANCE', 'METAMASK', 'PHANTOM']);
+
 export function Step3Platforms() {
   const { state, updateState, nextStep, prevStep } = useOnboarding();
 
@@ -34,10 +36,13 @@ export function Step3Platforms() {
   const [manualEntries, setManualEntries] = useState<ManualEntry[]>([{ ...EMPTY_MANUAL }]);
   const [customPlatformName, setCustomPlatformName] = useState('');
 
-  const connectedPlatforms = state.platforms?.connected ?? [];
+  const connectedPlatforms = useMemo(() => state.platforms?.connected ?? [], [state.platforms?.connected]);
   const isConnected = (id: string) => connectedPlatforms.some((p) => p.platform === id);
 
   const selectedPlatform = PLATFORMS.find((p) => p.id === selectedPlatformId);
+
+  const platformAssetClass =
+    selectedPlatformId && CRYPTO_PLATFORMS.has(selectedPlatformId) ? ('crypto' as const) : ('equity' as const);
 
   const handlePlatformClick = (platformId: string) => {
     if (isConnected(platformId)) return;
@@ -574,7 +579,11 @@ export function Step3Platforms() {
           </div>
 
           <div className="mb-6">
-            <EditableTable positions={extractedPositions} onChange={setExtractedPositions} />
+            <EditableTable
+              positions={extractedPositions}
+              onChange={setExtractedPositions}
+              assetClass={platformAssetClass}
+            />
           </div>
 
           <div className="flex items-center justify-between">

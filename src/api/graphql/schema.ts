@@ -54,9 +54,9 @@ export const typeDefs = /* GraphQL */ `
     marketValue: Float!
     unrealizedPnl: Float!
     unrealizedPnlPercent: Float!
-    dayChange: Float!
-    dayChangePercent: Float!
-    sparkline: [Float!]!
+    dayChange: Float
+    dayChangePercent: Float
+    sparkline: [Float!]
     sector: String
     assetClass: AssetClass!
     platform: String!

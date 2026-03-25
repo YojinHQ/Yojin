@@ -5,8 +5,9 @@
  * empty state when no snapshots have been imported yet.
  */
 
-import type { JintelClient } from '@yojinhq/jintel-client';
+import type { JintelClient, MarketQuote } from '@yojinhq/jintel-client';
 
+import { getLogger } from '../../../logging/index.js';
 import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { ConnectionManager } from '../../../scraper/connection-manager.js';
 import { pubsub } from '../pubsub.js';
@@ -20,6 +21,8 @@ import type {
   Position,
 } from '../types.js';
 
+const log = getLogger().sub('portfolio-resolver');
+
 let snapshotStore: PortfolioSnapshotStore | undefined;
 let connectionManager: ConnectionManager | undefined;
 let jintelClient: JintelClient | undefined;
@@ -29,53 +32,77 @@ export function setPortfolioJintelClient(c: JintelClient | undefined): void {
 }
 
 // ---------------------------------------------------------------------------
-// Mock sparkline / day-change generation (until real market data is wired)
+// Live quote enrichment — batch-fetch from Jintel and merge onto positions
 // ---------------------------------------------------------------------------
 
-/** Deterministic hash for a symbol string. */
-function symbolHash(symbol: string): number {
-  let h = 0;
-  for (const c of symbol) h = c.charCodeAt(0) + ((h << 5) - h);
-  return h;
-}
-
-/** Seeded pseudo-random — stable across calls for the same seed. */
-function seededRandom(seed: number): number {
-  const x = Math.sin(seed) * 10000;
-  return x - Math.floor(x);
-}
-
-/** Generate mock daily change based on the symbol (deterministic). */
-function mockDayChange(symbol: string, currentPrice: number): { dayChange: number; dayChangePercent: number } {
-  const h = symbolHash(symbol);
-  // Range: roughly -5% to +5%, biased by symbol hash
-  const pct = (seededRandom(h + 42) - 0.4) * 10;
-  const roundedPct = Math.round(pct * 100) / 100;
-  const change = Math.round(currentPrice * (roundedPct / 100) * 100) / 100;
-  return { dayChange: change, dayChangePercent: roundedPct };
-}
-
-/** Generate a 24-point sparkline array for the day (deterministic per symbol). */
-function mockSparkline(symbol: string, currentPrice: number, dayChangePercent: number): number[] {
-  const points = 24;
-  const h = symbolHash(symbol);
-  const trend = dayChangePercent > 0 ? 1 : dayChangePercent < 0 ? -1 : 0;
-  const startOffset = Math.max(0.02, Math.abs(dayChangePercent) * 0.008);
-  let price = currentPrice * (1 - trend * startOffset);
-  let momentum = 0;
-  const volatility = 0.01 + seededRandom(h + 99) * 0.008;
-  const data: number[] = [Math.round(price * 100) / 100];
-
-  for (let i = 1; i < points; i++) {
-    const noise = (seededRandom(h + i * 13) - 0.5) * currentPrice * volatility;
-    momentum = momentum * 0.6 + noise * 0.4;
-    const drift = (trend * currentPrice * startOffset * 1.2) / points;
-    const pull = ((currentPrice - price) / (points - i)) * 0.15;
-    price += momentum + drift + pull;
-    data.push(Math.round(price * 100) / 100);
+/**
+ * Enrich a snapshot's positions with live market quotes from Jintel.
+ * One batch call per snapshot — avoids N+1 per-position fetches.
+ * Returns a new snapshot (original is never mutated).
+ * Falls back to the original snapshot when Jintel is unavailable or the call fails.
+ */
+async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<PortfolioSnapshot> {
+  if (!jintelClient || snapshot.positions.length === 0) {
+    log.debug('enrichWithLiveQuotes skipped', {
+      hasClient: !!jintelClient,
+      positionCount: snapshot.positions.length,
+    });
+    return snapshot;
   }
-  data[data.length - 1] = currentPrice;
-  return data;
+
+  const symbols = [...new Set(snapshot.positions.map((p) => p.symbol))];
+  log.debug('Fetching live quotes', { symbols });
+
+  const result = await jintelClient.quotes(symbols).catch((err: unknown) => {
+    log.warn('Jintel quotes call failed', { error: String(err) });
+    return undefined;
+  });
+
+  if (!result?.success) {
+    log.warn('Jintel quotes returned non-success', {
+      success: result?.success,
+      error: result && 'error' in result ? (result as { error: string }).error : 'no result',
+    });
+    return snapshot;
+  }
+
+  log.info('Jintel quotes received', {
+    requested: symbols.length,
+    received: result.data.length,
+    tickers: result.data.map((q) => q.ticker),
+  });
+
+  const quoteMap = new Map<string, MarketQuote>(result.data.map((q) => [q.ticker, q]));
+
+  const positions: Position[] = snapshot.positions.map((pos) => {
+    const quote = quoteMap.get(pos.symbol);
+    if (!quote) {
+      log.debug('No quote found for position', { symbol: pos.symbol, availableTickers: [...quoteMap.keys()] });
+      return pos;
+    }
+
+    const currentPrice = quote.price;
+    const marketValue = pos.quantity * currentPrice;
+    const totalCost = pos.costBasis * pos.quantity;
+
+    return {
+      ...pos,
+      currentPrice,
+      marketValue,
+      dayChange: quote.change,
+      dayChangePercent: quote.changePercent,
+      unrealizedPnl: marketValue - totalCost,
+      unrealizedPnlPercent: pos.costBasis > 0 ? ((currentPrice - pos.costBasis) / pos.costBasis) * 100 : 0,
+    };
+  });
+
+  // Recompute portfolio totals from live-priced positions
+  const totalValue = positions.reduce((sum, p) => sum + p.marketValue, 0);
+  const totalCost = positions.reduce((sum, p) => sum + p.costBasis * p.quantity, 0);
+  const totalPnl = totalValue - totalCost;
+  const totalPnlPercent = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
+
+  return { ...snapshot, positions, totalValue, totalCost, totalPnl, totalPnlPercent };
 }
 
 /** Called once during server startup to inject the store. */
@@ -113,12 +140,14 @@ async function getSnapshot(): Promise<PortfolioSnapshot> {
 // ---------------------------------------------------------------------------
 
 export async function portfolioQuery(): Promise<PortfolioSnapshot> {
-  return getSnapshot();
+  const snapshot = await getSnapshot();
+  return enrichWithLiveQuotes(snapshot);
 }
 
 export async function positionsQuery(): Promise<Position[]> {
   const snapshot = await getSnapshot();
-  return snapshot.positions;
+  const enriched = await enrichWithLiveQuotes(snapshot);
+  return enriched.positions;
 }
 
 export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> {
@@ -135,8 +164,9 @@ export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> 
 
 export async function enrichedSnapshotQuery(): Promise<EnrichedSnapshot> {
   const snapshot = await getSnapshot();
+  const liveSnapshot = await enrichWithLiveQuotes(snapshot);
   const enriched: EnrichedPosition[] = await Promise.all(
-    snapshot.positions.map(async (p): Promise<EnrichedPosition> => {
+    liveSnapshot.positions.map(async (p): Promise<EnrichedPosition> => {
       if (!jintelClient) {
         return { ...p };
       }
@@ -165,11 +195,11 @@ export async function enrichedSnapshotQuery(): Promise<EnrichedSnapshot> {
   return {
     id: `enriched-${Date.now()}`,
     positions: enriched,
-    totalValue: snapshot.totalValue,
-    totalCost: snapshot.totalCost,
-    totalPnl: snapshot.totalPnl,
-    totalPnlPercent: snapshot.totalPnlPercent,
-    timestamp: snapshot.timestamp,
+    totalValue: liveSnapshot.totalValue,
+    totalCost: liveSnapshot.totalCost,
+    totalPnl: liveSnapshot.totalPnl,
+    totalPnlPercent: liveSnapshot.totalPnlPercent,
+    timestamp: liveSnapshot.timestamp,
     enrichedAt: new Date().toISOString(),
   };
 }
@@ -239,48 +269,33 @@ export async function refreshPositionsMutation(
   if (connectionManager && args.platform) {
     const syncResult = await connectionManager.syncPlatform(args.platform);
     if (syncResult.success) {
-      // Return the freshly saved snapshot
+      // Return the freshly saved snapshot with live prices
       const snapshot = await getSnapshot();
-      pubsub.publish('portfolioUpdate', snapshot);
-      return snapshot;
+      const enriched = await enrichWithLiveQuotes(snapshot);
+      pubsub.publish('portfolioUpdate', enriched);
+      return enriched;
     }
     // If sync failed (e.g. no connector for this platform), fall through to
     // returning the cached snapshot so the UI still gets data.
   }
 
   const snapshot = await getSnapshot();
-  pubsub.publish('portfolioUpdate', snapshot);
-  return snapshot;
+  const enriched = await enrichWithLiveQuotes(snapshot);
+  pubsub.publish('portfolioUpdate', enriched);
+  return enriched;
 }
 
 // ---------------------------------------------------------------------------
-// Position field resolvers — computed fields (mock until real market data)
+// Position field resolvers
 // ---------------------------------------------------------------------------
-
-/** Cache mock day-change per position object to avoid redundant computation across field resolvers. */
-const dayChangeCache = new WeakMap<Position, { dayChange: number; dayChangePercent: number }>();
-
-function getCachedDayChange(pos: Position): { dayChange: number; dayChangePercent: number } {
-  let cached = dayChangeCache.get(pos);
-  if (!cached) {
-    cached = mockDayChange(pos.symbol, pos.currentPrice);
-    dayChangeCache.set(pos, cached);
-  }
-  return cached;
-}
 
 export const positionFieldResolvers = {
-  dayChange: (pos: Position) => {
-    if (pos.dayChange != null) return pos.dayChange;
-    return getCachedDayChange(pos).dayChange;
-  },
-  dayChangePercent: (pos: Position) => {
-    if (pos.dayChangePercent != null) return pos.dayChangePercent;
-    return getCachedDayChange(pos).dayChangePercent;
-  },
-  sparkline: (pos: Position) => {
-    if (pos.sparkline) return pos.sparkline;
-    const { dayChangePercent } = getCachedDayChange(pos);
-    return mockSparkline(pos.symbol, pos.currentPrice, dayChangePercent);
-  },
+  /** Real value from enrichWithLiveQuotes; null when no quote data available. */
+  dayChange: (pos: Position) => pos.dayChange ?? null,
+
+  /** Real value from enrichWithLiveQuotes; null when no quote data available. */
+  dayChangePercent: (pos: Position) => pos.dayChangePercent ?? null,
+
+  /** Real sparkline from enrichWithLiveQuotes; null when no intraday data available. */
+  sparkline: (pos: Position) => pos.sparkline ?? null,
 };

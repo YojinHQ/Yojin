@@ -13,6 +13,7 @@ export interface ExtractedPosition {
 interface EditableTableProps {
   positions: ExtractedPosition[];
   onChange: (positions: ExtractedPosition[]) => void;
+  assetClass?: 'equity' | 'crypto';
   className?: string;
 }
 
@@ -37,7 +38,7 @@ function MissingBadge() {
   );
 }
 
-export function EditableTable({ positions, onChange, className }: EditableTableProps) {
+export function EditableTable({ positions, onChange, assetClass = 'equity', className }: EditableTableProps) {
   const [editing, setEditing] = useState<EditingCell | null>(null);
   const [editValue, setEditValue] = useState('');
 
@@ -140,7 +141,7 @@ export function EditableTable({ positions, onChange, className }: EditableTableP
                     >
                       {pos.symbol ? (
                         <>
-                          <SymbolLogo symbol={pos.symbol} size="sm" />
+                          <SymbolLogo symbol={pos.symbol} assetClass={assetClass} size="sm" />
                           <span className="text-sm font-medium text-text-primary">{pos.symbol}</span>
                         </>
                       ) : (

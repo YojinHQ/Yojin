@@ -132,8 +132,10 @@ export default function PositionsPreview() {
           </thead>
           <tbody>
             {top.map((pos) => {
-              const isUp = pos.dayChangePercent > 0;
-              const isDown = pos.dayChangePercent < 0;
+              const dc = pos.dayChange;
+              const dcp = pos.dayChangePercent;
+              const isUp = dc != null && dc > 0;
+              const isDown = dc != null && dc < 0;
               const colorClass = isUp ? 'text-success' : isDown ? 'text-error' : 'text-text-muted';
               const arrow = isUp ? '\u25B2' : isDown ? '\u25BC' : '';
 
@@ -156,7 +158,13 @@ export default function PositionsPreview() {
 
                   {/* Sparkline */}
                   <td className="px-3 py-2">
-                    <Sparkline symbol={pos.symbol} data={pos.sparkline} dayChangePercent={pos.dayChangePercent} />
+                    {pos.sparkline ? (
+                      <Sparkline symbol={pos.symbol} data={pos.sparkline} dayChangePercent={dcp ?? 0} />
+                    ) : (
+                      <div className="flex h-8 w-[100px] items-center justify-center">
+                        <span className="text-2xs text-text-muted/40">—</span>
+                      </div>
+                    )}
                   </td>
 
                   {/* Price Today */}
@@ -166,14 +174,26 @@ export default function PositionsPreview() {
 
                   {/* Change $ */}
                   <td className={cn('whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums', colorClass)}>
-                    {arrow && <span className="mr-0.5 text-2xs">{arrow}</span>}
-                    {formatChange(pos.dayChange)}
+                    {dc != null ? (
+                      <>
+                        {arrow && <span className="mr-0.5 text-2xs">{arrow}</span>}
+                        {formatChange(dc)}
+                      </>
+                    ) : (
+                      <span className="text-text-muted/40">—</span>
+                    )}
                   </td>
 
                   {/* Change % */}
                   <td className={cn('whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums', colorClass)}>
-                    {arrow && <span className="mr-0.5 text-2xs">{arrow}</span>}
-                    {formatPercent(pos.dayChangePercent)}
+                    {dcp != null ? (
+                      <>
+                        {arrow && <span className="mr-0.5 text-2xs">{arrow}</span>}
+                        {formatPercent(dcp)}
+                      </>
+                    ) : (
+                      <span className="text-text-muted/40">—</span>
+                    )}
                   </td>
                 </tr>
               );
