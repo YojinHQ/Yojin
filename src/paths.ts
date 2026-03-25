@@ -10,10 +10,20 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/**
+ * Resolve the credential vault directory.
+ * Stored separately from app data so "Clear App Data" never wipes credentials.
+ * $YOJIN_VAULT_DIR if set, otherwise ~/.yojin-vault/
+ */
+export function resolveVaultDir(): string {
+  const envDir = process.env.YOJIN_VAULT_DIR;
+  if (envDir) return resolve(envDir);
+  return join(homedir(), '.yojin-vault');
+}
+
 /** Subdirectories created inside the data root on first run. */
 export const DATA_SUBDIRS = [
   'config',
-  'vault',
   'brain',
   'sessions',
   'snapshots',
@@ -70,4 +80,6 @@ export async function ensureDataDirs(dataRoot: string): Promise<void> {
   for (const sub of DATA_SUBDIRS) {
     await mkdir(join(dataRoot, sub), { recursive: true });
   }
+  // Vault directory is separate from app data
+  await mkdir(resolveVaultDir(), { recursive: true });
 }

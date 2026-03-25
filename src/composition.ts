@@ -219,7 +219,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   let vault: EncryptedVault | undefined;
   if (!skipVault) {
     try {
-      vault = new EncryptedVault({ auditLog, vaultPath: `${dataRoot}/vault/secrets.json` });
+      vault = new EncryptedVault({ auditLog });
       // Always expose vault to GraphQL so the web UI can manage it
       setVault(vault);
 

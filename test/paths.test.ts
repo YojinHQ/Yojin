@@ -63,7 +63,6 @@ describe('ensureDataDirs', () => {
 
     const expected = [
       'config',
-      'vault',
       'brain',
       'sessions',
       'snapshots',
