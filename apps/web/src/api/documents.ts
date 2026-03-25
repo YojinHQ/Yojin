@@ -301,6 +301,12 @@ export const RESET_ONBOARDING_MUTATION = gql`
   }
 `;
 
+export const CLEAR_APP_DATA_MUTATION = gql`
+  mutation ClearAppData {
+    clearAppData
+  }
+`;
+
 // ---------------------------------------------------------------------------
 // Queries — Connections
 // ---------------------------------------------------------------------------

@@ -21,6 +21,7 @@ import {
   useRemoveDataSource,
   useToggleDataSource,
   useFetchDataSource,
+  useClearAppData,
 } from '../api/hooks';
 import { VaultSection } from './vault';
 
@@ -38,8 +39,12 @@ export default function Profile() {
   const [removingDs, setRemovingDs] = useState<string | null>(null);
   const [dsError, setDsError] = useState<string | null>(null);
 
+  const [clearConfirm, setClearConfirm] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
   const [{ data: deviceData, fetching: deviceFetching }] = useDeviceInfo();
   const [{ data, fetching, error }] = useListConnections();
+  const [, clearAppData] = useClearAppData();
   const [, disconnectPlatform] = useDisconnectPlatform();
   const [, refreshPositions] = useRefreshPositions();
   const [{ data: dsData, fetching: dsFetching, error: dsQueryError }, reexecuteDs] = useListDataSources();
@@ -327,6 +332,44 @@ export default function Profile() {
 
       {/* Credential Vault */}
       <VaultSection />
+
+      {/* Danger Zone */}
+      <Card className="border border-error/30 p-6">
+        <h3 className="text-sm font-medium text-error mb-2">Danger Zone</h3>
+        <p className="text-xs text-text-secondary mb-4">
+          Clear all app data including portfolio, insights, sessions, brain memory, and vault. Config and connections
+          are preserved. This action cannot be undone.
+        </p>
+        {clearConfirm ? (
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-text-muted">Are you sure?</span>
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={clearing}
+              onClick={async () => {
+                setClearing(true);
+                try {
+                  await clearAppData({});
+                  window.location.reload();
+                } finally {
+                  setClearing(false);
+                  setClearConfirm(false);
+                }
+              }}
+            >
+              {clearing ? 'Clearing...' : 'Yes, clear everything'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setClearConfirm(false)}>
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <Button size="sm" variant="danger" onClick={() => setClearConfirm(true)}>
+            Clear App Data
+          </Button>
+        )}
+      </Card>
     </div>
   );
 }

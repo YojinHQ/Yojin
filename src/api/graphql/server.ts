@@ -74,7 +74,7 @@ import {
   positionsQuery,
   refreshPositionsMutation,
 } from './resolvers/portfolio.js';
-import { deviceInfoResolver } from './resolvers/profile.js';
+import { clearAppDataMutation, deviceInfoResolver } from './resolvers/profile.js';
 import { riskReportQuery } from './resolvers/risk.js';
 import { signalsResolver } from './resolvers/signals.js';
 import {
@@ -161,6 +161,7 @@ const schema = createSchema({
       processInsights: processInsightsMutation,
       addToWatchlist: addToWatchlistMutation,
       removeFromWatchlist: removeFromWatchlistMutation,
+      clearAppData: clearAppDataMutation,
     },
     Subscription: {
       onAlert: onAlertSubscription,

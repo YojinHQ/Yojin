@@ -780,6 +780,7 @@ export const typeDefs = /* GraphQL */ `
     processInsights: InsightReport
     addToWatchlist(symbol: String!, name: String!, assetClass: AssetClass!): WatchlistResult!
     removeFromWatchlist(symbol: String!): WatchlistResult!
+    clearAppData: Boolean!
   }
 
   # ---------------------------------------------------------------------------
