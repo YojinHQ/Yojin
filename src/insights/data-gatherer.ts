@@ -548,7 +548,14 @@ function buildUnifiedEnrichQuery(): string {
   // Start from the SDK's batch enrich query and inject the news block
   const base = buildBatchEnrichQuery(ALL_ENRICHMENT_FIELDS);
   // Insert news fields just before the closing `}` of the entity selection set
-  return base.replace(/(\n\s*}\s*}\s*)$/, `${NEWS_FIELDS}\n$1`);
+  const result = base.replace(/(\n\s*}\s*}\s*)$/, `${NEWS_FIELDS}\n$1`);
+  if (result === base) {
+    throw new Error(
+      'buildUnifiedEnrichQuery: failed to inject news fields into base query. ' +
+        'The SDK query format may have changed.',
+    );
+  }
+  return result;
 }
 
 const UNIFIED_ENRICH_QUERY = buildUnifiedEnrichQuery();
