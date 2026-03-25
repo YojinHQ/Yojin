@@ -10,6 +10,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { resolveDataRoot } from '../paths.js';
+
 export interface DeviceIdentity {
   deviceId: string;
   publicKeyPem: string;
@@ -24,8 +26,9 @@ interface StoredIdentity {
   createdAt: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const IDENTITY_PATH = path.join(DATA_DIR, 'identity', 'device.json');
+function identityPath(dataRoot?: string): string {
+  return path.join(dataRoot ?? resolveDataRoot(), 'identity', 'device.json');
+}
 
 const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
 
@@ -54,10 +57,11 @@ function generate(): StoredIdentity {
 }
 
 /** Load existing identity or create one on first run. */
-export function loadOrCreateDeviceIdentity(): DeviceIdentity {
+export function loadOrCreateDeviceIdentity(dataRoot?: string): DeviceIdentity {
+  const filePath = identityPath(dataRoot);
   try {
-    if (fs.existsSync(IDENTITY_PATH)) {
-      const raw = fs.readFileSync(IDENTITY_PATH, 'utf-8');
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
       const parsed = JSON.parse(raw) as StoredIdentity;
       if (parsed?.version === 1 && parsed.deviceId && parsed.publicKeyPem) {
         // Re-derive to validate
@@ -74,10 +78,10 @@ export function loadOrCreateDeviceIdentity(): DeviceIdentity {
   }
 
   const identity = generate();
-  fs.mkdirSync(path.dirname(IDENTITY_PATH), { recursive: true });
-  fs.writeFileSync(IDENTITY_PATH, JSON.stringify(identity, null, 2) + '\n', { mode: 0o600 });
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(identity, null, 2) + '\n', { mode: 0o600 });
   try {
-    fs.chmodSync(IDENTITY_PATH, 0o600);
+    fs.chmodSync(filePath, 0o600);
   } catch {
     // best-effort
   }
@@ -90,8 +94,9 @@ export function loadOrCreateDeviceIdentity(): DeviceIdentity {
 }
 
 /** Sign a payload with the device private key. */
-export function signPayload(payload: string): string {
-  const raw = fs.readFileSync(IDENTITY_PATH, 'utf-8');
+export function signPayload(payload: string, dataRoot?: string): string {
+  const filePath = identityPath(dataRoot);
+  const raw = fs.readFileSync(filePath, 'utf-8');
   const { privateKeyPem } = JSON.parse(raw) as StoredIdentity;
   const key = crypto.createPrivateKey(privateKeyPem);
   return crypto.sign(null, Buffer.from(payload, 'utf-8'), key).toString('base64url');

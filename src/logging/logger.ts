@@ -14,6 +14,7 @@ import { join } from 'node:path';
 
 import { type ILogObj, Logger as TsLogger } from 'tslog';
 
+import { resolveDataRoot } from '../paths.js';
 import { redact } from './redact.js';
 
 // ---------------------------------------------------------------------------
@@ -71,7 +72,7 @@ class YojinLogger {
     const minLevel = envLevel && LEVEL_MAP[envLevel] ? envLevel : (opts.minLevel ?? 'debug');
     const consoleStyle = opts.consoleStyle ?? (process.stderr.isTTY ? 'pretty' : 'compact');
 
-    this.logDir = opts.logDir ?? join(process.cwd(), 'logs');
+    this.logDir = opts.logDir ?? join(resolveDataRoot(), 'logs');
     this.maxFileSize = opts.maxFileSize ?? 500 * 1024 * 1024; // 500MB
 
     mkdirSync(this.logDir, { recursive: true });
