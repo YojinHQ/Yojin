@@ -85,10 +85,11 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
         });
 
         // Group by ticker, enforce per-ticker limit
+        const tickerSet = new Set(params.tickers);
         const byTicker = new Map<string, Signal[]>();
         for (const signal of allSignals) {
           for (const asset of signal.assets) {
-            if (params.tickers.includes(asset.ticker)) {
+            if (tickerSet.has(asset.ticker)) {
               const group = byTicker.get(asset.ticker) ?? [];
               if (group.length < params.limit) {
                 group.push(signal);

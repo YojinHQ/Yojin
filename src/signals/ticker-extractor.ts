@@ -154,7 +154,7 @@ const FALSE_POSITIVES = new Set([
   'MOVE',
   'MUCH',
   'MUST',
-  'NEAR',
+  // 'NEAR' removed — legitimate crypto ticker via NAME_TO_TICKER ('near protocol')
   'NEED',
   'NEXT',
   'NINE',

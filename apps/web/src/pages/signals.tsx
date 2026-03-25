@@ -89,14 +89,15 @@ export default function Signals() {
     variables: { workflowId: 'process-insights' },
   });
 
-  const lastProgressStage = progressResult.data?.onWorkflowProgress.stage;
+  const progressEvent = progressResult.data?.onWorkflowProgress;
+  const lastCompletedAt = progressEvent?.stage === 'complete' ? progressEvent.timestamp : undefined;
   useEffect(() => {
-    if (lastProgressStage === 'complete') {
+    if (lastCompletedAt) {
       reexecuteSignals({ requestPolicy: 'network-only' });
       reexecuteInsights({ requestPolicy: 'network-only' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reexecute functions are stable
-  }, [lastProgressStage]);
+  }, [lastCompletedAt]);
 
   const insightSignalIds = useMemo(
     () => collectInsightSignalIds(insightResult.data?.latestInsightReport),
