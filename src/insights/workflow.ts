@@ -196,7 +196,7 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
       [
         {
           agentId: 'bull-researcher',
-          maxIterations: 1,
+          maxIterations: hasGatherer ? 1 : undefined,
           disabledTools: hasGatherer ? DEBATE_DISABLED_TOOLS : undefined,
           buildMessage: (prev) => {
             const researchOutput = prev.get('research-analyst')?.text ?? '';
@@ -216,7 +216,7 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
         },
         {
           agentId: 'bear-researcher',
-          maxIterations: 1,
+          maxIterations: hasGatherer ? 1 : undefined,
           disabledTools: hasGatherer ? DEBATE_DISABLED_TOOLS : undefined,
           buildMessage: (prev) => {
             const researchOutput = prev.get('research-analyst')?.text ?? '';

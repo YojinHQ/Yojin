@@ -186,6 +186,7 @@ async function startGateway(): Promise<void> {
   registerBuiltinWorkflows(orchestrator, {
     reflectionEngine: services.reflectionEngine,
     insightStore: services.insightStore,
+    memoryStore: services.memoryStores.get('analyst'),
     gathererOptions: {
       snapshotStore: services.snapshotStore,
       signalArchive: services.signalArchive,
@@ -215,7 +216,7 @@ async function startGateway(): Promise<void> {
   });
 
   // Daily insights scheduler — reads digestSchedule from alerts.json
-  const scheduler = new Scheduler({ orchestrator, dataRoot });
+  const scheduler = new Scheduler({ orchestrator, dataRoot, reflectionEngine: services.reflectionEngine });
   scheduler.start();
 
   const gateway = new Gateway(services.config, agentRuntime, {
@@ -269,6 +270,7 @@ async function runInsights(): Promise<void> {
   registerBuiltinWorkflows(orchestrator, {
     reflectionEngine: services.reflectionEngine,
     insightStore: services.insightStore,
+    memoryStore: services.memoryStores.get('analyst'),
     gathererOptions: {
       snapshotStore: services.snapshotStore,
       signalArchive: services.signalArchive,
