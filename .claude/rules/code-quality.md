@@ -44,6 +44,8 @@ Extend via interfaces, not modification:
 
 - **Wire optional dependencies at every call site.** When adding an optional parameter to an interface (e.g. `memoryStore?: SignalMemoryStore`), TypeScript won't warn if callers omit it. Grep for all call sites of the function/constructor and wire the new dependency at each one — or the feature will be silently dead in production behind an `if (dependency)` guard.
 - **Apply conditional patterns symmetrically.** When multiple agents in a workflow use the same `hasX ? value : fallback` pattern, apply it consistently to all agents — don't hardcode values for some while making others conditional.
+- **Don't expose dead API surface.** If a GraphQL mutation, query, or resolver depends on a setter (e.g. `setXPipeline`) that is never called in the composition root or `run-main.ts`, remove it from the schema until it's wired. Dead mutations silently return fallback values, confusing both API consumers and future developers.
+- **Mirror guards across duplicate workflow files.** When two workflow files share the same stage structure (e.g. `assessment-workflow.ts` and `full-curation-workflow.ts`), any guard added to one (like an empty-data early return in `buildMessage`) must be added to the other. Before committing, grep for the guarded pattern across all sibling workflows.
 
 ## Refactoring — Ask First
 

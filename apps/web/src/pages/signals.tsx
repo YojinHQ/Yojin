@@ -1,8 +1,14 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { useQuery, useSubscription } from 'urql';
+import { useMutation, useQuery, useSubscription } from 'urql';
 import { Link, useSearchParams } from 'react-router';
 import { cn } from '../lib/utils';
-import { SIGNALS_QUERY, LATEST_INSIGHT_REPORT_QUERY, ON_WORKFLOW_PROGRESS_SUBSCRIPTION } from '../api/documents';
+import {
+  SIGNALS_QUERY,
+  LATEST_INSIGHT_REPORT_QUERY,
+  ON_WORKFLOW_PROGRESS_SUBSCRIPTION,
+  RUN_FULL_CURATION_MUTATION,
+  CURATION_WORKFLOW_STATUS_QUERY,
+} from '../api/documents';
 import type {
   Signal,
   SignalsQueryResult,
@@ -10,9 +16,13 @@ import type {
   LatestInsightReportQueryResult,
   OnWorkflowProgressSubscriptionResult,
   OnWorkflowProgressVariables,
+  RunFullCurationMutationResult,
+  CurationWorkflowStatusQueryResult,
+  WorkflowProgressEvent,
 } from '../api/types';
 import Badge from '../components/common/badge';
 import type { BadgeVariant } from '../components/common/badge';
+import Button from '../components/common/button';
 import Card from '../components/common/card';
 import { collectInsightSignalIds } from '../lib/insight-signals';
 
@@ -99,6 +109,57 @@ export default function Signals() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reexecute functions are stable
   }, [lastCompletedAt]);
 
+  // --- Full Curation (Tier 1 + Tier 2) ---
+  const [curationMutResult, runFullCuration] = useMutation<RunFullCurationMutationResult>(RUN_FULL_CURATION_MUTATION);
+
+  // Check if a curation workflow is already running (reconnection on nav)
+  const [curationStatusResult, reexecuteCurationStatus] = useQuery<CurationWorkflowStatusQueryResult>({
+    query: CURATION_WORKFLOW_STATUS_QUERY,
+    requestPolicy: 'network-only',
+  });
+
+  const [curationReconnecting, setCurationReconnecting] = useState(false);
+  const backendCurationRunning = curationStatusResult.data?.curationWorkflowStatus.running ?? false;
+  useEffect(() => {
+    if (backendCurationRunning && !curationMutResult.fetching && !curationReconnecting) {
+      setCurationReconnecting(true);
+    }
+  }, [backendCurationRunning, curationMutResult.fetching, curationReconnecting]);
+
+  const curationLoading = curationMutResult.fetching || curationReconnecting;
+
+  // Subscribe to curation workflow progress
+  const [curationProgressResult] = useSubscription<
+    OnWorkflowProgressSubscriptionResult,
+    WorkflowProgressEvent[],
+    OnWorkflowProgressVariables
+  >(
+    {
+      query: ON_WORKFLOW_PROGRESS_SUBSCRIPTION,
+      variables: { workflowId: 'full-curation' },
+      pause: !curationLoading,
+    },
+    (prev = [], data) => [...prev, data.onWorkflowProgress],
+  );
+
+  const curationEvents = curationProgressResult.data ?? [];
+  const lastCurationEvent = curationEvents[curationEvents.length - 1];
+
+  // Handle curation workflow completion
+  useEffect(() => {
+    if (lastCurationEvent?.stage === 'complete' || lastCurationEvent?.stage === 'error') {
+      setCurationReconnecting(false);
+      reexecuteSignals({ requestPolicy: 'network-only' });
+      reexecuteCurationStatus({ requestPolicy: 'network-only' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reexecute functions are stable
+  }, [lastCurationEvent?.stage]);
+
+  const handleRunCuration = async () => {
+    setCurationReconnecting(false);
+    await runFullCuration({});
+  };
+
   const insightSignalIds = useMemo(
     () => collectInsightSignalIds(insightResult.data?.latestInsightReport),
     [insightResult.data],
@@ -151,17 +212,22 @@ export default function Signals() {
                 : `${filteredSignals.length} signal${filteredSignals.length !== 1 ? 's' : ''}${usedInInsights > 0 ? ` · ${usedInInsights} used in insights` : ''}`}
             </p>
           </div>
-          {insightSignalIds.size > 0 && (
-            <Link
-              to="/insights"
-              className="text-xs font-medium text-accent-primary hover:underline flex items-center gap-1"
-            >
-              View Insights
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
-              </svg>
-            </Link>
-          )}
+          <div className="flex items-center gap-3">
+            {insightSignalIds.size > 0 && (
+              <Link
+                to="/insights"
+                className="text-xs font-medium text-accent-primary hover:underline flex items-center gap-1"
+              >
+                View Insights
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                </svg>
+              </Link>
+            )}
+            <Button size="lg" onClick={handleRunCuration} loading={curationLoading}>
+              {curationLoading ? 'Curating...' : 'Run Curation'}
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -266,6 +332,23 @@ export default function Signals() {
         </div>
       </div>
 
+      {/* Curation workflow activity log */}
+      {curationLoading && <CurationActivityLog events={curationEvents} />}
+
+      {/* Curation error */}
+      {!curationLoading && curationMutResult.error && (
+        <div className="px-6 pb-4">
+          <Card className="p-4 border border-error/30 bg-error/5">
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-error flex-1">{curationMutResult.error.message}</p>
+              <Button size="sm" onClick={handleRunCuration}>
+                Retry
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Signal list */}
       <div className="flex-1 overflow-auto px-6 pb-6">
         {!loading && filteredSignals.length === 0 && (
@@ -299,6 +382,189 @@ export default function Signals() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Curation pipeline stages
+// ---------------------------------------------------------------------------
+
+const CURATION_STAGES = [
+  {
+    title: 'Tier 1 — Deterministic Filter',
+    agents: [] as string[],
+    tasks: ['Confidence filter', 'Spam detection', 'Portfolio relevance scoring', 'Top-N per position'],
+  },
+  {
+    title: 'Tier 2 — Research Analyst',
+    agents: ['Research Analyst'],
+    tasks: ['Classify CRITICAL / IMPORTANT / NOISE', 'Data quality & redundancy check'],
+  },
+  {
+    title: 'Tier 2 — Strategist',
+    agents: ['Strategist'],
+    tasks: ['Score against active thesis', 'Thesis alignment assessment', 'Save structured assessments'],
+  },
+];
+
+function CurationActivityLog({ events }: { events: WorkflowProgressEvent[] }) {
+  const [elapsed, setElapsed] = useState(0);
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Derive stage states from events
+  let activeStage = 0;
+  const completedStages = new Set<number>();
+  let workflowError: string | null = null;
+  const activities: string[] = [];
+
+  for (const evt of events) {
+    if (evt.stage === 'stage_start' && evt.stageIndex != null) {
+      activeStage = evt.stageIndex;
+    } else if (evt.stage === 'stage_complete' && evt.stageIndex != null) {
+      completedStages.add(evt.stageIndex);
+    } else if (evt.stage === 'error') {
+      workflowError = evt.error ?? 'Unknown error';
+    } else if (evt.stage === 'activity' && evt.message) {
+      activities.push(evt.message);
+    }
+  }
+
+  // Auto-scroll activity log
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activities.length]);
+
+  return (
+    <div className="px-6 pb-4">
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-text-secondary">Curation Pipeline</h3>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-text-muted">{elapsed}s</span>
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-primary animate-pulse" />
+            {events.length > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-success/10 text-success">LIVE</span>
+            )}
+          </div>
+        </div>
+
+        {/* Stage progress */}
+        <div className="flex items-start gap-3 mb-4">
+          {CURATION_STAGES.map((stage, i) => {
+            const isDone = completedStages.has(i);
+            const isActive = !isDone && i === activeStage;
+            return (
+              <div key={stage.title} className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div
+                    className={cn(
+                      'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0',
+                      isDone && 'bg-success text-white',
+                      isActive && 'bg-accent-primary text-white',
+                      !isDone && !isActive && 'bg-bg-tertiary text-text-muted',
+                    )}
+                  >
+                    {isDone ? (
+                      <svg
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={2.5}
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                      </svg>
+                    ) : (
+                      i + 1
+                    )}
+                  </div>
+                  <span
+                    className={cn(
+                      'text-xs font-medium truncate',
+                      isDone ? 'text-success' : isActive ? 'text-text-primary' : 'text-text-muted',
+                    )}
+                  >
+                    {stage.title}
+                  </span>
+                </div>
+                {stage.agents.length > 0 && (
+                  <div className="ml-8 flex flex-wrap gap-1 mb-1">
+                    {stage.agents.map((agent) => (
+                      <span
+                        key={agent}
+                        className={cn(
+                          'text-xs px-1.5 py-0.5 rounded-full',
+                          isActive
+                            ? 'bg-accent-glow text-accent-primary'
+                            : isDone
+                              ? 'bg-success/10 text-success'
+                              : 'bg-bg-tertiary text-text-muted',
+                        )}
+                      >
+                        {agent}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <ul className="ml-8 space-y-0.5">
+                  {stage.tasks.map((task) => (
+                    <li key={task} className="text-xs text-text-muted">
+                      {task}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Progress bar */}
+        <div className="h-1 rounded-full bg-bg-tertiary mb-4">
+          <div
+            className="h-1 rounded-full bg-accent-primary transition-all duration-500"
+            style={{
+              width: `${Math.round(((completedStages.size + (events.length > 0 ? 0.5 : 0)) / CURATION_STAGES.length) * 100)}%`,
+            }}
+          />
+        </div>
+
+        {/* Workflow error */}
+        {workflowError && (
+          <div className="mb-3 p-3 rounded-lg bg-error/10 border border-error/20">
+            <p className="text-sm text-error">{workflowError}</p>
+          </div>
+        )}
+
+        {/* Live activity feed */}
+        {activities.length > 0 && (
+          <div className="border-t border-border pt-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent-primary animate-pulse" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">Activity Log</span>
+            </div>
+            <div className="space-y-1 font-mono text-xs text-text-secondary max-h-48 overflow-y-auto">
+              {activities.map((msg, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    'px-2 py-1 rounded transition-opacity duration-300',
+                    i === activities.length - 1 ? 'bg-bg-hover text-text-primary' : 'opacity-60',
+                  )}
+                >
+                  {msg}
+                </div>
+              ))}
+              <div ref={logEndRef} />
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

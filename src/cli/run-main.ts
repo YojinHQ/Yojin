@@ -14,6 +14,7 @@ import { Orchestrator, registerBuiltinWorkflows, setWorkflowProgressCallback } f
 import { ClaudeCodeProvider } from '../ai-providers/claude-code.js';
 import { ProviderRouter } from '../ai-providers/router.js';
 import { VercelAIProvider } from '../ai-providers/vercel-ai.js';
+import { setCurationOrchestrator } from '../api/graphql/resolvers/curated-signals.js';
 import { setInsightsOrchestrator } from '../api/graphql/resolvers/insights.js';
 import { setOnboardingClaudeCodeProvider, setOnboardingProvider } from '../api/graphql/resolvers/onboarding.js';
 import { buildContext } from '../composition.js';
@@ -27,6 +28,9 @@ import { Scheduler } from '../scheduler.js';
 import { JsonlSessionStore } from '../sessions/jsonl-store.js';
 import { SignalClustering } from '../signals/clustering.js';
 import type { ClassifyInput } from '../signals/clustering.js';
+import { AssessmentConfigSchema } from '../signals/curation/assessment-types.js';
+import { registerFullCurationWorkflow } from '../signals/curation/full-curation-workflow.js';
+import { CurationConfigSchema } from '../signals/curation/types.js';
 import { SummaryGenerator } from '../signals/summary-generator.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
 
@@ -198,21 +202,33 @@ async function startGateway(): Promise<void> {
   });
   setInsightsOrchestrator(orchestrator);
 
+  // Register full-curation workflow (Tier 1 + Tier 2) for the UI button
+  const { loadJsonConfig } = await import('../config/config.js');
+  const curationConfigRaw = await loadJsonConfig(`${dataRoot}/config/curation.json`, CurationConfigSchema);
+  const curationConfig = CurationConfigSchema.parse(curationConfigRaw);
+  const assessmentConfigRaw = await loadJsonConfig(`${dataRoot}/config/assessment.json`, AssessmentConfigSchema);
+  const assessmentConfig = AssessmentConfigSchema.parse(assessmentConfigRaw);
+
+  registerFullCurationWorkflow(orchestrator, {
+    signalArchive: services.signalArchive,
+    curatedSignalStore: services.curatedSignalStore,
+    assessmentStore: services.assessmentStore,
+    insightStore: services.insightStore,
+    snapshotStore: services.snapshotStore,
+    curationConfig,
+    assessmentConfig,
+    assessmentWorkflowStartMs: services.assessmentWorkflowStartMs,
+  });
+  setCurationOrchestrator(orchestrator);
+
   // Broadcast workflow progress events to GraphQL subscribers + persist to log file
   const { pubsub } = await import('../api/graphql/pubsub.js');
-  const debugMode = process.env.YOJIN_DEBUG === 'true';
-  let workflowLog: import('../insights/workflow-log.js').WorkflowLog | null = null;
-  if (debugMode) {
-    const { WorkflowLog } = await import('../insights/workflow-log.js');
-    workflowLog = new WorkflowLog(dataRoot);
-  }
+  const { WorkflowLog } = await import('../insights/workflow-log.js');
+  const workflowLog = new WorkflowLog(dataRoot);
   let writeQueue = Promise.resolve();
   setWorkflowProgressCallback((event) => {
     pubsub.publish('workflowProgress', event);
-    if (workflowLog) {
-      const log = workflowLog;
-      writeQueue = writeQueue.then(() => log.write(event));
-    }
+    writeQueue = writeQueue.then(() => workflowLog.write(event));
   });
 
   // Daily insights scheduler — reads digestSchedule from alerts.json

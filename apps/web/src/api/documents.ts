@@ -876,6 +876,25 @@ export const PROCESS_INSIGHTS_MUTATION = gql`
 `;
 
 // ---------------------------------------------------------------------------
+// Mutations — Curation
+// ---------------------------------------------------------------------------
+
+export const RUN_FULL_CURATION_MUTATION = gql`
+  mutation RunFullCuration {
+    runFullCuration
+  }
+`;
+
+export const CURATION_WORKFLOW_STATUS_QUERY = gql`
+  query CurationWorkflowStatus {
+    curationWorkflowStatus {
+      running
+      startedAt
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
 // Subscriptions
 // ---------------------------------------------------------------------------
 

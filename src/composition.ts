@@ -16,6 +16,7 @@ import { createDefaultProfiles } from './agents/defaults.js';
 import { AgentRegistry } from './agents/registry.js';
 import { pubsub } from './api/graphql/pubsub.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
+import { setCuratedSignalStore } from './api/graphql/resolvers/curated-signals.js';
 import {
   runHealthChecks,
   setDataSourceConfigPath,
@@ -34,6 +35,7 @@ import {
   setOnboardingVault,
 } from './api/graphql/resolvers/onboarding.js';
 import { setPortfolioConnectionManager, setPortfolioJintelClient } from './api/graphql/resolvers/portfolio.js';
+import { setAssessmentStore } from './api/graphql/resolvers/signal-assessments.js';
 import { setGroupSignalArchive, setSignalGroupArchive } from './api/graphql/resolvers/signal-groups.js';
 import { setSignalArchive } from './api/graphql/resolvers/signals.js';
 import { setVault, setVaultSecretChangedCallback } from './api/graphql/resolvers/vault.js';
@@ -73,6 +75,9 @@ import { ConnectionManager } from './scraper/connection-manager.js';
 import { loadCredentialLookup } from './scraper/platform-credentials.js';
 import { registerAllConnectors } from './scraper/platforms/index.js';
 import { SignalArchive } from './signals/archive.js';
+import { AssessmentStore } from './signals/curation/assessment-store.js';
+import { createAssessmentTools } from './signals/curation/assessment-tools.js';
+import { CuratedSignalStore } from './signals/curation/curated-signal-store.js';
 import { SignalGroupArchive } from './signals/group-archive.js';
 import { SignalIngestor } from './signals/ingestor.js';
 import { createSignalTools } from './signals/tools.js';
@@ -127,6 +132,10 @@ export interface YojinServices {
   signalArchive: SignalArchive;
   signalGroupArchive: SignalGroupArchive;
   signalIngestor: SignalIngestor;
+  curatedSignalStore: CuratedSignalStore;
+  assessmentStore: AssessmentStore;
+  /** Mutable ref — workflows set this before agent stages to track pipeline duration. */
+  assessmentWorkflowStartMs: { value: number };
   brain: {
     persona: PersonaManager;
     frontalLobe: FrontalLobe;
@@ -534,6 +543,19 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   }
   setInsightStore(insightStore);
 
+  // Curated signal + assessment stores
+  const curatedSignalStore = new CuratedSignalStore(dataRoot);
+  const assessmentStore = new AssessmentStore(dataRoot);
+  setCuratedSignalStore(curatedSignalStore);
+  setAssessmentStore(assessmentStore);
+
+  // Assessment tools (1 tool: save_signal_assessment)
+  // Mutable ref allows workflows to inject their start time for accurate durationMs
+  const assessmentWorkflowStartMs = { value: 0 };
+  for (const tool of createAssessmentTools({ assessmentStore, workflowStartMs: assessmentWorkflowStartMs })) {
+    toolRegistry.register(tool);
+  }
+
   // Platform tools (3 tools if ConnectionManager available)
   if (connectionManager) {
     for (const tool of createPlatformTools(connectionManager)) {
@@ -595,6 +617,9 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     signalArchive,
     signalGroupArchive,
     signalIngestor,
+    curatedSignalStore,
+    assessmentStore,
+    assessmentWorkflowStartMs,
     brain: {
       persona,
       frontalLobe,
