@@ -65,6 +65,8 @@ export interface DataBrief {
   // Enrichment — corporate
   legalName: string | null;
   jurisdiction: string | null;
+  // Enrichment — technicals
+  technicals: TechnicalsBrief | null;
   // Signals
   signalCount: number;
   signals: SignalBrief[];
@@ -92,6 +94,17 @@ export interface SignalBrief {
   publishedAt: string;
   link: string | null;
   groupId: string | null;
+}
+
+export interface TechnicalsBrief {
+  rsi: number | null;
+  macd: { macd: number; signal: number; histogram: number } | null;
+  bollingerBands: { upper: number; middle: number; lower: number } | null;
+  ema: number | null;
+  sma: number | null;
+  atr: number | null;
+  vwma: number | null;
+  mfi: number | null;
 }
 
 export interface MemoryBrief {
@@ -263,6 +276,21 @@ export function formatBriefsForContext(briefs: DataBrief[]): string {
     }
     if (b.riskScore != null) riskParts.push(`Risk: ${b.riskScore.toFixed(1)}/100`);
     if (riskParts.length > 0) lines.push(riskParts.join(' | '));
+
+    // Technicals
+    if (b.technicals) {
+      const t = b.technicals;
+      const techParts: string[] = [];
+      if (t.rsi != null) techParts.push(`RSI: ${t.rsi.toFixed(1)}`);
+      if (t.macd) techParts.push(`MACD hist: ${t.macd.histogram.toFixed(3)}`);
+      if (t.bollingerBands)
+        techParts.push(`BB: ${t.bollingerBands.lower.toFixed(0)}–${t.bollingerBands.upper.toFixed(0)}`);
+      if (t.sma != null) techParts.push(`SMA: ${t.sma.toFixed(2)}`);
+      if (t.ema != null) techParts.push(`EMA: ${t.ema.toFixed(2)}`);
+      if (t.atr != null) techParts.push(`ATR: ${t.atr.toFixed(2)}`);
+      if (t.mfi != null) techParts.push(`MFI: ${t.mfi.toFixed(1)}`);
+      if (techParts.length > 0) lines.push(`Technicals: ${techParts.join(' | ')}`);
+    }
 
     // Risk signals
     if (b.riskSignals.length > 0) {
@@ -516,6 +544,46 @@ function enrichmentToSignals(entity: Entity, inputTicker: string): RawSignalInpu
     });
   }
 
+  // 6. Technical indicators → TECHNICAL signal (summary of all available indicators)
+  const tech = entity.technicals;
+  if (tech) {
+    const parts: string[] = [];
+    if (tech.rsi != null) parts.push(`RSI: ${tech.rsi.toFixed(1)}`);
+    if (tech.macd)
+      parts.push(`MACD: ${tech.macd.histogram.toFixed(3)} (${tech.macd.histogram >= 0 ? 'bullish' : 'bearish'})`);
+    if (tech.bollingerBands)
+      parts.push(`BB: ${tech.bollingerBands.lower.toFixed(2)}–${tech.bollingerBands.upper.toFixed(2)}`);
+    if (tech.ema != null) parts.push(`EMA: ${tech.ema.toFixed(2)}`);
+    if (tech.sma != null) parts.push(`SMA: ${tech.sma.toFixed(2)}`);
+    if (tech.atr != null) parts.push(`ATR: ${tech.atr.toFixed(2)}`);
+    if (tech.mfi != null) parts.push(`MFI: ${tech.mfi.toFixed(1)}`);
+
+    if (parts.length > 0) {
+      signals.push({
+        sourceId: 'jintel-technicals',
+        sourceName: 'Jintel Technicals',
+        sourceType: 'ENRICHMENT',
+        reliability: 0.9,
+        title: `${entity.name ?? tickers[0]} technicals: ${parts.slice(0, 4).join(', ')}`,
+        content: parts.join('\n'),
+        publishedAt: now,
+        type: 'TECHNICAL',
+        tickers,
+        confidence: 0.9,
+        metadata: {
+          rsi: tech.rsi,
+          macdHistogram: tech.macd?.histogram,
+          bbUpper: tech.bollingerBands?.upper,
+          bbLower: tech.bollingerBands?.lower,
+          ema: tech.ema,
+          sma: tech.sma,
+          atr: tech.atr,
+          mfi: tech.mfi,
+        },
+      });
+    }
+  }
+
   return signals;
 }
 
@@ -730,6 +798,18 @@ function buildBrief(
     })),
     legalName: entity?.corporate?.legalName ?? null,
     jurisdiction: entity?.corporate?.jurisdiction ?? null,
+    technicals: entity?.technicals
+      ? {
+          rsi: entity.technicals.rsi ?? null,
+          macd: entity.technicals.macd ?? null,
+          bollingerBands: entity.technicals.bollingerBands ?? null,
+          ema: entity.technicals.ema ?? null,
+          sma: entity.technicals.sma ?? null,
+          atr: entity.technicals.atr ?? null,
+          vwma: entity.technicals.vwma ?? null,
+          mfi: entity.technicals.mfi ?? null,
+        }
+      : null,
     signalCount: signals.length,
     signals: signals.slice(0, 10).map((s) => ({
       id: s.id,
