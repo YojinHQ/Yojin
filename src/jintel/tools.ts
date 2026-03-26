@@ -36,7 +36,7 @@ const NOT_CONFIGURED_MSG =
 
 const FALLBACK_SUFFIX = '\n\nJintel unavailable. Use query_data_source with configured sources for fallback data.';
 
-const ENRICHMENT_FIELDS = z.enum(['market', 'risk', 'regulatory', 'corporate']);
+const ENRICHMENT_FIELDS = z.enum(['market', 'risk', 'regulatory', 'corporate', 'technicals', 'news', 'research']);
 
 const SEVERITY_CONFIDENCE: Record<string, number> = {
   CRITICAL: 0.95,
@@ -139,6 +139,26 @@ function formatEnrichment(entity: Entity): string {
       parts.push(`Filings:\n${filingLines.join('\n')}`);
     }
     if (parts.length) sections.push(`## Regulatory\n${parts.join('\n')}`);
+  }
+
+  if (entity.technicals) {
+    const t = entity.technicals;
+    const lines: string[] = [];
+    if (t.rsi != null) lines.push(`RSI(14): ${t.rsi.toFixed(1)}`);
+    if (t.macd)
+      lines.push(
+        `MACD: ${t.macd.macd.toFixed(3)} | Signal: ${t.macd.signal.toFixed(3)} | Histogram: ${t.macd.histogram.toFixed(3)}`,
+      );
+    if (t.bollingerBands)
+      lines.push(
+        `Bollinger Bands: Lower ${t.bollingerBands.lower.toFixed(2)} | Middle ${t.bollingerBands.middle.toFixed(2)} | Upper ${t.bollingerBands.upper.toFixed(2)}`,
+      );
+    if (t.ema != null) lines.push(`EMA(10): ${t.ema.toFixed(2)}`);
+    if (t.sma != null) lines.push(`SMA(50): ${t.sma.toFixed(2)}`);
+    if (t.atr != null) lines.push(`ATR(14): ${t.atr.toFixed(2)}`);
+    if (t.vwma != null) lines.push(`VWMA(20): ${t.vwma.toFixed(2)}`);
+    if (t.mfi != null) lines.push(`MFI(14): ${t.mfi.toFixed(1)}`);
+    if (lines.length) sections.push(`## Technicals\n${lines.join('\n')}`);
   }
 
   if (entity.corporate) {
@@ -312,5 +332,70 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     },
   };
 
-  return [searchEntities, enrichEntity, batchEnrich, marketQuotes, sanctionsScreen];
+  const runTechnical: ToolDefinition = {
+    name: 'run_technical',
+    description:
+      'Fetch technical indicators for a ticker via Jintel technicals sub-graph. ' +
+      'Returns RSI, MACD (with histogram), Bollinger Bands, EMA, SMA, ATR, VWMA, and MFI.\n\n' +
+      'Interpretation guide:\n' +
+      '- RSI > 70 = overbought, < 30 = oversold, 40-60 = neutral\n' +
+      '- MACD histogram > 0 = bullish momentum, < 0 = bearish; crossover of MACD/signal line = trend change\n' +
+      '- Price near BB upper = overbought/strong trend, near BB lower = oversold/weak; BB squeeze (narrow bands) = breakout imminent\n' +
+      '- Price > SMA = uptrend, < SMA = downtrend; EMA reacts faster than SMA\n' +
+      '- ATR rising = increasing volatility; ATR falling = consolidation\n' +
+      '- MFI > 80 = overbought (with volume confirmation), < 20 = oversold\n' +
+      '- VWMA > SMA = buying pressure, VWMA < SMA = selling pressure',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, BTC, ETH)'),
+    }),
+    async execute(params: { ticker: string }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const result = await options.client.enrichEntity(params.ticker, ['technicals']);
+      const handled = handleResult(result);
+      if (!handled.ok) return handled.toolResult;
+
+      const entity = handled.data;
+      if (!entity.technicals) {
+        return { content: `No technical indicators available for ${params.ticker}.` };
+      }
+
+      const t = entity.technicals;
+      const lines: string[] = [`# ${entity.name ?? params.ticker} — Technical Indicators`];
+
+      if (t.rsi != null) {
+        const zone = t.rsi > 70 ? ' (OVERBOUGHT)' : t.rsi < 30 ? ' (OVERSOLD)' : '';
+        lines.push(`RSI(14): ${t.rsi.toFixed(1)}${zone}`);
+      }
+      if (t.macd) {
+        const momentum = t.macd.histogram >= 0 ? 'bullish' : 'bearish';
+        lines.push(
+          `MACD: ${t.macd.macd.toFixed(3)} | Signal: ${t.macd.signal.toFixed(3)} | Histogram: ${t.macd.histogram.toFixed(3)} (${momentum})`,
+        );
+      }
+      if (t.bollingerBands) {
+        lines.push(
+          `Bollinger Bands: Lower ${t.bollingerBands.lower.toFixed(2)} | Middle ${t.bollingerBands.middle.toFixed(2)} | Upper ${t.bollingerBands.upper.toFixed(2)}`,
+        );
+      }
+      if (t.ema != null) lines.push(`EMA(10): ${t.ema.toFixed(2)}`);
+      if (t.sma != null) {
+        const trend = entity.market?.quote
+          ? entity.market.quote.price > t.sma
+            ? 'above (uptrend)'
+            : 'below (downtrend)'
+          : '';
+        lines.push(`SMA(50): ${t.sma.toFixed(2)}${trend ? ` — price ${trend}` : ''}`);
+      }
+      if (t.atr != null) lines.push(`ATR(14): ${t.atr.toFixed(2)}`);
+      if (t.vwma != null) lines.push(`VWMA(20): ${t.vwma.toFixed(2)}`);
+      if (t.mfi != null) {
+        const zone = t.mfi > 80 ? ' (OVERBOUGHT)' : t.mfi < 20 ? ' (OVERSOLD)' : '';
+        lines.push(`MFI(14): ${t.mfi.toFixed(1)}${zone}`);
+      }
+
+      return { content: lines.join('\n') };
+    },
+  };
+
+  return [searchEntities, enrichEntity, batchEnrich, marketQuotes, sanctionsScreen, runTechnical];
 }

@@ -74,9 +74,9 @@ describe('Jintel Zod schemas', () => {
       news: [
         {
           title: 'Apple Q1 Beat',
-          url: 'https://example.com/1',
+          link: 'https://example.com/1',
           source: 'Serper',
-          publishedAt: '2026-03-23T10:00:00Z',
+          date: '2026-03-23T10:00:00Z',
           snippet: 'Beat expectations...',
         },
       ],
