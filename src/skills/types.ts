@@ -1,0 +1,78 @@
+/**
+ * Skill types — Markdown-defined trading strategies that guide the Strategist.
+ *
+ * A Skill is a set of conditions + reasoning + actions encoded in Markdown.
+ * When conditions are met, the Strategist proposes an ACTION in the Intel Feed.
+ */
+
+import { z } from 'zod';
+
+// ---------------------------------------------------------------------------
+// Skill category — aligned with strategic decision domains
+// ---------------------------------------------------------------------------
+
+export const SkillCategorySchema = z.enum(['RISK', 'PORTFOLIO', 'MARKET', 'RESEARCH']);
+export type SkillCategory = z.infer<typeof SkillCategorySchema>;
+
+// ---------------------------------------------------------------------------
+// Skill trigger condition
+// ---------------------------------------------------------------------------
+
+export const TriggerTypeSchema = z.enum([
+  'PRICE_MOVE', // Absolute or % price change
+  'INDICATOR_THRESHOLD', // RSI, MACD, etc. crosses a value
+  'CONCENTRATION_DRIFT', // Position weight exceeds limit
+  'DRAWDOWN', // Portfolio or position drawdown
+  'EARNINGS_PROXIMITY', // Days until earnings report
+  'SIGNAL_MATCH', // New signal matches pattern
+  'CUSTOM', // User-defined expression
+]);
+export type TriggerType = z.infer<typeof TriggerTypeSchema>;
+
+export const SkillTriggerSchema = z.object({
+  type: TriggerTypeSchema,
+  description: z.string().min(1),
+  /** Structured condition params (e.g. { ticker: 'AAPL', threshold: -0.10 }) */
+  params: z.record(z.unknown()).optional(),
+});
+export type SkillTrigger = z.infer<typeof SkillTriggerSchema>;
+
+// ---------------------------------------------------------------------------
+// Skill — the core entity
+// ---------------------------------------------------------------------------
+
+export const SkillSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().min(1),
+  category: SkillCategorySchema,
+  active: z.boolean().default(false),
+  source: z.enum(['built-in', 'custom']),
+  createdBy: z.string().min(1),
+  createdAt: z.string().datetime(),
+  /** The Markdown strategy content — what the Strategist reads. */
+  content: z.string().min(1),
+  triggers: z.array(SkillTriggerSchema).min(1),
+  /** Max position size as fraction of portfolio (0-1). Guard enforced. */
+  maxPositionSize: z.number().min(0).max(1).optional(),
+  /** Tickers this skill applies to. Empty = all portfolio tickers. */
+  tickers: z.array(z.string().min(1)).default([]),
+});
+export type Skill = z.infer<typeof SkillSchema>;
+
+// ---------------------------------------------------------------------------
+// Skill evaluation result — when a trigger fires
+// ---------------------------------------------------------------------------
+
+export const SkillEvaluationSchema = z.object({
+  skillId: z.string().min(1),
+  skillName: z.string().min(1),
+  triggerId: z.string().min(1),
+  triggerType: TriggerTypeSchema,
+  /** Context data that caused the trigger to fire. */
+  context: z.record(z.unknown()),
+  /** The Markdown content to inject into the Strategist prompt. */
+  skillContent: z.string().min(1),
+  evaluatedAt: z.string().datetime(),
+});
+export type SkillEvaluation = z.infer<typeof SkillEvaluationSchema>;

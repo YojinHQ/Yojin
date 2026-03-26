@@ -19,7 +19,16 @@ import {
 
 describe('SignalTypeSchema', () => {
   it('accepts valid signal types', () => {
-    for (const t of ['NEWS', 'FUNDAMENTAL', 'SENTIMENT', 'TECHNICAL', 'MACRO']) {
+    for (const t of [
+      'NEWS',
+      'FUNDAMENTAL',
+      'SENTIMENT',
+      'TECHNICAL',
+      'MACRO',
+      'FILINGS',
+      'SOCIALS',
+      'TRADING_LOGIC_TRIGGER',
+    ]) {
       expect(SignalTypeSchema.parse(t)).toBe(t);
     }
   });

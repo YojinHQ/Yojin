@@ -12,9 +12,11 @@ import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import { JintelClient } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
+import { ActionStore } from './actions/action-store.js';
 import { createDefaultProfiles } from './agents/defaults.js';
 import { AgentRegistry } from './agents/registry.js';
 import { pubsub } from './api/graphql/pubsub.js';
+import { setActionStore } from './api/graphql/resolvers/actions.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
 import { setCuratedSignalStore } from './api/graphql/resolvers/curated-signals.js';
 import {
@@ -38,6 +40,8 @@ import { setPortfolioConnectionManager, setPortfolioJintelClient } from './api/g
 import { setAssessmentStore } from './api/graphql/resolvers/signal-assessments.js';
 import { setGroupSignalArchive, setSignalGroupArchive } from './api/graphql/resolvers/signal-groups.js';
 import { setSignalArchive } from './api/graphql/resolvers/signals.js';
+import { setSkillStore } from './api/graphql/resolvers/skills.js';
+import { setSnapStore } from './api/graphql/resolvers/snap.js';
 import { setVault, setVaultSecretChangedCallback } from './api/graphql/resolvers/vault.js';
 import { setWatchlistEnrichment, setWatchlistStore } from './api/graphql/resolvers/watchlist.js';
 import { BrainStore } from './brain/brain.js';
@@ -81,6 +85,9 @@ import { CuratedSignalStore } from './signals/curation/curated-signal-store.js';
 import { SignalGroupArchive } from './signals/group-archive.js';
 import { SignalIngestor } from './signals/ingestor.js';
 import { createSignalTools } from './signals/tools.js';
+import { SkillEvaluator } from './skills/skill-evaluator.js';
+import { SkillStore } from './skills/skill-store.js';
+import { SnapStore } from './snap/snap-store.js';
 import { createApiHealthTools } from './tools/api-health.js';
 import { createBrainTools } from './tools/brain-tools.js';
 import { createDataSourceQueryTools } from './tools/data-source-query.js';
@@ -129,6 +136,7 @@ export interface YojinServices {
   memoryStores: Map<MemoryAgentRole, SignalMemoryStore>;
   reflectionEngine?: ReflectionEngine;
   insightStore: InsightStore;
+  snapStore: SnapStore;
   signalArchive: SignalArchive;
   signalGroupArchive: SignalGroupArchive;
   signalIngestor: SignalIngestor;
@@ -136,6 +144,9 @@ export interface YojinServices {
   assessmentStore: AssessmentStore;
   /** Mutable ref — workflows set this before agent stages to track pipeline duration. */
   assessmentWorkflowStartMs: { value: number };
+  actionStore: ActionStore;
+  skillStore: SkillStore;
+  skillEvaluator: SkillEvaluator;
   brain: {
     persona: PersonaManager;
     frontalLobe: FrontalLobe;
@@ -543,6 +554,10 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   }
   setInsightStore(insightStore);
 
+  // Snap store (Strategist brief)
+  const snapStore = new SnapStore(dataRoot);
+  setSnapStore(snapStore);
+
   // Curated signal + assessment stores
   const curatedSignalStore = new CuratedSignalStore(dataRoot);
   const assessmentStore = new AssessmentStore(dataRoot);
@@ -555,6 +570,28 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   for (const tool of createAssessmentTools({ assessmentStore, workflowStartMs: assessmentWorkflowStartMs })) {
     toolRegistry.register(tool);
   }
+
+  // Action store
+  const actionStore = new ActionStore({ dir: `${dataRoot}/actions` });
+  setActionStore(actionStore);
+
+  // Skill store + evaluator — seed from factory defaults on first run
+  const skillsDir = `${dataRoot}/skills`;
+  const defaultSkillsDir = `${resolveDefaultsRoot()}/skills`;
+  if (existsSync(defaultSkillsDir)) {
+    const { readdirSync } = await import('node:fs');
+    for (const file of readdirSync(defaultSkillsDir).filter((f: string) => f.endsWith('.json'))) {
+      const dest = `${skillsDir}/${file}`;
+      if (!existsSync(dest)) {
+        await copyFile(`${defaultSkillsDir}/${file}`, dest);
+        log.info(`Seeded default skill: ${file}`);
+      }
+    }
+  }
+  const skillStore = new SkillStore({ dir: skillsDir });
+  await skillStore.initialize();
+  setSkillStore(skillStore);
+  const skillEvaluator = new SkillEvaluator(skillStore);
 
   // Platform tools (3 tools if ConnectionManager available)
   if (connectionManager) {
@@ -614,12 +651,16 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     memoryStores: memoryResult.stores,
     reflectionEngine: memoryResult.reflectionEngine,
     insightStore,
+    snapStore,
     signalArchive,
     signalGroupArchive,
     signalIngestor,
     curatedSignalStore,
     assessmentStore,
     assessmentWorkflowStartMs,
+    actionStore,
+    skillStore,
+    skillEvaluator,
     brain: {
       persona,
       frontalLobe,

@@ -1,0 +1,19 @@
+{
+  "id": "drawdown-protector",
+  "name": "Drawdown Protector",
+  "description": "Alert and propose defensive actions when portfolio or position drawdown exceeds configured thresholds.",
+  "category": "RISK",
+  "active": false,
+  "source": "built-in",
+  "createdBy": "yojin",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "content": "# Drawdown Protector\n\n## Conditions\n- Position drawdown exceeds -10% from recent high\n- OR portfolio-level drawdown exceeds -8%\n\n## Action\nFor position drawdown:\n- If position has no clear catalyst: Propose SELL 50% to cut losses\n- If position has upcoming catalyst (earnings, product launch): Propose reviewing thesis\n\nFor portfolio drawdown:\n- Propose increasing cash allocation by 5% via trimming weakest positions\n\n## Risk Management\n- Don't trigger on intraday spikes — require sustained drawdown over 2+ sessions\n- Check correlation: if drawdown is market-wide (SPY down similar %), flag as systematic not idiosyncratic\n- Never propose selling everything — always partial\n\n## Reasoning\nDrawdown protection limits the compounding effect of losses. A -10% loss requires +11.1% to recover; a -20% loss requires +25%. Early intervention preserves capital for recovery.",
+  "triggers": [
+    {
+      "type": "DRAWDOWN",
+      "description": "Position drawdown exceeds -10%",
+      "params": { "threshold": -0.10 }
+    }
+  ],
+  "tickers": []
+}

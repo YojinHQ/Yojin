@@ -1,0 +1,19 @@
+{
+  "id": "concentration-rebalancer",
+  "name": "Concentration Rebalancer",
+  "description": "Propose trimming positions that exceed a concentration threshold. Prevents single-stock risk from growing unchecked.",
+  "category": "RISK",
+  "active": false,
+  "source": "built-in",
+  "createdBy": "yojin",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "content": "# Concentration Rebalancer\n\n## Conditions\n- Any single position exceeds 15% of total portfolio value\n- Position has been above threshold for at least 24 hours (avoid intraday noise)\n\n## Action\nPropose: SELL partial position to bring weight back to 12% (target below threshold with buffer).\n\n## Risk Management\n- Never sell more than 30% of the position in one action\n- Check if the position has unrealized gains — flag tax implications\n- If position is in a loss, suggest reviewing thesis instead of mechanical trimming\n\n## Reasoning\nSingle-stock concentration above 15% introduces outsized idiosyncratic risk. Mechanical rebalancing ensures portfolio diversification stays within bounds without requiring manual monitoring.",
+  "triggers": [
+    {
+      "type": "CONCENTRATION_DRIFT",
+      "description": "Position exceeds 15% of portfolio",
+      "params": { "maxWeight": 0.15 }
+    }
+  ],
+  "tickers": []
+}

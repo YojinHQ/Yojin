@@ -40,6 +40,8 @@ export const DATA_SUBDIRS = [
   'identity',
   'logs',
   'watchlist',
+  'actions',
+  'skills',
   'data', // General-purpose data storage for data source outputs and imports
 ] as const;
 

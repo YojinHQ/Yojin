@@ -261,6 +261,16 @@ export class SignalIngestor {
   private classifyType(input: RawSignalInput): SignalType {
     const text = `${input.title} ${input.content ?? ''}`.toLowerCase();
 
+    // Filings — SEC, regulatory submissions
+    if (/\b(10-k|10-q|8-k|s-1|13f|sec filing|proxy statement|annual report|form 4|insider filing)\b/.test(text)) {
+      return 'FILINGS';
+    }
+
+    // Social media signals
+    if (/\b(tiktok|instagram|youtube|facebook|reddit post|tweet|x\.com|threads|social buzz|viral)\b/.test(text)) {
+      return 'SOCIALS';
+    }
+
     // Macro indicators
     if (/\b(fed|federal reserve|gdp|inflation|cpi|interest rate|treasury|fomc|central bank)\b/.test(text)) {
       return 'MACRO';
@@ -272,7 +282,7 @@ export class SignalIngestor {
     }
 
     // Sentiment signals
-    if (/\b(sentiment|bullish|bearish|fear|greed|social media|trending|reddit|twitter)\b/.test(text)) {
+    if (/\b(sentiment|bullish|bearish|fear|greed|social media|trending)\b/.test(text)) {
       return 'SENTIMENT';
     }
 

@@ -438,6 +438,7 @@ export const typeDefs = /* GraphQL */ `
   enum SignalOutputType {
     INSIGHT
     ALERT
+    ACTION
   }
 
   type Signal {
@@ -469,6 +470,32 @@ export const typeDefs = /* GraphQL */ `
     outputType: SignalOutputType!
     firstEventAt: String!
     lastEventAt: String!
+  }
+
+  # ---------------------------------------------------------------------------
+  # Actions (approval workflow)
+  # ---------------------------------------------------------------------------
+
+  enum ActionStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    EXPIRED
+  }
+
+  type Action {
+    id: String!
+    signalId: String
+    skillId: String
+    what: String!
+    why: String!
+    source: String!
+    riskContext: String
+    status: ActionStatus!
+    expiresAt: String!
+    createdAt: String!
+    resolvedAt: String
+    resolvedBy: String
   }
 
   input DataSourceInput {
@@ -707,6 +734,24 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # ---------------------------------------------------------------------------
+  # Snap (Strategist brief)
+  # ---------------------------------------------------------------------------
+
+  type SnapAttentionItem {
+    label: String!
+    severity: String!
+    ticker: String
+  }
+
+  type Snap {
+    id: String!
+    generatedAt: String!
+    summary: String!
+    attentionItems: [SnapAttentionItem!]!
+    portfolioTickers: [String!]!
+  }
+
+  # ---------------------------------------------------------------------------
   # Root types
   # ---------------------------------------------------------------------------
 
@@ -804,6 +849,56 @@ export const typeDefs = /* GraphQL */ `
     signalsKept: Int!
   }
 
+  # ---------------------------------------------------------------------------
+  # Skills
+  # ---------------------------------------------------------------------------
+
+  enum SkillCategory {
+    RISK
+    PORTFOLIO
+    MARKET
+    RESEARCH
+  }
+
+  type SkillTrigger {
+    type: String!
+    description: String!
+  }
+
+  type Skill {
+    id: String!
+    name: String!
+    description: String!
+    category: SkillCategory!
+    active: Boolean!
+    source: String!
+    createdBy: String!
+    createdAt: String!
+    triggers: [SkillTrigger!]!
+    tickers: [String!]!
+  }
+
+  # ---------------------------------------------------------------------------
+  # Activity Log
+  # ---------------------------------------------------------------------------
+
+  enum ActivityEventType {
+    TRADE
+    SYSTEM
+    ACTION
+    ALERT
+    INSIGHT
+  }
+
+  type ActivityEvent {
+    id: String!
+    type: ActivityEventType!
+    message: String!
+    timestamp: String!
+    ticker: String
+    metadata: String
+  }
+
   type Query {
     deviceInfo: DeviceInfo!
     portfolio: PortfolioSnapshot
@@ -852,6 +947,12 @@ export const typeDefs = /* GraphQL */ `
     watchlist: [WatchlistEntry!]!
     insightsWorkflowStatus: WorkflowStatus!
     briefingConfig: BriefingConfig
+    snap: Snap
+    activityLog(types: [ActivityEventType!], since: String, limit: Int): [ActivityEvent!]!
+    actions(status: ActionStatus, since: String, limit: Int): [Action!]!
+    action(id: ID!): Action
+    skills(category: SkillCategory, active: Boolean): [Skill!]!
+    skill(id: ID!): Skill
   }
 
   type Mutation {
@@ -893,6 +994,9 @@ export const typeDefs = /* GraphQL */ `
     runFullCuration: Boolean!
     addToWatchlist(symbol: String!, name: String!, assetClass: AssetClass!): WatchlistResult!
     removeFromWatchlist(symbol: String!): WatchlistResult!
+    approveAction(id: ID!): Action!
+    rejectAction(id: ID!): Action!
+    toggleSkill(id: ID!, active: Boolean!): Skill!
     clearAppData: Boolean!
   }
 

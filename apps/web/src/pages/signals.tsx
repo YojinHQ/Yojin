@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router';
 import { cn } from '../lib/utils';
 import {
   SIGNALS_QUERY,
+  SIGNAL_GROUPS_QUERY,
   LATEST_INSIGHT_REPORT_QUERY,
   ON_WORKFLOW_PROGRESS_SUBSCRIPTION,
   RUN_FULL_CURATION_MUTATION,
@@ -13,6 +14,8 @@ import type {
   Signal,
   SignalsQueryResult,
   SignalsVariables,
+  SignalGroupsQueryResult,
+  SignalGroupsVariables,
   LatestInsightReportQueryResult,
   OnWorkflowProgressSubscriptionResult,
   OnWorkflowProgressVariables,
@@ -24,9 +27,21 @@ import Badge from '../components/common/badge';
 import type { BadgeVariant } from '../components/common/badge';
 import Button from '../components/common/button';
 import Card from '../components/common/card';
+import Tabs from '../components/common/tabs';
+import SignalGroupCard from '../components/signals/signal-group-card';
 import { collectInsightSignalIds } from '../lib/insight-signals';
 
-const SIGNAL_TYPES = ['ALL', 'NEWS', 'FUNDAMENTAL', 'SENTIMENT', 'TECHNICAL', 'MACRO'] as const;
+const SIGNAL_TYPES = [
+  'ALL',
+  'NEWS',
+  'FUNDAMENTAL',
+  'SENTIMENT',
+  'TECHNICAL',
+  'MACRO',
+  'FILINGS',
+  'SOCIALS',
+  'TRADING_LOGIC_TRIGGER',
+] as const;
 
 const DATE_RANGES = [
   { label: '24h', value: '1' },
@@ -48,6 +63,9 @@ const typeVariant: Record<string, BadgeVariant> = {
   SENTIMENT: 'warning',
   TECHNICAL: 'neutral',
   MACRO: 'error',
+  FILINGS: 'neutral',
+  SOCIALS: 'info',
+  TRADING_LOGIC_TRIGGER: 'warning',
 };
 
 export default function Signals() {
@@ -56,6 +74,12 @@ export default function Signals() {
   const initialTicker = searchParams.get('ticker') ?? '';
   const initialType = searchParams.get('type') ?? 'ALL';
   const initialSearch = searchParams.get('search') ?? '';
+
+  const VIEW_TABS = [
+    { label: 'Signals', value: 'signals' },
+    { label: 'Groups', value: 'groups' },
+  ] as const;
+  const [viewMode, setViewMode] = useState<'signals' | 'groups'>('signals');
 
   const [search, setSearch] = useState(initialSearch);
   const [typeFilter, setTypeFilter] = useState<string>(initialType);
@@ -83,6 +107,22 @@ export default function Signals() {
     query: SIGNALS_QUERY,
     variables,
   });
+
+  // Signal groups query (only fetched when Groups view is active)
+  const groupVariables: SignalGroupsVariables = {
+    limit: 50,
+    ...(tickerFilter ? { ticker: tickerFilter.toUpperCase() } : {}),
+    ...(since ? { since } : {}),
+  };
+
+  const [groupsResult] = useQuery<SignalGroupsQueryResult, SignalGroupsVariables>({
+    query: SIGNAL_GROUPS_QUERY,
+    variables: groupVariables,
+    pause: viewMode !== 'groups',
+  });
+
+  const signalGroups = useMemo(() => groupsResult.data?.signalGroups ?? [], [groupsResult.data]);
+  const groupsLoading = groupsResult.fetching;
 
   // Cross-reference with latest insight report to show which signals were used
   const [insightResult, reexecuteInsights] = useQuery<LatestInsightReportQueryResult>({
@@ -207,12 +247,22 @@ export default function Signals() {
           <div>
             <h1 className="text-lg font-semibold text-text-primary">Signals</h1>
             <p className="mt-1 text-sm text-text-muted">
-              {loading
-                ? 'Loading...'
-                : `${filteredSignals.length} signal${filteredSignals.length !== 1 ? 's' : ''}${usedInInsights > 0 ? ` · ${usedInInsights} used in insights` : ''}`}
+              {viewMode === 'signals'
+                ? loading
+                  ? 'Loading...'
+                  : `${filteredSignals.length} signal${filteredSignals.length !== 1 ? 's' : ''}${usedInInsights > 0 ? ` · ${usedInInsights} used in insights` : ''}`
+                : groupsLoading
+                  ? 'Loading groups...'
+                  : `${signalGroups.length} narrative chain${signalGroups.length !== 1 ? 's' : ''}`}
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <Tabs
+              tabs={[...VIEW_TABS]}
+              value={viewMode}
+              onChange={(v) => setViewMode(v as 'signals' | 'groups')}
+              size="sm"
+            />
             {insightSignalIds.size > 0 && (
               <Link
                 to="/insights"
@@ -265,28 +315,32 @@ export default function Signals() {
           )}
         </div>
 
-        {/* Row 2: Type tabs + Date range + Confidence */}
+        {/* Row 2: Type tabs + Date range + Confidence (signals view only for type/confidence) */}
         <div className="flex items-center gap-4 flex-wrap">
-          {/* Type tabs */}
-          <div className="flex gap-1">
-            {SIGNAL_TYPES.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTypeFilter(t)}
-                className={cn(
-                  'px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer',
-                  typeFilter === t
-                    ? 'bg-accent-primary text-white'
-                    : 'bg-bg-tertiary text-text-secondary hover:text-text-primary',
-                )}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+          {viewMode === 'signals' && (
+            <>
+              {/* Type tabs */}
+              <div className="flex gap-1">
+                {SIGNAL_TYPES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTypeFilter(t)}
+                    className={cn(
+                      'px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer',
+                      typeFilter === t
+                        ? 'bg-accent-primary text-white'
+                        : 'bg-bg-tertiary text-text-secondary hover:text-text-primary',
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
 
-          <span className="h-4 w-px bg-border" />
+              <span className="h-4 w-px bg-border" />
+            </>
+          )}
 
           {/* Date range */}
           <div className="flex items-center gap-1">
@@ -308,27 +362,31 @@ export default function Signals() {
             ))}
           </div>
 
-          <span className="h-4 w-px bg-border" />
+          {viewMode === 'signals' && (
+            <>
+              <span className="h-4 w-px bg-border" />
 
-          {/* Confidence */}
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-text-muted mr-1">Confidence:</span>
-            {CONFIDENCE_PRESETS.map((c) => (
-              <button
-                key={c.label}
-                type="button"
-                onClick={() => setMinConfidence(c.value)}
-                className={cn(
-                  'px-2 py-0.5 text-xs font-medium rounded transition-colors cursor-pointer',
-                  minConfidence === c.value
-                    ? 'bg-accent-primary/10 text-accent-primary'
-                    : 'text-text-muted hover:text-text-primary',
-                )}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
+              {/* Confidence */}
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-text-muted mr-1">Confidence:</span>
+                {CONFIDENCE_PRESETS.map((c) => (
+                  <button
+                    key={c.label}
+                    type="button"
+                    onClick={() => setMinConfidence(c.value)}
+                    className={cn(
+                      'px-2 py-0.5 text-xs font-medium rounded transition-colors cursor-pointer',
+                      minConfidence === c.value
+                        ? 'bg-accent-primary/10 text-accent-primary'
+                        : 'text-text-muted hover:text-text-primary',
+                    )}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -349,38 +407,73 @@ export default function Signals() {
         </div>
       )}
 
-      {/* Signal list */}
+      {/* Content: Signals or Groups */}
       <div className="flex-1 overflow-auto px-6 pb-6">
-        {!loading && filteredSignals.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-4 py-24">
-            <svg
-              className="h-14 w-14 text-text-muted"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1}
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
-              />
-            </svg>
-            <p className="text-base text-text-muted">No signals found. Fetch data sources to ingest signals.</p>
-          </div>
+        {viewMode === 'signals' && (
+          <>
+            {!loading && filteredSignals.length === 0 && (
+              <div className="flex flex-col items-center justify-center gap-4 py-24">
+                <svg
+                  className="h-14 w-14 text-text-muted"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
+                  />
+                </svg>
+                <p className="text-base text-text-muted">No signals found. Fetch data sources to ingest signals.</p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {filteredSignals.map((signal) => (
+                <SignalRow
+                  key={signal.id}
+                  signal={signal}
+                  highlighted={signal.id === highlightId}
+                  usedInInsight={insightSignalIds.has(signal.id)}
+                  insightImpact={insightSignalImpact.get(signal.id)}
+                />
+              ))}
+            </div>
+          </>
         )}
 
-        <div className="space-y-2">
-          {filteredSignals.map((signal) => (
-            <SignalRow
-              key={signal.id}
-              signal={signal}
-              highlighted={signal.id === highlightId}
-              usedInInsight={insightSignalIds.has(signal.id)}
-              insightImpact={insightSignalImpact.get(signal.id)}
-            />
-          ))}
-        </div>
+        {viewMode === 'groups' && (
+          <>
+            {!groupsLoading && signalGroups.length === 0 && (
+              <div className="flex flex-col items-center justify-center gap-4 py-24">
+                <svg
+                  className="h-14 w-14 text-text-muted"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"
+                  />
+                </svg>
+                <p className="text-base text-text-muted">
+                  No signal groups found. Groups are created when related signals form narrative chains.
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {signalGroups.map((group) => (
+                <SignalGroupCard key={group.id} group={group} />
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
