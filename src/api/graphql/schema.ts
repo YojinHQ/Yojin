@@ -585,6 +585,14 @@ export const typeDefs = /* GraphQL */ `
     channel: String!
   }
 
+  type BriefingConfig {
+    time: String!
+    timezone: String!
+    sections: [String!]!
+    channel: String!
+    enabled: Boolean!
+  }
+
   type OnboardingStatusResult {
     completed: Boolean!
     personaExists: Boolean!
@@ -782,6 +790,7 @@ export const typeDefs = /* GraphQL */ `
     insightReport(id: ID!): InsightReport
     watchlist: [WatchlistEntry!]!
     insightsWorkflowStatus: WorkflowStatus!
+    briefingConfig: BriefingConfig
   }
 
   type Mutation {

@@ -23,6 +23,7 @@ import { Gateway } from '../gateway/server.js';
 import { createJintelPriceProvider } from '../jintel/price-provider.js';
 import { createReflectionEngine } from '../memory/adapter.js';
 import { resolveDataRoot } from '../paths.js';
+import { Scheduler } from '../scheduler.js';
 import { JsonlSessionStore } from '../sessions/jsonl-store.js';
 import { SignalClustering } from '../signals/clustering.js';
 import type { ClassifyInput } from '../signals/clustering.js';
@@ -213,6 +214,10 @@ async function startGateway(): Promise<void> {
     }
   });
 
+  // Daily insights scheduler — reads digestSchedule from alerts.json
+  const scheduler = new Scheduler({ orchestrator, dataRoot });
+  scheduler.start();
+
   const gateway = new Gateway(services.config, agentRuntime, {
     snapshotStore: services.snapshotStore,
     connectionManager: services.connectionManager,
@@ -221,6 +226,7 @@ async function startGateway(): Promise<void> {
 
   // Graceful shutdown
   const shutdown = async () => {
+    scheduler.stop();
     await gateway.stop();
     process.exit(0);
   };

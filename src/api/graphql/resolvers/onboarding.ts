@@ -890,6 +890,53 @@ export async function resetOnboardingMutation(): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------------------
+// Briefing config query — reads current schedule from alerts.json + yojin.json
+// ---------------------------------------------------------------------------
+
+interface BriefingConfigResult {
+  time: string;
+  timezone: string;
+  sections: string[];
+  channel: string;
+  enabled: boolean;
+}
+
+export async function briefingConfigQuery(): Promise<BriefingConfigResult | null> {
+  const alertsPath = `${dataRoot}/config/alerts.json`;
+  if (!existsSync(alertsPath)) return null;
+
+  try {
+    const alertsConfig = JSON.parse(await readFile(alertsPath, 'utf-8'));
+    const schedule = alertsConfig.digestSchedule;
+    if (!schedule?.time || !schedule?.timezone) return null;
+
+    // Read channel preference from yojin.json
+    let channel = 'web';
+    const yojinPath = `${dataRoot}/config/yojin.json`;
+    if (existsSync(yojinPath)) {
+      try {
+        const yojinConfig = JSON.parse(await readFile(yojinPath, 'utf-8'));
+        if (yojinConfig.briefingChannel) {
+          channel = yojinConfig.briefingChannel;
+        }
+      } catch {
+        // Ignore read errors
+      }
+    }
+
+    return {
+      time: schedule.time,
+      timezone: schedule.timezone,
+      sections: alertsConfig.digestSections ?? [],
+      channel,
+      enabled: true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

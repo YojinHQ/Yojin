@@ -48,6 +48,7 @@ import {
 } from './resolvers/live.js';
 import { newsQuery, quoteQuery, sectorExposureQuery } from './resolvers/market.js';
 import {
+  briefingConfigQuery,
   completeMagicLinkMutation,
   completeOAuthFlowMutation,
   completeOnboardingMutation,
@@ -128,6 +129,7 @@ const schema = createSchema({
       insightReport: insightReportQuery,
       watchlist: watchlistQuery,
       insightsWorkflowStatus: () => getInsightsWorkflowStatus(),
+      briefingConfig: briefingConfigQuery,
     },
     Position: positionFieldResolvers,
     SignalGroup: signalGroupFieldResolvers,

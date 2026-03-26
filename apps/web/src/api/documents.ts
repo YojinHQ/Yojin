@@ -314,6 +314,28 @@ export const CLEAR_APP_DATA_MUTATION = gql`
 `;
 
 // ---------------------------------------------------------------------------
+// Briefing config
+// ---------------------------------------------------------------------------
+
+export const BRIEFING_CONFIG_QUERY = gql`
+  query BriefingConfig {
+    briefingConfig {
+      time
+      timezone
+      sections
+      channel
+      enabled
+    }
+  }
+`;
+
+export const SAVE_BRIEFING_CONFIG_MUTATION = gql`
+  mutation SaveBriefingConfig($input: BriefingConfigInput!) {
+    saveBriefingConfig(input: $input)
+  }
+`;
+
+// ---------------------------------------------------------------------------
 // Queries — Connections
 // ---------------------------------------------------------------------------
 

@@ -136,6 +136,13 @@ export async function loadJsonConfig<T>(filePath: string, schema: z.ZodType<T>):
 // Domain config schemas — minimal, grow as consuming modules are built
 // ---------------------------------------------------------------------------
 
+export const DigestScheduleSchema = z.object({
+  time: z.string(), // "HH:MM" in the user's local timezone
+  timezone: z.string(), // IANA timezone (e.g. "America/New_York")
+  cron: z.string(), // "M H * * *" — derived from time
+});
+export type DigestSchedule = z.infer<typeof DigestScheduleSchema>;
+
 export const AlertsConfigSchema = z.object({
   rules: z
     .array(
@@ -147,7 +154,8 @@ export const AlertsConfigSchema = z.object({
       }),
     )
     .default([]),
-  digestSchedule: z.string().default('0 7 * * *'),
+  digestSchedule: DigestScheduleSchema.optional(),
+  digestSections: z.array(z.string()).optional(),
 });
 export type AlertsConfig = z.infer<typeof AlertsConfigSchema>;
 
