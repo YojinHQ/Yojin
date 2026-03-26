@@ -243,6 +243,10 @@ export class Scheduler {
       prices[position.symbol] = position.currentPrice;
     }
 
+    // Partial context — only weights and prices are available from the snapshot.
+    // priceChanges, indicators, earningsDays, and drawdowns will be populated
+    // once the enrichment pipeline wires these data sources. Trigger checks
+    // skip evaluation when their required data is absent (returns null).
     const context = {
       weights,
       prices,

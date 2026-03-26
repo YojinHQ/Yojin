@@ -164,6 +164,26 @@ export default function ActivityLog() {
     );
   }
 
+  if (result.error) {
+    return (
+      <DashboardCard title="Activity Log" variant="feature" className="flex-1">
+        <CardEmptyState
+          icon={
+            <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+              />
+            </svg>
+          }
+          title="Failed to load activity"
+          description="Could not fetch activity log. Try refreshing the page."
+        />
+      </DashboardCard>
+    );
+  }
+
   if (!result.data || events.length === 0) {
     return (
       <DashboardCard title="Activity Log" variant="feature" className="flex-1">
