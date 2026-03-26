@@ -51,7 +51,7 @@ export default function YojinSnapCard() {
     return (
       <DashboardCard title="Yojin Snap" variant="feature" className="flex-1">
         <div className="flex flex-1 items-center justify-center px-5 pb-5">
-          <Spinner size="sm" label="Loading insights…" />
+          <Spinner size="md" label="Loading insights…" />
         </div>
       </DashboardCard>
     );

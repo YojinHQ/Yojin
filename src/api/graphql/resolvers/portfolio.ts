@@ -181,13 +181,47 @@ export async function positionsQuery(): Promise<Position[]> {
 export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> {
   if (!snapshotStore) return [];
   const snapshots = await snapshotStore.getAll();
-  return snapshots.map((s) => ({
+  if (snapshots.length === 0) return [];
+
+  // Sort chronologically — JSONL insertion order may not be time-ordered
+  snapshots.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // Deduplicate to one snapshot per day (keep the latest per day).
+  // Multiple snapshots on the same day come from sequential position
+  // additions and create chart noise + ghost P&L bars.
+  const byDay = new Map<string, PortfolioSnapshot>();
+  for (const s of snapshots) {
+    const day = s.timestamp.slice(0, 10); // YYYY-MM-DD
+    byDay.set(day, s); // later (sorted) snapshot overwrites earlier
+  }
+  const daily = [...byDay.values()];
+
+  // Use stored totalValue for each historical snapshot — this preserves
+  // the actual portfolio value at the time of capture. Re-pricing all
+  // history at today's prices would destroy the time-series.
+  const history: PortfolioHistoryPoint[] = daily.map((s) => ({
     timestamp: s.timestamp,
     totalValue: s.totalValue,
     totalCost: s.totalCost,
     totalPnl: s.totalPnl,
     totalPnlPercent: s.totalPnlPercent,
   }));
+
+  // Append a live-priced data point so the chart's trailing edge matches
+  // the Portfolio Value card (which uses enrichWithLiveQuotes).
+  const latest = daily[daily.length - 1];
+  const liveSnapshot = await enrichWithLiveQuotes(latest);
+  if (liveSnapshot.totalValue !== latest.totalValue) {
+    history.push({
+      timestamp: new Date().toISOString(),
+      totalValue: liveSnapshot.totalValue,
+      totalCost: liveSnapshot.totalCost,
+      totalPnl: liveSnapshot.totalPnl,
+      totalPnlPercent: liveSnapshot.totalPnlPercent,
+    });
+  }
+
+  return history;
 }
 
 export async function enrichedSnapshotQuery(): Promise<EnrichedSnapshot> {

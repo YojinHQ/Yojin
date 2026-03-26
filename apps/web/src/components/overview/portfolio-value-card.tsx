@@ -25,7 +25,7 @@ export default function PortfolioValueCard() {
     return (
       <DashboardCard title="Portfolio Value">
         <div className="flex flex-1 items-center justify-center px-4 pb-4">
-          <Spinner size="sm" label="Fetching portfolio…" />
+          <Spinner size="md" label="Fetching portfolio…" />
         </div>
       </DashboardCard>
     );

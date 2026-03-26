@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { tooltipStyle } from '../../lib/mock-chart-data';
+import { tooltipStyle } from '../../lib/chart-utils';
 import { usePositions, usePortfolioHistory } from '../../api';
 import Spinner from '../common/spinner';
 

@@ -23,7 +23,6 @@ interface PortfolioStatsProps {
 
 export default function PortfolioStats({ portfolio }: PortfolioStatsProps) {
   const stats = [
-    { label: 'Total Positions', value: portfolio ? String(portfolio.positions.length) : '--' },
     {
       label: 'Total Value',
       value: portfolio ? formatCurrency(portfolio.totalValue) : '--',
@@ -34,6 +33,7 @@ export default function PortfolioStats({ portfolio }: PortfolioStatsProps) {
       change: portfolio && portfolio.totalCost > 0 ? formatPercent(portfolio.totalPnlPercent) : null,
       positive: portfolio ? portfolio.totalPnl >= 0 : undefined,
     },
+    { label: 'Total Positions', value: portfolio ? String(portfolio.positions.length) : '--' },
   ];
 
   return (
@@ -41,12 +41,14 @@ export default function PortfolioStats({ portfolio }: PortfolioStatsProps) {
       {stats.map((stat) => (
         <div key={stat.label} className="rounded-xl border border-border bg-bg-card p-4">
           <p className="text-xs uppercase tracking-wider text-text-muted">{stat.label}</p>
-          <p className={cn('mt-1.5 text-lg font-semibold text-text-primary', stat.positive === false && 'text-error')}>
-            {stat.value}
-          </p>
-          {'change' in stat && stat.change && (
-            <p className={cn('text-xs', stat.positive ? 'text-success' : 'text-error')}>{stat.change}</p>
-          )}
+          <div className="mt-1.5 flex items-baseline gap-2">
+            <p className={cn('text-lg font-semibold text-text-primary', stat.positive === false && 'text-error')}>
+              {stat.value}
+            </p>
+            {'change' in stat && stat.change && (
+              <p className={cn('text-xs', stat.positive ? 'text-success' : 'text-error')}>{stat.change}</p>
+            )}
+          </div>
         </div>
       ))}
     </div>

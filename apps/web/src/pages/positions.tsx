@@ -18,8 +18,9 @@ export default function Positions() {
 
   if (fetching) {
     return (
-      <div className="flex flex-1 items-center justify-center p-6">
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
         <Spinner size="lg" />
+        <p className="text-sm text-text-muted">Loading portfolio...</p>
       </div>
     );
   }
@@ -55,9 +56,13 @@ export default function Positions() {
   }
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6 max-w-5xl mx-auto">
-      <PortfolioStats portfolio={portfolio} />
-      <PositionTable positions={positions} onAdd={openAddPosition} />
+    <div className="flex flex-1 flex-col overflow-hidden p-6 max-w-5xl mx-auto">
+      <div className="shrink-0 pb-6">
+        <PortfolioStats portfolio={portfolio} />
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto">
+        <PositionTable positions={positions} onAdd={openAddPosition} />
+      </div>
     </div>
   );
 }

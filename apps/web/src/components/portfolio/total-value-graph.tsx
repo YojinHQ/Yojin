@@ -1,29 +1,13 @@
 import { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { tooltipStyle } from '../../lib/mock-chart-data';
-import { usePortfolioHistory } from '../../api';
+import { tooltipStyle } from '../../lib/chart-utils';
 import { CardEmptyState } from '../common/card-empty-state';
-import Spinner from '../common/spinner';
-import type { TimeScale } from '../../data/mocks/performance';
+import { getScaleDays, type TimeScale } from '../../lib/time-scales';
+import type { PortfolioHistoryPoint } from '../../api/types';
 
 interface TotalValueGraphProps {
   scale: TimeScale;
-}
-
-const SCALE_DAYS: Record<TimeScale, number> = {
-  '7D': 7,
-  '1M': 30,
-  '3M': 90,
-  YTD: Infinity,
-};
-
-function getScaleDays(scale: TimeScale): number {
-  if (scale === 'YTD') {
-    const now = new Date();
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-    return Math.ceil((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
-  }
-  return SCALE_DAYS[scale];
+  history: PortfolioHistoryPoint[];
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Recharts tooltip payload type
@@ -47,14 +31,11 @@ function ensureMinPoints(points: { date: string; value: number }[]): { date: str
   if (points.length >= 2) return points;
   if (points.length === 0) return [];
   const only = points[0];
-  return [{ date: '', value: only.value }, only];
+  return [{ date: only.date, value: only.value }, only];
 }
 
-export function TotalValueGraph({ scale }: TotalValueGraphProps) {
-  const [{ data, fetching, error }] = usePortfolioHistory();
-
+export function TotalValueGraph({ scale, history }: TotalValueGraphProps) {
   const chartData = useMemo(() => {
-    const history = data?.portfolioHistory ?? [];
     if (history.length === 0) return [];
 
     const days = getScaleDays(scale);
@@ -68,19 +49,11 @@ export function TotalValueGraph({ scale }: TotalValueGraphProps) {
     }));
 
     return ensureMinPoints(mapped);
-  }, [data?.portfolioHistory, scale]);
+  }, [history, scale]);
 
   const baselineValue = chartData[0]?.value ?? 0;
 
-  if (fetching) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <Spinner size="sm" />
-      </div>
-    );
-  }
-
-  if (error || chartData.length === 0) {
+  if (chartData.length === 0) {
     return (
       <CardEmptyState
         icon={

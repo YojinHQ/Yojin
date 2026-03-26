@@ -566,10 +566,13 @@ export class ConnectionManager {
 
   private static readonly CRYPTO_PLATFORMS = new Set(['BINANCE', 'COINBASE', 'METAMASK', 'PHANTOM', 'POLYMARKET']);
 
-  /** Map ExtractedPositions to Position[] for snapshot storage. */
+  /** Map ExtractedPositions to Position[] for snapshot storage.
+   *  Aggregates positions with the same symbol (e.g. ETH across multiple chains). */
   private mapExtractedPositions(extracted: ExtractedPosition[], platform: Platform): Position[] {
     const defaultAssetClass = ConnectionManager.CRYPTO_PLATFORMS.has(platform.toUpperCase()) ? 'CRYPTO' : 'EQUITY';
-    return extracted.map((ep) => {
+
+    // First pass: map to Position objects
+    const mapped = extracted.map((ep) => {
       const qty = ep.quantity ?? 0;
       const mv = ep.marketValue ?? 0;
       const price = qty > 0 ? mv / qty : 0;
@@ -586,6 +589,30 @@ export class ConnectionManager {
         platform,
       };
     });
+
+    // Second pass: aggregate duplicates by symbol (e.g. ETH on multiple chains)
+    const bySymbol = new Map<string, Position>();
+    for (const pos of mapped) {
+      const existing = bySymbol.get(pos.symbol);
+      if (!existing) {
+        bySymbol.set(pos.symbol, pos);
+        continue;
+      }
+      const totalQty = existing.quantity + pos.quantity;
+      const totalCost = existing.costBasis * existing.quantity + pos.costBasis * pos.quantity;
+      const weightedCostBasis = totalQty > 0 ? totalCost / totalQty : 0;
+      bySymbol.set(pos.symbol, {
+        ...existing,
+        quantity: totalQty,
+        costBasis: weightedCostBasis,
+        marketValue: existing.marketValue + pos.marketValue,
+        currentPrice: totalQty > 0 ? (existing.marketValue + pos.marketValue) / totalQty : existing.currentPrice,
+        unrealizedPnl: existing.unrealizedPnl + pos.unrealizedPnl,
+        unrealizedPnlPercent:
+          totalCost > 0 ? ((existing.marketValue + pos.marketValue - totalCost) / totalCost) * 100 : 0,
+      });
+    }
+    return [...bySymbol.values()];
   }
 
   // -------------------------------------------------------------------------

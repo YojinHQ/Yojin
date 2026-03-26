@@ -2,15 +2,17 @@ import { useState } from 'react';
 import { cn } from '../../lib/utils';
 import { usePortfolioHistory } from '../../api';
 import { CardEmptyState } from '../common/card-empty-state';
-import { timeScales, type TimeScale } from '../../data/mocks/performance';
+import Spinner from '../common/spinner';
+import { timeScales, type TimeScale } from '../../lib/time-scales';
 import { DashboardCard } from '../common/dashboard-card';
 import { TotalValueGraph } from './total-value-graph';
 import { PerformanceOvertime } from './performance-overtime';
 
 export function PortfolioOverview() {
   const [scale, setScale] = useState<TimeScale>('7D');
-  const [{ data: historyData }] = usePortfolioHistory();
-  const hasHistory = (historyData?.portfolioHistory?.length ?? 0) > 0;
+  const [{ data: historyData, fetching }] = usePortfolioHistory();
+  const history = historyData?.portfolioHistory ?? [];
+  const hasHistory = history.length > 0;
 
   const timeScaleButtons = (
     <div className="flex gap-0.5">
@@ -28,6 +30,16 @@ export function PortfolioOverview() {
       ))}
     </div>
   );
+
+  if (fetching) {
+    return (
+      <DashboardCard title="Total Value" className="min-h-[120px] flex-1">
+        <div className="flex flex-1 items-center justify-center px-5 pb-5">
+          <Spinner size="md" label="Loading history…" />
+        </div>
+      </DashboardCard>
+    );
+  }
 
   if (!hasHistory) {
     return (
@@ -54,14 +66,14 @@ export function PortfolioOverview() {
       <div className="flex min-h-0 flex-1 flex-col">
         {/* Total Value */}
         <div className="min-h-0 flex-[3] border-b border-border px-3 pb-1">
-          <TotalValueGraph scale={scale} />
+          <TotalValueGraph scale={scale} history={history} />
         </div>
 
         {/* Performance Over Time */}
         <div className="flex min-h-0 flex-[2] flex-col">
           <span className="px-4 pt-2 text-2xs font-medium uppercase tracking-wider text-text-muted">P&L</span>
           <div className="min-h-0 flex-1 px-3 pb-1">
-            <PerformanceOvertime scale={scale} />
+            <PerformanceOvertime scale={scale} history={history} />
           </div>
         </div>
       </div>

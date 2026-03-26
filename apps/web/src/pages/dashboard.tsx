@@ -9,25 +9,14 @@ import NewsFeed from '../components/overview/news-feed';
 export default function Dashboard() {
   return (
     <div className="flex flex-1 overflow-hidden">
-      {/* Main content */}
-      <div className="flex flex-1 flex-col overflow-auto p-6 gap-5">
-        {/* Row 1: Portfolio value + Connected accounts */}
-        <div className="grid max-h-[140px] flex-shrink-0 grid-cols-2 gap-5">
-          <PortfolioValueCard />
-          <ConnectedAccountsCard />
-        </div>
-
-        {/* Row 2: Total Value chart + Top Positions */}
-        <div className="grid min-h-[280px] flex-1 grid-cols-2 gap-5">
-          <PortfolioOverview />
-          <PositionsPreview />
-        </div>
-
-        {/* Row 3: Yojin Snap + Actions */}
-        <div className="grid min-h-[320px] flex-shrink-0 grid-cols-2 gap-5">
-          <YojinSnapCard />
-          <YojinActionsCard />
-        </div>
+      {/* Main content — 2-col × 3-row grid with locked row ratios */}
+      <div className="grid flex-1 grid-cols-2 grid-rows-[1.3fr_4fr_2.5fr] gap-5 overflow-hidden p-6">
+        <PortfolioValueCard />
+        <ConnectedAccountsCard />
+        <PortfolioOverview />
+        <PositionsPreview />
+        <YojinSnapCard />
+        <YojinActionsCard />
       </div>
 
       {/* Right panel — unified feed */}

@@ -42,7 +42,7 @@ export default function YojinActionsCard() {
     return (
       <DashboardCard title="Action Items" variant="feature" className="flex-1">
         <div className="flex flex-1 items-center justify-center px-5 pb-5">
-          <Spinner size="sm" label="Loading actions…" />
+          <Spinner size="md" label="Loading actions…" />
         </div>
       </DashboardCard>
     );

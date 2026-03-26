@@ -56,7 +56,7 @@ function Sparkline({ symbol, data, dayChangePercent }: { symbol: string; data: n
   );
 }
 
-const TH = 'px-3 py-2 text-2xs font-medium uppercase tracking-wider text-text-muted';
+const TH = 'whitespace-nowrap px-3 py-2 text-2xs font-medium uppercase tracking-wider text-text-muted';
 
 export default function PositionsPreview() {
   const [{ data, fetching, error }] = usePositions();
@@ -71,7 +71,7 @@ export default function PositionsPreview() {
     return (
       <DashboardCard title="Top Positions" headerAction={viewAllLink}>
         <div className="flex flex-1 items-center justify-center">
-          <Spinner size="sm" label="Fetching positions…" />
+          <Spinner size="md" label="Fetching positions…" />
         </div>
       </DashboardCard>
     );

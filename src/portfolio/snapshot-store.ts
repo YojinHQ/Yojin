@@ -52,8 +52,8 @@ export class PortfolioSnapshotStore {
     const merged = [...otherPlatformPositions, ...stamped];
 
     const totalValue = merged.reduce((sum, p) => sum + p.marketValue, 0);
-    const totalPnl = merged.reduce((sum, p) => sum + p.unrealizedPnl, 0);
-    const totalCost = totalValue - totalPnl;
+    const totalCost = merged.reduce((sum, p) => sum + p.costBasis * p.quantity, 0);
+    const totalPnl = totalValue - totalCost;
 
     const snapshot: PortfolioSnapshot = {
       id: `snap-${randomUUID().slice(0, 8)}`,

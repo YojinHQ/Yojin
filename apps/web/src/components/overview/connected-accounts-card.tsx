@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { usePositions } from '../../api';
 import { useOnboardingStatus } from '../../lib/onboarding-context';
 import Spinner from '../common/spinner';
@@ -24,49 +23,16 @@ const PLATFORM_DISPLAY: Record<string, string> = {
   MANUAL: 'Manual',
 };
 
-const PLATFORM_PALETTE = [
-  'var(--color-accent-primary)',
-  'var(--color-accent-secondary)',
-  'var(--color-success)',
-  'var(--color-warning)',
-  'var(--color-info)',
-  'var(--color-text-muted)',
-];
-
 interface AccountSummary {
   platform: string;
   name: string;
   totalValue: number;
   change: number;
-}
-
-interface AllocationSlice {
-  name: string;
-  value: number;
-  color: string;
+  positionCount: number;
 }
 
 function formatCurrency(n: number): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-}
-
-function DonutTooltip({
-  active,
-  payload,
-  total,
-}: {
-  active?: boolean;
-  payload?: Array<{ name: string; value: number }>;
-  total: number;
-}) {
-  if (!active || !payload?.[0]) return null;
-  const pct = total > 0 ? ((payload[0].value / total) * 100).toFixed(1) : '0';
-  return (
-    <div className="rounded-lg border border-border bg-bg-card px-2.5 py-1.5 text-2xs shadow-lg">
-      <span className="text-text-primary">{payload[0].name}</span>
-      <span className="ml-1.5 text-text-muted">{pct}%</span>
-    </div>
-  );
 }
 
 export default function ConnectedAccountsCard() {
@@ -78,12 +44,13 @@ export default function ConnectedAccountsCard() {
     const positions = data?.positions ?? [];
     if (positions.length === 0) return [];
 
-    const grouped: Record<string, { totalValue: number; change: number }> = {};
+    const grouped: Record<string, { totalValue: number; change: number; count: number }> = {};
     for (const pos of positions) {
       const key = pos.platform;
-      if (!grouped[key]) grouped[key] = { totalValue: 0, change: 0 };
+      if (!grouped[key]) grouped[key] = { totalValue: 0, change: 0, count: 0 };
       grouped[key].totalValue += pos.marketValue;
       grouped[key].change += pos.dayChange ?? 0;
+      grouped[key].count += 1;
     }
 
     return Object.entries(grouped)
@@ -92,21 +59,10 @@ export default function ConnectedAccountsCard() {
         name: PLATFORM_DISPLAY[platform] ?? platform,
         totalValue: agg.totalValue,
         change: agg.change,
+        positionCount: agg.count,
       }))
       .sort((a, b) => b.totalValue - a.totalValue);
   }, [data?.positions]);
-
-  const allocation = useMemo<AllocationSlice[]>(() => {
-    if (accounts.length === 0) return [];
-
-    return accounts.map((account, idx) => ({
-      name: account.name,
-      value: account.totalValue,
-      color: PLATFORM_PALETTE[idx % PLATFORM_PALETTE.length],
-    }));
-  }, [accounts]);
-
-  const allocationTotal = useMemo(() => allocation.reduce((s, a) => s + a.value, 0), [allocation]);
 
   const connectedPlatformIds = accounts.map((a) => a.platform);
 
@@ -136,7 +92,7 @@ export default function ConnectedAccountsCard() {
     return (
       <DashboardCard title="Connected Accounts" headerAction={addButton}>
         <div className="flex flex-1 items-center justify-center px-4 pb-4">
-          <Spinner size="sm" label="Loading accounts…" />
+          <Spinner size="md" label="Loading accounts…" />
         </div>
         {modal}
       </DashboardCard>
@@ -174,46 +130,37 @@ export default function ConnectedAccountsCard() {
 
   return (
     <DashboardCard title="Connected Accounts" headerAction={addButton}>
-      <div className="flex min-h-0 flex-1 items-start gap-6 px-4 pb-4 pt-2">
-        {/* Account list */}
-        <div className="flex min-w-0 flex-1 flex-col gap-2.5 overflow-y-auto" style={{ maxHeight: '160px' }}>
-          {accounts.map((account) => (
-            <div key={account.platform} className="flex items-center gap-2">
-              <PlatformLogo platform={account.platform} size="xs" className="flex-shrink-0" />
-              <span className="text-xs font-medium text-text-primary">{account.name}</span>
-              <span className="text-xs font-medium text-text-primary tabular-nums">
-                {formatCurrency(account.totalValue)}
-              </span>
-            </div>
-          ))}
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-1">
+        <div className="grid grid-cols-2 gap-2">
+          {accounts.map((account) => {
+            const isPositive = account.change >= 0;
+            return (
+              <div
+                key={account.platform}
+                className="flex items-center gap-2.5 rounded-lg border border-border-light bg-bg-secondary/50 px-3 py-2.5"
+              >
+                <PlatformLogo platform={account.platform} size="xs" className="flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate text-xs font-medium text-text-primary">{account.name}</span>
+                    <span className="flex-shrink-0 text-3xs text-text-muted">
+                      {account.positionCount} {account.positionCount === 1 ? 'position' : 'positions'}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <span className="text-xs font-semibold tabular-nums text-text-primary">
+                      {formatCurrency(account.totalValue)}
+                    </span>
+                    <span className={`text-3xs tabular-nums ${isPositive ? 'text-success' : 'text-error'}`}>
+                      {isPositive ? '+' : ''}
+                      {formatCurrency(account.change)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
-
-        {/* Donut chart — labels only on hover */}
-        {allocation.length > 0 && (
-          <div className="flex flex-shrink-0 flex-col items-center">
-            <div className="h-[72px] w-[72px]">
-              <ResponsiveContainer width="100%" height="100%" minHeight={1}>
-                <PieChart>
-                  <Pie
-                    data={allocation}
-                    dataKey="value"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={20}
-                    outerRadius={34}
-                    strokeWidth={1}
-                    stroke="var(--color-bg-card)"
-                  >
-                    {allocation.map((slice) => (
-                      <Cell key={slice.name} fill={slice.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<DonutTooltip total={allocationTotal} />} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
       </div>
 
       {modal}
