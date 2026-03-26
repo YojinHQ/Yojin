@@ -116,7 +116,7 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
       ...pos,
       currentPrice,
       marketValue,
-      dayChange: quote.change * pos.quantity,
+      dayChange: quote.change,
       dayChangePercent: quote.changePercent,
       unrealizedPnl: hasCostBasis ? marketValue - totalCost : 0,
       unrealizedPnlPercent: hasCostBasis ? ((currentPrice - pos.costBasis) / pos.costBasis) * 100 : 0,
