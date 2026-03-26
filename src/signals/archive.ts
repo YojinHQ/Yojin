@@ -51,6 +51,19 @@ export interface SignalQueryFilter {
   limit?: number;
 }
 
+/** Pre-compiled filter — avoids per-signal allocations in the hot loop. */
+interface CompiledFilter {
+  id: string | undefined;
+  type: string | undefined;
+  tickerSet: Set<string> | null;
+  sourceId: string | undefined;
+  sinceBound: string | null;
+  untilBound: string | null;
+  searchTerm: string | null;
+  minConfidence: number | null;
+  outputType: string | undefined;
+}
+
 export class SignalArchive {
   private readonly dir: string;
   private dirCreated = false;
@@ -103,6 +116,9 @@ export class SignalArchive {
     const results: Signal[] = [];
     const limit = filter.limit ?? Infinity;
 
+    // Pre-compute ticker set once instead of per-signal
+    const compiled = this.compileFilter(filter);
+
     for (const file of files) {
       if (results.length >= limit) break;
 
@@ -110,7 +126,7 @@ export class SignalArchive {
       for (const signal of [...signals].reverse()) {
         // newest within the day first
         if (results.length >= limit) break;
-        if (this.matchesFilter(signal, filter)) {
+        if (this.matchesCompiled(signal, compiled)) {
           results.push(signal);
         }
       }
@@ -234,33 +250,45 @@ export class SignalArchive {
     return result;
   }
 
-  private matchesFilter(signal: Signal, filter: SignalQueryFilter): boolean {
-    if (filter.id && signal.id !== filter.id) return false;
-    if (filter.type && signal.type !== filter.type) return false;
-    if (filter.tickers && filter.tickers.length > 0) {
-      const tickerSet = new Set(filter.tickers);
-      if (!signal.assets.some((a) => tickerSet.has(a.ticker))) return false;
-    } else if (filter.ticker && !signal.assets.some((a) => a.ticker === filter.ticker)) {
-      return false;
+  /**
+   * Pre-compute expensive filter values once (ticker Set, lowered search term,
+   * ISO bounds) so matchesCompiled does zero allocations per signal.
+   */
+  private compileFilter(filter: SignalQueryFilter): CompiledFilter {
+    return {
+      id: filter.id,
+      type: filter.type,
+      tickerSet:
+        filter.tickers && filter.tickers.length > 0
+          ? new Set(filter.tickers)
+          : filter.ticker
+            ? new Set([filter.ticker])
+            : null,
+      sourceId: filter.sourceId,
+      sinceBound: filter.since ? (filter.since.includes('T') ? filter.since : `${filter.since}T00:00:00.000Z`) : null,
+      untilBound: filter.until ? (filter.until.includes('T') ? filter.until : `${filter.until}T23:59:59.999Z`) : null,
+      searchTerm: filter.search?.toLowerCase() ?? null,
+      minConfidence: filter.minConfidence ?? null,
+      outputType: filter.outputType,
+    };
+  }
+
+  private matchesCompiled(signal: Signal, f: CompiledFilter): boolean {
+    if (f.id && signal.id !== f.id) return false;
+    if (f.type && signal.type !== f.type) return false;
+    if (f.tickerSet) {
+      const ts = f.tickerSet;
+      if (!signal.assets.some((a) => ts.has(a.ticker))) return false;
     }
-    if (filter.sourceId && !signal.sources.some((s) => s.id === filter.sourceId)) return false;
-    if (filter.since) {
-      // When since is a date-only string (no 'T'), match from start of day
-      const bound = filter.since.includes('T') ? filter.since : `${filter.since}T00:00:00.000Z`;
-      if (signal.publishedAt < bound) return false;
-    }
-    if (filter.until) {
-      // When until is a date-only string (no 'T'), include the entire day
-      const bound = filter.until.includes('T') ? filter.until : `${filter.until}T23:59:59.999Z`;
-      if (signal.publishedAt > bound) return false;
-    }
-    if (filter.search) {
-      const term = filter.search.toLowerCase();
+    if (f.sourceId && !signal.sources.some((s) => s.id === f.sourceId)) return false;
+    if (f.sinceBound && signal.publishedAt < f.sinceBound) return false;
+    if (f.untilBound && signal.publishedAt > f.untilBound) return false;
+    if (f.searchTerm) {
       const haystack = `${signal.title} ${signal.content ?? ''}`.toLowerCase();
-      if (!haystack.includes(term)) return false;
+      if (!haystack.includes(f.searchTerm)) return false;
     }
-    if (filter.minConfidence != null && signal.confidence < filter.minConfidence) return false;
-    if (filter.outputType && (signal.outputType ?? 'INSIGHT') !== filter.outputType) return false;
+    if (f.minConfidence != null && signal.confidence < f.minConfidence) return false;
+    if (f.outputType && (signal.outputType ?? 'INSIGHT') !== f.outputType) return false;
     return true;
   }
 

@@ -18,6 +18,7 @@ function makeInsight(symbol: string, overrides?: Partial<PositionInsight>): Posi
     conviction: 0.7,
     thesis: `Thesis for ${symbol}`,
     keySignals: [],
+    allSignalIds: [],
     risks: [],
     opportunities: [],
     memoryContext: null,

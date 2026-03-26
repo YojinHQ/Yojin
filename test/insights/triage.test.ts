@@ -43,6 +43,7 @@ function makePreviousReport(positions: Array<{ symbol: string; rating: string }>
       conviction: 0.7,
       thesis: 'Previous thesis',
       keySignals: [],
+      allSignalIds: [],
       risks: [],
       opportunities: [],
       memoryContext: null,

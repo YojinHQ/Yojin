@@ -32,7 +32,7 @@ export function setWorkflowProgressCallback(cb: (event: WorkflowProgressEvent) =
   progressCallback = cb;
 }
 
-function emitProgress(event: WorkflowProgressEvent): void {
+export function emitProgress(event: WorkflowProgressEvent): void {
   if (progressCallback) {
     try {
       progressCallback(event);
@@ -114,16 +114,28 @@ export class Orchestrator {
           timestamp: new Date().toISOString(),
         });
 
-        if (Array.isArray(stage)) {
-          const results = await Promise.all(
-            stage.map((step) => this.executeStep(step, outputs, trigger, true, workflowId, stageIndex)),
-          );
-          for (const result of results) {
+        try {
+          if (Array.isArray(stage)) {
+            const results = await Promise.all(
+              stage.map((step) => this.executeStep(step, outputs, trigger, true, workflowId, stageIndex)),
+            );
+            for (const result of results) {
+              outputs.set(result.agentId, result);
+            }
+          } else {
+            const result = await this.executeStep(stage, outputs, trigger, false, workflowId, stageIndex);
             outputs.set(result.agentId, result);
           }
-        } else {
-          const result = await this.executeStep(stage, outputs, trigger, false, workflowId, stageIndex);
-          outputs.set(result.agentId, result);
+        } catch (stageErr) {
+          emitProgress({
+            workflowId,
+            stage: 'error',
+            stageIndex,
+            agentIds,
+            error: stageErr instanceof Error ? stageErr.message : String(stageErr),
+            timestamp: new Date().toISOString(),
+          });
+          throw stageErr;
         }
 
         emitProgress({

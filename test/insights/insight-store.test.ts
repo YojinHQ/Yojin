@@ -29,6 +29,7 @@ function makeReport(overrides?: Partial<InsightReport>): InsightReport {
             outputType: 'INSIGHT',
           },
         ],
+        allSignalIds: [],
         risks: ['Regulatory pressure in EU'],
         opportunities: ['AI integration in consumer products'],
         memoryContext: 'Previously bullish call on AAPL was correct (Q3 2025).',

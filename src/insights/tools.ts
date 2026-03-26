@@ -151,6 +151,41 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
         }
       }
 
+      // Populate allSignalIds: 1 batch query for ALL position tickers, grouped by ticker.
+      // This is the deterministic link — every signal for a position's ticker in the
+      // 7-day window is associated, regardless of what the LLM chose as keySignals.
+      if (signalArchive) {
+        const allTickers = positions.map((p) => p.symbol);
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const allSignals = await signalArchive.query({
+          tickers: allTickers,
+          since: sevenDaysAgo,
+          limit: 200 * allTickers.length,
+        });
+
+        // Group signal IDs by ticker (1 pass, pre-compiled Set)
+        const tickerSet = new Set(allTickers.map((t) => t.split('-')[0].toUpperCase()));
+        const signalIdsByTicker = new Map<string, Set<string>>();
+        for (const signal of allSignals) {
+          for (const asset of signal.assets) {
+            const base = asset.ticker.split('-')[0].toUpperCase();
+            if (tickerSet.has(base)) {
+              let ids = signalIdsByTicker.get(base);
+              if (!ids) {
+                ids = new Set();
+                signalIdsByTicker.set(base, ids);
+              }
+              ids.add(signal.id);
+            }
+          }
+        }
+
+        for (const position of positions) {
+          const base = position.symbol.split('-')[0].toUpperCase();
+          position.allSignalIds = [...(signalIdsByTicker.get(base) ?? [])];
+        }
+      }
+
       // Deterministically assign signalIds to portfolio items.
       // Build a symbol → signalIds map from validated position keySignals.
       const symbolToSignalIds = new Map<string, string[]>();

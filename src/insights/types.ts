@@ -54,6 +54,10 @@ export const PositionInsightSchema = z.object({
   conviction: z.number().min(0).max(1),
   thesis: z.string().min(1),
   keySignals: z.array(SignalSummarySchema),
+  /** ALL signal IDs for this ticker from the archive (7-day window).
+   *  Populated deterministically by the save_insight_report tool — not LLM-selected.
+   *  keySignals are the LLM-highlighted subset; allSignalIds is the full set. */
+  allSignalIds: z.array(z.string()).default([]),
   risks: z.array(z.string().min(1)),
   opportunities: z.array(z.string().min(1)),
   memoryContext: z.string().nullable(),

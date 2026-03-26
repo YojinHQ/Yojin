@@ -72,27 +72,32 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
       search?: string;
       limit: number;
     }): Promise<ToolResult> {
-      // Batch mode: query per ticker to guarantee limit per ticker
+      // Batch mode: single query for all tickers, then group in memory
       if (params.tickers) {
-        const byTicker = new Map<string, Signal[]>();
+        const allSignals = await archive.query({
+          type: params.type,
+          tickers: params.tickers,
+          sourceId: params.sourceId,
+          since: params.since,
+          until: params.until,
+          search: params.search,
+          limit: params.limit * params.tickers.length,
+        });
 
-        // Query each ticker individually to guarantee per-ticker limits
-        await Promise.all(
-          params.tickers.map(async (ticker) => {
-            const signals = await archive.query({
-              type: params.type,
-              tickers: [ticker],
-              sourceId: params.sourceId,
-              since: params.since,
-              until: params.until,
-              search: params.search,
-              limit: params.limit,
-            });
-            if (signals.length > 0) {
-              byTicker.set(ticker, signals);
+        // Group by ticker, enforce per-ticker limit
+        const tickerSet = new Set(params.tickers);
+        const byTicker = new Map<string, Signal[]>();
+        for (const signal of allSignals) {
+          for (const asset of signal.assets) {
+            if (tickerSet.has(asset.ticker)) {
+              const group = byTicker.get(asset.ticker) ?? [];
+              if (group.length < params.limit) {
+                group.push(signal);
+                byTicker.set(asset.ticker, group);
+              }
             }
-          }),
-        );
+          }
+        }
 
         if (byTicker.size === 0) {
           return { content: `No signals found for tickers: ${params.tickers.join(', ')}` };
@@ -112,10 +117,9 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
             seen.add(s.id);
             return true;
           });
-          const limited = unique.slice(0, params.limit);
-          const lines = limited.map((s) => formatSignalSummary(s));
+          const lines = unique.map((s) => formatSignalSummary(s));
           sections.push(
-            `## ${ticker} (${limited.length} signal${limited.length !== 1 ? 's' : ''})\n${lines.join('\n\n')}`,
+            `## ${ticker} (${unique.length} signal${unique.length !== 1 ? 's' : ''})\n${lines.join('\n\n')}`,
           );
         }
 

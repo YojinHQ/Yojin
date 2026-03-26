@@ -154,7 +154,7 @@ const FALSE_POSITIVES = new Set([
   'MOVE',
   'MUCH',
   'MUST',
-  'NEAR',
+  // 'NEAR' removed — legitimate crypto ticker via NAME_TO_TICKER ('near protocol')
   'NEED',
   'NEXT',
   'NINE',
@@ -242,6 +242,62 @@ const EXCHANGE_RE = /\b(?:NASDAQ|NYSE|AMEX|LSE|TSE|ASX):([A-Z]{1,5})\b/g;
 const CRYPTO_PAIR_RE = /\b([A-Z]{2,5})-(USD|USDT|EUR|GBP|BTC|ETH)\b/g;
 
 /**
+ * Common asset name → ticker mapping for natural language extraction.
+ * Keys are lowercase; values are the canonical ticker symbol.
+ * This catches references like "bitcoin" → BTC, "gamestop" → GME.
+ */
+const NAME_TO_TICKER: ReadonlyMap<string, string> = new Map([
+  // Crypto
+  ['bitcoin', 'BTC'],
+  ['btc', 'BTC'],
+  ['ethereum', 'ETH'],
+  ['ether', 'ETH'],
+  ['solana', 'SOL'],
+  ['cardano', 'ADA'],
+  ['dogecoin', 'DOGE'],
+  ['polkadot', 'DOT'],
+  ['polygon', 'MATIC'],
+  ['avalanche', 'AVAX'],
+  ['chainlink', 'LINK'],
+  ['litecoin', 'LTC'],
+  ['ripple', 'XRP'],
+  ['tether', 'USDT'],
+  ['uniswap', 'UNI'],
+  ['shiba inu', 'SHIB'],
+  ['celestia', 'TIA'],
+  ['lido', 'LDO'],
+  ['near protocol', 'NEAR'],
+  ['optimism protocol', 'OP'],
+  ['zcash', 'ZEC'],
+  ['qubic', 'QUBIC'],
+  // Mega-cap equities commonly referenced by name
+  ['apple', 'AAPL'],
+  ['microsoft', 'MSFT'],
+  ['google', 'GOOG'],
+  ['alphabet', 'GOOG'],
+  ['amazon', 'AMZN'],
+  ['tesla', 'TSLA'],
+  ['nvidia', 'NVDA'],
+  ['meta platforms', 'META'],
+  ['netflix', 'NFLX'],
+  ['gamestop', 'GME'],
+  ['palantir', 'PLTR'],
+  ['coinbase', 'COIN'],
+  ['microstrategy', 'MSTR'],
+]);
+
+/**
+ * Build a regex that matches any known name as a whole word (case-insensitive).
+ * Multi-word names (e.g. "shiba inu") are matched first (sorted by length desc).
+ */
+const NAME_PATTERNS = [...NAME_TO_TICKER.keys()].sort((a, b) => b.length - a.length);
+const NAME_RE = new RegExp(`\\b(${NAME_PATTERNS.map(escapeRegex).join('|')})\\b`, 'gi');
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Interface for pluggable symbol resolution (future SymbolIndex integration).
  */
 export interface SymbolResolver {
@@ -270,9 +326,20 @@ export function extractTickers(text: string, resolver?: SymbolResolver): string[
     tickers.add(match[1]);
   }
 
-  // Crypto pairs — preserve the actual quote currency
+  // Crypto pairs — preserve the pair AND extract the base ticker
+  // e.g. "BTC-USD" → both "BTC-USD" (pair) and "BTC" (base)
   for (const match of text.matchAll(CRYPTO_PAIR_RE)) {
     tickers.add(`${match[1]}-${match[2]}`);
+    tickers.add(match[1]);
+  }
+
+  // Known asset names in natural language (e.g. "bitcoin" → BTC, "gamestop" → GME)
+  for (const match of text.matchAll(NAME_RE)) {
+    const name = match[1].toLowerCase();
+    const ticker = NAME_TO_TICKER.get(name);
+    if (ticker && !FALSE_POSITIVES.has(ticker)) {
+      tickers.add(ticker);
+    }
   }
 
   // If a SymbolResolver is available, validate ambiguous matches

@@ -10,7 +10,7 @@
  */
 
 import type { Entity, JintelClient, MarketQuote } from '@yojinhq/jintel-client';
-import { ALL_ENRICHMENT_FIELDS } from '@yojinhq/jintel-client';
+import { ALL_ENRICHMENT_FIELDS, buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
 import type { InsightStore } from './insight-store.js';
 import type { InsightReport } from './types.js';
@@ -153,50 +153,58 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
     });
   }
 
-  // 3. Parallel lookups — signals (now fresh), quotes, enrichments, memories
+  // 3. Parallel lookups — quotes, enrichments, memories, previous report
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const [signals, quotes, enrichments, memories, previousReport] = await Promise.all([
-    // Signals (local, fast)
-    signalArchive.query({ tickers, since: sevenDaysAgo, limit: 100 * tickers.length }),
+  const [quotes, enrichmentByTicker, memories, previousReport] = await Promise.all([
     // Quotes (1 API call)
     jintelClient
       ? jintelClient.quotes(tickers).catch(() => ({ success: false as const, error: 'quotes failed' }))
       : Promise.resolve(null),
-    // Enrichment (1 API call per 20 tickers)
-    jintelClient ? batchEnrichChunked(jintelClient, tickers) : Promise.resolve([]),
+    // Unified enrichment + news (1 API call per 20 tickers)
+    // Returns Map<inputTicker, entity> — preserves portfolio ticker → entity association
+    jintelClient ? batchEnrichAllChunked(jintelClient, tickers) : Promise.resolve(new Map<string, EntityWithNews>()),
     // Memories (local, fast)
     recallAllMemories(memoryStores, tickers),
     // Previous report (local, fast)
     insightStore.getLatest(),
   ]);
 
-  // 4. Ingest Jintel enrichment data into the signal archive
-  if (signalIngestor && enrichments.length > 0) {
-    try {
-      const rawSignals = enrichments.flatMap((entity) => enrichmentToSignals(entity));
-      if (rawSignals.length > 0) {
+  // 4. Ingest ALL Jintel entity data into the signal archive (fundamentals,
+  //    risk, filings, price moves, news — all from the single unified query).
+  //    Each signal is tagged with the portfolio ticker that was queried, guaranteeing
+  //    downstream association from signal → position.
+  if (signalIngestor && enrichmentByTicker.size > 0) {
+    const rawSignals = [...enrichmentByTicker.entries()].flatMap(([inputTicker, entity]) =>
+      enrichmentToSignals(entity, inputTicker),
+    );
+
+    if (rawSignals.length > 0) {
+      try {
         const ingestResult = await signalIngestor.ingest(rawSignals);
-        logger.info('Jintel enrichment signals ingested', {
+        logger.info('Jintel signals ingested', {
           ingested: ingestResult.ingested,
           duplicates: ingestResult.duplicates,
           total: rawSignals.length,
         });
+      } catch (err) {
+        logger.warn('Jintel signal ingestion failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
-    } catch (err) {
-      logger.warn('Jintel enrichment signal ingestion failed', {
-        error: err instanceof Error ? err.message : String(err),
-      });
     }
   }
 
-  // 5. Index data by ticker for O(1) lookup
+  // 5. Query signals AFTER enrichment ingestion so freshly-created signals are included
+  const signals = await signalArchive.query({ tickers, since: sevenDaysAgo, limit: 100 * tickers.length });
+
+  // 6. Index data by ticker for O(1) lookup
   const signalsByTicker = groupSignalsByTicker(signals, tickers);
   const quotesByTicker = indexQuotes(quotes);
-  const enrichmentByTicker = indexEnrichments(enrichments);
+  // enrichmentByTicker is already keyed by portfolio ticker from batchEnrichAllChunked
   const memoriesByTicker = indexMemories(memories, tickers);
 
-  // 6. Build compact briefs
+  // 7. Build compact briefs
   const briefs: DataBrief[] = snapshot.positions.map((pos) => {
     const tickerSignals = signalsByTicker.get(pos.symbol) ?? [];
     const quote = quotesByTicker.get(pos.symbol);
@@ -381,12 +389,18 @@ export function formatRiskMetrics(briefs: DataBrief[]): string {
 
 /**
  * Convert a Jintel Entity enrichment into RawSignalInput items.
- * Extracts fundamentals, risk, regulatory filings, and market data.
+ * Extracts ALL signal types: fundamentals, risk, regulatory filings, market data, and news.
+ *
+ * @param entity  — Jintel enrichment response
+ * @param inputTicker — the portfolio ticker that was queried; always included in
+ *   the signal's tickers so downstream association (signal → position) is guaranteed.
  */
-function enrichmentToSignals(entity: Entity): RawSignalInput[] {
-  const tickers = entity.tickers ?? [];
-  if (tickers.length === 0) return [];
-
+function enrichmentToSignals(entity: EntityWithNews, inputTicker: string): RawSignalInput[] {
+  const entityTickers = entity.tickers ?? [];
+  // Guarantee the portfolio ticker is in the tickers list (case-insensitive dedup)
+  const tickers = entityTickers.some((t) => t.toUpperCase() === inputTicker.toUpperCase())
+    ? entityTickers
+    : [inputTicker, ...entityTickers];
   const now = new Date().toISOString();
   const signals: RawSignalInput[] = [];
 
@@ -481,40 +495,148 @@ function enrichmentToSignals(entity: Entity): RawSignalInput[] {
     });
   }
 
+  // 5. News articles — tickers come from the entity structure, not content parsing
+  for (const article of entity.news ?? []) {
+    if (!article.title) continue;
+    signals.push({
+      sourceId: `jintel-news-${article.source.toLowerCase().replace(/\s+/g, '-')}`,
+      sourceName: `Jintel News (${article.source})`,
+      sourceType: 'API',
+      reliability: 0.8,
+      title: article.title,
+      content: article.snippet ?? undefined,
+      link: article.url,
+      publishedAt: article.publishedAt,
+      tickers,
+      confidence: 0.8,
+      metadata: {
+        source: article.source,
+        sentiment: article.sentiment,
+        link: article.url,
+      },
+    });
+  }
+
   return signals;
 }
 
-async function batchEnrichChunked(client: JintelClient, tickers: string[]): Promise<Entity[]> {
+// ---------------------------------------------------------------------------
+// Unified Jintel enrichment — single query for ALL signal types
+// ---------------------------------------------------------------------------
+
+/** News fields appended to the standard enrichment query. */
+const NEWS_FIELDS = `
+  news {
+    title
+    url
+    source
+    publishedAt
+    snippet
+    sentiment
+  }`;
+
+/** Entity with optional news — extends the SDK Entity type. */
+interface EntityWithNews extends Entity {
+  news?: Array<{
+    title: string;
+    url: string;
+    source: string;
+    publishedAt: string;
+    snippet?: string | null;
+    sentiment?: string | null;
+  }> | null;
+}
+
+/**
+ * Build a query that fetches all standard enrichment fields PLUS news.
+ * Uses the SDK's field fragments so they stay in sync with the client.
+ */
+function buildUnifiedEnrichQuery(): string {
+  // Start from the SDK's batch enrich query and inject the news block
+  const base = buildBatchEnrichQuery(ALL_ENRICHMENT_FIELDS);
+  // Insert news fields just before the closing `}` of the entity selection set
+  const result = base.replace(/(\n\s*}\s*}\s*)$/, `${NEWS_FIELDS}\n$1`);
+  if (result === base) {
+    throw new Error(
+      'buildUnifiedEnrichQuery: failed to inject news fields into base query. ' +
+        'The SDK query format may have changed.',
+    );
+  }
+  return result;
+}
+
+const UNIFIED_ENRICH_QUERY = buildUnifiedEnrichQuery();
+
+/**
+ * Batch enrich tickers with ALL fields (market, risk, regulatory, corporate, news)
+ * in a single GraphQL call per chunk.
+ *
+ * Returns a Map keyed by the **input** portfolio ticker → entity. This guarantees
+ * that downstream code always knows which portfolio position an entity belongs to,
+ * even if the entity's own `tickers` field has a different format or ordering.
+ */
+async function batchEnrichAllChunked(client: JintelClient, tickers: string[]): Promise<Map<string, EntityWithNews>> {
   const CHUNK_SIZE = 20;
-  const entities: Entity[] = [];
+  const result = new Map<string, EntityWithNews>();
+  let newsSupported = true;
 
   for (let i = 0; i < tickers.length; i += CHUNK_SIZE) {
     const chunk = tickers.slice(i, i + CHUNK_SIZE);
     try {
-      const result = await client.batchEnrich(chunk, ALL_ENRICHMENT_FIELDS);
-      if (result.success) {
-        entities.push(...result.data);
-        const riskCount = result.data.reduce((n, e) => n + (e.risk?.signals?.length ?? 0), 0);
-        const filingCount = result.data.reduce((n, e) => n + (e.regulatory?.filings?.length ?? 0), 0);
-        const hasMarket = result.data.filter((e) => e.market?.quote).length;
-        const hasFundamentals = result.data.filter((e) => e.market?.fundamentals).length;
-        logger.info('Batch enrich succeeded', {
-          tickers: chunk,
-          entities: result.data.length,
-          withQuotes: hasMarket,
-          withFundamentals: hasFundamentals,
-          riskSignals: riskCount,
-          filings: filingCount,
-        });
-      } else {
-        logger.warn('Batch enrich returned failure', { tickers: chunk, error: result.error });
+      // Use the unified query (enrichment + news) via raw request
+      const data = await client.request<EntityWithNews[]>(
+        newsSupported ? UNIFIED_ENRICH_QUERY : buildBatchEnrichQuery(ALL_ENRICHMENT_FIELDS),
+        { tickers: chunk },
+      );
+
+      // Build a case-insensitive lookup: entity ticker → entity
+      const entityByTicker = new Map<string, EntityWithNews>();
+      for (const entity of data) {
+        for (const t of entity.tickers ?? []) {
+          entityByTicker.set(t.toUpperCase(), entity);
+        }
       }
+
+      // Map each input ticker to its entity — preserves the portfolio ticker as key
+      for (const inputTicker of chunk) {
+        const entity = entityByTicker.get(inputTicker.toUpperCase());
+        if (entity) {
+          result.set(inputTicker, entity);
+        } else {
+          logger.warn('No entity returned for ticker', { ticker: inputTicker });
+        }
+      }
+
+      const riskCount = data.reduce((n, e) => n + (e.risk?.signals?.length ?? 0), 0);
+      const filingCount = data.reduce((n, e) => n + (e.regulatory?.filings?.length ?? 0), 0);
+      const hasMarket = data.filter((e) => e.market?.quote).length;
+      const hasFundamentals = data.filter((e) => e.market?.fundamentals).length;
+      const newsCount = data.reduce((n, e) => n + (e.news?.length ?? 0), 0);
+      logger.info('Unified enrich succeeded', {
+        tickers: chunk,
+        entities: data.length,
+        mapped: chunk.filter((t) => result.has(t)).length,
+        withQuotes: hasMarket,
+        withFundamentals: hasFundamentals,
+        riskSignals: riskCount,
+        filings: filingCount,
+        newsArticles: newsCount,
+      });
     } catch (err) {
-      logger.warn('Batch enrich chunk failed', { chunk: chunk.slice(0, 3), error: err });
+      const msg = err instanceof Error ? err.message : String(err);
+      // If the server doesn't support news field yet, fall back to standard enrichment
+      if (newsSupported && msg.includes('Cannot query field')) {
+        logger.info('Jintel news field not available — falling back to standard enrichment');
+        newsSupported = false;
+        // Retry this chunk without news
+        i -= CHUNK_SIZE;
+        continue;
+      }
+      logger.warn('Unified enrich chunk failed', { chunk: chunk.slice(0, 3), error: msg });
     }
   }
 
-  return entities;
+  return result;
 }
 
 async function recallAllMemories(
@@ -560,15 +682,6 @@ function indexQuotes(result: { success: boolean; data?: MarketQuote[] } | null):
   return map;
 }
 
-function indexEnrichments(entities: Entity[]): Map<string, Entity> {
-  const map = new Map<string, Entity>();
-  for (const e of entities) {
-    const ticker = e.tickers?.[0];
-    if (ticker) map.set(ticker, e);
-  }
-  return map;
-}
-
 function indexMemories(
   memories: Array<{ entry: MemoryEntry; score: number }>,
   tickers: string[],
@@ -599,7 +712,7 @@ function buildBrief(
   pos: Position,
   signals: Signal[],
   quote: MarketQuote | undefined,
-  entity: Entity | undefined,
+  entity: EntityWithNews | undefined,
   memories: MemoryBrief[],
 ): DataBrief {
   // Compute sentiment direction from signal-level sentiment (with keyword fallback)

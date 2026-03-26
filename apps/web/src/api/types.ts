@@ -584,6 +584,8 @@ export interface PositionInsight {
   conviction: number;
   thesis: string;
   keySignals: SignalSummary[];
+  /** All signal IDs for this ticker (7-day window). Deterministic — not LLM-selected. */
+  allSignalIds: string[];
   risks: string[];
   opportunities: string[];
   memoryContext: string | null;
