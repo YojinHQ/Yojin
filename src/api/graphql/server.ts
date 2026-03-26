@@ -90,6 +90,7 @@ import { riskReportQuery } from './resolvers/risk.js';
 import { assessmentStatusResolver, signalAssessmentsResolver } from './resolvers/signal-assessments.js';
 import { signalGroupFieldResolvers, signalGroupResolver, signalGroupsResolver } from './resolvers/signal-groups.js';
 import { signalsResolver } from './resolvers/signals.js';
+import { resolveSkill, resolveSkills, resolveToggleSkill } from './resolvers/skills.js';
 import { snapQuery } from './resolvers/snap.js';
 import {
   addVaultSecretMutation,
@@ -149,6 +150,8 @@ const schema = createSchema({
       activityLog: activityLogQuery,
       actions: actionsResolver,
       action: actionResolver,
+      skills: resolveSkills,
+      skill: resolveSkill,
     },
     Position: positionFieldResolvers,
     SignalGroup: signalGroupFieldResolvers,
@@ -193,6 +196,7 @@ const schema = createSchema({
       removeFromWatchlist: removeFromWatchlistMutation,
       approveAction: approveActionMutation,
       rejectAction: rejectActionMutation,
+      toggleSkill: resolveToggleSkill,
       clearAppData: clearAppDataMutation,
     },
     Subscription: {

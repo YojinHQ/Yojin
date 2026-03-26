@@ -42,6 +42,7 @@ export const DATA_SUBDIRS = [
   'watchlist',
   'actions',
   'skills',
+  'snap',
   'data', // General-purpose data storage for data source outputs and imports
 ] as const;
 
