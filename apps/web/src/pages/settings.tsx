@@ -134,6 +134,7 @@ function BriefingEditor() {
   const [sections, setSections] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
   // Sync from server when loaded
@@ -146,26 +147,33 @@ function BriefingEditor() {
     }
   }, [config]);
 
-  const handleTimeChange = (t: string) => {
-    setTime(t);
+  const markDirty = () => {
     setDirty(true);
     setSaved(false);
+    setSaveError(null);
+  };
+  const handleTimeChange = (t: string) => {
+    setTime(t);
+    markDirty();
   };
   const handleTimezoneChange = (tz: string) => {
     setTimezone(tz);
-    setDirty(true);
-    setSaved(false);
+    markDirty();
   };
   const toggleSection = (key: string) => {
     setSections((prev) => (prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]));
-    setDirty(true);
-    setSaved(false);
+    markDirty();
   };
 
   const handleSave = useCallback(async () => {
     setSaving(true);
+    setSaveError(null);
     try {
-      await saveBriefing({ input: { time, timezone, sections, channel: 'web' } });
+      const result = await saveBriefing({ input: { time, timezone, sections, channel: 'web' } });
+      if (result.error) {
+        setSaveError(result.error.message || 'Failed to save schedule');
+        return;
+      }
       setSaved(true);
       setDirty(false);
     } finally {
@@ -220,6 +228,7 @@ function BriefingEditor() {
           Save schedule
         </Button>
         {saved && <span className="text-xs text-success">Saved</span>}
+        {saveError && <span className="text-xs text-error">{saveError}</span>}
       </div>
     </div>
   );

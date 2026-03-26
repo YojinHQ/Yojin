@@ -162,14 +162,14 @@ export class Scheduler {
       timestamp: new Date().toISOString(),
     });
 
+    // Persist attempt before executing so a crash/retry can't re-fire the same day
+    state.lastRuns['process-insights'] = new Date().toISOString();
+    await this.saveState(state);
+
     try {
       await this.orchestrator.execute('process-insights', {
         message: 'Scheduled daily portfolio insights',
       });
-
-      // Persist last run time
-      state.lastRuns['process-insights'] = new Date().toISOString();
-      await this.saveState(state);
 
       logger.info('Scheduled process-insights completed');
     } catch (err) {
@@ -188,7 +188,7 @@ export class Scheduler {
       timeZone: timezone,
       hour: 'numeric',
       minute: 'numeric',
-      hour12: false,
+      hourCycle: 'h23',
     }).formatToParts(now);
 
     const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
