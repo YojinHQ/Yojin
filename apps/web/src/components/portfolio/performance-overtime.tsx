@@ -22,12 +22,20 @@ function fmtDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+/** Local-timezone date key (YYYY-MM-DD) — avoids UTC/local mismatch. */
+function toLocalDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 /**
  * Derive daily P&L from portfolio history snapshots.
  *
- * Builds a lookup of snapshot totalValue by date (YYYY-MM-DD), then walks
- * every calendar day in the time-scale window. Each day's P&L is the delta
- * from the previous known snapshot value. Days without snapshot changes
+ * Builds a lookup of snapshot totalValue by local date (YYYY-MM-DD), then
+ * walks every calendar day in the time-scale window. Each day's P&L is the
+ * delta from the previous known snapshot value. Days without snapshot changes
  * get pnl = 0, which keeps the BarChart populated with enough data points
  * for stable tooltip behaviour.
  */
@@ -38,10 +46,10 @@ function derivePnlFromHistory(history: PortfolioHistoryPoint[], scale: TimeScale
   const latestTs = new Date(history[history.length - 1].timestamp);
   const cutoff = new Date(latestTs.getTime() - days * 24 * 60 * 60 * 1000);
 
-  // Build date → totalValue map (latest snapshot per day wins)
+  // Build local-date → totalValue map (latest snapshot per day wins)
   const valueByDay = new Map<string, number>();
   for (const h of history) {
-    const day = h.timestamp.slice(0, 10);
+    const day = toLocalDateKey(new Date(h.timestamp));
     valueByDay.set(day, h.totalValue);
   }
 
@@ -63,7 +71,7 @@ function derivePnlFromHistory(history: PortfolioHistoryPoint[], scale: TimeScale
   }
 
   while (cursor <= end) {
-    const dayKey = cursor.toISOString().slice(0, 10);
+    const dayKey = toLocalDateKey(cursor);
     const value = valueByDay.get(dayKey);
 
     if (value !== undefined) {

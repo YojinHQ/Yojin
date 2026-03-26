@@ -9,7 +9,7 @@
  * injecting into an agent's context without overflow.
  */
 
-import type { Entity, JintelClient, MarketQuote } from '@yojinhq/jintel-client';
+import type { JintelClient, MarketQuote } from '@yojinhq/jintel-client';
 import { ALL_ENRICHMENT_FIELDS, buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
 import type { InsightStore } from './insight-store.js';
@@ -17,6 +17,7 @@ import type { InsightReport } from './types.js';
 import { fetchAllEnabledSources } from '../api/graphql/resolvers/fetch-data-source.js';
 import type { Position } from '../api/graphql/types.js';
 import { riskSignalsToRaw } from '../jintel/tools.js';
+import type { ExtendedEntity } from '../jintel/types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { SignalMemoryStore } from '../memory/memory-store.js';
 import type { MemoryEntry } from '../memory/types.js';
@@ -180,7 +181,7 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
       : Promise.resolve(null),
     // Unified enrichment + news (1 API call per 20 tickers)
     // Returns Map<inputTicker, entity> — preserves portfolio ticker → entity association
-    jintelClient ? batchEnrichAllChunked(jintelClient, tickers) : Promise.resolve(new Map<string, Entity>()),
+    jintelClient ? batchEnrichAllChunked(jintelClient, tickers) : Promise.resolve(new Map<string, ExtendedEntity>()),
     // Memories (local, fast)
     recallAllMemories(memoryStores, tickers),
     // Previous report (local, fast)
@@ -435,7 +436,7 @@ export function formatRiskMetrics(briefs: DataBrief[]): string {
  * @param inputTicker — the portfolio ticker that was queried; always included in
  *   the signal's tickers so downstream association (signal → position) is guaranteed.
  */
-function enrichmentToSignals(entity: Entity, inputTicker: string): RawSignalInput[] {
+function enrichmentToSignals(entity: ExtendedEntity, inputTicker: string): RawSignalInput[] {
   const entityTickers = entity.tickers ?? [];
   // Guarantee the portfolio ticker is in the tickers list (case-insensitive dedup)
   const tickers = entityTickers.some((t) => t.toUpperCase() === inputTicker.toUpperCase())
@@ -614,16 +615,16 @@ const BATCH_ENRICH_QUERY = buildBatchEnrichQuery(ALL_ENRICHMENT_FIELDS);
  * that downstream code always knows which portfolio position an entity belongs to,
  * even if the entity's own `tickers` field has a different format or ordering.
  */
-async function batchEnrichAllChunked(client: JintelClient, tickers: string[]): Promise<Map<string, Entity>> {
+async function batchEnrichAllChunked(client: JintelClient, tickers: string[]): Promise<Map<string, ExtendedEntity>> {
   const CHUNK_SIZE = 20;
-  const result = new Map<string, Entity>();
+  const result = new Map<string, ExtendedEntity>();
   for (let i = 0; i < tickers.length; i += CHUNK_SIZE) {
     const chunk = tickers.slice(i, i + CHUNK_SIZE);
     try {
-      const data = await client.request<Entity[]>(BATCH_ENRICH_QUERY, { tickers: chunk });
+      const data = await client.request<ExtendedEntity[]>(BATCH_ENRICH_QUERY, { tickers: chunk });
 
       // Build a case-insensitive lookup: entity ticker → entity
-      const entityByTicker = new Map<string, Entity>();
+      const entityByTicker = new Map<string, ExtendedEntity>();
       for (const entity of data) {
         for (const t of entity.tickers ?? []) {
           entityByTicker.set(t.toUpperCase(), entity);
@@ -740,7 +741,7 @@ function buildBrief(
   pos: Position,
   signals: Signal[],
   quote: MarketQuote | undefined,
-  entity: Entity | undefined,
+  entity: ExtendedEntity | undefined,
   memories: MemoryBrief[],
 ): DataBrief {
   // Compute sentiment direction from signal-level sentiment (with keyword fallback)

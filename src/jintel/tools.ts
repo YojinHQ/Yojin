@@ -8,8 +8,6 @@
 
 import {
   type EconomicDataPoint,
-  type EnrichmentField,
-  type Entity,
   type EntityType,
   EntityTypeSchema,
   GDP,
@@ -30,8 +28,14 @@ import {
 } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
+import type { ExtendedEnrichmentField, ExtendedEntity } from './types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
+
+// The Jintel API accepts extended enrichment fields (technicals, news, research)
+// but the published client types don't include them yet. This helper bridges the gap.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- upstream type lag
+const asFields = (fields: ExtendedEnrichmentField[] | string[] | undefined): any[] | undefined => fields as any;
 
 // ── Options ──────────────────────────────────────────────────────────────
 
@@ -120,7 +124,7 @@ async function bestEffortIngest(ingestor: SignalIngestor | undefined, items: Raw
 
 // ── Formatters ───────────────────────────────────────────────────────────
 
-function formatEntities(entities: Entity[]): string {
+function formatEntities(entities: ExtendedEntity[]): string {
   if (entities.length === 0) return 'No entities found.';
   return entities
     .map((e) => {
@@ -133,7 +137,7 @@ function formatEntities(entities: Entity[]): string {
     .join('\n');
 }
 
-function formatEnrichment(entity: Entity): string {
+function formatEnrichment(entity: ExtendedEntity): string {
   const sections: string[] = [`# ${entity.name} (${entity.type})`];
 
   if (entity.market) {
@@ -287,7 +291,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       });
       const handled = handleResult(result);
       if (!handled.ok) return handled.toolResult;
-      return { content: formatEntities(handled.data) };
+      return { content: formatEntities(handled.data as ExtendedEntity[]) };
     },
   };
 
@@ -300,13 +304,13 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       ticker: z.string().describe('Entity ticker or ID (e.g. AAPL, BTC)'),
       fields: z.array(ENRICHMENT_FIELDS).optional().describe('Specific enrichment fields to fetch (default: all)'),
     }),
-    async execute(params: { ticker: string; fields?: EnrichmentField[] }): Promise<ToolResult> {
+    async execute(params: { ticker: string; fields?: ExtendedEnrichmentField[] }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
-      const result = await options.client.enrichEntity(params.ticker, params.fields);
+      const result = await options.client.enrichEntity(params.ticker, asFields(params.fields));
       const handled = handleResult(result);
       if (!handled.ok) return handled.toolResult;
 
-      const entity = handled.data;
+      const entity = handled.data as ExtendedEntity;
       const content = formatEnrichment(entity);
 
       // Best-effort signal ingestion for risk signals
@@ -347,15 +351,15 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         .optional()
         .describe("Specific enrichment fields to fetch (default: ['market', 'risk'])"),
     }),
-    async execute(params: { tickers: string[]; fields?: EnrichmentField[] }): Promise<ToolResult> {
+    async execute(params: { tickers: string[]; fields?: ExtendedEnrichmentField[] }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const fields = params.fields ?? ['market', 'risk'];
 
-      const result = await options.client.batchEnrich(params.tickers, fields);
+      const result = await options.client.batchEnrich(params.tickers, asFields(fields));
       const handled = handleResult(result);
       if (!handled.ok) return handled.toolResult;
 
-      const entities = handled.data;
+      const entities = handled.data as ExtendedEntity[];
       if (entities.length === 0) {
         return failureResult(`Batch enrich returned no data for ${params.tickers.join(', ')}`);
       }
@@ -409,11 +413,11 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     }),
     async execute(params: { ticker: string }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
-      const result = await options.client.enrichEntity(params.ticker, ['technicals']);
+      const result = await options.client.enrichEntity(params.ticker, asFields(['technicals']));
       const handled = handleResult(result);
       if (!handled.ok) return handled.toolResult;
 
-      const entity = handled.data;
+      const entity = handled.data as ExtendedEntity;
       if (!entity.technicals) {
         return { content: `No technical indicators available for ${params.ticker}.` };
       }

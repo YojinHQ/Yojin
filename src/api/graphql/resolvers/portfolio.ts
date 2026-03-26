@@ -207,18 +207,30 @@ export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> 
     totalPnlPercent: s.totalPnlPercent,
   }));
 
-  // Append a live-priced data point so the chart's trailing edge matches
-  // the Portfolio Value card (which uses enrichWithLiveQuotes).
+  // Replace or append a live-priced data point so the chart's trailing edge
+  // matches the Portfolio Value card (which uses enrichWithLiveQuotes).
+  // If the latest stored snapshot is from today, replace it instead of
+  // appending — otherwise the chart has two same-day points with different
+  // values and the tooltip shows the stale stored value.
   const latest = daily[daily.length - 1];
   const liveSnapshot = await enrichWithLiveQuotes(latest);
   if (liveSnapshot.totalValue !== latest.totalValue) {
-    history.push({
+    const livePoint: PortfolioHistoryPoint = {
       timestamp: new Date().toISOString(),
       totalValue: liveSnapshot.totalValue,
       totalCost: liveSnapshot.totalCost,
       totalPnl: liveSnapshot.totalPnl,
       totalPnlPercent: liveSnapshot.totalPnlPercent,
-    });
+    };
+
+    const today = livePoint.timestamp.slice(0, 10);
+    const lastDay = latest.timestamp.slice(0, 10);
+    if (today === lastDay) {
+      // Same day — replace stored value with live-priced value
+      history[history.length - 1] = livePoint;
+    } else {
+      history.push(livePoint);
+    }
   }
 
   return history;
