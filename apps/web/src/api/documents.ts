@@ -1027,6 +1027,38 @@ export const ON_WORKFLOW_PROGRESS_SUBSCRIPTION = gql`
 `;
 
 // ---------------------------------------------------------------------------
+// Queries — Intel Feed
+// ---------------------------------------------------------------------------
+
+export const INTEL_FEED_QUERY = gql`
+  query IntelFeed($limit: Int) {
+    signals(limit: $limit) {
+      id
+      title
+      type
+      sentiment
+      tickers
+      publishedAt
+      confidence
+      sources {
+        name
+        reliability
+      }
+      tier1
+    }
+    actions(status: PENDING, limit: 10) {
+      id
+      what
+      why
+      source
+      status
+      expiresAt
+      createdAt
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
 // Queries — Activity Log
 // ---------------------------------------------------------------------------
 

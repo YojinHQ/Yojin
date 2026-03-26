@@ -1,22 +1,30 @@
 /**
- * Lightweight job scheduler — reads digest schedule from alerts.json,
- * checks once per minute, and fires the process-insights workflow daily.
+ * Lightweight job scheduler — runs curation every 15 minutes and
+ * optionally fires the process-insights workflow on a daily cron schedule.
  *
  * State is persisted to data/cron/state.json so restarts don't re-run
- * a job that already fired today.
+ * a job that already fired within its cooldown window.
  */
 
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { z } from 'zod';
 
+import type { ActionStore } from './actions/action-store.js';
 import type { Orchestrator } from './agents/orchestrator.js';
 import { emitProgress } from './agents/orchestrator.js';
 import { AlertsConfigSchema } from './config/config.js';
 import { createSubsystemLogger } from './logging/logger.js';
 import type { ReflectionEngine } from './memory/reflection.js';
+import type { PortfolioSnapshotStore } from './portfolio/snapshot-store.js';
+import type { SignalArchive } from './signals/archive.js';
+import type { CuratedSignalStore } from './signals/curation/curated-signal-store.js';
+import { runCurationPipeline } from './signals/curation/pipeline.js';
+import type { CurationConfig } from './signals/curation/types.js';
+import type { SkillEvaluator } from './skills/skill-evaluator.js';
 
 const logger = createSubsystemLogger('scheduler');
 
@@ -89,13 +97,36 @@ export interface SchedulerOptions {
   checkIntervalMs?: number;
   /** Reflection engine — runs after insights to grade past predictions. */
   reflectionEngine?: ReflectionEngine;
+  /** Curation pipeline dependencies — required for scheduled curation. */
+  curationPipeline?: {
+    signalArchive: SignalArchive;
+    curatedStore: CuratedSignalStore;
+    snapshotStore: PortfolioSnapshotStore;
+    config: CurationConfig;
+  };
+  /** Skill evaluator — evaluates active skills after curation. */
+  skillEvaluator?: SkillEvaluator;
+  /** Action store — persists actions created from fired skill triggers. */
+  actionStore?: ActionStore;
+  /** Portfolio snapshot store — used to build PortfolioContext for skill evaluation. */
+  snapshotStore?: PortfolioSnapshotStore;
 }
+
+/** Minimum interval between curation runs (15 minutes). */
+const CURATION_INTERVAL_MS = 15 * 60 * 1000;
+
+/** Default expiry window for actions created from skill triggers. */
+const ACTION_EXPIRY_HOURS = 24;
 
 export class Scheduler {
   private readonly orchestrator: Orchestrator;
   private readonly dataRoot: string;
   private readonly checkIntervalMs: number;
   private readonly reflectionEngine?: ReflectionEngine;
+  private readonly curationPipeline?: SchedulerOptions['curationPipeline'];
+  private readonly skillEvaluator?: SkillEvaluator;
+  private readonly actionStore?: ActionStore;
+  private readonly snapshotStore?: PortfolioSnapshotStore;
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
 
@@ -104,6 +135,10 @@ export class Scheduler {
     this.dataRoot = options.dataRoot;
     this.checkIntervalMs = options.checkIntervalMs ?? 60_000;
     this.reflectionEngine = options.reflectionEngine;
+    this.curationPipeline = options.curationPipeline;
+    this.skillEvaluator = options.skillEvaluator;
+    this.actionStore = options.actionStore;
+    this.snapshotStore = options.snapshotStore;
   }
 
   /** Start the scheduler. Checks once per minute. */
@@ -131,6 +166,7 @@ export class Scheduler {
     this.running = true;
 
     try {
+      await this.checkCurationSchedule();
       await this.checkInsightsSchedule();
     } catch (err) {
       logger.error('Scheduler tick failed', { error: err });
@@ -139,7 +175,137 @@ export class Scheduler {
     }
   }
 
-  /** Check if the process-insights workflow should run. */
+  // ---------------------------------------------------------------------------
+  // Curation schedule (every 15 minutes)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Run the Tier 1 curation pipeline if 15+ minutes have elapsed since the
+   * last run.  After curation, evaluate active skills and create Actions for
+   * any triggers that fire.
+   */
+  private async checkCurationSchedule(): Promise<void> {
+    if (!this.curationPipeline) return;
+
+    const state = await this.loadState();
+    const lastRun = state.lastRuns['run-curation'];
+
+    if (lastRun) {
+      const elapsed = Date.now() - new Date(lastRun).getTime();
+      if (elapsed < CURATION_INTERVAL_MS) return;
+    }
+
+    logger.info('Triggering scheduled curation pipeline');
+
+    // Persist the watermark before execution to prevent re-runs on crash
+    state.lastRuns['run-curation'] = new Date().toISOString();
+    await this.saveState(state);
+
+    try {
+      const result = await runCurationPipeline(this.curationPipeline);
+
+      logger.info('Scheduled curation complete', {
+        signalsProcessed: result.signalsProcessed,
+        signalsCurated: result.signalsCurated,
+        durationMs: result.durationMs,
+      });
+
+      // Evaluate active skills after curation
+      await this.evaluateSkillsAfterCuration();
+    } catch (err) {
+      logger.error('Scheduled curation failed', { error: err });
+    }
+  }
+
+  /**
+   * After curation, evaluate active skills against current portfolio state
+   * and create Actions for any triggers that fire.
+   */
+  private async evaluateSkillsAfterCuration(): Promise<void> {
+    if (!this.skillEvaluator || !this.actionStore) return;
+
+    // Resolve snapshot store — prefer the top-level option, fall back to curation pipeline's store
+    const store = this.snapshotStore ?? this.curationPipeline?.snapshotStore;
+    if (!store) return;
+
+    const snapshot = await store.getLatest();
+    if (!snapshot || snapshot.positions.length === 0) {
+      logger.info('No portfolio snapshot — skipping skill evaluation');
+      return;
+    }
+
+    // Build PortfolioContext from the latest snapshot
+    const weights: Record<string, number> = {};
+    const prices: Record<string, number> = {};
+
+    for (const position of snapshot.positions) {
+      weights[position.symbol] = snapshot.totalValue > 0 ? position.marketValue / snapshot.totalValue : 0;
+      prices[position.symbol] = position.currentPrice;
+    }
+
+    const context = {
+      weights,
+      prices,
+      priceChanges: {} as Record<string, number>,
+      indicators: {} as Record<string, Record<string, number>>,
+      earningsDays: {} as Record<string, number>,
+      portfolioDrawdown: 0,
+      positionDrawdowns: {} as Record<string, number>,
+    };
+
+    const evaluations = this.skillEvaluator.evaluate(context);
+
+    if (evaluations.length === 0) {
+      logger.info('No skill triggers fired');
+      return;
+    }
+
+    logger.info(`${evaluations.length} skill trigger(s) fired — creating actions`);
+
+    const expiresAt = new Date(Date.now() + ACTION_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
+    const now = new Date().toISOString();
+
+    for (const evaluation of evaluations) {
+      const contextSummary = Object.entries(evaluation.context)
+        .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+        .join(', ');
+
+      const result = await this.actionStore.create({
+        id: randomUUID(),
+        skillId: evaluation.skillId,
+        what: `Skill "${evaluation.skillName}" trigger fired: ${evaluation.triggerType}`,
+        why: `Trigger ${evaluation.triggerId} fired with context: ${contextSummary}`,
+        source: `skill: ${evaluation.skillName}`,
+        status: 'PENDING',
+        expiresAt,
+        createdAt: now,
+      });
+
+      if (result.success) {
+        logger.info('Action created from skill trigger', {
+          actionId: result.data.id,
+          skillId: evaluation.skillId,
+          triggerType: evaluation.triggerType,
+        });
+      } else {
+        logger.warn('Failed to create action from skill trigger', {
+          error: result.error,
+          skillId: evaluation.skillId,
+        });
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Insights schedule (daily cron — available for manual/skill-triggered use)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Check if the process-insights workflow should run.
+   *
+   * NOTE: This runs on a daily cron schedule from alerts.json. It is also
+   * available for manual or skill-triggered invocation via the orchestrator.
+   */
   private async checkInsightsSchedule(): Promise<void> {
     const config = await this.loadAlertsConfig();
     if (!config.digestSchedule) return;

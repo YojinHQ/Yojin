@@ -236,7 +236,21 @@ async function startGateway(): Promise<void> {
   });
 
   // Daily insights scheduler — reads digestSchedule from alerts.json
-  const scheduler = new Scheduler({ orchestrator, dataRoot, reflectionEngine: services.reflectionEngine });
+  const scheduler = new Scheduler({
+    orchestrator,
+    dataRoot,
+    reflectionEngine: services.reflectionEngine,
+    // Curation pipeline runs every 15 min
+    curationPipeline: {
+      signalArchive: services.signalArchive,
+      curatedStore: services.curatedSignalStore,
+      snapshotStore: services.snapshotStore,
+      config: curationConfig,
+    },
+    skillEvaluator: services.skillEvaluator,
+    actionStore: services.actionStore,
+    snapshotStore: services.snapshotStore,
+  });
   scheduler.start();
 
   const gateway = new Gateway(services.config, agentRuntime, {

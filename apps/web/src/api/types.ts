@@ -922,6 +922,62 @@ export interface CurationWorkflowStatusQueryResult {
 }
 
 // ---------------------------------------------------------------------------
+// Actions
+// ---------------------------------------------------------------------------
+
+export type ActionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
+
+export interface Action {
+  id: string;
+  signalId: string | null;
+  skillId: string | null;
+  what: string;
+  why: string;
+  source: string;
+  riskContext: string | null;
+  status: ActionStatus;
+  expiresAt: string;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Intel Feed
+// ---------------------------------------------------------------------------
+
+export interface IntelFeedSignal {
+  id: string;
+  title: string;
+  type: string;
+  sentiment: string | null;
+  tickers: string[];
+  publishedAt: string;
+  confidence: number;
+  sources: { name: string; reliability: number }[];
+  tier1: string | null;
+}
+
+export interface IntelFeedAction {
+  id: string;
+  what: string;
+  why: string;
+  source: string;
+  status: ActionStatus;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface IntelFeedQueryResult {
+  signals: IntelFeedSignal[];
+  actions: IntelFeedAction[];
+}
+
+export interface IntelFeedQueryVariables {
+  limit?: number;
+}
+
+// ---------------------------------------------------------------------------
 // Variable types
 // ---------------------------------------------------------------------------
 
