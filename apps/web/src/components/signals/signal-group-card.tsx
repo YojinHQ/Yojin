@@ -18,8 +18,8 @@ const typeVariant: Record<string, BadgeVariant> = {
 };
 
 const sentimentVariant: Record<string, BadgeVariant> = {
-  POSITIVE: 'success',
-  NEGATIVE: 'error',
+  BULLISH: 'success',
+  BEARISH: 'error',
   NEUTRAL: 'neutral',
   MIXED: 'warning',
 };
