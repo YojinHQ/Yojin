@@ -5,25 +5,31 @@
  * Pipeline:
  *   0. Data Gathering + Triage (code, no LLM) — fetches data sources, ingests signals, scores positions
  *   1. Research Analyst + Risk Manager (LLM, parallel) — deep analysis + risk assessment simultaneously
- *   2. Strategist (LLM) — synthesis, saves InsightReport, updates brain
- *   3. Merge (code) — carry forward cold positions from previous report
+ *   2. Bull + Bear Researchers (LLM, parallel) — adversarial debate, argues from RA/RM evidence
+ *   3. Strategist (LLM) — synthesis weighing bull/bear debate, saves InsightReport, updates brain
+ *   4. Merge (code) — carry forward cold positions from previous report
+ *   5. Memory Bridge (code) — store position-level predictions for future reflection
  */
 
 import type { DataGathererOptions } from './data-gatherer.js';
 import { formatBriefsForContext, formatRiskMetrics, gatherDataBriefs } from './data-gatherer.js';
 import type { InsightStore } from './insight-store.js';
+import { storeInsightMemories } from './memory-bridge.js';
 import { mergeColdPositions } from './merge.js';
 import type { ColdPosition } from './triage.js';
 import { triagePositions } from './triage.js';
 import type { Orchestrator } from '../agents/orchestrator.js';
 import { emitProgress } from '../agents/orchestrator.js';
 import { createSubsystemLogger } from '../logging/logger.js';
+import type { SignalMemoryStore } from '../memory/memory-store.js';
 
 const logger = createSubsystemLogger('process-insights');
 
 export interface ProcessInsightsOptions {
   insightStore: InsightStore;
   gathererOptions?: DataGathererOptions;
+  /** Memory store for the analyst role — used to store insight predictions for future reflection. */
+  memoryStore?: SignalMemoryStore;
 }
 
 // Tools to disable per agent when data is pre-aggregated.
@@ -31,6 +37,11 @@ export interface ProcessInsightsOptions {
 //
 // RA and RM are pure analysis stages — ALL tools disabled so the LLM
 // emits text in a single iteration with zero tool-call overhead.
+//
+// Bull/Bear researchers are advocacy-only — no tools needed, they argue
+// from the data RA already gathered.
+const DEBATE_DISABLED_TOOLS = ['recall_signal_memories'];
+
 const RA_DISABLED_TOOLS = [
   'search_entities',
   'enrich_entity',
@@ -80,7 +91,7 @@ const STRATEGIST_DISABLED_TOOLS = [
 ];
 
 export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, options: ProcessInsightsOptions): void {
-  const { insightStore, gathererOptions } = options;
+  const { insightStore, gathererOptions, memoryStore } = options;
   const hasGatherer = !!gathererOptions;
 
   // Shared state between beforeWorkflow and afterWorkflow hooks
@@ -178,7 +189,54 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
         },
       ],
 
-      // Stage 1: Strategist — 1 iteration to batch all tool calls, 1 to emit final text
+      // Stage 1: Bull + Bear Researchers — adversarial debate (parallel)
+      // Both receive RA + RM output + data briefs and argue from the evidence.
+      // Bull builds the strongest bullish case; Bear builds the strongest bearish case.
+      // The Strategist then weighs both perspectives to reduce confirmation bias.
+      [
+        {
+          agentId: 'bull-researcher',
+          maxIterations: 1,
+          disabledTools: hasGatherer ? DEBATE_DISABLED_TOOLS : undefined,
+          buildMessage: (prev) => {
+            const researchOutput = prev.get('research-analyst')?.text ?? '';
+            const riskOutput = prev.get('risk-manager')?.text ?? '';
+            const dataBriefs = prev.get('__data_briefs')?.text ?? '';
+
+            return (
+              `Build the strongest possible BULLISH case for each position.\n` +
+              `Use ONLY the data provided — do NOT call any tools.\n\n` +
+              `## Research Brief\n${researchOutput}\n\n` +
+              `## Risk Assessment\n${riskOutput}\n\n` +
+              (dataBriefs ? `## Position Data\n${dataBriefs}\n\n` : '') +
+              `For each position: bullish thesis, supporting evidence (cite specific numbers/signals), ` +
+              `why bears are wrong, upcoming catalysts, and conviction (1-5).`
+            );
+          },
+        },
+        {
+          agentId: 'bear-researcher',
+          maxIterations: 1,
+          disabledTools: hasGatherer ? DEBATE_DISABLED_TOOLS : undefined,
+          buildMessage: (prev) => {
+            const researchOutput = prev.get('research-analyst')?.text ?? '';
+            const riskOutput = prev.get('risk-manager')?.text ?? '';
+            const dataBriefs = prev.get('__data_briefs')?.text ?? '';
+
+            return (
+              `Build the strongest possible BEARISH case for each position.\n` +
+              `Use ONLY the data provided — do NOT call any tools.\n\n` +
+              `## Research Brief\n${researchOutput}\n\n` +
+              `## Risk Assessment\n${riskOutput}\n\n` +
+              (dataBriefs ? `## Position Data\n${dataBriefs}\n\n` : '') +
+              `For each position: bearish thesis, supporting evidence (cite specific numbers/signals), ` +
+              `why bulls are wrong, downside risks, and conviction (1-5).`
+            );
+          },
+        },
+      ],
+
+      // Stage 2: Strategist — 1 iteration to batch all tool calls, 1 to emit final text
       {
         agentId: 'strategist',
         maxIterations: hasGatherer ? 2 : undefined,
@@ -187,20 +245,37 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
         buildMessage: (prev) => {
           const researchOutput = prev.get('research-analyst')?.text ?? '';
           const riskOutput = prev.get('risk-manager')?.text ?? '';
+          const bullOutput = prev.get('bull-researcher')?.text ?? '';
+          const bearOutput = prev.get('bear-researcher')?.text ?? '';
           const coldSummary = prev.get('__cold_summary')?.text;
           const snapshotId = prev.get('__snapshot_id')?.text ?? '';
 
           // Truncate agent outputs to reduce context — keep most important content.
           // Must be high enough to preserve signal IDs (sig-xxx) for all positions.
           const maxChars = 12000;
-          const research =
-            researchOutput.length > maxChars ? researchOutput.slice(0, maxChars) + '\n[truncated]' : researchOutput;
-          const risk = riskOutput.length > maxChars ? riskOutput.slice(0, maxChars) + '\n[truncated]' : riskOutput;
+          const truncate = (s: string) => (s.length > maxChars ? s.slice(0, maxChars) + '\n[truncated]' : s);
+          const research = truncate(researchOutput);
+          const risk = truncate(riskOutput);
+
+          // Bull/Bear get a smaller budget — they're supplementary perspectives
+          const debateMaxChars = 6000;
+          const bull = truncate(bullOutput.length > debateMaxChars ? bullOutput.slice(0, debateMaxChars) : bullOutput);
+          const bear = truncate(bearOutput.length > debateMaxChars ? bearOutput.slice(0, debateMaxChars) : bearOutput);
 
           let prompt =
             `Synthesize insights and save a report. Be extremely concise in all string fields.\n\n` +
             `## Research\n${research}\n\n` +
             `## Risk\n${risk}\n\n`;
+
+          if (bull || bear) {
+            prompt +=
+              `## Bull/Bear Debate\n` +
+              `Two adversarial analysts have argued for and against each position. ` +
+              `Weigh both perspectives — when they agree, conviction should be HIGH. ` +
+              `When they disagree, flag the uncertainty and explain your reasoning.\n\n` +
+              (bull ? `### Bull Case\n${bull}\n\n` : '') +
+              (bear ? `### Bear Case\n${bear}\n\n` : '');
+          }
 
           if (coldSummary) {
             prompt += `## Carried-Forward\n${coldSummary}\n\n`;
@@ -318,13 +393,30 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
         }
       : undefined,
 
-    // Merge cold positions into the final report after the Strategist saves
+    // Merge cold positions and store insight memories for future reflection
     afterWorkflow: gathererOptions
       ? async () => {
-          if (pendingColdPositions.length === 0) return;
-          logger.info('Merging cold positions...', { count: pendingColdPositions.length });
-          await mergeColdPositions(insightStore, pendingColdPositions);
-          pendingColdPositions = [];
+          // 1. Merge cold positions into the final report
+          if (pendingColdPositions.length > 0) {
+            logger.info('Merging cold positions...', { count: pendingColdPositions.length });
+            await mergeColdPositions(insightStore, pendingColdPositions);
+            pendingColdPositions = [];
+          }
+
+          // 2. Store insight predictions as memories for outcome feedback loop
+          if (memoryStore) {
+            const latestReport = await insightStore.getLatest();
+            if (latestReport) {
+              try {
+                const { stored, skipped } = await storeInsightMemories(latestReport, memoryStore);
+                logger.info('Insight memories stored for reflection', { stored, skipped });
+              } catch (err) {
+                logger.warn('Failed to store insight memories', {
+                  error: err instanceof Error ? err.message : String(err),
+                });
+              }
+            }
+          }
         }
       : undefined,
   });

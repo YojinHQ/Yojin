@@ -77,13 +77,20 @@ describe('buildContext', () => {
     expect(names).toContain('display_morning_briefing');
   });
 
-  it('registers 4 agent profiles', async () => {
+  it('registers 6 agent profiles', async () => {
     const services = await buildContext({ skipVault: true });
     const agents = services.agentRegistry.getAll();
 
-    expect(agents.length).toBe(4);
+    expect(agents.length).toBe(6);
     const ids = agents.map((a) => a.id).sort();
-    expect(ids).toEqual(['research-analyst', 'risk-manager', 'strategist', 'trader']);
+    expect(ids).toEqual([
+      'bear-researcher',
+      'bull-researcher',
+      'research-analyst',
+      'risk-manager',
+      'strategist',
+      'trader',
+    ]);
   });
 
   it('vault-locked stubs return error messages', async () => {

@@ -68,6 +68,9 @@ function makeBrief(overrides?: Partial<DataBrief>): DataBrief {
         recommendation: 'Hold position with trailing stop at $160',
         confidence: 0.85,
         date: '2026-03-15',
+        grade: null,
+        lesson: null,
+        actualReturn: null,
       },
     ],
     ...overrides,
@@ -150,19 +153,22 @@ describe('formatBriefsForContext', () => {
     expect(signalLines).toHaveLength(5);
   });
 
-  it('limits to 2 memories per brief', () => {
+  it('limits to 3 memories per brief', () => {
     const brief = makeBrief({
       memories: Array.from({ length: 5 }, (_, i) => ({
         situation: `Situation ${i}`,
         recommendation: `Recommendation ${i}`,
         confidence: 0.8,
         date: '2026-03-15',
+        grade: null,
+        lesson: null,
+        actualReturn: null,
       })),
     });
 
     const result = formatBriefsForContext([brief]);
     const memoryLines = result.split('\n').filter((l) => l.includes('Recommendation'));
-    expect(memoryLines).toHaveLength(2);
+    expect(memoryLines).toHaveLength(3);
   });
 
   it('handles empty briefs in formatRiskMetrics', () => {

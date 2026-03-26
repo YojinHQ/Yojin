@@ -4,6 +4,7 @@ import type { DataGathererOptions } from '../insights/data-gatherer.js';
 import type { InsightStore } from '../insights/insight-store.js';
 import { registerProcessInsightsWorkflow } from '../insights/workflow.js';
 import { createSubsystemLogger } from '../logging/logger.js';
+import type { SignalMemoryStore } from '../memory/memory-store.js';
 import type { ReflectionEngine } from '../memory/reflection.js';
 
 const logger = createSubsystemLogger('orchestrator');
@@ -231,7 +232,12 @@ export class Orchestrator {
 
 export function registerBuiltinWorkflows(
   orchestrator: Orchestrator,
-  options?: { reflectionEngine?: ReflectionEngine; insightStore?: InsightStore; gathererOptions?: DataGathererOptions },
+  options?: {
+    reflectionEngine?: ReflectionEngine;
+    insightStore?: InsightStore;
+    gathererOptions?: DataGathererOptions;
+    memoryStore?: SignalMemoryStore;
+  },
 ): void {
   const afterStageHooks = new Map<number, () => Promise<void>>();
 
@@ -326,6 +332,7 @@ export function registerBuiltinWorkflows(
     registerProcessInsightsWorkflow(orchestrator, {
       insightStore: options.insightStore,
       gathererOptions: options.gathererOptions,
+      memoryStore: options.memoryStore,
     });
   }
 }

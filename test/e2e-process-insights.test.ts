@@ -114,26 +114,29 @@ const INSIGHT_REPORT_INPUT = {
  * save_insight_report tool call.
  */
 function createInsightsMockProvider(): AgentLoopProvider {
-  let callCount = 0;
+  let strategistCalls = 0;
 
   return {
     completeWithTools: vi.fn(async (params) => {
-      callCount++;
       const system = (params.system ?? '') as string;
+      const sysLower = system.toLowerCase();
 
-      // Determine which agent is being invoked based on system prompt or call order
-      // 3 agent runs: RA (call 1), RM (call 2), Strategist (calls 3+)
-      const isStrategist = system.toLowerCase().includes('strategist') || callCount >= 3;
+      // Detect agent by system prompt heading (specific to avoid false matches
+      // e.g. RA prompt contains "bullish" in technicals table)
+      const isStrategist = sysLower.includes('# strategist');
+      const isBull = sysLower.includes('# bull researcher');
+      const isBear = sysLower.includes('# bear researcher');
 
       if (isStrategist) {
+        strategistCalls++;
         // First Strategist call: invoke save_insight_report tool
-        if (callCount === 3) {
+        if (strategistCalls === 1) {
           return {
             content: [
               { type: 'text' as const, text: 'Synthesizing portfolio insights...' },
               {
                 type: 'tool_use' as const,
-                id: `tool-call-${callCount}`,
+                id: `tool-call-strategist-${strategistCalls}`,
                 name: 'save_insight_report',
                 input: INSIGHT_REPORT_INPUT,
               },
@@ -157,16 +160,45 @@ function createInsightsMockProvider(): AgentLoopProvider {
         };
       }
 
-      // Research Analyst (call 1) and Risk Manager (call 2)
-      const agentName = callCount === 1 ? 'Research Analyst' : 'Risk Manager';
+      if (isBull) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text:
+                'Bull case: AAPL has strong momentum with 8% earnings beat and rising RSI. ' +
+                'BTC institutional adoption accelerating. Conviction: 4/5.',
+            },
+          ] as ContentBlock[],
+          stopReason: 'end_turn',
+          usage: { inputTokens: 200, outputTokens: 100 },
+        };
+      }
+
+      if (isBear) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text:
+                'Bear case: AAPL P/E elevated at 31x, vulnerable to rate sensitivity. ' +
+                'BTC facing regulatory headwinds and macro uncertainty. Conviction: 3/5.',
+            },
+          ] as ContentBlock[],
+          stopReason: 'end_turn',
+          usage: { inputTokens: 200, outputTokens: 100 },
+        };
+      }
+
+      // Research Analyst or Risk Manager — generic analysis response
       return {
         content: [
           {
             type: 'text' as const,
             text:
-              `${agentName} analysis: AAPL shows strong fundamentals with 8% earnings beat. ` +
-              `BTC facing macro headwinds but institutional inflows rising. ` +
-              `Portfolio concentrated in tech (65%) with moderate correlation risk.`,
+              'Portfolio analysis: AAPL shows strong fundamentals with 8% earnings beat. ' +
+              'BTC facing macro headwinds but institutional inflows rising. ' +
+              'Portfolio concentrated in tech (65%) with moderate correlation risk.',
           },
         ] as ContentBlock[],
         stopReason: 'end_turn',
@@ -198,6 +230,8 @@ describe('E2E ProcessInsights workflow', () => {
     agentRegistry.register(stubProfile('strategist', ['save_insight_report']));
     agentRegistry.register(stubProfile('risk-manager'));
     agentRegistry.register(stubProfile('trader'));
+    agentRegistry.register(stubProfile('bull-researcher'));
+    agentRegistry.register(stubProfile('bear-researcher'));
 
     const runtime = new AgentRuntime({
       agentRegistry,
@@ -221,9 +255,11 @@ describe('E2E ProcessInsights workflow', () => {
       message: 'Process portfolio insights',
     });
 
-    // All 3 agents should have produced output (one run each)
+    // All 5 agents should have produced output
     expect(results.has('research-analyst')).toBe(true);
     expect(results.has('risk-manager')).toBe(true);
+    expect(results.has('bull-researcher')).toBe(true);
+    expect(results.has('bear-researcher')).toBe(true);
     expect(results.has('strategist')).toBe(true);
   });
 

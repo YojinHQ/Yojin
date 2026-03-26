@@ -135,6 +135,19 @@ export class SignalMemoryStore {
     });
   }
 
+  /** Find memories that have been reflected on (graded with lessons). */
+  async findReflected(options?: { ticker?: string; limit?: number }): Promise<MemoryEntry[]> {
+    const results = [...this.entries.values()]
+      .filter((e) => {
+        if (e.reflectedAt === null) return false;
+        if (options?.ticker && !e.tickers.includes(options.ticker)) return false;
+        return true;
+      })
+      .sort((a, b) => new Date(b.reflectedAt ?? 0).getTime() - new Date(a.reflectedAt ?? 0).getTime());
+
+    return options?.limit ? results.slice(0, options.limit) : results;
+  }
+
   async prune(): Promise<number> {
     if (this.entries.size <= this.maxEntries) return 0;
 

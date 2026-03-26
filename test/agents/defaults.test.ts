@@ -6,13 +6,13 @@ import { AgentProfileSchema } from '../../src/agents/types.js';
 describe('createDefaultProfiles', () => {
   const profiles = createDefaultProfiles();
 
-  it('creates exactly 4 profiles', () => {
-    expect(profiles).toHaveLength(4);
+  it('creates exactly 6 profiles', () => {
+    expect(profiles).toHaveLength(6);
   });
 
   it('has unique ids', () => {
     const ids = profiles.map((p) => p.id);
-    expect(new Set(ids).size).toBe(4);
+    expect(new Set(ids).size).toBe(6);
   });
 
   it('assigns correct roles', () => {
@@ -22,6 +22,8 @@ describe('createDefaultProfiles', () => {
       strategist: 'strategist',
       'risk-manager': 'risk-manager',
       trader: 'trader',
+      'bull-researcher': 'analyst',
+      'bear-researcher': 'analyst',
     });
   });
 

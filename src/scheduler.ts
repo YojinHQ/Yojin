@@ -16,6 +16,7 @@ import type { Orchestrator } from './agents/orchestrator.js';
 import { emitProgress } from './agents/orchestrator.js';
 import { AlertsConfigSchema } from './config/config.js';
 import { createSubsystemLogger } from './logging/logger.js';
+import type { ReflectionEngine } from './memory/reflection.js';
 
 const logger = createSubsystemLogger('scheduler');
 
@@ -86,12 +87,15 @@ export interface SchedulerOptions {
   dataRoot: string;
   /** Check interval in ms (default: 60_000 = 1 minute) */
   checkIntervalMs?: number;
+  /** Reflection engine — runs after insights to grade past predictions. */
+  reflectionEngine?: ReflectionEngine;
 }
 
 export class Scheduler {
   private readonly orchestrator: Orchestrator;
   private readonly dataRoot: string;
   private readonly checkIntervalMs: number;
+  private readonly reflectionEngine?: ReflectionEngine;
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
 
@@ -99,6 +103,7 @@ export class Scheduler {
     this.orchestrator = options.orchestrator;
     this.dataRoot = options.dataRoot;
     this.checkIntervalMs = options.checkIntervalMs ?? 60_000;
+    this.reflectionEngine = options.reflectionEngine;
   }
 
   /** Start the scheduler. Checks once per minute. */
@@ -172,6 +177,16 @@ export class Scheduler {
       });
 
       logger.info('Scheduled process-insights completed');
+
+      // Run reflection sweep after insights — grades past predictions older than 7 days
+      if (this.reflectionEngine) {
+        try {
+          const sweep = await this.reflectionEngine.runSweep({ olderThanDays: 7 });
+          logger.info('Post-insights reflection sweep completed', { ...sweep });
+        } catch (err) {
+          logger.warn('Reflection sweep failed (non-fatal)', { error: err });
+        }
+      }
     } catch (err) {
       logger.error('Scheduled process-insights failed', { error: err });
     }

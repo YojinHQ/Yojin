@@ -112,6 +112,10 @@ export interface MemoryBrief {
   recommendation: string;
   confidence: number;
   date: string;
+  /** Reflection fields — populated after the entry has been graded. */
+  grade: string | null;
+  lesson: string | null;
+  actualReturn: number | null;
 }
 
 export interface GatherResult {
@@ -316,11 +320,19 @@ export function formatBriefsForContext(briefs: DataBrief[]): string {
       lines.push(`  - [${sig.outputType}] ${sig.title}${sources} (id:${sig.id})`);
     }
 
-    // Memories
+    // Memories (prioritize reflected memories with lessons)
     if (b.memories.length > 0) {
       lines.push(`Past analysis:`);
-      for (const m of b.memories.slice(0, 2)) {
-        lines.push(`  - ${m.date}: ${m.recommendation.slice(0, 100)}`);
+      // Show reflected (graded) memories first, then ungraded
+      const sorted = [...b.memories].sort((ma, mb) => (mb.grade ? 1 : 0) - (ma.grade ? 1 : 0));
+      for (const m of sorted.slice(0, 3)) {
+        if (m.grade && m.actualReturn != null) {
+          const returnStr = `${m.actualReturn > 0 ? '+' : ''}${m.actualReturn.toFixed(1)}%`;
+          lines.push(`  - ${m.date}: ${m.recommendation.slice(0, 80)} (grade: ${m.grade}, ${returnStr})`);
+          if (m.lesson) lines.push(`    Lesson: ${m.lesson.slice(0, 120)}`);
+        } else {
+          lines.push(`  - ${m.date}: ${m.recommendation.slice(0, 100)}`);
+        }
       }
     }
 
@@ -708,6 +720,9 @@ function indexMemories(
       recommendation: entry.recommendation,
       confidence: entry.confidence,
       date: entry.createdAt.slice(0, 10),
+      grade: entry.grade,
+      lesson: entry.lesson,
+      actualReturn: entry.actualReturn,
     };
     for (const t of entry.tickers) {
       if (tickerSet.has(t)) {

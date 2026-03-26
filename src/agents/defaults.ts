@@ -5,6 +5,8 @@
  * This module provides a single convenience function for the composition root.
  */
 
+import { createBearResearcherProfile } from './profiles/bear-researcher.js';
+import { createBullResearcherProfile } from './profiles/bull-researcher.js';
 import { createResearchAnalystProfile } from './profiles/research-analyst.js';
 import { createRiskManagerProfile } from './profiles/risk-manager.js';
 import { createStrategistProfile } from './profiles/strategist.js';
@@ -12,5 +14,12 @@ import { createTraderProfile } from './profiles/trader.js';
 import type { AgentProfile } from './types.js';
 
 export function createDefaultProfiles(): AgentProfile[] {
-  return [createResearchAnalystProfile(), createStrategistProfile(), createRiskManagerProfile(), createTraderProfile()];
+  return [
+    createResearchAnalystProfile(),
+    createStrategistProfile(),
+    createRiskManagerProfile(),
+    createTraderProfile(),
+    createBullResearcherProfile(),
+    createBearResearcherProfile(),
+  ];
 }
