@@ -12,6 +12,7 @@
     ],
     "enabled": true,
     "priority": 1,
+    "builtin": true,
     "baseUrl": "https://api.jintel.ai/api",
     "secretRef": "jintel-api-key"
   },

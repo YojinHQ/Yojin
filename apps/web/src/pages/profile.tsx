@@ -69,7 +69,10 @@ export default function Profile() {
   const device = deviceData?.deviceInfo;
   const connections = data?.listConnections ?? [];
   const connectedPlatforms = connections.map((c) => c.platform);
-  const dataSources = dsData?.listDataSources ?? [];
+  const dataSources = [...(dsData?.listDataSources ?? [])].sort((a, b) => {
+    if (a.builtin !== b.builtin) return a.builtin ? -1 : 1;
+    return a.priority - b.priority;
+  });
 
   const refreshDs = useCallback(() => {
     reexecuteDs({ requestPolicy: 'network-only' });

@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 import { runCli } from '../core/run-cli.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
+import type { DataSourceRegistry } from '../data-sources/registry.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
 import type { EncryptedVault } from '../trust/vault/vault.js';
 
@@ -31,6 +32,7 @@ export interface DataSourceQueryOptions {
   configPath: string;
   vault?: EncryptedVault;
   ingestor?: SignalIngestor;
+  registry?: DataSourceRegistry;
 }
 
 /** Convert CLI output to RawSignalInput items for ingestion. */
@@ -66,7 +68,7 @@ function outputToSignals(output: string, config: DataSourceConfig): RawSignalInp
 }
 
 export function createDataSourceQueryTools(options: DataSourceQueryOptions): ToolDefinition[] {
-  const { configPath, vault, ingestor } = options;
+  const { configPath, vault, ingestor, registry } = options;
 
   // Shared: resolve API key from vault
   async function resolveApiKey(config: DataSourceConfig): Promise<{ key: string } | { error: string }> {
@@ -236,7 +238,64 @@ export function createDataSourceQueryTools(options: DataSourceQueryOptions): Too
       url: z.string().optional().describe('URL to fetch for URL-based sources'),
     }),
     async execute(params: { sourceId: string; query?: string; url?: string }): Promise<ToolResult> {
-      // Load config
+      // Try registry first (generic path with priority fallback)
+      if (registry) {
+        const plugin = registry.getSource(params.sourceId);
+        if (plugin) {
+          if (!plugin.enabled) {
+            return { content: `Data source "${plugin.name}" is disabled.`, isError: true };
+          }
+          try {
+            const result = await plugin.query({
+              capability: 'query',
+              prompt: params.query,
+              url: params.url,
+              params: {},
+            });
+            const output = typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2);
+
+            // Best-effort signal ingestion
+            if (ingestor) {
+              try {
+                const signals = outputToSignals(output, {
+                  id: plugin.id,
+                  name: plugin.name,
+                  type: plugin.type.toUpperCase() as 'CLI' | 'MCP' | 'API',
+                  capabilities: plugin.capabilities.map((c) => c.id),
+                  enabled: plugin.enabled,
+                });
+                if (signals.length > 0) {
+                  const ingestResult = await ingestor.ingest(signals);
+                  return {
+                    content:
+                      output +
+                      `\n\n[Ingested ${ingestResult.ingested} signal(s), ${ingestResult.duplicates} duplicate(s)]`,
+                  };
+                }
+              } catch {
+                // Best-effort
+              }
+            }
+
+            return { content: output };
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            return { content: `Query failed: ${message}`, isError: true };
+          }
+        }
+
+        // Source not in registry — list available ones
+        const available = registry
+          .getSources()
+          .map((s) => `${s.id} (${s.name})`)
+          .join(', ');
+        return {
+          content: `Data source "${params.sourceId}" not found. Available sources: ${available || 'none'}`,
+          isError: true,
+        };
+      }
+
+      // Fallback: load from config file directly
       let configs: DataSourceConfig[];
       try {
         const content = await readFile(configPath, 'utf-8');
@@ -278,6 +337,25 @@ export function createDataSourceQueryTools(options: DataSourceQueryOptions): Too
       'Shows which sources are available, enabled, and what they can do.',
     parameters: z.object({}),
     async execute(): Promise<ToolResult> {
+      // Use registry when available
+      if (registry) {
+        const sources = registry.getSources();
+        if (sources.length === 0) {
+          return { content: 'No data sources configured.' };
+        }
+
+        const lines = ['# Configured Data Sources', ''];
+        for (const s of sources) {
+          const status = s.enabled ? 'ENABLED' : 'DISABLED';
+          const caps = s.capabilities.map((c) => c.id).join(', ');
+          lines.push(`- **${s.name}** (${s.id}) [${status}]`);
+          lines.push(`  Type: ${s.type.toUpperCase()} | Capabilities: ${caps}`);
+        }
+
+        return { content: lines.join('\n') };
+      }
+
+      // Fallback: load from config file
       let configs: DataSourceConfig[];
       try {
         const content = await readFile(configPath, 'utf-8');

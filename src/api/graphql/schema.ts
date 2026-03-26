@@ -408,6 +408,7 @@ export const typeDefs = /* GraphQL */ `
     lastError: String
     lastFetchedAt: String
     priority: Int!
+    builtin: Boolean!
   }
 
   type DataSourceResult {

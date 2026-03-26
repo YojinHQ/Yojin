@@ -93,6 +93,11 @@ export function DataSourceCard({
               <Badge variant={variant} size="xs">
                 {label}
               </Badge>
+              {source.builtin && (
+                <Badge variant="accent" size="xs">
+                  Built-in
+                </Badge>
+              )}
             </div>
             <div className="mt-0.5 flex items-center gap-2 text-xs text-text-muted">
               <span>{typeLabels[source.type] ?? source.type}</span>
@@ -119,30 +124,34 @@ export function DataSourceCard({
                 {hasSearchCapability ? 'Search' : fetching ? 'Fetching...' : 'Fetch'}
               </Button>
             )}
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onToggle(source.id, !source.enabled)}
-              disabled={toggling}
-            >
-              {toggling ? <Spinner size="sm" className="text-current" /> : source.enabled ? 'Disable' : 'Enable'}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={`Remove ${source.name}`}
-              onClick={() => setConfirmRemove(true)}
-            >
-              <svg
-                className="h-4 w-4 text-text-muted"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
+            {!source.builtin && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => onToggle(source.id, !source.enabled)}
+                disabled={toggling}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-              </svg>
-            </Button>
+                {toggling ? <Spinner size="sm" className="text-current" /> : source.enabled ? 'Disable' : 'Enable'}
+              </Button>
+            )}
+            {!source.builtin && (
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`Remove ${source.name}`}
+                onClick={() => setConfirmRemove(true)}
+              >
+                <svg
+                  className="h-4 w-4 text-text-muted"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </Button>
+            )}
           </div>
         </div>
 

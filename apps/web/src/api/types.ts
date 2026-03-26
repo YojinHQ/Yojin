@@ -431,6 +431,7 @@ export interface DataSource {
   lastError: string | null;
   lastFetchedAt: string | null;
   priority: number;
+  builtin: boolean;
 }
 
 export interface DataSourceResult {

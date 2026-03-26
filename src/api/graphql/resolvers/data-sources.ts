@@ -14,6 +14,7 @@ import { promisify } from 'node:util';
 import type { JintelClient } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
+import type { DataSourceRegistry } from '../../../data-sources/registry.js';
 import { createSubsystemLogger } from '../../../logging/logger.js';
 
 const runExec = promisify(execFile);
@@ -39,6 +40,7 @@ interface DataSource {
   lastError?: string;
   lastFetchedAt?: string;
   priority: number;
+  builtin: boolean;
 }
 
 const DataSourceConfigSchema = z.object({
@@ -48,6 +50,7 @@ const DataSourceConfigSchema = z.object({
   capabilities: z.array(z.string()),
   enabled: z.boolean(),
   priority: z.number(),
+  builtin: z.boolean().default(false),
   baseUrl: z.string().optional(),
   secretRef: z.string().optional(),
   command: z.string().optional(),
@@ -78,6 +81,13 @@ export function setDataSourceConfigPath(path: string): void {
 
 export function setDataSourceJintelClient(getter: () => JintelClient | undefined): void {
   getJintelClient = getter;
+}
+
+/** Optional registry — used for generic health checks when available. */
+let dataSourceRegistry: DataSourceRegistry | null = null;
+
+export function setDataSourceRegistry(registry: DataSourceRegistry): void {
+  dataSourceRegistry = registry;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +142,7 @@ function configToDataSource(config: DataSourceConfig): DataSource {
         ? 'Health check pending — restart server or check vault'
         : undefined),
     priority: config.priority,
+    builtin: config.builtin ?? false,
   };
 }
 
@@ -184,6 +195,7 @@ export async function addDataSourceResolver(
     capabilities: input.capabilities,
     enabled: input.enabled ?? true,
     priority: input.priority ?? 10,
+    builtin: false,
     baseUrl: input.baseUrl,
     secretRef: input.secretRef,
     command: input.command,
@@ -206,6 +218,10 @@ export async function removeDataSourceResolver(_parent: unknown, args: { id: str
     return { success: false, error: `Data source "${args.id}" not found` };
   }
 
+  if (configs[idx].builtin) {
+    return { success: false, error: `Cannot remove builtin data source "${args.id}"` };
+  }
+
   const [removed] = configs.splice(idx, 1);
   await saveConfigs(configs);
   logger.info(`Removed data source: ${args.id}`);
@@ -222,6 +238,10 @@ export async function toggleDataSourceResolver(
 
   if (!config) {
     return { success: false, error: `Data source "${args.id}" not found` };
+  }
+
+  if (config.builtin && !args.enabled) {
+    return { success: false, error: `Cannot disable builtin data source "${args.id}"` };
   }
 
   config.enabled = args.enabled;
@@ -243,6 +263,20 @@ export async function toggleDataSourceResolver(
 
 /** Check a single data source's prerequisites. Returns error string or null if healthy. */
 async function checkSource(config: DataSourceConfig): Promise<string | null> {
+  // Use the registry's plugin health check when available (generic path)
+  if (dataSourceRegistry) {
+    const plugin = dataSourceRegistry.getSource(config.id);
+    if (plugin) {
+      try {
+        const result = await plugin.healthCheck();
+        return result.healthy ? null : (result.error ?? 'Health check failed');
+      } catch (err) {
+        return err instanceof Error ? err.message : String(err);
+      }
+    }
+  }
+
+  // Fallback: legacy per-type checks (when registry not wired)
   if (config.type === 'CLI') {
     if (!config.command) return 'No command configured';
     try {

@@ -20,6 +20,7 @@ import {
   runHealthChecks,
   setDataSourceConfigPath,
   setDataSourceJintelClient,
+  setDataSourceRegistry,
 } from './api/graphql/resolvers/data-sources.js';
 import { setFetchDeps } from './api/graphql/resolvers/fetch-data-source.js';
 import { setInsightStore } from './api/graphql/resolvers/insights.js';
@@ -46,6 +47,9 @@ import { loadConfig } from './config/config.js';
 import { starterTools } from './core/starter-tools.js';
 import { ToolRegistry } from './core/tool-registry.js';
 import type { ToolDefinition, ToolResult } from './core/types.js';
+import { ApiAdapter } from './data-sources/adapters/api-adapter.js';
+import { CliAdapter } from './data-sources/adapters/cli-adapter.js';
+import { loadDataSourceConfigs } from './data-sources/config-loader.js';
 import { DataSourceRegistry } from './data-sources/registry.js';
 import { GuardRunner } from './guards/guard-runner.js';
 import { POSTURE_CONFIGS } from './guards/posture.js';
@@ -282,7 +286,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   if (vault) setOnboardingVault(vault);
   if (connectionManager) setOnboardingConnectionManager(connectionManager);
 
-  // 6. DataSourceRegistry (empty — no sources registered yet)
+  // 6. DataSourceRegistry
   const dataSourceRegistry = new DataSourceRegistry();
 
   // 6a. Seed data-sources.json from factory defaults if missing, or add Jintel if absent
@@ -305,6 +309,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
           capabilities: ['enrichment', 'news', 'quotes', 'sanctions', 'search'],
           enabled: true,
           priority: 1,
+          builtin: true,
           baseUrl: 'https://api.jintel.ai/api',
           secretRef: 'jintel-api-key',
         });
@@ -357,7 +362,52 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   // Wire Jintel client into data source health checks
   setDataSourceJintelClient(() => jintelClient);
 
-  // 6d. Run data source health checks (non-blocking — after Jintel client init)
+  // 6d. Populate DataSourceRegistry with adapters from config
+  try {
+    const dsConfigs = await loadDataSourceConfigs(dsConfigPath);
+    for (const dsCfg of dsConfigs) {
+      try {
+        if (dsCfg.config.type === 'api') {
+          const jintelHealthClient = dsCfg.id === 'jintel' ? jintelClient : undefined;
+          const adapter = new ApiAdapter(dsCfg, {
+            vault,
+            // Jintel gets a custom health check that uses its typed client
+            healthCheckFn: jintelHealthClient
+              ? async () => {
+                  const start = Date.now();
+                  try {
+                    const result = await jintelHealthClient.healthCheck();
+                    return { healthy: result.healthy, latencyMs: result.latencyMs };
+                  } catch (err) {
+                    return {
+                      healthy: false,
+                      latencyMs: Date.now() - start,
+                      error: err instanceof Error ? err.message : String(err),
+                    };
+                  }
+                }
+              : undefined,
+          });
+          await adapter.initialize(dsCfg);
+          dataSourceRegistry.register(adapter);
+        } else if (dsCfg.config.type === 'cli') {
+          const adapter = new CliAdapter(dsCfg, { vault });
+          await adapter.initialize(dsCfg);
+          dataSourceRegistry.register(adapter);
+        }
+      } catch (err) {
+        log.warn(`Failed to register data source "${dsCfg.id}"`, { error: String(err) });
+      }
+    }
+    log.info(`DataSourceRegistry ready — ${dataSourceRegistry.getSources().length} sources`);
+  } catch (err) {
+    log.warn('Failed to load data source configs for registry', { error: String(err) });
+  }
+
+  // Wire registry into resolver for generic health checks
+  setDataSourceRegistry(dataSourceRegistry);
+
+  // 6e. Run data source health checks (non-blocking — after Jintel client init)
   runHealthChecks().catch((err) => log.warn('Data source health check failed', { error: String(err) }));
 
   // 7. ToolRegistry — register all tools
@@ -457,6 +507,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     configPath: `${dataRoot}/config/data-sources.json`,
     vault,
     ingestor: signalIngestor,
+    registry: dataSourceRegistry,
   })) {
     toolRegistry.register(tool);
   }

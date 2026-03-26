@@ -176,6 +176,7 @@ export const DataSourceConfigSchema = z.object({
   capabilities: z.array(DataSourceCapabilitySchema),
   enabled: z.boolean().default(true),
   priority: z.number().default(10),
+  builtin: z.boolean().default(false),
   config: z.discriminatedUnion('type', [CliConfigSchema, McpConfigSchema, ApiConfigSchema]),
 });
 

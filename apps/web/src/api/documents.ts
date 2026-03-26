@@ -517,6 +517,7 @@ export const LIST_DATA_SOURCES_QUERY = gql`
       lastError
       lastFetchedAt
       priority
+      builtin
     }
   }
 `;
