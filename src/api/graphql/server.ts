@@ -81,6 +81,7 @@ import {
   enrichedSnapshotQuery,
   portfolioHistoryQuery,
   portfolioQuery,
+  portfolioSnapshotFieldResolvers,
   positionFieldResolvers,
   positionsQuery,
   refreshPositionsMutation,
@@ -162,6 +163,7 @@ const schema = createSchema({
       skill: resolveSkill,
       aiConfig: aiConfigQuery,
     },
+    PortfolioSnapshot: portfolioSnapshotFieldResolvers,
     Position: positionFieldResolvers,
     SignalGroup: signalGroupFieldResolvers,
     Mutation: {

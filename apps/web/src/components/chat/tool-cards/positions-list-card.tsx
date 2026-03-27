@@ -1,7 +1,7 @@
 import { Briefcase, TrendingUp, TrendingDown, Activity, List } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { cn } from '../../../lib/utils';
-import { usePositions } from '../../../api';
+import { usePortfolio } from '../../../api';
 import type { Position } from '../../../api';
 import { useAddPositionModal } from '../../../lib/add-position-modal-context';
 import { SymbolCell } from '../../common/symbol-logo';
@@ -58,7 +58,8 @@ interface PositionsListCardProps {
 }
 
 export default function PositionsListCard({ variant }: PositionsListCardProps) {
-  const [{ data, fetching, error }] = usePositions();
+  const [{ data: portfolioData, fetching, error }] = usePortfolio();
+  const data = portfolioData?.portfolio;
   const navigate = useNavigate();
   const { openModal: openAddPosition } = useAddPositionModal();
   const config = VARIANT_CONFIG[variant];

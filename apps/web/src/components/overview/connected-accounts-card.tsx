@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { usePositions } from '../../api';
+import { usePortfolio } from '../../api';
 import { useOnboardingStatus } from '../../lib/onboarding-context';
 import Spinner from '../common/spinner';
 import Button from '../common/button';
@@ -36,12 +36,12 @@ function formatCurrency(n: number): string {
 }
 
 export default function ConnectedAccountsCard() {
-  const [{ data, fetching, error }, reexecuteQuery] = usePositions();
+  const [{ data: portfolioData, fetching, error }, reexecuteQuery] = usePortfolio();
   const [modalOpen, setModalOpen] = useState(false);
   const { openOnboarding, completed: onboardingComplete, skipped: onboardingSkipped } = useOnboardingStatus();
 
   const accounts = useMemo<AccountSummary[]>(() => {
-    const positions = data?.positions ?? [];
+    const positions = portfolioData?.portfolio?.positions ?? [];
     if (positions.length === 0) return [];
 
     const grouped: Record<string, { totalValue: number; change: number; count: number }> = {};
@@ -62,7 +62,7 @@ export default function ConnectedAccountsCard() {
         positionCount: agg.count,
       }))
       .sort((a, b) => b.totalValue - a.totalValue);
-  }, [data?.positions]);
+  }, [portfolioData?.portfolio?.positions]);
 
   const connectedPlatformIds = accounts.map((a) => a.platform);
 

@@ -1,15 +1,11 @@
 // Hooks — the primary import for components
 export {
   usePortfolio,
-  usePositions,
-  usePortfolioHistory,
-  useEnrichedSnapshot,
   useRefreshPositions,
   useAddManualPosition,
   useEditPosition,
   useRemovePosition,
   useRiskReport,
-  useSectorExposure,
   useAlerts,
   useCreateAlert,
   useDismissAlert,
@@ -28,8 +24,6 @@ export type {
   Position,
   PortfolioSnapshot,
   PortfolioHistoryPoint,
-  EnrichedPosition,
-  EnrichedSnapshot,
   SectorWeight,
   Concentration,
   CorrelationCluster,
@@ -55,11 +49,7 @@ export { KNOWN_PLATFORMS, isKnownPlatform } from './types.js';
 // Documents — for advanced use (manual client.query, testing)
 export {
   PORTFOLIO_QUERY,
-  POSITIONS_QUERY,
-  PORTFOLIO_HISTORY_QUERY,
-  ENRICHED_SNAPSHOT_QUERY,
   RISK_REPORT_QUERY,
-  SECTOR_EXPOSURE_QUERY,
   ALERTS_QUERY,
   QUOTE_QUERY,
   NEWS_QUERY,

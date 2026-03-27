@@ -1,4 +1,4 @@
-import { usePortfolio, usePositions } from '../api/hooks/use-portfolio';
+import { usePortfolio } from '../api/hooks/use-portfolio';
 import Spinner from '../components/common/spinner';
 import EmptyState from '../components/common/empty-state';
 import Button from '../components/common/button';
@@ -7,14 +7,11 @@ import PositionTable from '../components/portfolio/position-table';
 import { useAddPositionModal } from '../lib/add-position-modal-context';
 
 export default function Positions() {
-  const [{ data: portfolioData, fetching: portfolioFetching, error: portfolioError }] = usePortfolio();
-  const [{ data: positionsData, fetching: positionsFetching, error: positionsError }] = usePositions();
+  const [{ data: portfolioData, fetching, error }] = usePortfolio();
   const { openModal: openAddPosition } = useAddPositionModal();
 
-  const fetching = portfolioFetching || positionsFetching;
-  const error = portfolioError || positionsError;
-  const positions = positionsData?.positions ?? [];
   const portfolio = portfolioData?.portfolio ?? null;
+  const positions = portfolio?.positions ?? [];
 
   if (fetching) {
     return (

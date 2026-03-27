@@ -101,6 +101,8 @@ export interface PortfolioSnapshot {
   totalPnlPercent: number;
   timestamp: string;
   platform: Platform | null;
+  history: PortfolioHistoryPoint[];
+  sectorExposure: SectorWeight[];
 }
 
 export interface PortfolioHistoryPoint {
@@ -577,10 +579,6 @@ export interface TickerSignals {
   signals: Signal[];
 }
 
-export interface SignalsByTickerQueryResult {
-  signalsByTicker: TickerSignals[];
-}
-
 // ---------------------------------------------------------------------------
 // Signal Groups
 // ---------------------------------------------------------------------------
@@ -595,17 +593,9 @@ export interface SignalGroup {
   lastEventAt: string;
 }
 
-export interface SignalGroupsQueryResult {
-  signalGroups: SignalGroup[];
-}
-
 export interface TickerSignalGroups {
   ticker: string;
   groups: SignalGroup[];
-}
-
-export interface SignalGroupsByTickerQueryResult {
-  signalGroupsByTicker: TickerSignalGroups[];
 }
 
 export interface SignalGroupsVariables {
@@ -760,24 +750,8 @@ export interface PortfolioQueryResult {
   portfolio: PortfolioSnapshot | null;
 }
 
-export interface PositionsQueryResult {
-  positions: Position[];
-}
-
-export interface PortfolioHistoryQueryResult {
-  portfolioHistory: PortfolioHistoryPoint[];
-}
-
-export interface EnrichedSnapshotQueryResult {
-  enrichedSnapshot: EnrichedSnapshot | null;
-}
-
 export interface RiskReportQueryResult {
   riskReport: RiskReport | null;
-}
-
-export interface SectorExposureQueryResult {
-  sectorExposure: SectorWeight[];
 }
 
 export interface AlertsQueryResult {

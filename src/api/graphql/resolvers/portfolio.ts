@@ -19,6 +19,7 @@ import type {
   PortfolioHistoryPoint,
   PortfolioSnapshot,
   Position,
+  SectorWeight,
 } from '../types.js';
 
 const log = getLogger().sub('portfolio-resolver');
@@ -440,6 +441,37 @@ export async function refreshPositionsMutation(
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// PortfolioSnapshot field resolvers (nested sub-graph)
+// ---------------------------------------------------------------------------
+
+export const portfolioSnapshotFieldResolvers = {
+  /** Nested: historical portfolio values (deduplicated by day, latest live-priced). */
+  history: (): Promise<PortfolioHistoryPoint[]> => portfolioHistoryQuery(),
+
+  /** Nested: sector allocation from the live-priced positions. */
+  sectorExposure: (parent: PortfolioSnapshot): SectorWeight[] => {
+    if (parent.positions.length === 0) return [];
+
+    const sectorMap = new Map<string, number>();
+    let total = 0;
+
+    for (const pos of parent.positions) {
+      const sector = pos.sector || 'Other';
+      sectorMap.set(sector, (sectorMap.get(sector) ?? 0) + pos.marketValue);
+      total += pos.marketValue;
+    }
+
+    if (total <= 0) return [];
+
+    return Array.from(sectorMap.entries()).map(([sector, value]) => ({
+      sector,
+      weight: value / total,
+      value,
+    }));
+  },
+};
+
 // Position field resolvers
 // ---------------------------------------------------------------------------
 

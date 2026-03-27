@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { tooltipStyle } from '../../lib/chart-utils';
-import { usePositions, usePortfolioHistory } from '../../api';
+import { usePortfolio } from '../../api';
 import Spinner from '../common/spinner';
 
 const ASSET_CLASS_COLORS: Record<string, string> = {
@@ -92,15 +92,12 @@ function AllocationBar({
 }
 
 export default function AllocationChart() {
-  const [{ data: posData, fetching: posFetching, error: posError }] = usePositions();
-  const [{ data: histData, fetching: histFetching, error: histError }] = usePortfolioHistory();
-
-  const fetching = posFetching || histFetching;
-  const error = posError || histError;
+  const [{ data: portfolioData, fetching, error }] = usePortfolio();
+  const portfolio = portfolioData?.portfolio;
 
   // Compute current allocation ratios from positions
   const assetClasses = useMemo(() => {
-    const positions = posData?.positions ?? [];
+    const positions = portfolio?.positions ?? [];
     if (positions.length === 0) return [];
 
     const totals: Record<string, number> = {};
@@ -119,16 +116,16 @@ export default function AllocationChart() {
         color: ASSET_CLASS_COLORS[assetClass] ?? ASSET_CLASS_COLORS.OTHER,
       }))
       .sort((a, b) => b.ratio - a.ratio);
-  }, [posData?.positions]);
+  }, [portfolio?.positions]);
 
-  const historyLength = histData?.portfolioHistory?.length ?? 0;
+  const historyLength = portfolio?.history?.length ?? 0;
 
   // Build time-series allocation data (only when 2+ history points exist)
   const chartData = useMemo(() => {
-    const history = histData?.portfolioHistory ?? [];
+    const history = portfolio?.history ?? [];
     if (history.length === 0 || assetClasses.length === 0) return [];
     return buildAllocationHistory(history, assetClasses);
-  }, [histData?.portfolioHistory, assetClasses]);
+  }, [portfolio?.history, assetClasses]);
 
   if (fetching) {
     return (

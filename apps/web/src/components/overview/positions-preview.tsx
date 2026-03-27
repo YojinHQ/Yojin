@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { cn } from '../../lib/utils';
 import { SymbolLogo } from '../common/symbol-logo';
-import { usePositions } from '../../api';
+import { usePortfolio } from '../../api';
 import { CardEmptyState } from '../common/card-empty-state';
 import Spinner from '../common/spinner';
 import { DashboardCard } from '../common/dashboard-card';
@@ -59,7 +59,8 @@ function Sparkline({ symbol, data, dayChangePercent }: { symbol: string; data: n
 const TH = 'whitespace-nowrap px-3 py-2 text-2xs font-medium uppercase tracking-wider text-text-muted';
 
 export default function PositionsPreview() {
-  const [{ data, fetching, error }] = usePositions();
+  const [{ data: portfolioData, fetching, error }] = usePortfolio();
+  const data = portfolioData?.portfolio;
 
   const viewAllLink = (
     <Link to="/portfolio" className="text-2xs text-accent-primary transition-colors hover:text-accent-primary/80">

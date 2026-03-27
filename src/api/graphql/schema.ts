@@ -71,6 +71,14 @@ export const typeDefs = /* GraphQL */ `
     totalPnlPercent: Float!
     timestamp: String!
     platform: String
+    """
+    Nested: historical portfolio values (delegates to PortfolioSnapshotStore).
+    """
+    history: [PortfolioHistoryPoint!]!
+    """
+    Nested: sector allocation breakdown (computed from positions).
+    """
+    sectorExposure: [SectorWeight!]!
   }
 
   # ---------------------------------------------------------------------------

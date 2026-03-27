@@ -60,6 +60,8 @@ const mockPortfolio: PortfolioSnapshot = {
   totalPnlPercent: 25.74,
   timestamp: '2026-03-19T12:00:00Z',
   platform: 'MANUAL',
+  history: [],
+  sectorExposure: [],
 };
 
 export const Default: Story = {
