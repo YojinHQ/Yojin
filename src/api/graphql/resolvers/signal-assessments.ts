@@ -5,6 +5,7 @@
  */
 
 import type { AssessmentStore } from '../../../signals/curation/assessment-store.js';
+import type { SignalVerdict, ThesisAlignment } from '../../../signals/curation/assessment-types.js';
 
 // ---------------------------------------------------------------------------
 // State
@@ -23,10 +24,10 @@ export function setAssessmentStore(s: AssessmentStore): void {
 interface SignalAssessmentGql {
   signalId: string;
   ticker: string;
-  verdict: string;
+  verdict: SignalVerdict;
   relevanceScore: number;
   reasoning: string;
-  thesisAlignment: string;
+  thesisAlignment: ThesisAlignment;
   actionability: number;
 }
 
@@ -96,10 +97,10 @@ function toGql(report: {
   assessments: Array<{
     signalId: string;
     ticker: string;
-    verdict: string;
+    verdict: SignalVerdict;
     relevanceScore: number;
     reasoning: string;
-    thesisAlignment: string;
+    thesisAlignment: ThesisAlignment;
     actionability: number;
   }>;
   signalsInput: number;

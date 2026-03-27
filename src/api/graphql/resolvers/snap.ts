@@ -5,7 +5,7 @@
  */
 
 import type { SnapStore } from '../../../snap/snap-store.js';
-import type { Snap } from '../../../snap/types.js';
+import type { Snap, SnapSeverity } from '../../../snap/types.js';
 
 // ---------------------------------------------------------------------------
 // State
@@ -23,7 +23,7 @@ export function setSnapStore(s: SnapStore): void {
 
 interface SnapAttentionItemGql {
   label: string;
-  severity: string;
+  severity: SnapSeverity;
   ticker: string | null;
 }
 

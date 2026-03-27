@@ -30,31 +30,6 @@ export const POSITION_FIELDS = gql`
   }
 `;
 
-export const ENRICHED_POSITION_FIELDS = gql`
-  fragment EnrichedPositionFields on EnrichedPosition {
-    symbol
-    name
-    quantity
-    costBasis
-    currentPrice
-    marketValue
-    unrealizedPnl
-    unrealizedPnlPercent
-    sector
-    assetClass
-    platform
-    sentimentScore
-    sentimentLabel
-    analystRating
-    targetPrice
-    peRatio
-    dividendYield
-    beta
-    fiftyTwoWeekHigh
-    fiftyTwoWeekLow
-  }
-`;
-
 export const ALERT_FIELDS = gql`
   fragment AlertFields on Alert {
     id
@@ -113,24 +88,6 @@ export const PORTFOLIO_HISTORY_QUERY = gql`
       totalPnlPercent
     }
   }
-`;
-
-export const ENRICHED_SNAPSHOT_QUERY = gql`
-  query EnrichedSnapshot {
-    enrichedSnapshot {
-      id
-      positions {
-        ...EnrichedPositionFields
-      }
-      totalValue
-      totalCost
-      totalPnl
-      totalPnlPercent
-      timestamp
-      enrichedAt
-    }
-  }
-  ${ENRICHED_POSITION_FIELDS}
 `;
 
 // ---------------------------------------------------------------------------
@@ -608,7 +565,7 @@ export const CHECK_CLI_COMMANDS_QUERY = gql`
 
 export const SIGNALS_QUERY = gql`
   query Signals(
-    $type: String
+    $type: SignalType
     $ticker: String
     $sourceId: String
     $since: String

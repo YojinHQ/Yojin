@@ -16,7 +16,7 @@ const sseClient = createSSEClient({
  *
  * Key resolution:
  * - Most types use `id` (default).
- * - Position / EnrichedPosition are keyed by `symbol` (no `id` field).
+ * - Position is keyed by `symbol:platform` (no `id` field).
  * - SectorWeight, Concentration, CorrelationCluster are embedded values (no key).
  *
  * Cache updates:
@@ -26,7 +26,6 @@ const sseClient = createSSEClient({
 const cache = cacheExchange({
   keys: {
     Position: (data) => `${data.symbol as string}:${data.platform as string}`,
-    EnrichedPosition: (data) => `${data.symbol as string}:${data.platform as string}`,
     AlertRule: () => null, // embedded, not an entity
     SectorWeight: () => null,
     Concentration: () => null,

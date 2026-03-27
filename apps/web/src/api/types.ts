@@ -46,6 +46,20 @@ export type AlertRuleType =
   | 'CORRELATION_WARNING';
 export type Direction = 'UP' | 'DOWN' | 'BOTH';
 
+export type SignalType =
+  | 'NEWS'
+  | 'FUNDAMENTAL'
+  | 'SENTIMENT'
+  | 'TECHNICAL'
+  | 'MACRO'
+  | 'FILINGS'
+  | 'SOCIALS'
+  | 'TRADING_LOGIC_TRIGGER';
+export type SignalSentiment = 'BULLISH' | 'BEARISH' | 'MIXED' | 'NEUTRAL';
+export type SourceType = 'API' | 'RSS' | 'SCRAPER' | 'ENRICHMENT';
+export type SignalVerdict = 'CRITICAL' | 'IMPORTANT' | 'NOISE';
+export type ThesisAlignment = 'SUPPORTS' | 'CHALLENGES' | 'NEUTRAL';
+
 // ---------------------------------------------------------------------------
 // Activity Log
 // ---------------------------------------------------------------------------
@@ -109,33 +123,6 @@ export interface PortfolioHistoryPoint {
   totalCost: number;
   totalPnl: number;
   totalPnlPercent: number;
-}
-
-// ---------------------------------------------------------------------------
-// Enriched
-// ---------------------------------------------------------------------------
-
-export interface EnrichedPosition extends Position {
-  sentimentScore: number | null;
-  sentimentLabel: string | null;
-  analystRating: string | null;
-  targetPrice: number | null;
-  peRatio: number | null;
-  dividendYield: number | null;
-  beta: number | null;
-  fiftyTwoWeekHigh: number | null;
-  fiftyTwoWeekLow: number | null;
-}
-
-export interface EnrichedSnapshot {
-  id: string;
-  positions: EnrichedPosition[];
-  totalValue: number;
-  totalCost: number;
-  totalPnl: number;
-  totalPnlPercent: number;
-  timestamp: string;
-  enrichedAt: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -543,13 +530,13 @@ export interface FetchDataSourceVariables {
 export interface SignalSource {
   id: string;
   name: string;
-  type: string;
+  type: SourceType;
   reliability: number;
 }
 
 export interface Signal {
   id: string;
-  type: string;
+  type: SignalType;
   title: string;
   content: string | null;
   publishedAt: string;
@@ -562,7 +549,7 @@ export interface Signal {
   link: string | null;
   tier1: string | null;
   tier2: string | null;
-  sentiment: string | null;
+  sentiment: SignalSentiment | null;
   outputType: string;
   groupId: string | null;
   version: number;
@@ -615,7 +602,7 @@ export interface SignalGroupsVariables {
 }
 
 export interface SignalsVariables {
-  type?: string;
+  type?: SignalType;
   ticker?: string;
   sourceId?: string;
   since?: string;
@@ -635,7 +622,7 @@ export type PortfolioHealth = 'STRONG' | 'HEALTHY' | 'CAUTIOUS' | 'WEAK' | 'CRIT
 
 export interface SignalSummary {
   signalId: string;
-  type: string;
+  type: SignalType;
   title: string;
   impact: string;
   confidence: number;
@@ -766,10 +753,6 @@ export interface PositionsQueryResult {
 
 export interface PortfolioHistoryQueryResult {
   portfolioHistory: PortfolioHistoryPoint[];
-}
-
-export interface EnrichedSnapshotQueryResult {
-  enrichedSnapshot: EnrichedSnapshot | null;
 }
 
 export interface RiskReportQueryResult {

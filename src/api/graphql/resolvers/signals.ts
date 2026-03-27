@@ -6,7 +6,7 @@
 
 import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { SignalArchive, SignalQueryFilter } from '../../../signals/archive.js';
-import type { Signal } from '../../../signals/types.js';
+import type { Signal, SignalSentiment, SignalType, SourceType } from '../../../signals/types.js';
 
 // ---------------------------------------------------------------------------
 // State
@@ -30,13 +30,13 @@ export function setSignalSnapshotStore(store: PortfolioSnapshotStore): void {
 export interface SignalSourceGql {
   id: string;
   name: string;
-  type: string;
+  type: SourceType;
   reliability: number;
 }
 
 export interface SignalGql {
   id: string;
-  type: string;
+  type: SignalType;
   title: string;
   content: string | null;
   publishedAt: string;
@@ -49,7 +49,7 @@ export interface SignalGql {
   link: string | null;
   tier1: string | null;
   tier2: string | null;
-  sentiment: string | null;
+  sentiment: SignalSentiment | null;
   outputType: string;
   groupId: string | null;
   version: number;
@@ -90,7 +90,7 @@ export function toGql(signal: Signal): SignalGql {
 export async function signalsResolver(
   _parent: unknown,
   args: {
-    type?: string;
+    type?: SignalType;
     ticker?: string;
     sourceId?: string;
     since?: string;

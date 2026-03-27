@@ -2,7 +2,6 @@ export {
   usePortfolio,
   usePositions,
   usePortfolioHistory,
-  useEnrichedSnapshot,
   useRefreshPositions,
   useAddManualPosition,
   useEditPosition,
