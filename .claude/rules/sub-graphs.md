@@ -78,3 +78,15 @@ Every piece of data must have exactly one canonical query path. Never expose the
 | Signal groups | `signalGroups` | SignalGroupArchive |
 | Curated signals | `curatedSignals` | CuratedSignalStore |
 | Insight reports | `insightReports` / `latestInsightReport` | InsightStore |
+
+## Live data: always fetch, never serve stale
+
+Any resolver or mutation that returns price-sensitive data (currentPrice, marketValue, unrealizedPnl, totalValue, dayChange, sparkline) **must call `enrichWithLiveQuotes()`** before returning.
+
+### Rules
+
+- **Queries**: `portfolioQuery` already calls `enrichWithLiveQuotes`. Any new query returning `PortfolioSnapshot` must do the same.
+- **Mutations**: Every mutation that returns `PortfolioSnapshot` (add, edit, remove, refresh) must call `enrichWithLiveQuotes()` on the saved snapshot before returning. Never return the raw `snapshotStore.save()` result — it has `costBasis` as `currentPrice`, zero PnL, and no `dayChange`.
+- **Subscriptions**: `pubsub.publish('portfolioUpdate', ...)` must publish the enriched snapshot, not the raw saved one.
+- **History trailing point**: `portfolioHistoryQuery` must live-price the most recent data point (today's entry) via `enrichWithLiveQuotes`. Historical points use stored values to preserve the time-series.
+- **Fallback**: If Jintel is unavailable, `enrichWithLiveQuotes` returns the original snapshot unchanged (stored prices). This is acceptable — the data may be stale but it's the best available. Do NOT fabricate prices or use hardcoded stubs.

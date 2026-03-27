@@ -281,8 +281,9 @@ export async function addManualPositionMutation(
     platform: effectivePlatform,
     existingSnapshot: existing,
   });
-  pubsub.publish('portfolioUpdate', snapshot);
-  return snapshot;
+  const enriched = await enrichWithLiveQuotes(snapshot);
+  pubsub.publish('portfolioUpdate', enriched);
+  return enriched;
 }
 
 export async function editPositionMutation(
@@ -331,8 +332,9 @@ export async function editPositionMutation(
       positions: existing.positions.filter((p) => (p.platform ?? '').toUpperCase() !== targetPlatform),
     },
   });
-  pubsub.publish('portfolioUpdate', snapshot);
-  return snapshot;
+  const enriched = await enrichWithLiveQuotes(snapshot);
+  pubsub.publish('portfolioUpdate', enriched);
+  return enriched;
 }
 
 export async function removePositionMutation(
@@ -361,8 +363,9 @@ export async function removePositionMutation(
       positions: existing.positions.filter((p) => (p.platform ?? '').toUpperCase() !== targetPlatform),
     },
   });
-  pubsub.publish('portfolioUpdate', snapshot);
-  return snapshot;
+  const enriched = await enrichWithLiveQuotes(snapshot);
+  pubsub.publish('portfolioUpdate', enriched);
+  return enriched;
 }
 
 export async function refreshPositionsMutation(
