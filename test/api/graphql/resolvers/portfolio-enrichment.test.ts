@@ -1,11 +1,9 @@
-import type { Entity, JintelClient, JintelResult, MarketQuote } from '@yojinhq/jintel-client';
+import type { JintelClient, MarketQuote } from '@yojinhq/jintel-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  enrichedSnapshotQuery,
   portfolioQuery,
   positionFieldResolvers,
-  positionsQuery,
   setPortfolioJintelClient,
   setSnapshotStore,
 } from '../../../../src/api/graphql/resolvers/portfolio.js';
@@ -61,117 +59,9 @@ function createMockStore(): PortfolioSnapshotStore {
   } as unknown as PortfolioSnapshotStore;
 }
 
-function createMockJintelClient(enrichFn?: JintelClient['enrichEntity']): JintelClient {
-  return {
-    enrichEntity: enrichFn ?? vi.fn(),
-    quotes: vi.fn().mockResolvedValue({ success: true, data: [] }),
-  } as unknown as JintelClient;
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-describe('enrichedSnapshotQuery', () => {
-  beforeEach(() => {
-    setPortfolioJintelClient(undefined);
-    setSnapshotStore(createMockStore() as unknown as PortfolioSnapshotStore);
-  });
-
-  it('enriches positions when Jintel client is available', async () => {
-    const enrichFn = vi.fn().mockImplementation((ticker: string): Promise<JintelResult<Entity>> => {
-      const fundamentals: Record<string, Record<string, unknown>> = {
-        AAPL: {
-          peRatio: 28.5,
-          dividendYield: 0.55,
-          beta: 1.2,
-          fiftyTwoWeekHigh: 200,
-          fiftyTwoWeekLow: 130,
-          sector: 'Technology',
-          source: 'test',
-        },
-        GOOG: {
-          peRatio: 25.1,
-          dividendYield: null,
-          beta: 1.1,
-          fiftyTwoWeekHigh: 160,
-          fiftyTwoWeekLow: 90,
-          sector: 'Technology',
-          source: 'test',
-        },
-      };
-
-      return Promise.resolve({
-        success: true as const,
-        data: {
-          market: { fundamentals: fundamentals[ticker] },
-        } as unknown as Entity,
-      });
-    });
-
-    setPortfolioJintelClient(createMockJintelClient(enrichFn));
-
-    const result = await enrichedSnapshotQuery();
-
-    expect(result.positions).toHaveLength(2);
-    expect(result.enrichedAt).toBeDefined();
-
-    const aapl = result.positions.find((p) => p.symbol === 'AAPL')!;
-    expect(aapl.peRatio).toBe(28.5);
-    expect(aapl.dividendYield).toBe(0.55);
-    expect(aapl.beta).toBe(1.2);
-    expect(aapl.fiftyTwoWeekHigh).toBe(200);
-    expect(aapl.fiftyTwoWeekLow).toBe(130);
-    expect(aapl.sector).toBe('Technology');
-
-    const goog = result.positions.find((p) => p.symbol === 'GOOG')!;
-    expect(goog.peRatio).toBe(25.1);
-    expect(goog.dividendYield).toBeUndefined(); // null → undefined
-    expect(goog.beta).toBe(1.1);
-
-    expect(enrichFn).toHaveBeenCalledWith('AAPL', ['market']);
-    expect(enrichFn).toHaveBeenCalledWith('GOOG', ['market']);
-  });
-
-  it('returns unenriched positions when Jintel fails', async () => {
-    const enrichFn = vi.fn().mockResolvedValue({
-      success: false,
-      error: 'Entity not found',
-    });
-
-    setPortfolioJintelClient(createMockJintelClient(enrichFn));
-
-    const result = await enrichedSnapshotQuery();
-
-    expect(result.positions).toHaveLength(2);
-    const aapl = result.positions.find((p) => p.symbol === 'AAPL')!;
-    expect(aapl.peRatio).toBeUndefined();
-    expect(aapl.beta).toBeUndefined();
-    expect(aapl.sector).toBeUndefined();
-    // Original position fields are preserved
-    expect(aapl.symbol).toBe('AAPL');
-    expect(aapl.currentPrice).toBe(175);
-  });
-
-  it('returns unenriched positions when no client', async () => {
-    setPortfolioJintelClient(undefined);
-
-    const result = await enrichedSnapshotQuery();
-
-    expect(result.positions).toHaveLength(2);
-    const aapl = result.positions.find((p) => p.symbol === 'AAPL')!;
-    expect(aapl.peRatio).toBeUndefined();
-    expect(aapl.beta).toBeUndefined();
-    expect(aapl.fiftyTwoWeekHigh).toBeUndefined();
-    // Original fields preserved
-    expect(aapl.symbol).toBe('AAPL');
-    expect(aapl.marketValue).toBe(1750);
-    // Snapshot-level fields
-    expect(result.totalValue).toBe(2450);
-    expect(result.id).toMatch(/^enriched-/);
-    expect(result.enrichedAt).toBeDefined();
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Live quote enrichment tests
@@ -216,10 +106,10 @@ describe('live quote enrichment', () => {
     setSnapshotStore(createMockStore() as unknown as PortfolioSnapshotStore);
   });
 
-  it('positionsQuery returns positions with live prices from Jintel quotes', async () => {
+  it('portfolioQuery returns positions with live prices from Jintel quotes', async () => {
     setPortfolioJintelClient(createQuoteMockClient());
 
-    const positions = await positionsQuery();
+    const positions = (await portfolioQuery()).positions;
 
     const aapl = positions.find((p) => p.symbol === 'AAPL')!;
     expect(aapl.currentPrice).toBe(190);
@@ -257,7 +147,7 @@ describe('live quote enrichment', () => {
     const failingQuotes = vi.fn().mockResolvedValue({ success: false, error: 'API down' });
     setPortfolioJintelClient(createQuoteMockClient(failingQuotes));
 
-    const positions = await positionsQuery();
+    const positions = (await portfolioQuery()).positions;
 
     // Positions retain original store values
     const aapl = positions.find((p) => p.symbol === 'AAPL')!;
@@ -269,7 +159,7 @@ describe('live quote enrichment', () => {
     const throwingQuotes = vi.fn().mockRejectedValue(new Error('Network error'));
     setPortfolioJintelClient(createQuoteMockClient(throwingQuotes));
 
-    const positions = await positionsQuery();
+    const positions = (await portfolioQuery()).positions;
 
     const aapl = positions.find((p) => p.symbol === 'AAPL')!;
     expect(aapl.currentPrice).toBe(175);
@@ -283,7 +173,7 @@ describe('live quote enrichment', () => {
     });
     setPortfolioJintelClient(createQuoteMockClient(partialQuotes));
 
-    const positions = await positionsQuery();
+    const positions = (await portfolioQuery()).positions;
 
     // AAPL gets live price
     const aapl = positions.find((p) => p.symbol === 'AAPL')!;
@@ -303,7 +193,7 @@ describe('live quote enrichment', () => {
     });
     setPortfolioJintelClient(createQuoteMockClient(quotesWithNull));
 
-    const positions = await positionsQuery();
+    const positions = (await portfolioQuery()).positions;
 
     // AAPL gets live price from the valid quote
     const aapl = positions.find((p) => p.symbol === 'AAPL')!;
@@ -319,7 +209,7 @@ describe('live quote enrichment', () => {
     const quotesFn = vi.fn().mockResolvedValue({ success: true, data: makeQuotes() });
     setPortfolioJintelClient(createQuoteMockClient(quotesFn));
 
-    await positionsQuery();
+    await portfolioQuery();
 
     expect(quotesFn).toHaveBeenCalledTimes(1);
     expect(quotesFn).toHaveBeenCalledWith(['AAPL', 'GOOG']);

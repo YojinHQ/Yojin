@@ -50,28 +50,6 @@ describe('GraphQL resolvers', () => {
     });
   });
 
-  describe('Query.positions', () => {
-    it('returns an array of positions (empty when no data imported)', async () => {
-      const result = await executeQuery(`
-        query {
-          positions {
-            symbol
-            name
-            quantity
-            costBasis
-            currentPrice
-            marketValue
-            unrealizedPnl
-          }
-        }
-      `);
-
-      expect(result.errors).toBeUndefined();
-      const positions = result.data!.positions as unknown[];
-      expect(positions).toBeInstanceOf(Array);
-    });
-  });
-
   describe('Query.quote', () => {
     it('returns a quote for a known symbol', async () => {
       const result = await executeQuery(`
@@ -194,27 +172,6 @@ describe('GraphQL resolvers', () => {
     });
   });
 
-  describe('Query.sectorExposure', () => {
-    it('returns sector weights', async () => {
-      const result = await executeQuery(`
-        query {
-          sectorExposure {
-            sector
-            weight
-            value
-          }
-        }
-      `);
-
-      expect(result.errors).toBeUndefined();
-      const sectors = result.data!.sectorExposure as Array<{ weight: number }>;
-      expect(sectors.length).toBeGreaterThan(0);
-
-      const totalWeight = sectors.reduce((sum, s) => sum + s.weight, 0);
-      expect(totalWeight).toBeCloseTo(1.0, 1);
-    });
-  });
-
   describe('Query.alerts', () => {
     it('returns all alerts', async () => {
       const result = await executeQuery(`
@@ -251,33 +208,6 @@ describe('GraphQL resolvers', () => {
       for (const alert of alerts) {
         expect(alert.status).toBe('ACTIVE');
       }
-    });
-  });
-
-  describe('Query.enrichedSnapshot', () => {
-    it('returns enriched snapshot with enrichedAt timestamp', async () => {
-      const result = await executeQuery(`
-        query {
-          enrichedSnapshot {
-            id
-            enrichedAt
-            totalValue
-            positions {
-              symbol
-              sentimentScore
-              sentimentLabel
-              analystRating
-              targetPrice
-              beta
-            }
-          }
-        }
-      `);
-
-      expect(result.errors).toBeUndefined();
-      const snapshot = result.data!.enrichedSnapshot as Record<string, unknown>;
-      expect(snapshot.enrichedAt).toBeDefined();
-      expect(snapshot.positions).toBeInstanceOf(Array);
     });
   });
 

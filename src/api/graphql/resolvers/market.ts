@@ -1,5 +1,5 @@
 /**
- * Market resolvers — quote, news, sectorExposure.
+ * Market resolvers — quote, news.
  *
  * When JintelClient is injected, resolvers fetch live data and fall back to
  * stubs on failure. Without a client, stubs are returned directly.
@@ -8,8 +8,7 @@
 import type { JintelClient } from '@yojinhq/jintel-client';
 
 import { createSubsystemLogger } from '../../../logging/logger.js';
-import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
-import type { Article, Quote, SectorWeight } from '../types.js';
+import type { Article, Quote } from '../types.js';
 
 const log = createSubsystemLogger('market-resolver');
 
@@ -18,14 +17,9 @@ const log = createSubsystemLogger('market-resolver');
 // ---------------------------------------------------------------------------
 
 let jintelClient: JintelClient | undefined;
-let snapshotStore: PortfolioSnapshotStore | undefined;
 
 export function setMarketJintelClient(c: JintelClient | undefined): void {
   jintelClient = c;
-}
-
-export function setMarketSnapshotStore(s: PortfolioSnapshotStore | undefined): void {
-  snapshotStore = s;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,11 +98,6 @@ const stubArticles: Article[] = [
   },
 ];
 
-const stubSectorExposure: SectorWeight[] = [
-  { sector: 'Technology', weight: 0.388, value: 21381.0 },
-  { sector: 'Crypto', weight: 0.612, value: 33750.0 },
-];
-
 // ---------------------------------------------------------------------------
 // Query resolvers
 // ---------------------------------------------------------------------------
@@ -155,30 +144,4 @@ export function newsQuery(_parent: unknown, args: { symbol?: string; limit?: num
     articles = articles.slice(0, args.limit);
   }
   return articles;
-}
-
-export async function sectorExposureQuery(): Promise<SectorWeight[]> {
-  if (snapshotStore) {
-    const snapshot = await snapshotStore.getLatest();
-    if (snapshot && snapshot.positions.length > 0) {
-      const sectorMap = new Map<string, number>();
-      let total = 0;
-
-      for (const pos of snapshot.positions) {
-        const sector = pos.sector || 'Other';
-        sectorMap.set(sector, (sectorMap.get(sector) ?? 0) + pos.marketValue);
-        total += pos.marketValue;
-      }
-
-      if (total > 0) {
-        return Array.from(sectorMap.entries()).map(([sector, value]) => ({
-          sector,
-          weight: value / total,
-          value,
-        }));
-      }
-    }
-  }
-
-  return stubSectorExposure;
 }

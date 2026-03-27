@@ -18,13 +18,10 @@ describe('GraphQL schema', () => {
     const fields = queryType.getFields();
 
     expect(fields.portfolio).toBeDefined();
-    expect(fields.positions).toBeDefined();
-    expect(fields.enrichedSnapshot).toBeDefined();
     expect(fields.riskReport).toBeDefined();
     expect(fields.alerts).toBeDefined();
     expect(fields.news).toBeDefined();
     expect(fields.quote).toBeDefined();
-    expect(fields.sectorExposure).toBeDefined();
   });
 
   it('has all expected mutation fields', () => {

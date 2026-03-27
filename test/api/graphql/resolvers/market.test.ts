@@ -1,14 +1,7 @@
 import type { JintelClient, JintelResult, MarketQuote } from '@yojinhq/jintel-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  newsQuery,
-  quoteQuery,
-  sectorExposureQuery,
-  setMarketJintelClient,
-  setMarketSnapshotStore,
-} from '../../../../src/api/graphql/resolvers/market.js';
-import type { PortfolioSnapshotStore } from '../../../../src/portfolio/snapshot-store.js';
+import { newsQuery, quoteQuery, setMarketJintelClient } from '../../../../src/api/graphql/resolvers/market.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -43,18 +36,6 @@ function createMockJintelClient(overrides: Partial<JintelClient> = {}): JintelCl
   } as unknown as JintelClient;
 }
 
-function createMockSnapshotStore(
-  snapshot: Awaited<ReturnType<PortfolioSnapshotStore['getLatest']>> = null,
-): PortfolioSnapshotStore {
-  return {
-    getLatest: vi.fn().mockResolvedValue(snapshot),
-    save: vi.fn(),
-    getAll: vi.fn(),
-    clearAll: vi.fn(),
-    getLatestRedacted: vi.fn(),
-  } as unknown as PortfolioSnapshotStore;
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -62,7 +43,6 @@ function createMockSnapshotStore(
 describe('market resolvers', () => {
   beforeEach(() => {
     setMarketJintelClient(undefined);
-    setMarketSnapshotStore(undefined);
   });
 
   // ── quoteQuery ────────────────────────────────────────────────────────
@@ -147,66 +127,6 @@ describe('market resolvers', () => {
       const result = await newsQuery(null, { limit: 1 });
 
       expect(result).toHaveLength(1);
-    });
-  });
-
-  // ── sectorExposureQuery ───────────────────────────────────────────────
-
-  describe('sectorExposureQuery', () => {
-    it('returns stub data when no snapshot store is set', async () => {
-      const result = await sectorExposureQuery();
-
-      expect(result).toHaveLength(2);
-      expect(result[0].sector).toBe('Technology');
-    });
-
-    it('computes sector weights from snapshot positions', async () => {
-      const store = createMockSnapshotStore({
-        id: 'snap-1',
-        positions: [
-          { symbol: 'AAPL', sector: 'Technology', marketValue: 5000 },
-          { symbol: 'MSFT', sector: 'Technology', marketValue: 3000 },
-          { symbol: 'JPM', sector: 'Financials', marketValue: 2000 },
-        ] as never[],
-        totalValue: 10000,
-        totalCost: 9000,
-        totalPnl: 1000,
-        totalPnlPercent: 11.11,
-        timestamp: '2024-01-15T16:00:00Z',
-        platform: 'INTERACTIVE_BROKERS',
-      });
-      setMarketSnapshotStore(store);
-
-      const result = await sectorExposureQuery();
-
-      expect(result).toHaveLength(2);
-      const tech = result.find((s) => s.sector === 'Technology');
-      const fin = result.find((s) => s.sector === 'Financials');
-      expect(tech).toBeDefined();
-      expect(tech!.weight).toBeCloseTo(0.8);
-      expect(tech!.value).toBe(8000);
-      expect(fin).toBeDefined();
-      expect(fin!.weight).toBeCloseTo(0.2);
-      expect(fin!.value).toBe(2000);
-    });
-
-    it('falls back to stubs when snapshot has no positions', async () => {
-      const store = createMockSnapshotStore({
-        id: 'snap-1',
-        positions: [],
-        totalValue: 0,
-        totalCost: 0,
-        totalPnl: 0,
-        totalPnlPercent: 0,
-        timestamp: '2024-01-15T16:00:00Z',
-        platform: null,
-      });
-      setMarketSnapshotStore(store);
-
-      const result = await sectorExposureQuery();
-
-      expect(result).toHaveLength(2);
-      expect(result[0].sector).toBe('Technology');
     });
   });
 });

@@ -13,8 +13,6 @@ import type { ConnectionManager } from '../../../scraper/connection-manager.js';
 import { pubsub } from '../pubsub.js';
 import type {
   AssetClass,
-  EnrichedPosition,
-  EnrichedSnapshot,
   Platform,
   PortfolioHistoryPoint,
   PortfolioSnapshot,
@@ -173,12 +171,6 @@ export async function portfolioQuery(): Promise<PortfolioSnapshot> {
   return enrichWithLiveQuotes(snapshot);
 }
 
-export async function positionsQuery(): Promise<Position[]> {
-  const snapshot = await getSnapshot();
-  const enriched = await enrichWithLiveQuotes(snapshot);
-  return enriched.positions;
-}
-
 export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> {
   if (!snapshotStore) return [];
   const snapshots = await snapshotStore.getAll();
@@ -235,48 +227,6 @@ export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> 
   }
 
   return history;
-}
-
-export async function enrichedSnapshotQuery(): Promise<EnrichedSnapshot> {
-  const snapshot = await getSnapshot();
-  const liveSnapshot = await enrichWithLiveQuotes(snapshot);
-  const enriched: EnrichedPosition[] = await Promise.all(
-    liveSnapshot.positions.map(async (p): Promise<EnrichedPosition> => {
-      if (!jintelClient) {
-        return { ...p };
-      }
-
-      const result = await jintelClient.enrichEntity(p.symbol, ['market']).catch(() => ({
-        success: false as const,
-        error: 'enrichEntity threw',
-      }));
-      if (!result.success || !('data' in result) || !result.data.market?.fundamentals) {
-        return { ...p };
-      }
-
-      const f = result.data.market.fundamentals;
-      return {
-        ...p,
-        peRatio: f.peRatio ?? undefined,
-        dividendYield: f.dividendYield ?? undefined,
-        beta: f.beta ?? undefined,
-        fiftyTwoWeekHigh: f.fiftyTwoWeekHigh ?? undefined,
-        fiftyTwoWeekLow: f.fiftyTwoWeekLow ?? undefined,
-        sector: f.sector ?? undefined,
-      };
-    }),
-  );
-
-  return {
-    id: `enriched-${Date.now()}`,
-    positions: enriched,
-    totalValue: liveSnapshot.totalValue,
-    totalCost: liveSnapshot.totalCost,
-    totalPnl: liveSnapshot.totalPnl,
-    totalPnlPercent: liveSnapshot.totalPnlPercent,
-    timestamp: liveSnapshot.timestamp,
-    enrichedAt: new Date().toISOString(),
-  };
 }
 
 // ---------------------------------------------------------------------------

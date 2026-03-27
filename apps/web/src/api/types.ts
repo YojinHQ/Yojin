@@ -574,11 +574,6 @@ export interface SignalsQueryResult {
   signals: Signal[];
 }
 
-export interface TickerSignals {
-  ticker: string;
-  signals: Signal[];
-}
-
 // ---------------------------------------------------------------------------
 // Signal Groups
 // ---------------------------------------------------------------------------
@@ -591,11 +586,6 @@ export interface SignalGroup {
   outputType: string;
   firstEventAt: string;
   lastEventAt: string;
-}
-
-export interface TickerSignalGroups {
-  ticker: string;
-  groups: SignalGroup[];
 }
 
 export interface SignalGroupsVariables {

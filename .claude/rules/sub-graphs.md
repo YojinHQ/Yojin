@@ -48,3 +48,33 @@ When creating a new connector that provides entity-level data:
 1. Wire it as a sub-graph on `Entity` (loader in `entityLoaders.Entity`)
 2. If the data is also useful on `MarketQuote` or `CryptoQuote`, add it there too using the shared loader factories (`createTechnicalsLoader`, `createDerivativesLoader`, or a new factory)
 3. Top-level queries are still fine for standalone use cases (e.g. `sanctionsScreen` for ad-hoc screening without an entity)
+
+## Single source of truth per data domain
+
+Every piece of data must have exactly one canonical query path. Never expose the same data through multiple top-level queries or from different backing stores.
+
+### Rules
+
+- **One query, one store.** If two queries return the same data (or a subset), consolidate them. Use nested fields on the parent type instead of separate top-level queries. For example: `portfolio { positions, history, sectorExposure }` — not separate `positions`, `portfolioHistory`, and `sectorExposure` queries.
+- **Grouping is a client concern.** Don't create `fooByTicker` variants of existing queries. If the client needs data grouped by ticker, it should group the flat result locally (`useMemo`). Server-side grouping duplicates the resolver logic and the archive scan.
+- **One resolver per store.** If two resolvers read from the same store (e.g. `PortfolioSnapshotStore`), one should delegate to the other or both should be fields on the same parent type resolved by a single query.
+- **Remove, don't deprecate.** When consolidating queries, delete the dead query from schema, server wiring, resolver, tests, frontend documents, hooks, and types. Dead surface area misleads consumers and accumulates stale tests.
+
+### Before adding a new top-level query
+
+1. Check if the data already lives on an existing type as a nested field.
+2. Check if another query reads from the same backing store.
+3. If either is true, add a field resolver on the existing parent type instead of a new root query.
+
+### Yojin canonical query paths
+
+| Data | Canonical path | Backing store |
+|---|---|---|
+| Portfolio snapshot | `portfolio` | PortfolioSnapshotStore |
+| Positions | `portfolio.positions` | PortfolioSnapshotStore |
+| Portfolio history | `portfolio.history` | PortfolioSnapshotStore |
+| Sector exposure | `portfolio.sectorExposure` | PortfolioSnapshotStore (computed) |
+| Signals | `signals` | SignalArchive |
+| Signal groups | `signalGroups` | SignalGroupArchive |
+| Curated signals | `curatedSignals` | CuratedSignalStore |
+| Insight reports | `insightReports` / `latestInsightReport` | InsightStore |

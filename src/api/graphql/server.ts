@@ -55,7 +55,7 @@ import {
   onPriceMoveSubscription,
   onWorkflowProgressSubscription,
 } from './resolvers/live.js';
-import { newsQuery, quoteQuery, sectorExposureQuery } from './resolvers/market.js';
+import { newsQuery, quoteQuery } from './resolvers/market.js';
 import {
   briefingConfigQuery,
   completeMagicLinkMutation,
@@ -78,25 +78,17 @@ import {
 import {
   addManualPositionMutation,
   editPositionMutation,
-  enrichedSnapshotQuery,
-  portfolioHistoryQuery,
   portfolioQuery,
   portfolioSnapshotFieldResolvers,
   positionFieldResolvers,
-  positionsQuery,
   refreshPositionsMutation,
   removePositionMutation,
 } from './resolvers/portfolio.js';
 import { clearAppDataMutation, deviceInfoResolver } from './resolvers/profile.js';
 import { riskReportQuery } from './resolvers/risk.js';
 import { assessmentStatusResolver, signalAssessmentsResolver } from './resolvers/signal-assessments.js';
-import {
-  signalGroupFieldResolvers,
-  signalGroupResolver,
-  signalGroupsByTickerResolver,
-  signalGroupsResolver,
-} from './resolvers/signal-groups.js';
-import { signalsByTickerResolver, signalsResolver } from './resolvers/signals.js';
+import { signalGroupFieldResolvers, signalGroupResolver, signalGroupsResolver } from './resolvers/signal-groups.js';
+import { signalsResolver } from './resolvers/signals.js';
 import { resolveSkill, resolveSkills, resolveToggleSkill } from './resolvers/skills.js';
 import { snapQuery } from './resolvers/snap.js';
 import {
@@ -117,21 +109,15 @@ const schema = createSchema({
   resolvers: {
     Query: {
       portfolio: portfolioQuery,
-      positions: positionsQuery,
-      portfolioHistory: portfolioHistoryQuery,
-      enrichedSnapshot: enrichedSnapshotQuery,
       riskReport: riskReportQuery,
       alerts: alertsQuery,
       news: newsQuery,
       quote: quoteQuery,
-      sectorExposure: sectorExposureQuery,
       listDataSources: listDataSourcesResolver,
       checkDataSourceHealth: checkDataSourceHealthResolver,
       checkCliCommands: checkCliCommandsResolver,
       signals: signalsResolver,
-      signalsByTicker: signalsByTickerResolver,
       signalGroups: signalGroupsResolver,
-      signalGroupsByTicker: signalGroupsByTickerResolver,
       curatedSignals: curatedSignalsResolver,
       curationStatus: curationStatusResolver,
       curationWorkflowStatus: () => getCurationWorkflowStatus(),

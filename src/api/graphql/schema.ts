@@ -82,44 +82,6 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # ---------------------------------------------------------------------------
-  # Enriched
-  # ---------------------------------------------------------------------------
-
-  type EnrichedPosition {
-    symbol: String!
-    name: String!
-    quantity: Float!
-    costBasis: Float!
-    currentPrice: Float!
-    marketValue: Float!
-    unrealizedPnl: Float!
-    unrealizedPnlPercent: Float!
-    sector: String
-    assetClass: AssetClass!
-    platform: String!
-    sentimentScore: Float
-    sentimentLabel: String
-    analystRating: String
-    targetPrice: Float
-    peRatio: Float
-    dividendYield: Float
-    beta: Float
-    fiftyTwoWeekHigh: Float
-    fiftyTwoWeekLow: Float
-  }
-
-  type EnrichedSnapshot {
-    id: ID!
-    positions: [EnrichedPosition!]!
-    totalValue: Float!
-    totalCost: Float!
-    totalPnl: Float!
-    totalPnlPercent: Float!
-    timestamp: String!
-    enrichedAt: String!
-  }
-
-  # ---------------------------------------------------------------------------
   # Risk
   # ---------------------------------------------------------------------------
 
@@ -470,11 +432,6 @@ export const typeDefs = /* GraphQL */ `
     version: Int!
   }
 
-  type TickerSignals {
-    ticker: String!
-    signals: [Signal!]!
-  }
-
   type SignalGroup {
     id: String!
     signals: [Signal!]!
@@ -483,11 +440,6 @@ export const typeDefs = /* GraphQL */ `
     outputType: SignalOutputType!
     firstEventAt: String!
     lastEventAt: String!
-  }
-
-  type TickerSignalGroups {
-    ticker: String!
-    groups: [SignalGroup!]!
   }
 
   # ---------------------------------------------------------------------------
@@ -920,14 +872,10 @@ export const typeDefs = /* GraphQL */ `
   type Query {
     deviceInfo: DeviceInfo!
     portfolio: PortfolioSnapshot
-    positions: [Position!]!
-    portfolioHistory: [PortfolioHistoryPoint!]!
-    enrichedSnapshot: EnrichedSnapshot
     riskReport: RiskReport
     alerts(status: AlertStatus): [Alert!]!
     news(symbol: String, limit: Int): [Article!]!
     quote(symbol: String!): Quote
-    sectorExposure: [SectorWeight!]!
     listConnections: [Connection!]!
     detectAvailableTiers(platform: String!): [TierAvailability!]!
     listDataSources: [DataSource!]!
@@ -944,9 +892,7 @@ export const typeDefs = /* GraphQL */ `
       outputType: SignalOutputType
       limit: Int
     ): [Signal!]!
-    signalsByTicker(since: String, limit: Int): [TickerSignals!]!
     signalGroups(ticker: String, since: String, limit: Int): [SignalGroup!]!
-    signalGroupsByTicker(since: String, limit: Int): [TickerSignalGroups!]!
     curatedSignals(ticker: String, since: String, limit: Int): [CuratedSignal!]!
     curationStatus: CurationStatus!
     curationWorkflowStatus: WorkflowStatus!

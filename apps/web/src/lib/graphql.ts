@@ -34,8 +34,6 @@ const cache = cacheExchange({
     CorrelationCluster: () => null,
     PriceEvent: () => null,
     SignalSource: () => null, // embedded — same source id appears on many signals
-    TickerSignals: (data) => data.ticker as string,
-    TickerSignalGroups: (data) => data.ticker as string,
     CuratedSignal: () => null, // embedded — wraps Signal with scores
     PortfolioRelevanceScore: () => null, // embedded
     AiConfig: () => null, // singleton — no id field
@@ -91,8 +89,6 @@ const cache = cacheExchange({
       runFullCuration(_result, _args, cache) {
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
-        cache.invalidate('Query', 'signalsByTicker');
-        cache.invalidate('Query', 'signalGroupsByTicker');
       },
       createAlert(_result, _args, cache) {
         cache.invalidate('Query', 'alerts');
