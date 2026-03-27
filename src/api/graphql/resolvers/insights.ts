@@ -8,6 +8,7 @@
 import type { Orchestrator } from '../../../agents/orchestrator.js';
 import type { InsightStore } from '../../../insights/insight-store.js';
 import type { InsightReport } from '../../../insights/types.js';
+import type { SignalType } from '../../../signals/types.js';
 
 // ---------------------------------------------------------------------------
 // State
@@ -30,7 +31,7 @@ export function setInsightsOrchestrator(o: Orchestrator): void {
 
 interface SignalSummaryGql {
   signalId: string;
-  type: string;
+  type: SignalType;
   title: string;
   impact: string;
   confidence: number;
@@ -94,6 +95,7 @@ function toGql(report: InsightReport): InsightReportGql {
       ...p,
       keySignals: p.keySignals.map((s) => ({
         ...s,
+        type: s.type as SignalType,
         url: s.url ?? null,
         sourceCount: s.sourceCount ?? 1,
         detail: s.detail ?? null,

@@ -134,7 +134,7 @@ Jintel is accessed via the `@yojinhq/jintel-client` npm package. PII redaction r
 
 **ProcessInsights Workflow** — multi-agent pipeline in `src/insights/` that pre-aggregates portfolio data, triages positions (hot/warm/cold), then runs Research Analyst → Risk Manager → Strategist. Produces structured `InsightReport`s with per-position ratings, conviction scores, key signals, risks, and opportunities. Portfolio-level items (action items, risks, opportunities) are structured objects with deterministically-assigned signal references — signal IDs are matched to positions by ticker mention, not by the LLM. Reports are stored as append-only JSONL and surfaced in the Web UI via GraphQL.
 
-**GraphQL API** — graphql-yoga on Hono; exposes typed queries, mutations, and real-time subscriptions for the Web UI. The schema is the single contract between the backend and frontend — the React app reads portfolio state, risk data, agent activity, and signal feeds exclusively through this API.
+**GraphQL API** — graphql-yoga on Hono; exposes typed queries, mutations, and real-time subscriptions for the Web UI. The schema is the single contract between the backend and frontend — the React app reads portfolio state, risk data, agent activity, and signal feeds exclusively through this API. The schema uses GraphQL enums for all fixed-value fields (signal types, sentiment, verdicts, severities) and `ID!` for all entity identifiers, enabling compile-time validation on both client and server.
 
 ```graphql
 # Query available tiers

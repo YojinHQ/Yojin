@@ -607,7 +607,7 @@ export const CHECK_CLI_COMMANDS_QUERY = gql`
 
 export const SIGNALS_QUERY = gql`
   query Signals(
-    $type: String
+    $type: SignalType
     $ticker: String
     $sourceId: String
     $since: String

@@ -41,6 +41,49 @@ export const typeDefs = /* GraphQL */ `
     BOTH
   }
 
+  enum SignalType {
+    NEWS
+    FUNDAMENTAL
+    SENTIMENT
+    TECHNICAL
+    MACRO
+    FILINGS
+    SOCIALS
+    TRADING_LOGIC_TRIGGER
+  }
+
+  enum SignalSentiment {
+    BULLISH
+    BEARISH
+    MIXED
+    NEUTRAL
+  }
+
+  enum SourceType {
+    API
+    RSS
+    SCRAPER
+    ENRICHMENT
+  }
+
+  enum SnapSeverity {
+    LOW
+    MEDIUM
+    HIGH
+  }
+
+  enum SignalVerdict {
+    CRITICAL
+    IMPORTANT
+    NOISE
+  }
+
+  enum ThesisAlignment {
+    SUPPORTS
+    CHALLENGES
+    NEUTRAL
+  }
+
   # ---------------------------------------------------------------------------
   # Portfolio
   # ---------------------------------------------------------------------------
@@ -364,12 +407,12 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type DataSourceCapability {
-    id: String!
+    id: ID!
     description: String
   }
 
   type DataSource {
-    id: String!
+    id: ID!
     name: String!
     type: DataSourceType!
     capabilities: [DataSourceCapability!]!
@@ -399,9 +442,9 @@ export const typeDefs = /* GraphQL */ `
   # ---------------------------------------------------------------------------
 
   type SignalSource {
-    id: String!
+    id: ID!
     name: String!
-    type: String!
+    type: SourceType!
     reliability: Float!
   }
 
@@ -412,8 +455,8 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type Signal {
-    id: String!
-    type: String!
+    id: ID!
+    type: SignalType!
     title: String!
     content: String
     publishedAt: String!
@@ -426,14 +469,14 @@ export const typeDefs = /* GraphQL */ `
     link: String
     tier1: String
     tier2: String
-    sentiment: String
+    sentiment: SignalSentiment
     outputType: SignalOutputType!
     groupId: String
     version: Int!
   }
 
   type SignalGroup {
-    id: String!
+    id: ID!
     signals: [Signal!]!
     tickers: [String!]!
     summary: String!
@@ -454,7 +497,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type Action {
-    id: String!
+    id: ID!
     signalId: String
     skillId: String
     what: String!
@@ -644,7 +687,7 @@ export const typeDefs = /* GraphQL */ `
 
   type SignalSummary {
     signalId: String!
-    type: String!
+    type: SignalType!
     title: String!
     impact: String!
     confidence: Float!
@@ -709,12 +752,12 @@ export const typeDefs = /* GraphQL */ `
 
   type SnapAttentionItem {
     label: String!
-    severity: String!
+    severity: SnapSeverity!
     ticker: String
   }
 
   type Snap {
-    id: String!
+    id: ID!
     generatedAt: String!
     summary: String!
     attentionItems: [SnapAttentionItem!]!
@@ -795,15 +838,15 @@ export const typeDefs = /* GraphQL */ `
   type SignalAssessment {
     signalId: String!
     ticker: String!
-    verdict: String!
+    verdict: SignalVerdict!
     relevanceScore: Float!
     reasoning: String!
-    thesisAlignment: String!
+    thesisAlignment: ThesisAlignment!
     actionability: Float!
   }
 
   type AssessmentReport {
-    id: String!
+    id: ID!
     assessedAt: String!
     tickers: [String!]!
     assessments: [SignalAssessment!]!
@@ -836,7 +879,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type Skill {
-    id: String!
+    id: ID!
     name: String!
     description: String!
     category: SkillCategory!
@@ -861,7 +904,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type ActivityEvent {
-    id: String!
+    id: ID!
     type: ActivityEventType!
     message: String!
     timestamp: String!
@@ -882,7 +925,7 @@ export const typeDefs = /* GraphQL */ `
     checkDataSourceHealth: [DataSource!]!
     checkCliCommands(commands: [String!]!): [CliCommandStatus!]!
     signals(
-      type: String
+      type: SignalType
       ticker: String
       sourceId: String
       since: String
