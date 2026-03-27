@@ -1,63 +1,33 @@
-import { useMemo } from 'react';
-import { useNavigate } from 'react-router';
 import { useQuery } from 'urql';
 
-import { LATEST_INSIGHT_REPORT_QUERY } from '../../api/documents';
-import type { LatestInsightReportQueryResult } from '../../api/types';
+import { SNAP_QUERY } from '../../api/documents';
+import type { SnapQueryResult, SnapSeverity } from '../../api/types';
 import { cn, timeAgo } from '../../lib/utils';
 import { CardEmptyState } from '../common/card-empty-state';
 import { DashboardCard } from '../common/dashboard-card';
 import Spinner from '../common/spinner';
-import { SignalChips } from './signal-chips';
 
-const HEALTH_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  STRONG: { bg: 'bg-success/15', text: 'text-success', label: 'Strong' },
-  HEALTHY: { bg: 'bg-success/15', text: 'text-success', label: 'Healthy' },
-  CAUTIOUS: { bg: 'bg-warning/15', text: 'text-warning', label: 'Cautious' },
-  WEAK: { bg: 'bg-error/15', text: 'text-error', label: 'Weak' },
-  CRITICAL: { bg: 'bg-error/15', text: 'text-error', label: 'Critical' },
+const SEVERITY_STYLES: Record<SnapSeverity, { dot: string; text: string }> = {
+  HIGH: { dot: 'bg-error', text: 'text-error/80' },
+  MEDIUM: { dot: 'bg-warning', text: 'text-warning/80' },
+  LOW: { dot: 'bg-info', text: 'text-info/80' },
 };
-
-const RATING_STYLES: Record<string, string> = {
-  STRONG_BUY: 'text-success',
-  BUY: 'text-success',
-  HOLD: 'text-text-secondary',
-  SELL: 'text-error',
-  STRONG_SELL: 'text-error',
-};
-
-function formatRating(rating: string): string {
-  return rating.replace('_', ' ');
-}
 
 export default function YojinSnapCard() {
-  const [result] = useQuery<LatestInsightReportQueryResult>({ query: LATEST_INSIGHT_REPORT_QUERY });
-  const report = result.data?.latestInsightReport;
-  const navigate = useNavigate();
-
-  // Build signalId → { title, url, sourceCount } lookup from all position keySignals
-  const signalMap = useMemo(() => {
-    const map = new Map<string, { title: string; url: string | null; sourceCount?: number }>();
-    if (!report) return map;
-    for (const pos of report.positions) {
-      for (const sig of pos.keySignals ?? []) {
-        map.set(sig.signalId, { title: sig.title, url: sig.url, sourceCount: sig.sourceCount });
-      }
-    }
-    return map;
-  }, [report]);
+  const [result] = useQuery<SnapQueryResult>({ query: SNAP_QUERY });
+  const snap = result.data?.snap;
 
   if (result.fetching) {
     return (
       <DashboardCard title="Yojin Snap" variant="feature" className="flex-1">
         <div className="flex flex-1 items-center justify-center px-5 pb-5">
-          <Spinner size="md" label="Loading insights…" />
+          <Spinner size="md" label="Loading brief..." />
         </div>
       </DashboardCard>
     );
   }
 
-  if (!report) {
+  if (!snap) {
     return (
       <DashboardCard title="Yojin Snap" variant="feature" className="flex-1">
         <CardEmptyState
@@ -70,58 +40,49 @@ export default function YojinSnapCard() {
               />
             </svg>
           }
-          title="No insights yet"
-          description="Run Process Insights to see your portfolio intelligence."
+          title="No snap brief yet"
+          description="The Strategist agent will generate a brief once your portfolio is loaded."
         />
       </DashboardCard>
     );
   }
-
-  const health = HEALTH_STYLES[report.portfolio.overallHealth] ?? HEALTH_STYLES.CAUTIOUS;
 
   return (
     <DashboardCard
       title="Yojin Snap"
       variant="feature"
       className="flex-1"
-      headerAction={<span className="text-xs text-text-muted">{timeAgo(report.createdAt)}</span>}
+      headerAction={<span className="text-xs text-text-muted">{timeAgo(snap.generatedAt)}</span>}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-5 pb-5">
-        {/* Health badge + summary */}
-        <div className="flex items-start gap-3">
-          <span
-            className={cn(
-              'mt-0.5 flex-shrink-0 rounded px-2.5 py-1 text-xs font-semibold uppercase tracking-wider',
-              health.bg,
-              health.text,
-            )}
-          >
-            {health.label}
-          </span>
-          <p className="text-sm leading-relaxed text-text-secondary">{report.portfolio.summary}</p>
-        </div>
+        {/* Summary prose */}
+        <p className="text-sm leading-relaxed text-text-secondary">{snap.summary}</p>
 
-        {/* Position ratings */}
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-          {report.positions.map((p) => (
-            <span key={p.symbol} className="flex items-center gap-1.5 text-sm">
-              <span className="font-medium text-text-primary">{p.symbol}</span>
-              <span className={cn('text-xs font-semibold', RATING_STYLES[p.rating] ?? 'text-text-muted')}>
-                {formatRating(p.rating)}
+        {/* Attention items */}
+        {snap.attentionItems.length > 0 && (
+          <div className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-wider text-text-muted">Attention</span>
+            <ul className="space-y-1.5">
+              {snap.attentionItems.map((item, i) => {
+                const styles = SEVERITY_STYLES[item.severity] ?? SEVERITY_STYLES.LOW;
+                return (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className={cn('mt-1.5 h-2 w-2 flex-shrink-0 rounded-full', styles.dot)} />
+                    <span className={cn('text-sm leading-relaxed', styles.text)}>{item.label}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {/* Tickers summarized */}
+        {snap.portfolioTickers.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {snap.portfolioTickers.map((ticker) => (
+              <span key={ticker} className="rounded bg-bg-tertiary px-2 py-0.5 text-xs font-medium text-text-secondary">
+                {ticker}
               </span>
-            </span>
-          ))}
-        </div>
-
-        {/* Top risks */}
-        {report.portfolio.topRisks.length > 0 && (
-          <div className="space-y-1.5">
-            <span className="text-xs font-medium uppercase tracking-wider text-text-muted">Top Risks</span>
-            {report.portfolio.topRisks.slice(0, 2).map((r, i) => (
-              <div key={i}>
-                <p className="text-sm leading-relaxed text-error/80">{r.text}</p>
-                <SignalChips signalIds={r.signalIds} signalMap={signalMap} navigate={navigate} />
-              </div>
             ))}
           </div>
         )}

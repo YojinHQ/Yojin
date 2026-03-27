@@ -47,6 +47,31 @@ export type AlertRuleType =
 export type Direction = 'UP' | 'DOWN' | 'BOTH';
 
 // ---------------------------------------------------------------------------
+// Activity Log
+// ---------------------------------------------------------------------------
+
+export type ActivityEventType = 'TRADE' | 'SYSTEM' | 'ACTION' | 'ALERT' | 'INSIGHT';
+
+export interface ActivityEvent {
+  id: string;
+  type: ActivityEventType;
+  message: string;
+  timestamp: string;
+  ticker: string | null;
+  metadata: string | null;
+}
+
+export interface ActivityLogQueryResult {
+  activityLog: ActivityEvent[];
+}
+
+export interface ActivityLogQueryVariables {
+  types?: ActivityEventType[];
+  since?: string;
+  limit?: number;
+}
+
+// ---------------------------------------------------------------------------
 // Portfolio
 // ---------------------------------------------------------------------------
 
@@ -547,6 +572,30 @@ export interface SignalsQueryResult {
   signals: Signal[];
 }
 
+// ---------------------------------------------------------------------------
+// Signal Groups
+// ---------------------------------------------------------------------------
+
+export interface SignalGroup {
+  id: string;
+  signals: Signal[];
+  tickers: string[];
+  summary: string;
+  outputType: string;
+  firstEventAt: string;
+  lastEventAt: string;
+}
+
+export interface SignalGroupsQueryResult {
+  signalGroups: SignalGroup[];
+}
+
+export interface SignalGroupsVariables {
+  ticker?: string;
+  since?: string;
+  limit?: number;
+}
+
 export interface SignalsVariables {
   type?: string;
   ticker?: string;
@@ -647,6 +696,30 @@ export interface WorkflowStatus {
 
 export interface InsightsWorkflowStatusQueryResult {
   insightsWorkflowStatus: WorkflowStatus;
+}
+
+// ---------------------------------------------------------------------------
+// Snap (Strategist brief)
+// ---------------------------------------------------------------------------
+
+export type SnapSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface SnapAttentionItem {
+  label: string;
+  severity: SnapSeverity;
+  ticker: string | null;
+}
+
+export interface Snap {
+  id: string;
+  generatedAt: string;
+  summary: string;
+  attentionItems: SnapAttentionItem[];
+  portfolioTickers: string[];
+}
+
+export interface SnapQueryResult {
+  snap: Snap | null;
 }
 
 // ---------------------------------------------------------------------------

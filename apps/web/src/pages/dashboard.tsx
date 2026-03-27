@@ -1,11 +1,12 @@
-import PortfolioValueCard from '../components/overview/portfolio-value-card';
+import ActivityLog from '../components/activity/activity-log';
+import RightPanel from '../components/layout/right-panel';
 import ConnectedAccountsCard from '../components/overview/connected-accounts-card';
-import { PortfolioOverview } from '../components/portfolio/portfolio-overview';
+import NewsFeed from '../components/overview/news-feed';
+import PortfolioValueCard from '../components/overview/portfolio-value-card';
 import PositionsPreview from '../components/overview/positions-preview';
 import YojinSnapCard from '../components/overview/yojin-snap-card';
-import YojinActionsCard from '../components/overview/yojin-actions-card';
-import RightPanel from '../components/layout/right-panel';
-import NewsFeed from '../components/overview/news-feed';
+import { PortfolioOverview } from '../components/portfolio/portfolio-overview';
+
 export default function Dashboard() {
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -16,7 +17,7 @@ export default function Dashboard() {
         <PortfolioOverview />
         <PositionsPreview />
         <YojinSnapCard />
-        <YojinActionsCard />
+        <ActivityLog />
       </div>
 
       {/* Right panel — unified feed */}

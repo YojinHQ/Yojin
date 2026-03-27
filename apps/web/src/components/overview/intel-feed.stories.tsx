@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import RecommendationsPanel from './recommendations-panel';
+import IntelFeed from './intel-feed';
 
-const meta: Meta<typeof RecommendationsPanel> = {
-  title: 'Overview/RecommendationsPanel',
-  component: RecommendationsPanel,
+const meta: Meta<typeof IntelFeed> = {
+  title: 'Overview/IntelFeed',
+  component: IntelFeed,
   decorators: [
     (Story) => (
       <div style={{ height: 700 }}>
@@ -15,6 +15,6 @@ const meta: Meta<typeof RecommendationsPanel> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof RecommendationsPanel>;
+type Story = StoryObj<typeof IntelFeed>;
 
 export const Default: Story = {};

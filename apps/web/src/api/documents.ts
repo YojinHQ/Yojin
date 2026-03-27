@@ -639,6 +639,48 @@ export const SIGNALS_QUERY = gql`
 `;
 
 // ---------------------------------------------------------------------------
+// Queries — Signal Groups
+// ---------------------------------------------------------------------------
+
+export const SIGNAL_GROUPS_QUERY = gql`
+  query SignalGroups($ticker: String, $since: String, $limit: Int) {
+    signalGroups(ticker: $ticker, since: $since, limit: $limit) {
+      id
+      signals {
+        id
+        type
+        title
+        content
+        publishedAt
+        ingestedAt
+        confidence
+        contentHash
+        tickers
+        sources {
+          id
+          name
+          type
+          reliability
+        }
+        sourceCount
+        link
+        tier1
+        tier2
+        sentiment
+        outputType
+        groupId
+        version
+      }
+      tickers
+      summary
+      outputType
+      firstEventAt
+      lastEventAt
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
 // Queries — Vault
 // ---------------------------------------------------------------------------
 
@@ -806,6 +848,26 @@ export const INSIGHT_REPORTS_QUERY = gql`
 `;
 
 // ---------------------------------------------------------------------------
+// Queries — Snap (Strategist brief)
+// ---------------------------------------------------------------------------
+
+export const SNAP_QUERY = gql`
+  query Snap {
+    snap {
+      id
+      generatedAt
+      summary
+      attentionItems {
+        label
+        severity
+        ticker
+      }
+      portfolioTickers
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
 // Mutations — Insights
 // ---------------------------------------------------------------------------
 
@@ -960,6 +1022,23 @@ export const ON_WORKFLOW_PROGRESS_SUBSCRIPTION = gql`
       error
       message
       timestamp
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Queries — Activity Log
+// ---------------------------------------------------------------------------
+
+export const ACTIVITY_LOG_QUERY = gql`
+  query ActivityLog($types: [ActivityEventType!], $since: String, $limit: Int) {
+    activityLog(types: $types, since: $since, limit: $limit) {
+      id
+      type
+      message
+      timestamp
+      ticker
+      metadata
     }
   }
 `;

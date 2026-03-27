@@ -1,0 +1,24 @@
+{
+  "id": "earnings-momentum-scalper",
+  "name": "Earnings Momentum Scalper",
+  "description": "Enter long positions ahead of earnings when technical and fundamental signals align. Targets stocks with RSI below 40, positive analyst revisions, and reports within 48 hours.",
+  "category": "MARKET",
+  "active": false,
+  "source": "built-in",
+  "createdBy": "yojin",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "content": "# Earnings Momentum Scalper\n\n## Conditions\n- RSI below 40 (oversold territory)\n- Positive analyst revisions in the last 30 days\n- Earnings report within 48 hours\n- No existing position in the stock (or position < 1% of portfolio)\n\n## Action\nPropose: BUY at 2-3% of portfolio at market open.\n\n## Risk Management\n- Set stop loss at -5% from entry\n- Close position after earnings report regardless of outcome\n- Never exceed 3% of portfolio on a single earnings play\n\n## Reasoning\nEarnings momentum plays exploit the tendency for oversold stocks with improving fundamentals to gap up on positive earnings surprises. The combination of technical oversold conditions and positive analyst revisions increases the probability of a positive surprise.",
+  "triggers": [
+    {
+      "type": "EARNINGS_PROXIMITY",
+      "description": "Stock reports earnings within 48 hours",
+      "params": { "withinDays": 2 }
+    },
+    {
+      "type": "INDICATOR_THRESHOLD",
+      "description": "RSI below 40 (oversold)",
+      "params": { "indicator": "RSI", "threshold": 40, "direction": "below" }
+    }
+  ],
+  "tickers": []
+}

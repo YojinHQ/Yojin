@@ -19,7 +19,16 @@ import { AssetClassSchema } from '../api/graphql/types.js';
 // Enums (SCREAMING_CASE to match GraphQL convention)
 // ---------------------------------------------------------------------------
 
-export const SignalTypeSchema = z.enum(['NEWS', 'FUNDAMENTAL', 'SENTIMENT', 'TECHNICAL', 'MACRO']);
+export const SignalTypeSchema = z.enum([
+  'NEWS',
+  'FUNDAMENTAL',
+  'SENTIMENT',
+  'TECHNICAL',
+  'MACRO',
+  'FILINGS',
+  'SOCIALS',
+  'TRADING_LOGIC_TRIGGER',
+]);
 export type SignalType = z.infer<typeof SignalTypeSchema>;
 
 export const SourceTypeSchema = z.enum(['API', 'RSS', 'SCRAPER', 'ENRICHMENT']);
@@ -35,7 +44,7 @@ export type LinkType = z.infer<typeof LinkTypeSchema>;
 export const SignalSentimentSchema = z.enum(['BULLISH', 'BEARISH', 'MIXED', 'NEUTRAL']);
 export type SignalSentiment = z.infer<typeof SignalSentimentSchema>;
 
-export const SignalOutputTypeSchema = z.enum(['INSIGHT', 'ALERT']);
+export const SignalOutputTypeSchema = z.enum(['INSIGHT', 'ALERT', 'ACTION']);
 export type SignalOutputType = z.infer<typeof SignalOutputTypeSchema>;
 
 // ---------------------------------------------------------------------------

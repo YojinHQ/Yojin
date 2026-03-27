@@ -11,7 +11,7 @@ interface DataRow {
   highlight?: boolean;
 }
 
-interface RecommendationItem {
+interface IntelFeedItem {
   id: string;
   type: ItemType;
   title: string;
@@ -22,7 +22,7 @@ interface RecommendationItem {
   primaryAction: string;
 }
 
-const items: RecommendationItem[] = [
+const items: IntelFeedItem[] = [
   {
     id: 'act-1',
     type: 'action',
@@ -317,15 +317,7 @@ function SectionHeader({ type }: { type: ItemType }) {
   );
 }
 
-function RecommendationCard({
-  item,
-  expanded,
-  onToggle,
-}: {
-  item: RecommendationItem;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
+function IntelFeedCard({ item, expanded, onToggle }: { item: IntelFeedItem; expanded: boolean; onToggle: () => void }) {
   return (
     <div
       className={cn(
@@ -389,7 +381,7 @@ function RecommendationCard({
   );
 }
 
-export default function RecommendationsPanel() {
+export default function IntelFeed() {
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -398,7 +390,7 @@ export default function RecommendationsPanel() {
   const totalCount = filteredItems.length;
 
   // Group filtered items by type, preserving section order
-  const sections: { type: ItemType; items: RecommendationItem[] }[] = [];
+  const sections: { type: ItemType; items: IntelFeedItem[] }[] = [];
   const typeOrder: ItemType[] = ['action', 'alert', 'insight'];
 
   for (const type of typeOrder) {
@@ -413,7 +405,7 @@ export default function RecommendationsPanel() {
       {/* Header */}
       <div className="px-4 pt-3.5 pb-1">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xs font-medium tracking-wide text-text-secondary uppercase">Recommendations</h2>
+          <h2 className="text-2xs font-medium tracking-wide text-text-secondary uppercase">Intel Feed</h2>
           <span className="text-2xs tabular-nums text-text-muted">{totalCount} items</span>
         </div>
       </div>
@@ -444,7 +436,7 @@ export default function RecommendationsPanel() {
             <SectionHeader type={section.type} />
             <div className="space-y-1.5">
               {section.items.map((item) => (
-                <RecommendationCard
+                <IntelFeedCard
                   key={item.id}
                   item={item}
                   expanded={expandedId === item.id}

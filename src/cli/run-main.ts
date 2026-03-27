@@ -14,6 +14,7 @@ import { Orchestrator, registerBuiltinWorkflows, setWorkflowProgressCallback } f
 import { ClaudeCodeProvider } from '../ai-providers/claude-code.js';
 import { ProviderRouter } from '../ai-providers/router.js';
 import { VercelAIProvider } from '../ai-providers/vercel-ai.js';
+import { setEventLog } from '../api/graphql/resolvers/activity-log.js';
 import { setCurationOrchestrator } from '../api/graphql/resolvers/curated-signals.js';
 import { setInsightsOrchestrator } from '../api/graphql/resolvers/insights.js';
 import { setOnboardingClaudeCodeProvider, setOnboardingProvider } from '../api/graphql/resolvers/onboarding.js';
@@ -166,12 +167,15 @@ Respond with exactly one word: SAME, RELATED, or DIFFERENT.
 
   const sessionStore = new JsonlSessionStore(`${dataRoot}/sessions`);
 
+  const eventLog = new EventLog(`${dataRoot}/event-log`);
+  setEventLog(eventLog);
+
   const agentRuntime = new AgentRuntime({
     agentRegistry: services.agentRegistry,
     toolRegistry: services.toolRegistry,
     guardRunner: services.guardRunner,
     sessionStore,
-    eventLog: new EventLog(`${dataRoot}/event-log`),
+    eventLog,
     provider: providerRouter,
     outputDlp: services.outputDlp,
     piiScanner: services.piiScanner,

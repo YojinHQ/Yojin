@@ -7,6 +7,8 @@
 import { createSchema, createYoga } from 'graphql-yoga';
 import type { Hono } from 'hono';
 
+import { actionResolver, actionsResolver, approveActionMutation, rejectActionMutation } from './resolvers/actions.js';
+import { activityLogQuery } from './resolvers/activity-log.js';
 import { alertsQuery, createAlertMutation, dismissAlertMutation } from './resolvers/alerts.js';
 import {
   activeSessionQuery,
@@ -88,6 +90,8 @@ import { riskReportQuery } from './resolvers/risk.js';
 import { assessmentStatusResolver, signalAssessmentsResolver } from './resolvers/signal-assessments.js';
 import { signalGroupFieldResolvers, signalGroupResolver, signalGroupsResolver } from './resolvers/signal-groups.js';
 import { signalsResolver } from './resolvers/signals.js';
+import { resolveSkill, resolveSkills, resolveToggleSkill } from './resolvers/skills.js';
+import { snapQuery } from './resolvers/snap.js';
 import {
   addVaultSecretMutation,
   changeVaultPassphraseMutation,
@@ -142,6 +146,12 @@ const schema = createSchema({
       watchlist: watchlistQuery,
       insightsWorkflowStatus: () => getInsightsWorkflowStatus(),
       briefingConfig: briefingConfigQuery,
+      snap: snapQuery,
+      activityLog: activityLogQuery,
+      actions: actionsResolver,
+      action: actionResolver,
+      skills: resolveSkills,
+      skill: resolveSkill,
     },
     Position: positionFieldResolvers,
     SignalGroup: signalGroupFieldResolvers,
@@ -184,6 +194,9 @@ const schema = createSchema({
       runFullCuration: runFullCurationResolver,
       addToWatchlist: addToWatchlistMutation,
       removeFromWatchlist: removeFromWatchlistMutation,
+      approveAction: approveActionMutation,
+      rejectAction: rejectActionMutation,
+      toggleSkill: resolveToggleSkill,
       clearAppData: clearAppDataMutation,
     },
     Subscription: {
