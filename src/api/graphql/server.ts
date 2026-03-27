@@ -88,7 +88,12 @@ import {
 import { clearAppDataMutation, deviceInfoResolver } from './resolvers/profile.js';
 import { riskReportQuery } from './resolvers/risk.js';
 import { assessmentStatusResolver, signalAssessmentsResolver } from './resolvers/signal-assessments.js';
-import { signalGroupFieldResolvers, signalGroupResolver, signalGroupsResolver } from './resolvers/signal-groups.js';
+import {
+  signalGroupFieldResolvers,
+  signalGroupResolver,
+  signalGroupsByTickerResolver,
+  signalGroupsResolver,
+} from './resolvers/signal-groups.js';
 import { signalsByTickerResolver, signalsResolver } from './resolvers/signals.js';
 import { resolveSkill, resolveSkills, resolveToggleSkill } from './resolvers/skills.js';
 import { snapQuery } from './resolvers/snap.js';
@@ -124,6 +129,7 @@ const schema = createSchema({
       signals: signalsResolver,
       signalsByTicker: signalsByTickerResolver,
       signalGroups: signalGroupsResolver,
+      signalGroupsByTicker: signalGroupsByTickerResolver,
       curatedSignals: curatedSignalsResolver,
       curationStatus: curationStatusResolver,
       curationWorkflowStatus: () => getCurationWorkflowStatus(),

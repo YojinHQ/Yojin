@@ -34,6 +34,7 @@ const cache = cacheExchange({
     PriceEvent: () => null,
     SignalSource: () => null, // embedded — same source id appears on many signals
     TickerSignals: (data) => data.ticker as string,
+    TickerSignalGroups: (data) => data.ticker as string,
     SessionSummary: (data) => data.id as string,
     SessionDetail: (data) => data.id as string,
   },
@@ -48,12 +49,18 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'portfolio');
         cache.invalidate('Query', 'positions');
         cache.invalidate('Query', 'enrichedSnapshot');
+        cache.invalidate('Query', 'signals');
+        cache.invalidate('Query', 'signalsByTicker');
+        cache.invalidate('Query', 'signalGroupsByTicker');
       },
       confirmPositions(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
         cache.invalidate('Query', 'positions');
         cache.invalidate('Query', 'portfolioHistory');
         cache.invalidate('Query', 'enrichedSnapshot');
+        cache.invalidate('Query', 'signals');
+        cache.invalidate('Query', 'signalsByTicker');
+        cache.invalidate('Query', 'signalGroupsByTicker');
       },
       completeOnboarding(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
@@ -61,16 +68,25 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'portfolioHistory');
         cache.invalidate('Query', 'enrichedSnapshot');
         cache.invalidate('Query', 'listConnections');
+        cache.invalidate('Query', 'signals');
+        cache.invalidate('Query', 'signalsByTicker');
+        cache.invalidate('Query', 'signalGroupsByTicker');
       },
       editPosition(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
         cache.invalidate('Query', 'positions');
         cache.invalidate('Query', 'enrichedSnapshot');
+        cache.invalidate('Query', 'signals');
+        cache.invalidate('Query', 'signalsByTicker');
+        cache.invalidate('Query', 'signalGroupsByTicker');
       },
       removePosition(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
         cache.invalidate('Query', 'positions');
         cache.invalidate('Query', 'enrichedSnapshot');
+        cache.invalidate('Query', 'signals');
+        cache.invalidate('Query', 'signalsByTicker');
+        cache.invalidate('Query', 'signalGroupsByTicker');
       },
       processInsights(_result, _args, cache) {
         cache.invalidate('Query', 'signals');

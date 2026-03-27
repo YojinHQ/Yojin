@@ -477,6 +477,11 @@ export const typeDefs = /* GraphQL */ `
     lastEventAt: String!
   }
 
+  type TickerSignalGroups {
+    ticker: String!
+    groups: [SignalGroup!]!
+  }
+
   # ---------------------------------------------------------------------------
   # Actions (approval workflow)
   # ---------------------------------------------------------------------------
@@ -933,6 +938,7 @@ export const typeDefs = /* GraphQL */ `
     ): [Signal!]!
     signalsByTicker(since: String, limit: Int): [TickerSignals!]!
     signalGroups(ticker: String, since: String, limit: Int): [SignalGroup!]!
+    signalGroupsByTicker(since: String, limit: Int): [TickerSignalGroups!]!
     curatedSignals(ticker: String, since: String, limit: Int): [CuratedSignal!]!
     curationStatus: CurationStatus!
     curationWorkflowStatus: WorkflowStatus!

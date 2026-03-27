@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router';
 import { cn } from '../lib/utils';
 import {
   SIGNALS_QUERY,
-  SIGNAL_GROUPS_QUERY,
+  SIGNAL_GROUPS_BY_TICKER_QUERY,
   LATEST_INSIGHT_REPORT_QUERY,
   ON_WORKFLOW_PROGRESS_SUBSCRIPTION,
   RUN_FULL_CURATION_MUTATION,
@@ -14,8 +14,7 @@ import type {
   Signal,
   SignalsQueryResult,
   SignalsVariables,
-  SignalGroupsQueryResult,
-  SignalGroupsVariables,
+  SignalGroupsByTickerQueryResult,
   LatestInsightReportQueryResult,
   OnWorkflowProgressSubscriptionResult,
   OnWorkflowProgressVariables,
@@ -108,20 +107,21 @@ export default function Signals() {
     variables,
   });
 
-  // Signal groups query (only fetched when Groups view is active)
-  const groupVariables: SignalGroupsVariables = {
-    limit: 50,
-    ...(tickerFilter ? { ticker: tickerFilter.toUpperCase() } : {}),
-    ...(since ? { since } : {}),
-  };
+  // Signal groups by ticker query (only fetched when Groups view is active)
+  const groupByTickerVars = useMemo(() => ({ limit: 100, ...(since ? { since } : {}) }), [since]);
 
-  const [groupsResult] = useQuery<SignalGroupsQueryResult, SignalGroupsVariables>({
-    query: SIGNAL_GROUPS_QUERY,
-    variables: groupVariables,
+  const [groupsResult] = useQuery<SignalGroupsByTickerQueryResult>({
+    query: SIGNAL_GROUPS_BY_TICKER_QUERY,
+    variables: groupByTickerVars,
     pause: viewMode !== 'groups',
   });
 
-  const signalGroups = useMemo(() => groupsResult.data?.signalGroups ?? [], [groupsResult.data]);
+  const tickerGroups = useMemo(() => {
+    const all = groupsResult.data?.signalGroupsByTicker ?? [];
+    if (!tickerFilter) return all;
+    const upper = tickerFilter.toUpperCase();
+    return all.filter((tg) => tg.ticker === upper);
+  }, [groupsResult.data, tickerFilter]);
   const groupsLoading = groupsResult.fetching;
 
   // Cross-reference with latest insight report to show which signals were used
@@ -253,7 +253,7 @@ export default function Signals() {
                   : `${filteredSignals.length} signal${filteredSignals.length !== 1 ? 's' : ''}${usedInInsights > 0 ? ` · ${usedInInsights} used in insights` : ''}`
                 : groupsLoading
                   ? 'Loading groups...'
-                  : `${signalGroups.length} narrative chain${signalGroups.length !== 1 ? 's' : ''}`}
+                  : `${tickerGroups.length} ticker${tickerGroups.length !== 1 ? 's' : ''} · ${tickerGroups.reduce((n, tg) => n + tg.groups.length, 0)} chain${tickerGroups.reduce((n, tg) => n + tg.groups.length, 0) !== 1 ? 's' : ''}`}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -446,7 +446,7 @@ export default function Signals() {
 
         {viewMode === 'groups' && (
           <>
-            {!groupsLoading && signalGroups.length === 0 && (
+            {!groupsLoading && tickerGroups.length === 0 && (
               <div className="flex flex-col items-center justify-center gap-4 py-24">
                 <svg
                   className="h-14 w-14 text-text-muted"
@@ -467,9 +467,26 @@ export default function Signals() {
               </div>
             )}
 
-            <div className="space-y-2">
-              {signalGroups.map((group) => (
-                <SignalGroupCard key={group.id} group={group} />
+            <div className="space-y-6">
+              {tickerGroups.map((tg) => (
+                <div key={tg.ticker}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Link
+                      to={`/signals?ticker=${tg.ticker}`}
+                      className="text-sm font-semibold text-accent-primary hover:underline"
+                    >
+                      {tg.ticker}
+                    </Link>
+                    <span className="text-xs text-text-muted">
+                      {tg.groups.length} chain{tg.groups.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {tg.groups.map((group) => (
+                      <SignalGroupCard key={group.id} group={group} />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </>

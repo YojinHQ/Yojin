@@ -65,10 +65,14 @@ export interface IngestorOptions {
   clustering?: SignalClustering;
 }
 
+/** Provider that returns the current set of portfolio tickers. */
+export type PortfolioTickerProvider = () => Promise<Set<string> | null>;
+
 export class SignalIngestor {
   private readonly archive: SignalArchive;
   private readonly symbolResolver?: SymbolResolver;
   private clustering?: SignalClustering;
+  private portfolioTickerProvider?: PortfolioTickerProvider;
   private knownHashes = new Map<string, string>(); // contentHash → signalId
   private initialized = false;
 
@@ -76,6 +80,11 @@ export class SignalIngestor {
     this.archive = options.archive;
     this.symbolResolver = options.symbolResolver;
     this.clustering = options.clustering;
+  }
+
+  /** Wire portfolio ticker filter — signals with no portfolio ticker are dropped at ingestion. */
+  setPortfolioTickerProvider(provider: PortfolioTickerProvider): void {
+    this.portfolioTickerProvider = provider;
   }
 
   /** Late-wire clustering after LLM provider becomes available. */
@@ -103,15 +112,31 @@ export class SignalIngestor {
   async ingest(items: RawSignalInput[]): Promise<IngestResult> {
     await this.initialize();
 
+    // Load portfolio tickers once for the entire batch
+    const portfolioTickers = this.portfolioTickerProvider ? await this.portfolioTickerProvider() : null;
+
     const result: IngestResult = { ingested: 0, duplicates: 0, errors: [] };
     // Pending signals not yet flushed to archive (keyed by id for fast lookup during same-batch merges)
     const pendingById = new Map<string, Signal>();
     const signals: Signal[] = [];
+    let dropped = 0;
 
     for (const item of items) {
       try {
         const signal = this.toSignal(item);
         if (!signal) continue;
+
+        // Drop signals that have explicit tickers but none match the portfolio.
+        // Signals with zero extracted tickers are kept — they may be relevant
+        // macro/market news that the curation pipeline will score later.
+        if (
+          portfolioTickers &&
+          signal.assets.length > 0 &&
+          !signal.assets.some((a) => portfolioTickers.has(a.ticker.toUpperCase()))
+        ) {
+          dropped++;
+          continue;
+        }
 
         const existingId = this.knownHashes.get(signal.contentHash);
         if (existingId) {
@@ -162,7 +187,7 @@ export class SignalIngestor {
       } else {
         await this.archive.appendBatch(signals);
       }
-      logger.info(`Ingested ${signals.length} signals`);
+      logger.info(`Ingested ${signals.length} signals${dropped > 0 ? `, ${dropped} dropped (not in portfolio)` : ''}`);
     }
 
     return result;

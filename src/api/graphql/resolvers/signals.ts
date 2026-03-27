@@ -103,9 +103,16 @@ export async function signalsResolver(
 ): Promise<SignalGql[]> {
   if (!archive) return [];
 
+  // Push portfolio ticker filter into the archive query so non-portfolio
+  // signals are skipped during the JSONL scan (avoids parsing + allocating).
+  const snapshot = !args.ticker && snapshotStore ? await snapshotStore.getLatest() : null;
+  const positionTickers =
+    snapshot && snapshot.positions.length > 0 ? snapshot.positions.map((p) => p.symbol.toUpperCase()) : null;
+
   const filter: SignalQueryFilter = {};
   if (args.type) filter.type = args.type;
   if (args.ticker) filter.ticker = args.ticker;
+  if (!args.ticker && positionTickers) filter.tickers = positionTickers;
   if (args.sourceId) filter.sourceId = args.sourceId;
   if (args.since) filter.since = args.since;
   if (args.until) filter.until = args.until;

@@ -22,6 +22,7 @@ import { runCurationPipeline } from './pipeline.js';
 import type { CuratedSignal, CurationConfig } from './types.js';
 import type { Orchestrator } from '../../agents/orchestrator.js';
 import { emitProgress } from '../../agents/orchestrator.js';
+import { fetchAllEnabledSources } from '../../api/graphql/resolvers/fetch-data-source.js';
 import type { InsightStore } from '../../insights/insight-store.js';
 import { createSubsystemLogger } from '../../logging/logger.js';
 import type { PortfolioSnapshotStore } from '../../portfolio/snapshot-store.js';
@@ -185,6 +186,24 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
       if (assessmentWorkflowStartMs) {
         assessmentWorkflowStartMs.value = Date.now();
       }
+
+      // ------------------------------------------------------------------
+      // STAGE 0: Fetch fresh data from all enabled data sources
+      // ------------------------------------------------------------------
+      emitProgress({
+        workflowId: WF_ID,
+        stage: 'activity',
+        message: 'Stage 0: Fetching data from enabled sources...',
+        timestamp: new Date().toISOString(),
+      });
+
+      const fetchResult = await fetchAllEnabledSources();
+      emitProgress({
+        workflowId: WF_ID,
+        stage: 'activity',
+        message: `Stage 0 complete: ${fetchResult.totalIngested} signals ingested, ${fetchResult.totalDuplicates} duplicates skipped${fetchResult.errors.length > 0 ? `, ${fetchResult.errors.length} error(s)` : ''}`,
+        timestamp: new Date().toISOString(),
+      });
 
       // ------------------------------------------------------------------
       // TIER 1: Run deterministic curation pipeline

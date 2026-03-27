@@ -599,6 +599,15 @@ export interface SignalGroupsQueryResult {
   signalGroups: SignalGroup[];
 }
 
+export interface TickerSignalGroups {
+  ticker: string;
+  groups: SignalGroup[];
+}
+
+export interface SignalGroupsByTickerQueryResult {
+  signalGroupsByTicker: TickerSignalGroups[];
+}
+
 export interface SignalGroupsVariables {
   ticker?: string;
   since?: string;

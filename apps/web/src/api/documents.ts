@@ -709,6 +709,47 @@ export const SIGNAL_GROUPS_QUERY = gql`
   }
 `;
 
+export const SIGNAL_GROUPS_BY_TICKER_QUERY = gql`
+  query SignalGroupsByTicker($since: String, $limit: Int) {
+    signalGroupsByTicker(since: $since, limit: $limit) {
+      ticker
+      groups {
+        id
+        signals {
+          id
+          type
+          title
+          content
+          publishedAt
+          ingestedAt
+          confidence
+          contentHash
+          tickers
+          sources {
+            id
+            name
+            type
+            reliability
+          }
+          sourceCount
+          link
+          tier1
+          tier2
+          sentiment
+          outputType
+          groupId
+          version
+        }
+        tickers
+        summary
+        outputType
+        firstEventAt
+        lastEventAt
+      }
+    }
+  }
+`;
+
 // ---------------------------------------------------------------------------
 // Queries — Vault
 // ---------------------------------------------------------------------------

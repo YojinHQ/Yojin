@@ -38,7 +38,11 @@ import {
 } from './api/graphql/resolvers/onboarding.js';
 import { setPortfolioConnectionManager, setPortfolioJintelClient } from './api/graphql/resolvers/portfolio.js';
 import { setAssessmentStore } from './api/graphql/resolvers/signal-assessments.js';
-import { setGroupSignalArchive, setSignalGroupArchive } from './api/graphql/resolvers/signal-groups.js';
+import {
+  setGroupSignalArchive,
+  setGroupSnapshotStore,
+  setSignalGroupArchive,
+} from './api/graphql/resolvers/signal-groups.js';
 import { setSignalArchive, setSignalSnapshotStore } from './api/graphql/resolvers/signals.js';
 import { setSkillStore } from './api/graphql/resolvers/skills.js';
 import { setSnapStore } from './api/graphql/resolvers/snap.js';
@@ -346,10 +350,16 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   const signalGroupArchive = new SignalGroupArchive({ dir: `${dataRoot}/signals/groups/by-date` });
   // Clustering is wired after LLM provider is available (see below)
   const signalIngestor = new SignalIngestor({ archive: signalArchive });
+  signalIngestor.setPortfolioTickerProvider(async () => {
+    const snap = await snapshotStore.getLatest();
+    if (!snap || snap.positions.length === 0) return null;
+    return new Set(snap.positions.map((p) => p.symbol.toUpperCase()));
+  });
   setSignalArchive(signalArchive);
   setSignalSnapshotStore(snapshotStore);
   setSignalGroupArchive(signalGroupArchive);
   setGroupSignalArchive(signalArchive);
+  setGroupSnapshotStore(snapshotStore);
   setDataSourceConfigPath(dsConfigPath);
   setFetchDeps({ configPath: dsConfigPath, ingestor: signalIngestor, vault });
 
