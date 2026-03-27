@@ -3,7 +3,7 @@ import { useMutation, useQuery, useSubscription } from 'urql';
 import { Link, useSearchParams } from 'react-router';
 import { cn } from '../lib/utils';
 import {
-  SIGNALS_QUERY,
+  CURATED_SIGNALS_QUERY,
   SIGNAL_GROUPS_BY_TICKER_QUERY,
   LATEST_INSIGHT_REPORT_QUERY,
   ON_WORKFLOW_PROGRESS_SUBSCRIPTION,
@@ -11,9 +11,9 @@ import {
   CURATION_WORKFLOW_STATUS_QUERY,
 } from '../api/documents';
 import type {
-  Signal,
-  SignalsQueryResult,
-  SignalsVariables,
+  CuratedSignal,
+  CuratedSignalsQueryResult,
+  CuratedSignalsVariables,
   SignalGroupsByTickerQueryResult,
   LatestInsightReportQueryResult,
   OnWorkflowProgressSubscriptionResult,
@@ -93,18 +93,18 @@ export default function Signals() {
     setSince(days ? new Date(Date.now() - Number(days) * 86_400_000).toISOString() : undefined);
   }, []);
 
-  const variables: SignalsVariables = {
-    limit: 200,
-    ...(typeFilter !== 'ALL' ? { type: typeFilter } : {}),
-    ...(tickerFilter ? { ticker: tickerFilter.toUpperCase() } : {}),
-    ...(search ? { search } : {}),
-    ...(since ? { since } : {}),
-    ...(minConfidence > 0 ? { minConfidence } : {}),
-  };
+  const curatedVars: CuratedSignalsVariables = useMemo(
+    () => ({
+      limit: 200,
+      ...(tickerFilter ? { ticker: tickerFilter.toUpperCase() } : {}),
+      ...(since ? { since } : {}),
+    }),
+    [tickerFilter, since],
+  );
 
-  const [result, reexecuteSignals] = useQuery<SignalsQueryResult, SignalsVariables>({
-    query: SIGNALS_QUERY,
-    variables,
+  const [result, reexecuteSignals] = useQuery<CuratedSignalsQueryResult, CuratedSignalsVariables>({
+    query: CURATED_SIGNALS_QUERY,
+    variables: curatedVars,
   });
 
   // Signal groups by ticker query (only fetched when Groups view is active)
@@ -218,27 +218,48 @@ export default function Signals() {
     return map;
   }, [insightResult.data]);
 
-  const signals = useMemo(() => result.data?.signals ?? [], [result.data]);
+  const curatedSignals = useMemo(() => result.data?.curatedSignals ?? [], [result.data]);
   const loading = result.fetching;
+
+  // Client-side filters for type, search, confidence, source (server handles ticker + since)
+  const filteredCurated = useMemo(() => {
+    let items = curatedSignals;
+    if (typeFilter !== 'ALL') {
+      items = items.filter((cs) => cs.signal.type === typeFilter);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      items = items.filter(
+        (cs) => cs.signal.title.toLowerCase().includes(q) || cs.signal.content?.toLowerCase().includes(q),
+      );
+    }
+    if (minConfidence > 0) {
+      items = items.filter((cs) => cs.signal.confidence >= minConfidence);
+    }
+    return items;
+  }, [curatedSignals, typeFilter, search, minConfidence]);
 
   // Collect unique sources for source filter
   const sources = useMemo(() => {
     const map = new Map<string, string>();
-    for (const s of signals) {
-      for (const src of s.sources) {
+    for (const cs of filteredCurated) {
+      for (const src of cs.signal.sources) {
         if (!map.has(src.id)) map.set(src.id, src.name);
       }
     }
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [signals]);
+  }, [filteredCurated]);
   const [sourceFilter, setSourceFilter] = useState('');
 
-  const filteredSignals = sourceFilter
-    ? signals.filter((s) => s.sources.some((src) => src.id === sourceFilter))
-    : signals;
+  const filteredSignals = useMemo(() => {
+    const items = sourceFilter
+      ? filteredCurated.filter((cs) => cs.signal.sources.some((src) => src.id === sourceFilter))
+      : filteredCurated;
+    return items;
+  }, [filteredCurated, sourceFilter]);
 
   // Stats for header
-  const usedInInsights = filteredSignals.filter((s) => insightSignalIds.has(s.id)).length;
+  const usedInInsights = filteredSignals.filter((cs) => insightSignalIds.has(cs.signal.id)).length;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -426,18 +447,20 @@ export default function Signals() {
                     d="M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
                   />
                 </svg>
-                <p className="text-base text-text-muted">No signals found. Fetch data sources to ingest signals.</p>
+                <p className="text-base text-text-muted">
+                  No curated signals yet. Run Curation to score and filter signals.
+                </p>
               </div>
             )}
 
             <div className="space-y-2">
-              {filteredSignals.map((signal) => (
+              {filteredSignals.map((cs) => (
                 <SignalRow
-                  key={signal.id}
-                  signal={signal}
-                  highlighted={signal.id === highlightId}
-                  usedInInsight={insightSignalIds.has(signal.id)}
-                  insightImpact={insightSignalImpact.get(signal.id)}
+                  key={cs.signal.id}
+                  curated={cs}
+                  highlighted={cs.signal.id === highlightId}
+                  usedInInsight={insightSignalIds.has(cs.signal.id)}
+                  insightImpact={insightSignalImpact.get(cs.signal.id)}
                 />
               ))}
             </div>
@@ -680,16 +703,23 @@ function CurationActivityLog({ events }: { events: WorkflowProgressEvent[] }) {
 }
 
 function SignalRow({
-  signal,
+  curated,
   highlighted,
   usedInInsight,
   insightImpact,
 }: {
-  signal: Signal;
+  curated: CuratedSignal;
   highlighted: boolean;
   usedInInsight: boolean;
   insightImpact?: string;
 }) {
+  const signal = curated.signal;
+  const topScore =
+    curated.scores.length > 0
+      ? curated.scores.reduce((best, s) => (s.compositeScore > best.compositeScore ? s : best), curated.scores[0])
+      : null;
+  const relevancePct = topScore ? Math.round(topScore.compositeScore * 100) : 0;
+
   const [expanded, setExpanded] = useState(highlighted);
   const variant = typeVariant[signal.type] ?? 'neutral';
   const date = new Date(signal.publishedAt);
@@ -726,12 +756,25 @@ function SignalRow({
                   {t}
                 </Link>
               ))}
+              {topScore && (
+                <span
+                  className={cn(
+                    'text-xs font-medium px-1.5 py-0.5 rounded',
+                    relevancePct >= 60
+                      ? 'bg-success/10 text-success'
+                      : relevancePct >= 30
+                        ? 'bg-warning/10 text-warning'
+                        : 'bg-bg-tertiary text-text-muted',
+                  )}
+                >
+                  {relevancePct}% relevant
+                </span>
+              )}
               <span className="text-xs text-text-muted">{timeAgo}</span>
               <span className="text-xs text-text-muted">
                 · {signal.sources.map((s) => s.name).join(', ')}
                 {signal.sourceCount > 1 && ` (${signal.sourceCount})`}
               </span>
-              {/* "Used in Insights" indicator */}
               {usedInInsight && (
                 <Link
                   to="/insights"
@@ -788,9 +831,20 @@ function SignalRow({
               <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap">{signal.content}</p>
             )}
 
+            {/* Relevance scores per ticker */}
+            {curated.scores.length > 0 && (
+              <div className="flex items-center gap-3 flex-wrap">
+                {curated.scores.map((s) => (
+                  <span key={s.ticker} className="text-xs px-2 py-1 rounded bg-bg-tertiary text-text-secondary">
+                    {s.ticker}: {Math.round(s.compositeScore * 100)}% relevance
+                  </span>
+                ))}
+              </div>
+            )}
+
             <div className="flex items-center gap-3 text-xs text-text-muted flex-wrap">
               <span>Published: {date.toLocaleString()}</span>
-              <span>· Ingested: {new Date(signal.ingestedAt).toLocaleString()}</span>
+              <span>· Curated: {new Date(curated.curatedAt).toLocaleString()}</span>
               <span>· Source: {signal.sources.map((s) => s.name).join(', ')}</span>
             </div>
 

@@ -638,6 +638,46 @@ export const SIGNALS_QUERY = gql`
   }
 `;
 
+export const CURATED_SIGNALS_QUERY = gql`
+  query CuratedSignals($ticker: String, $since: String, $limit: Int) {
+    curatedSignals(ticker: $ticker, since: $since, limit: $limit) {
+      signal {
+        id
+        type
+        title
+        content
+        publishedAt
+        ingestedAt
+        confidence
+        contentHash
+        tickers
+        sources {
+          id
+          name
+          type
+          reliability
+        }
+        sourceCount
+        link
+        tier1
+        tier2
+        sentiment
+        outputType
+        groupId
+        version
+      }
+      scores {
+        signalId
+        ticker
+        exposureWeight
+        typeRelevance
+        compositeScore
+      }
+      curatedAt
+    }
+  }
+`;
+
 export const SIGNALS_BY_TICKER_QUERY = gql`
   query SignalsByTicker($since: String, $limit: Int) {
     signalsByTicker(since: $since, limit: $limit) {
@@ -1102,19 +1142,26 @@ export const ON_WORKFLOW_PROGRESS_SUBSCRIPTION = gql`
 
 export const INTEL_FEED_QUERY = gql`
   query IntelFeed($limit: Int) {
-    signals(limit: $limit) {
-      id
-      title
-      type
-      sentiment
-      tickers
-      publishedAt
-      confidence
-      sources {
-        name
-        reliability
+    curatedSignals(limit: $limit) {
+      signal {
+        id
+        title
+        type
+        sentiment
+        tickers
+        publishedAt
+        confidence
+        sources {
+          name
+          reliability
+        }
+        tier1
       }
-      tier1
+      scores {
+        ticker
+        compositeScore
+      }
+      curatedAt
     }
     actions(status: PENDING, limit: 10) {
       id

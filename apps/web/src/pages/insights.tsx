@@ -3,14 +3,16 @@ import { Link } from 'react-router';
 import { useMutation, useQuery, useSubscription } from 'urql';
 import { cn } from '../lib/utils';
 import {
+  CURATED_SIGNALS_QUERY,
   INSIGHTS_WORKFLOW_STATUS_QUERY,
   LATEST_INSIGHT_REPORT_QUERY,
   ON_WORKFLOW_PROGRESS_SUBSCRIPTION,
   PROCESS_INSIGHTS_MUTATION,
-  SIGNALS_BY_TICKER_QUERY,
 } from '../api/documents';
 import { usePositions } from '../api/hooks/use-portfolio';
 import type {
+  CuratedSignalsQueryResult,
+  CuratedSignalsVariables,
   InsightRating,
   InsightReport,
   InsightsWorkflowStatusQueryResult,
@@ -21,7 +23,6 @@ import type {
   PositionInsight,
   ProcessInsightsMutationResult,
   Signal,
-  SignalsByTickerQueryResult,
   SignalSummary,
   WorkflowProgressEvent,
 } from '../api/types';
@@ -116,14 +117,33 @@ export default function Insights() {
   const positions = useMemo(() => positionsResult.data?.positions ?? [], [positionsResult.data]);
   const hasPositions = positions.length > 0;
 
-  // Fetch signals pre-grouped by portfolio ticker from the backend.
+  // Fetch curated signals and group client-side by ticker.
   // Memoize variables so the `since` timestamp doesn't change on every render.
-  const signalVars = useMemo(() => ({ limit: 200, since: new Date(Date.now() - 7 * 86_400_000).toISOString() }), []);
-  const [signalsResult] = useQuery<SignalsByTickerQueryResult>({
-    query: SIGNALS_BY_TICKER_QUERY,
+  const signalVars: CuratedSignalsVariables = useMemo(
+    () => ({ limit: 200, since: new Date(Date.now() - 7 * 86_400_000).toISOString() }),
+    [],
+  );
+  const [signalsResult] = useQuery<CuratedSignalsQueryResult, CuratedSignalsVariables>({
+    query: CURATED_SIGNALS_QUERY,
     variables: signalVars,
   });
-  const signalsByTicker = useMemo(() => signalsResult.data?.signalsByTicker ?? [], [signalsResult.data]);
+  const signalsByTicker = useMemo(() => {
+    const curated = signalsResult.data?.curatedSignals ?? [];
+    const byTicker = new Map<string, Signal[]>();
+    for (const cs of curated) {
+      for (const score of cs.scores) {
+        const bucket = byTicker.get(score.ticker);
+        if (bucket) {
+          if (!bucket.some((s) => s.id === cs.signal.id)) bucket.push(cs.signal);
+        } else {
+          byTicker.set(score.ticker, [cs.signal]);
+        }
+      }
+    }
+    return Array.from(byTicker.entries())
+      .map(([ticker, signals]) => ({ ticker, signals }))
+      .sort((a, b) => b.signals.length - a.signals.length);
+  }, [signalsResult.data]);
   const totalSignals = useMemo(() => signalsByTicker.reduce((sum, g) => sum + g.signals.length, 0), [signalsByTicker]);
 
   // Check if a workflow is already running (e.g. user navigated away and back)

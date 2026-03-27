@@ -31,6 +31,7 @@ import { SignalClustering } from '../signals/clustering.js';
 import type { ClassifyInput } from '../signals/clustering.js';
 import { AssessmentConfigSchema } from '../signals/curation/assessment-types.js';
 import { registerFullCurationWorkflow } from '../signals/curation/full-curation-workflow.js';
+import { runCurationPipeline } from '../signals/curation/pipeline.js';
 import { CurationConfigSchema } from '../signals/curation/types.js';
 import { SummaryGenerator } from '../signals/summary-generator.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
@@ -197,10 +198,9 @@ async function startGateway(): Promise<void> {
     memoryStore: services.memoryStores.get('analyst'),
     gathererOptions: {
       snapshotStore: services.snapshotStore,
-      signalArchive: services.signalArchive,
+      curatedSignalStore: services.curatedSignalStore,
       insightStore: services.insightStore,
       getJintelClient: () => services.jintelToolOptions.client,
-      signalIngestor: services.signalIngestor,
       memoryStores: services.memoryStores,
     },
   });
@@ -213,6 +213,17 @@ async function startGateway(): Promise<void> {
   const assessmentConfigRaw = await loadJsonConfig(`${dataRoot}/config/assessment.json`, AssessmentConfigSchema);
   const assessmentConfig = AssessmentConfigSchema.parse(assessmentConfigRaw);
 
+  // Auto-curate: run Tier 1 deterministic curation after every ingestion
+  services.signalIngestor.setPostIngestHook(async (ingested) => {
+    if (ingested === 0) return;
+    await runCurationPipeline({
+      signalArchive: services.signalArchive,
+      curatedStore: services.curatedSignalStore,
+      snapshotStore: services.snapshotStore,
+      config: curationConfig,
+    });
+  });
+
   registerFullCurationWorkflow(orchestrator, {
     signalArchive: services.signalArchive,
     curatedSignalStore: services.curatedSignalStore,
@@ -221,6 +232,8 @@ async function startGateway(): Promise<void> {
     snapshotStore: services.snapshotStore,
     curationConfig,
     assessmentConfig,
+    getJintelClient: () => services.jintelToolOptions.client,
+    signalIngestor: services.signalIngestor,
     assessmentWorkflowStartMs: services.assessmentWorkflowStartMs,
   });
   setCurationOrchestrator(orchestrator);
@@ -307,10 +320,9 @@ async function runInsights(): Promise<void> {
     memoryStore: services.memoryStores.get('analyst'),
     gathererOptions: {
       snapshotStore: services.snapshotStore,
-      signalArchive: services.signalArchive,
+      curatedSignalStore: services.curatedSignalStore,
       insightStore: services.insightStore,
       getJintelClient: () => services.jintelToolOptions.client,
-      signalIngestor: services.signalIngestor,
       memoryStores: services.memoryStores,
     },
   });

@@ -18,7 +18,7 @@ import { AgentRegistry } from './agents/registry.js';
 import { pubsub } from './api/graphql/pubsub.js';
 import { setActionStore } from './api/graphql/resolvers/actions.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
-import { setCuratedSignalStore } from './api/graphql/resolvers/curated-signals.js';
+import { setCuratedSignalStore, setCuratedSnapshotStore } from './api/graphql/resolvers/curated-signals.js';
 import {
   runHealthChecks,
   setDataSourceConfigPath,
@@ -558,8 +558,15 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     toolRegistry.register(tool);
   }
 
+  // Curated signal + assessment stores (created before wireInsights which needs curatedSignalStore)
+  const curatedSignalStore = new CuratedSignalStore(dataRoot);
+  const assessmentStore = new AssessmentStore(dataRoot);
+  setCuratedSignalStore(curatedSignalStore);
+  setCuratedSnapshotStore(snapshotStore);
+  setAssessmentStore(assessmentStore);
+
   // Insight tools (1 tool: save_insight_report)
-  const { insightStore, tools: insightTools } = wireInsights({ dataRoot, signalArchive });
+  const { insightStore, tools: insightTools } = wireInsights({ dataRoot, curatedSignalStore });
   for (const tool of insightTools) {
     toolRegistry.register(tool);
   }
@@ -568,12 +575,6 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   // Snap store (Strategist brief)
   const snapStore = new SnapStore(dataRoot);
   setSnapStore(snapStore);
-
-  // Curated signal + assessment stores
-  const curatedSignalStore = new CuratedSignalStore(dataRoot);
-  const assessmentStore = new AssessmentStore(dataRoot);
-  setCuratedSignalStore(curatedSignalStore);
-  setAssessmentStore(assessmentStore);
 
   // Assessment tools (1 tool: save_signal_assessment)
   // Mutable ref allows workflows to inject their start time for accurate durationMs

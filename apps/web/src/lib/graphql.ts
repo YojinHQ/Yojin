@@ -35,6 +35,8 @@ const cache = cacheExchange({
     SignalSource: () => null, // embedded — same source id appears on many signals
     TickerSignals: (data) => data.ticker as string,
     TickerSignalGroups: (data) => data.ticker as string,
+    CuratedSignal: () => null, // embedded — wraps Signal with scores
+    PortfolioRelevanceScore: () => null, // embedded
     SessionSummary: (data) => data.id as string,
     SessionDetail: (data) => data.id as string,
   },
@@ -50,6 +52,7 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'positions');
         cache.invalidate('Query', 'enrichedSnapshot');
         cache.invalidate('Query', 'signals');
+        cache.invalidate('Query', 'curatedSignals');
         cache.invalidate('Query', 'signalsByTicker');
         cache.invalidate('Query', 'signalGroupsByTicker');
       },
@@ -59,6 +62,7 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'portfolioHistory');
         cache.invalidate('Query', 'enrichedSnapshot');
         cache.invalidate('Query', 'signals');
+        cache.invalidate('Query', 'curatedSignals');
         cache.invalidate('Query', 'signalsByTicker');
         cache.invalidate('Query', 'signalGroupsByTicker');
       },
@@ -69,6 +73,7 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'enrichedSnapshot');
         cache.invalidate('Query', 'listConnections');
         cache.invalidate('Query', 'signals');
+        cache.invalidate('Query', 'curatedSignals');
         cache.invalidate('Query', 'signalsByTicker');
         cache.invalidate('Query', 'signalGroupsByTicker');
       },
@@ -77,6 +82,7 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'positions');
         cache.invalidate('Query', 'enrichedSnapshot');
         cache.invalidate('Query', 'signals');
+        cache.invalidate('Query', 'curatedSignals');
         cache.invalidate('Query', 'signalsByTicker');
         cache.invalidate('Query', 'signalGroupsByTicker');
       },
@@ -85,6 +91,7 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'positions');
         cache.invalidate('Query', 'enrichedSnapshot');
         cache.invalidate('Query', 'signals');
+        cache.invalidate('Query', 'curatedSignals');
         cache.invalidate('Query', 'signalsByTicker');
         cache.invalidate('Query', 'signalGroupsByTicker');
       },
@@ -95,6 +102,13 @@ const cache = cacheExchange({
       },
       fetchDataSource(_result, _args, cache) {
         cache.invalidate('Query', 'signals');
+        cache.invalidate('Query', 'curatedSignals');
+      },
+      runFullCuration(_result, _args, cache) {
+        cache.invalidate('Query', 'signals');
+        cache.invalidate('Query', 'curatedSignals');
+        cache.invalidate('Query', 'signalsByTicker');
+        cache.invalidate('Query', 'signalGroupsByTicker');
       },
       createAlert(_result, _args, cache) {
         cache.invalidate('Query', 'alerts');

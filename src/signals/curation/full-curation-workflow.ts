@@ -14,6 +14,8 @@
  * workflow remains for scheduler-only Tier 2 runs.
  */
 
+import type { JintelClient } from '@yojinhq/jintel-client';
+
 import { type TickerPosition, type TickerThesis, formatSignalsForAssessment } from './assessment-formatter.js';
 import type { AssessmentStore } from './assessment-store.js';
 import type { AssessmentConfig } from './assessment-types.js';
@@ -22,11 +24,12 @@ import { runCurationPipeline } from './pipeline.js';
 import type { CuratedSignal, CurationConfig } from './types.js';
 import type { Orchestrator } from '../../agents/orchestrator.js';
 import { emitProgress } from '../../agents/orchestrator.js';
-import { fetchAllEnabledSources } from '../../api/graphql/resolvers/fetch-data-source.js';
 import type { InsightStore } from '../../insights/insight-store.js';
+import { fetchJintelSignals } from '../../jintel/signal-fetcher.js';
 import { createSubsystemLogger } from '../../logging/logger.js';
 import type { PortfolioSnapshotStore } from '../../portfolio/snapshot-store.js';
 import type { SignalArchive } from '../archive.js';
+import type { SignalIngestor } from '../ingestor.js';
 
 const logger = createSubsystemLogger('full-curation');
 
@@ -38,6 +41,9 @@ export interface FullCurationWorkflowOptions {
   snapshotStore: PortfolioSnapshotStore;
   curationConfig: CurationConfig;
   assessmentConfig: AssessmentConfig;
+  /** Getter for Jintel client (may be hot-swapped after vault unlock). */
+  getJintelClient?: () => JintelClient | undefined;
+  signalIngestor?: SignalIngestor;
   /** Mutable ref shared with the assessment tool for accurate durationMs tracking. */
   assessmentWorkflowStartMs?: { value: number };
 }
@@ -101,6 +107,8 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
     insightStore,
     snapshotStore,
     curationConfig,
+    getJintelClient,
+    signalIngestor,
     assessmentWorkflowStartMs,
   } = options;
 
@@ -188,22 +196,35 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
       }
 
       // ------------------------------------------------------------------
-      // STAGE 0: Fetch fresh data from all enabled data sources
+      // STAGE 0: Fetch fresh signals from Jintel for portfolio tickers
       // ------------------------------------------------------------------
-      emitProgress({
-        workflowId: WF_ID,
-        stage: 'activity',
-        message: 'Stage 0: Fetching data from enabled sources...',
-        timestamp: new Date().toISOString(),
-      });
+      const snapshot0 = await snapshotStore.getLatest();
+      const jintelClient = getJintelClient?.();
 
-      const fetchResult = await fetchAllEnabledSources();
-      emitProgress({
-        workflowId: WF_ID,
-        stage: 'activity',
-        message: `Stage 0 complete: ${fetchResult.totalIngested} signals ingested, ${fetchResult.totalDuplicates} duplicates skipped${fetchResult.errors.length > 0 ? `, ${fetchResult.errors.length} error(s)` : ''}`,
-        timestamp: new Date().toISOString(),
-      });
+      if (snapshot0 && snapshot0.positions.length > 0 && jintelClient && signalIngestor) {
+        const portfolioTickers = snapshot0.positions.map((p) => p.symbol);
+        emitProgress({
+          workflowId: WF_ID,
+          stage: 'activity',
+          message: `Stage 0: Fetching Jintel data for ${portfolioTickers.length} tickers...`,
+          timestamp: new Date().toISOString(),
+        });
+
+        const fetchResult = await fetchJintelSignals(jintelClient, signalIngestor, portfolioTickers);
+        emitProgress({
+          workflowId: WF_ID,
+          stage: 'activity',
+          message: `Stage 0 complete: ${fetchResult.ingested} signals ingested, ${fetchResult.duplicates} duplicates skipped`,
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        emitProgress({
+          workflowId: WF_ID,
+          stage: 'activity',
+          message: 'Stage 0: Skipped — no portfolio or Jintel client not available',
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       // ------------------------------------------------------------------
       // TIER 1: Run deterministic curation pipeline

@@ -928,6 +928,30 @@ export interface OnWorkflowProgressVariables {
 // Curation
 // ---------------------------------------------------------------------------
 
+export interface PortfolioRelevanceScore {
+  signalId: string;
+  ticker: string;
+  exposureWeight: number;
+  typeRelevance: number;
+  compositeScore: number;
+}
+
+export interface CuratedSignal {
+  signal: Signal;
+  scores: PortfolioRelevanceScore[];
+  curatedAt: string;
+}
+
+export interface CuratedSignalsQueryResult {
+  curatedSignals: CuratedSignal[];
+}
+
+export interface CuratedSignalsVariables {
+  ticker?: string;
+  since?: string;
+  limit?: number;
+}
+
 export interface RunFullCurationMutationResult {
   runFullCuration: boolean;
 }
@@ -976,6 +1000,12 @@ export interface IntelFeedSignal {
   tier1: string | null;
 }
 
+export interface IntelFeedCuratedSignal {
+  signal: IntelFeedSignal;
+  scores: { ticker: string; compositeScore: number }[];
+  curatedAt: string;
+}
+
 export interface IntelFeedAction {
   id: string;
   what: string;
@@ -987,7 +1017,7 @@ export interface IntelFeedAction {
 }
 
 export interface IntelFeedQueryResult {
-  signals: IntelFeedSignal[];
+  curatedSignals: IntelFeedCuratedSignal[];
   actions: IntelFeedAction[];
 }
 

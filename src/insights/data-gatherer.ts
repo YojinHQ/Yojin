@@ -14,16 +14,13 @@ import { ALL_ENRICHMENT_FIELDS, buildBatchEnrichQuery } from '@yojinhq/jintel-cl
 
 import type { InsightStore } from './insight-store.js';
 import type { InsightReport } from './types.js';
-import { fetchAllEnabledSources } from '../api/graphql/resolvers/fetch-data-source.js';
 import type { Position } from '../api/graphql/types.js';
-import { riskSignalsToRaw } from '../jintel/tools.js';
 import type { ExtendedEntity } from '../jintel/types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { SignalMemoryStore } from '../memory/memory-store.js';
 import type { MemoryEntry } from '../memory/types.js';
 import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
-import type { SignalArchive } from '../signals/archive.js';
-import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
+import type { CuratedSignalStore } from '../signals/curation/curated-signal-store.js';
 import type { Signal, SignalOutputType, SignalSentiment } from '../signals/types.js';
 
 const logger = createSubsystemLogger('data-gatherer');
@@ -128,11 +125,10 @@ export interface GatherResult {
 
 export interface DataGathererOptions {
   snapshotStore: PortfolioSnapshotStore;
-  signalArchive: SignalArchive;
+  curatedSignalStore: CuratedSignalStore;
   insightStore: InsightStore;
   /** Getter to resolve the current Jintel client (may be hot-swapped after vault unlock). */
   getJintelClient?: () => JintelClient | undefined;
-  signalIngestor?: SignalIngestor;
   memoryStores: Map<string, SignalMemoryStore>;
 }
 
@@ -142,7 +138,7 @@ export interface DataGathererOptions {
 
 export async function gatherDataBriefs(options: DataGathererOptions): Promise<GatherResult> {
   const start = Date.now();
-  const { snapshotStore, signalArchive, insightStore, getJintelClient, signalIngestor, memoryStores } = options;
+  const { snapshotStore, curatedSignalStore, insightStore, getJintelClient, memoryStores } = options;
   const jintelClient = getJintelClient?.();
   if (!jintelClient) {
     logger.warn('Jintel client not available — skipping enrichment and quotes');
@@ -157,24 +153,12 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
   const tickers = snapshot.positions.map((p) => p.symbol);
   logger.info('Gathering data briefs', { positionCount: tickers.length });
 
-  // 2. Fetch fresh signals from all enabled data sources
-  try {
-    const fetchResult = await fetchAllEnabledSources();
-    logger.info('Data source fetch complete', {
-      ingested: fetchResult.totalIngested,
-      duplicates: fetchResult.totalDuplicates,
-      sources: fetchResult.sourcesAttempted,
-    });
-  } catch (err) {
-    logger.warn('Data source fetch failed — continuing with existing signals', {
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-
-  // 3. Parallel lookups — quotes, enrichments, memories, previous report
+  // 2. Parallel lookups — quotes, enrichments, curated signals, memories, previous report
+  // Signal ingestion & curation happen on the scheduler / post-ingest hook — no need to
+  // re-fetch or re-ingest here. We just read what's already curated.
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const [quotes, enrichmentByTicker, memories, previousReport] = await Promise.all([
+  const [quotes, enrichmentByTicker, curatedSignals, memories, previousReport] = await Promise.all([
     // Quotes (1 API call)
     jintelClient
       ? jintelClient.quotes(tickers).catch(() => ({ success: false as const, error: 'quotes failed' }))
@@ -182,41 +166,16 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
     // Unified enrichment + news (1 API call per 20 tickers)
     // Returns Map<inputTicker, entity> — preserves portfolio ticker → entity association
     jintelClient ? batchEnrichAllChunked(jintelClient, tickers) : Promise.resolve(new Map<string, ExtendedEntity>()),
+    // Curated signals (local, already scored by the curation pipeline)
+    curatedSignalStore.queryByTickers(tickers, { since: sevenDaysAgo, limit: 100 * tickers.length }),
     // Memories (local, fast)
     recallAllMemories(memoryStores, tickers),
     // Previous report (local, fast)
     insightStore.getLatest(),
   ]);
+  const signals = curatedSignals.map((cs) => cs.signal);
 
-  // 4. Ingest ALL Jintel entity data into the signal archive (fundamentals,
-  //    risk, filings, price moves, news — all from the single unified query).
-  //    Each signal is tagged with the portfolio ticker that was queried, guaranteeing
-  //    downstream association from signal → position.
-  if (signalIngestor && enrichmentByTicker.size > 0) {
-    const rawSignals = [...enrichmentByTicker.entries()].flatMap(([inputTicker, entity]) =>
-      enrichmentToSignals(entity, inputTicker),
-    );
-
-    if (rawSignals.length > 0) {
-      try {
-        const ingestResult = await signalIngestor.ingest(rawSignals);
-        logger.info('Jintel signals ingested', {
-          ingested: ingestResult.ingested,
-          duplicates: ingestResult.duplicates,
-          total: rawSignals.length,
-        });
-      } catch (err) {
-        logger.warn('Jintel signal ingestion failed', {
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-  }
-
-  // 5. Query signals AFTER enrichment ingestion so freshly-created signals are included
-  const signals = await signalArchive.query({ tickers, since: sevenDaysAgo, limit: 100 * tickers.length });
-
-  // 6. Index data by ticker for O(1) lookup
+  // 3. Index data by ticker for O(1) lookup
   const signalsByTicker = groupSignalsByTicker(signals, tickers);
   const quotesByTicker = indexQuotes(quotes);
   // enrichmentByTicker is already keyed by portfolio ticker from batchEnrichAllChunked
@@ -427,181 +386,6 @@ export function formatRiskMetrics(briefs: DataBrief[]): string {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Convert a Jintel Entity enrichment into RawSignalInput items.
- * Extracts ALL signal types: fundamentals, risk, regulatory filings, market data, and news.
- *
- * @param entity  — Jintel enrichment response
- * @param inputTicker — the portfolio ticker that was queried; always included in
- *   the signal's tickers so downstream association (signal → position) is guaranteed.
- */
-function enrichmentToSignals(entity: ExtendedEntity, inputTicker: string): RawSignalInput[] {
-  const entityTickers = entity.tickers ?? [];
-  // Guarantee the portfolio ticker is in the tickers list (case-insensitive dedup)
-  const tickers = entityTickers.some((t) => t.toUpperCase() === inputTicker.toUpperCase())
-    ? entityTickers
-    : [inputTicker, ...entityTickers];
-  // Day-precision timestamp for enrichment signals. The content hash is
-  // sha256(title | publishedAt), so using a stable per-day value prevents
-  // duplicate signals when enrichment runs multiple times in the same day.
-  const now = new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z';
-  const signals: RawSignalInput[] = [];
-
-  // 1. Risk signals (OFAC, adverse media, etc.)
-  if (entity.risk?.signals?.length) {
-    signals.push(...riskSignalsToRaw(entity.risk.signals, tickers));
-  }
-
-  // 2. Fundamentals snapshot → FUNDAMENTAL signal
-  const fund = entity.market?.fundamentals;
-  if (fund) {
-    const parts: string[] = [];
-    if (fund.sector) parts.push(`Sector: ${fund.sector}`);
-    if (fund.industry) parts.push(`Industry: ${fund.industry}`);
-    if (fund.marketCap) parts.push(`MCap: $${formatLargeNumber(fund.marketCap)}`);
-    if (fund.peRatio != null) parts.push(`P/E: ${fund.peRatio.toFixed(1)}`);
-    if (fund.eps != null) parts.push(`EPS: $${fund.eps.toFixed(2)}`);
-    if (fund.beta != null) parts.push(`Beta: ${fund.beta.toFixed(2)}`);
-    if (fund.dividendYield != null) parts.push(`Div yield: ${(fund.dividendYield * 100).toFixed(2)}%`);
-    if (fund.debtToEquity != null) parts.push(`D/E: ${fund.debtToEquity.toFixed(2)}`);
-    if (fund.fiftyTwoWeekHigh != null) parts.push(`52w high: $${fund.fiftyTwoWeekHigh.toFixed(2)}`);
-    if (fund.fiftyTwoWeekLow != null) parts.push(`52w low: $${fund.fiftyTwoWeekLow.toFixed(2)}`);
-
-    if (parts.length > 0) {
-      signals.push({
-        sourceId: 'jintel-fundamentals',
-        sourceName: 'Jintel Fundamentals',
-        sourceType: 'ENRICHMENT',
-        reliability: 0.9,
-        title: `${entity.name ?? tickers[0]} fundamentals: ${parts.slice(0, 4).join(', ')}`,
-        content: parts.join('\n'),
-        publishedAt: now,
-        type: 'FUNDAMENTAL',
-        tickers,
-        confidence: 0.9,
-        metadata: {
-          source: fund.source,
-          marketCap: fund.marketCap,
-          peRatio: fund.peRatio,
-          eps: fund.eps,
-          beta: fund.beta,
-          dividendYield: fund.dividendYield,
-          debtToEquity: fund.debtToEquity,
-          fiftyTwoWeekHigh: fund.fiftyTwoWeekHigh,
-          fiftyTwoWeekLow: fund.fiftyTwoWeekLow,
-          sector: fund.sector,
-          industry: fund.industry,
-        },
-      });
-    }
-  }
-
-  // 3. Regulatory filings → FUNDAMENTAL signals
-  const filings = entity.regulatory?.filings ?? [];
-  for (const filing of filings.slice(0, 5)) {
-    signals.push({
-      sourceId: 'jintel-sec',
-      sourceName: 'Jintel SEC',
-      sourceType: 'ENRICHMENT',
-      reliability: 0.95,
-      title: `${entity.name ?? tickers[0]}: ${filing.type} filed ${filing.date}`,
-      content: filing.description ?? undefined,
-      link: filing.url,
-      publishedAt: filing.date.includes('T') ? filing.date : `${filing.date}T00:00:00Z`,
-      type: 'FUNDAMENTAL',
-      tickers,
-      confidence: 0.95,
-      metadata: { filingType: filing.type },
-    });
-  }
-
-  // 4. Market quote → price-change signal (only if significant)
-  const quote = entity.market?.quote;
-  if (quote && Math.abs(quote.changePercent) >= 2) {
-    const direction = quote.changePercent > 0 ? 'up' : 'down';
-    signals.push({
-      sourceId: 'jintel-market',
-      sourceName: 'Jintel Market',
-      sourceType: 'ENRICHMENT',
-      reliability: 0.95,
-      title: `${quote.ticker} ${direction} ${Math.abs(quote.changePercent).toFixed(1)}% to $${quote.price.toFixed(2)}`,
-      publishedAt: quote.timestamp,
-      type: 'TECHNICAL',
-      tickers,
-      confidence: 0.95,
-      metadata: {
-        price: quote.price,
-        change: quote.change,
-        changePercent: quote.changePercent,
-        volume: quote.volume,
-      },
-    });
-  }
-
-  // 5. News articles — tickers come from the entity structure, not content parsing
-  for (const article of entity.news ?? []) {
-    if (!article.title) continue;
-    signals.push({
-      sourceId: `jintel-news-${article.source.toLowerCase().replace(/\s+/g, '-')}`,
-      sourceName: `Jintel News (${article.source})`,
-      sourceType: 'API',
-      reliability: 0.8,
-      title: article.title,
-      content: article.snippet ?? undefined,
-      link: article.link,
-      publishedAt: article.date ?? now,
-      tickers,
-      confidence: 0.8,
-      metadata: {
-        source: article.source,
-        link: article.link,
-      },
-    });
-  }
-
-  // 6. Technical indicators → TECHNICAL signal (summary of all available indicators)
-  const tech = entity.technicals;
-  if (tech) {
-    const parts: string[] = [];
-    if (tech.rsi != null) parts.push(`RSI: ${tech.rsi.toFixed(1)}`);
-    if (tech.macd)
-      parts.push(`MACD: ${tech.macd.histogram.toFixed(3)} (${tech.macd.histogram >= 0 ? 'bullish' : 'bearish'})`);
-    if (tech.bollingerBands)
-      parts.push(`BB: ${tech.bollingerBands.lower.toFixed(2)}–${tech.bollingerBands.upper.toFixed(2)}`);
-    if (tech.ema != null) parts.push(`EMA: ${tech.ema.toFixed(2)}`);
-    if (tech.sma != null) parts.push(`SMA: ${tech.sma.toFixed(2)}`);
-    if (tech.atr != null) parts.push(`ATR: ${tech.atr.toFixed(2)}`);
-    if (tech.mfi != null) parts.push(`MFI: ${tech.mfi.toFixed(1)}`);
-
-    if (parts.length > 0) {
-      signals.push({
-        sourceId: 'jintel-technicals',
-        sourceName: 'Jintel Technicals',
-        sourceType: 'ENRICHMENT',
-        reliability: 0.9,
-        title: `${entity.name ?? tickers[0]} technicals: ${parts.slice(0, 4).join(', ')}`,
-        content: parts.join('\n'),
-        publishedAt: now,
-        type: 'TECHNICAL',
-        tickers,
-        confidence: 0.9,
-        metadata: {
-          rsi: tech.rsi,
-          macdHistogram: tech.macd?.histogram,
-          bbUpper: tech.bollingerBands?.upper,
-          bbLower: tech.bollingerBands?.lower,
-          ema: tech.ema,
-          sma: tech.sma,
-          atr: tech.atr,
-          mfi: tech.mfi,
-        },
-      });
-    }
-  }
-
-  return signals;
-}
 
 // ---------------------------------------------------------------------------
 // Unified Jintel enrichment — single query for ALL signal types

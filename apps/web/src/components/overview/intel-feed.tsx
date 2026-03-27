@@ -329,8 +329,13 @@ export default function IntelFeed() {
   const items: IntelFeedItem[] = useMemo(() => {
     if (!data) return [];
 
-    const signalItems: IntelFeedItem[] = data.signals.map((s) => {
+    const signalItems: IntelFeedItem[] = data.curatedSignals.map((cs) => {
+      const s = cs.signal;
       const itemType = classifySignal(s);
+      const topScore =
+        cs.scores.length > 0
+          ? cs.scores.reduce((best, sc) => (sc.compositeScore > best.compositeScore ? sc : best), cs.scores[0])
+          : null;
       return {
         id: s.id,
         type: itemType,
@@ -343,6 +348,15 @@ export default function IntelFeed() {
             ? [
                 { label: 'Tickers', value: s.tickers.join(', ') },
                 { label: 'Confidence', value: `${Math.round(s.confidence * 100)}%`, highlight: s.confidence >= 0.8 },
+                ...(topScore
+                  ? [
+                      {
+                        label: 'Relevance',
+                        value: `${Math.round(topScore.compositeScore * 100)}%`,
+                        highlight: topScore.compositeScore >= 0.6,
+                      },
+                    ]
+                  : []),
               ]
             : undefined,
         primaryAction: primaryActionLabel[itemType],

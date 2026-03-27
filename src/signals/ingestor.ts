@@ -68,11 +68,15 @@ export interface IngestorOptions {
 /** Provider that returns the current set of portfolio tickers. */
 export type PortfolioTickerProvider = () => Promise<Set<string> | null>;
 
+/** Hook called after signals are written to the archive. */
+export type PostIngestHook = (ingested: number) => Promise<void>;
+
 export class SignalIngestor {
   private readonly archive: SignalArchive;
   private readonly symbolResolver?: SymbolResolver;
   private clustering?: SignalClustering;
   private portfolioTickerProvider?: PortfolioTickerProvider;
+  private postIngestHook?: PostIngestHook;
   private knownHashes = new Map<string, string>(); // contentHash → signalId
   private initialized = false;
 
@@ -85,6 +89,11 @@ export class SignalIngestor {
   /** Wire portfolio ticker filter — signals with no portfolio ticker are dropped at ingestion. */
   setPortfolioTickerProvider(provider: PortfolioTickerProvider): void {
     this.portfolioTickerProvider = provider;
+  }
+
+  /** Wire auto-curation — runs deterministic curation after every ingestion. */
+  setPostIngestHook(hook: PostIngestHook): void {
+    this.postIngestHook = hook;
   }
 
   /** Late-wire clustering after LLM provider becomes available. */
@@ -188,6 +197,15 @@ export class SignalIngestor {
         await this.archive.appendBatch(signals);
       }
       logger.info(`Ingested ${signals.length} signals${dropped > 0 ? `, ${dropped} dropped (not in portfolio)` : ''}`);
+
+      // Auto-curate: run deterministic curation immediately after ingestion
+      if (this.postIngestHook) {
+        try {
+          await this.postIngestHook(signals.length);
+        } catch (err) {
+          logger.warn('Post-ingest curation failed', { error: err });
+        }
+      }
     }
 
     return result;

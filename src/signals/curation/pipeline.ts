@@ -32,6 +32,7 @@ const TYPE_RELEVANCE: Record<SignalType, Record<AssetClass, number>> = {
   TRADING_LOGIC_TRIGGER: { EQUITY: 0.8, CRYPTO: 0.8, BOND: 0.7, COMMODITY: 0.7, CURRENCY: 0.7, OTHER: 0.6 },
 };
 
+const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
@@ -105,10 +106,9 @@ export async function runCurationPipeline(options: CurationPipelineOptions): Pro
   const positionByTicker = new Map(snapshot.positions.map((p) => [p.symbol, p]));
 
   // 1. LOAD — incremental via watermark
+  // First run: 48-hour lookback. Subsequent runs: delta from last watermark (full-precision).
   const watermark = await curatedStore.getLatestWatermark();
-  const since = watermark
-    ? watermark.lastSignalIngestedAt.slice(0, 10)
-    : new Date(Date.now() - SEVEN_DAYS_MS).toISOString().slice(0, 10);
+  const since = watermark ? watermark.lastSignalIngestedAt : new Date(Date.now() - FORTY_EIGHT_HOURS_MS).toISOString();
 
   const rawSignals = await signalArchive.query({ tickers: [...portfolioTickers], since });
 
