@@ -7,6 +7,7 @@
 import { toGql } from './signals.js';
 import type { SignalGql } from './signals.js';
 import type { Orchestrator } from '../../../agents/orchestrator.js';
+import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { CuratedSignalStore } from '../../../signals/curation/curated-signal-store.js';
 
 // ---------------------------------------------------------------------------
@@ -15,6 +16,7 @@ import type { CuratedSignalStore } from '../../../signals/curation/curated-signa
 
 let store: CuratedSignalStore | null = null;
 let curationOrchestrator: Orchestrator | null = null;
+let snapshotStore: PortfolioSnapshotStore | null = null;
 
 export function setCuratedSignalStore(s: CuratedSignalStore): void {
   store = s;
@@ -22,6 +24,10 @@ export function setCuratedSignalStore(s: CuratedSignalStore): void {
 
 export function setCurationOrchestrator(o: Orchestrator): void {
   curationOrchestrator = o;
+}
+
+export function setCuratedSnapshotStore(s: PortfolioSnapshotStore): void {
+  snapshotStore = s;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,13 +64,21 @@ export async function curatedSignalsResolver(
 ): Promise<CuratedSignalGql[]> {
   if (!store) return [];
 
-  // Requires at least one ticker — UI should pass portfolio tickers for "show all"
-  const tickers = args.ticker ? [args.ticker] : [];
+  // Resolve tickers: explicit arg, or auto-resolve from portfolio snapshot
+  let tickers: string[];
+  if (args.ticker) {
+    tickers = [args.ticker];
+  } else if (snapshotStore) {
+    const snapshot = await snapshotStore.getLatest();
+    tickers = snapshot && snapshot.positions.length > 0 ? snapshot.positions.map((p) => p.symbol.toUpperCase()) : [];
+  } else {
+    tickers = [];
+  }
   if (tickers.length === 0) return [];
 
   const curated = await store.queryByTickers(tickers, {
     since: args.since,
-    limit: args.limit ?? 50,
+    limit: args.limit ?? 200,
   });
 
   return curated.map((cs) => ({

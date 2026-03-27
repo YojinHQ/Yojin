@@ -84,6 +84,9 @@ export class SignalGroupArchive {
     const results: SignalGroup[] = [];
     const limit = filter.limit ?? Infinity;
 
+    // Pre-compute expensive filter values once
+    const compiled = this.compileFilter(filter);
+
     for (const file of files) {
       if (results.length >= limit) break;
 
@@ -91,7 +94,7 @@ export class SignalGroupArchive {
       for (const group of [...groups].reverse()) {
         // newest within the day first
         if (results.length >= limit) break;
-        if (this.matchesFilter(group, filter)) {
+        if (this.matchesCompiled(group, compiled)) {
           results.push(group);
         }
       }
@@ -217,21 +220,27 @@ export class SignalGroupArchive {
     return result;
   }
 
-  private matchesFilter(group: SignalGroup, filter: SignalGroupQueryFilter): boolean {
-    if (filter.tickers && filter.tickers.length > 0) {
-      const tickerSet = new Set(filter.tickers);
-      if (!group.tickers.some((t) => tickerSet.has(t))) return false;
-    } else if (filter.ticker && !group.tickers.includes(filter.ticker)) {
-      return false;
+  /** Pre-compute expensive filter values once so matchesCompiled does zero allocations. */
+  private compileFilter(filter: SignalGroupQueryFilter) {
+    return {
+      tickerSet:
+        filter.tickers && filter.tickers.length > 0
+          ? new Set(filter.tickers)
+          : filter.ticker
+            ? new Set([filter.ticker])
+            : null,
+      sinceBound: filter.since ? (filter.since.includes('T') ? filter.since : `${filter.since}T00:00:00.000Z`) : null,
+      untilBound: filter.until ? (filter.until.includes('T') ? filter.until : `${filter.until}T23:59:59.999Z`) : null,
+    };
+  }
+
+  private matchesCompiled(group: SignalGroup, f: ReturnType<typeof this.compileFilter>): boolean {
+    if (f.tickerSet) {
+      const ts = f.tickerSet;
+      if (!group.tickers.some((t) => ts.has(t))) return false;
     }
-    if (filter.since) {
-      const bound = filter.since.includes('T') ? filter.since : `${filter.since}T00:00:00.000Z`;
-      if (group.lastEventAt < bound) return false;
-    }
-    if (filter.until) {
-      const bound = filter.until.includes('T') ? filter.until : `${filter.until}T23:59:59.999Z`;
-      if (group.lastEventAt > bound) return false;
-    }
+    if (f.sinceBound && group.lastEventAt < f.sinceBound) return false;
+    if (f.untilBound && group.lastEventAt > f.untilBound) return false;
     return true;
   }
 

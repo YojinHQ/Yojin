@@ -103,7 +103,8 @@ ${sections.join('\n\n---\n\n')}`;
     switch (trigger.type) {
       case 'PRICE_MOVE': {
         const threshold = Number(params['threshold'] ?? 0);
-        const change = ctx.priceChanges[ticker] ?? 0;
+        const change = ctx.priceChanges[ticker];
+        if (change === undefined) return null; // no data — don't fire
         if (threshold < 0 && change <= threshold) return { change, threshold };
         if (threshold > 0 && change >= threshold) return { change, threshold };
         return null;
@@ -113,7 +114,8 @@ ${sections.join('\n\n---\n\n')}`;
         const indicator = String(params['indicator'] ?? 'RSI');
         const threshold = Number(params['threshold'] ?? 0);
         const direction = String(params['direction'] ?? 'above');
-        const value = ctx.indicators[ticker]?.[indicator] ?? 0;
+        const value = ctx.indicators[ticker]?.[indicator];
+        if (value === undefined) return null; // no data — don't fire
         if (direction === 'above' && value >= threshold) return { indicator, value, threshold };
         if (direction === 'below' && value <= threshold) return { indicator, value, threshold };
         return null;

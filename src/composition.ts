@@ -18,7 +18,7 @@ import { AgentRegistry } from './agents/registry.js';
 import { pubsub } from './api/graphql/pubsub.js';
 import { setActionStore } from './api/graphql/resolvers/actions.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
-import { setCuratedSignalStore } from './api/graphql/resolvers/curated-signals.js';
+import { setCuratedSignalStore, setCuratedSnapshotStore } from './api/graphql/resolvers/curated-signals.js';
 import {
   runHealthChecks,
   setDataSourceConfigPath,
@@ -38,8 +38,12 @@ import {
 } from './api/graphql/resolvers/onboarding.js';
 import { setPortfolioConnectionManager, setPortfolioJintelClient } from './api/graphql/resolvers/portfolio.js';
 import { setAssessmentStore } from './api/graphql/resolvers/signal-assessments.js';
-import { setGroupSignalArchive, setSignalGroupArchive } from './api/graphql/resolvers/signal-groups.js';
-import { setSignalArchive } from './api/graphql/resolvers/signals.js';
+import {
+  setGroupSignalArchive,
+  setGroupSnapshotStore,
+  setSignalGroupArchive,
+} from './api/graphql/resolvers/signal-groups.js';
+import { setSignalArchive, setSignalSnapshotStore } from './api/graphql/resolvers/signals.js';
 import { setSkillStore } from './api/graphql/resolvers/skills.js';
 import { setSnapStore } from './api/graphql/resolvers/snap.js';
 import { setVault, setVaultSecretChangedCallback } from './api/graphql/resolvers/vault.js';
@@ -346,9 +350,16 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   const signalGroupArchive = new SignalGroupArchive({ dir: `${dataRoot}/signals/groups/by-date` });
   // Clustering is wired after LLM provider is available (see below)
   const signalIngestor = new SignalIngestor({ archive: signalArchive });
+  signalIngestor.setPortfolioTickerProvider(async () => {
+    const snap = await snapshotStore.getLatest();
+    if (!snap || snap.positions.length === 0) return null;
+    return new Set(snap.positions.map((p) => p.symbol.toUpperCase()));
+  });
   setSignalArchive(signalArchive);
+  setSignalSnapshotStore(snapshotStore);
   setSignalGroupArchive(signalGroupArchive);
   setGroupSignalArchive(signalArchive);
+  setGroupSnapshotStore(snapshotStore);
   setDataSourceConfigPath(dsConfigPath);
   setFetchDeps({ configPath: dsConfigPath, ingestor: signalIngestor, vault });
 
@@ -547,8 +558,15 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     toolRegistry.register(tool);
   }
 
+  // Curated signal + assessment stores (created before wireInsights which needs curatedSignalStore)
+  const curatedSignalStore = new CuratedSignalStore(dataRoot);
+  const assessmentStore = new AssessmentStore(dataRoot);
+  setCuratedSignalStore(curatedSignalStore);
+  setCuratedSnapshotStore(snapshotStore);
+  setAssessmentStore(assessmentStore);
+
   // Insight tools (1 tool: save_insight_report)
-  const { insightStore, tools: insightTools } = wireInsights({ dataRoot, signalArchive });
+  const { insightStore, tools: insightTools } = wireInsights({ dataRoot, curatedSignalStore });
   for (const tool of insightTools) {
     toolRegistry.register(tool);
   }
@@ -557,12 +575,6 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   // Snap store (Strategist brief)
   const snapStore = new SnapStore(dataRoot);
   setSnapStore(snapStore);
-
-  // Curated signal + assessment stores
-  const curatedSignalStore = new CuratedSignalStore(dataRoot);
-  const assessmentStore = new AssessmentStore(dataRoot);
-  setCuratedSignalStore(curatedSignalStore);
-  setAssessmentStore(assessmentStore);
 
   // Assessment tools (1 tool: save_signal_assessment)
   // Mutable ref allows workflows to inject their start time for accurate durationMs

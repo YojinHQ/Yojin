@@ -20,17 +20,17 @@ import {
 } from './types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import { getLogger } from '../logging/index.js';
-import type { SignalArchive } from '../signals/archive.js';
+import type { CuratedSignalStore } from '../signals/curation/curated-signal-store.js';
 
 const log = getLogger().sub('insight-tools');
 
 export interface InsightToolsOptions {
   insightStore: InsightStore;
-  signalArchive?: SignalArchive;
+  curatedSignalStore?: CuratedSignalStore;
 }
 
 export function createInsightTools(options: InsightToolsOptions): ToolDefinition[] {
-  const { insightStore, signalArchive } = options;
+  const { insightStore, curatedSignalStore } = options;
 
   const saveInsightReport: ToolDefinition = {
     name: 'save_insight_report',
@@ -115,22 +115,23 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
       // Validate position schemas
       const positions = params.positions.map((p) => PositionInsightSchema.parse(p));
 
-      // Enrich position keySignals with canonical data from archive.
+      // Enrich position keySignals with canonical data from curated store.
       // Drop signals that belong to a different position (LLM misattribution).
       let enrichedCount = 0;
       let droppedCount = 0;
-      if (signalArchive) {
+      if (curatedSignalStore) {
         for (const position of positions) {
           const baseSymbol = position.symbol.split('-')[0].toUpperCase();
           const validSignals = [];
 
           for (const sig of position.keySignals) {
-            const archived = await signalArchive.getById(sig.signalId);
-            if (!archived) {
+            const curated = await curatedSignalStore.getBySignalId(sig.signalId);
+            if (!curated) {
               droppedCount++;
               log.warn(`Dropping signal with non-existent ID: ${sig.signalId} ("${sig.title}")`);
               continue;
             }
+            const archived = curated.signal;
             const signalTickers = archived.assets.map((a) => a.ticker.split('-')[0].toUpperCase());
             if (signalTickers.length > 0 && !signalTickers.includes(baseSymbol)) {
               droppedCount++;
@@ -152,13 +153,12 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
       }
 
       // Populate allSignalIds: 1 batch query for ALL position tickers, grouped by ticker.
-      // This is the deterministic link — every signal for a position's ticker in the
+      // This is the deterministic link — every curated signal for a position's ticker in the
       // 7-day window is associated, regardless of what the LLM chose as keySignals.
-      if (signalArchive) {
+      if (curatedSignalStore) {
         const allTickers = positions.map((p) => p.symbol);
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        const allSignals = await signalArchive.query({
-          tickers: allTickers,
+        const allCurated = await curatedSignalStore.queryByTickers(allTickers, {
           since: sevenDaysAgo,
           limit: 200 * allTickers.length,
         });
@@ -166,8 +166,8 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
         // Group signal IDs by ticker (1 pass, pre-compiled Set)
         const tickerSet = new Set(allTickers.map((t) => t.split('-')[0].toUpperCase()));
         const signalIdsByTicker = new Map<string, Set<string>>();
-        for (const signal of allSignals) {
-          for (const asset of signal.assets) {
+        for (const cs of allCurated) {
+          for (const asset of cs.signal.assets) {
             const base = asset.ticker.split('-')[0].toUpperCase();
             if (tickerSet.has(base)) {
               let ids = signalIdsByTicker.get(base);
@@ -175,7 +175,7 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
                 ids = new Set();
                 signalIdsByTicker.set(base, ids);
               }
-              ids.add(signal.id);
+              ids.add(cs.signal.id);
             }
           }
         }
@@ -236,7 +236,7 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
 
       const enrichNote = enrichedCount > 0 ? `\nSignal enrichment: ${enrichedCount} matched` : '';
       const dropNote = droppedCount > 0 ? `, ${droppedCount} misattributed signals dropped` : '';
-      const validationNote = signalArchive ? `${enrichNote}${dropNote}` : '';
+      const validationNote = curatedSignalStore ? `${enrichNote}${dropNote}` : '';
 
       return {
         content:

@@ -65,10 +65,18 @@ export interface IngestorOptions {
   clustering?: SignalClustering;
 }
 
+/** Provider that returns the current set of portfolio tickers. */
+export type PortfolioTickerProvider = () => Promise<Set<string> | null>;
+
+/** Hook called after signals are written to the archive. */
+export type PostIngestHook = (ingested: number) => Promise<void>;
+
 export class SignalIngestor {
   private readonly archive: SignalArchive;
   private readonly symbolResolver?: SymbolResolver;
   private clustering?: SignalClustering;
+  private portfolioTickerProvider?: PortfolioTickerProvider;
+  private postIngestHook?: PostIngestHook;
   private knownHashes = new Map<string, string>(); // contentHash → signalId
   private initialized = false;
 
@@ -76,6 +84,16 @@ export class SignalIngestor {
     this.archive = options.archive;
     this.symbolResolver = options.symbolResolver;
     this.clustering = options.clustering;
+  }
+
+  /** Wire portfolio ticker filter — signals with no portfolio ticker are dropped at ingestion. */
+  setPortfolioTickerProvider(provider: PortfolioTickerProvider): void {
+    this.portfolioTickerProvider = provider;
+  }
+
+  /** Wire auto-curation — runs deterministic curation after every ingestion. */
+  setPostIngestHook(hook: PostIngestHook): void {
+    this.postIngestHook = hook;
   }
 
   /** Late-wire clustering after LLM provider becomes available. */
@@ -103,15 +121,31 @@ export class SignalIngestor {
   async ingest(items: RawSignalInput[]): Promise<IngestResult> {
     await this.initialize();
 
+    // Load portfolio tickers once for the entire batch
+    const portfolioTickers = this.portfolioTickerProvider ? await this.portfolioTickerProvider() : null;
+
     const result: IngestResult = { ingested: 0, duplicates: 0, errors: [] };
     // Pending signals not yet flushed to archive (keyed by id for fast lookup during same-batch merges)
     const pendingById = new Map<string, Signal>();
     const signals: Signal[] = [];
+    let dropped = 0;
 
     for (const item of items) {
       try {
         const signal = this.toSignal(item);
         if (!signal) continue;
+
+        // Drop signals that have explicit tickers but none match the portfolio.
+        // Signals with zero extracted tickers are kept — they may be relevant
+        // macro/market news that the curation pipeline will score later.
+        if (
+          portfolioTickers &&
+          signal.assets.length > 0 &&
+          !signal.assets.some((a) => portfolioTickers.has(a.ticker.toUpperCase()))
+        ) {
+          dropped++;
+          continue;
+        }
 
         const existingId = this.knownHashes.get(signal.contentHash);
         if (existingId) {
@@ -162,7 +196,16 @@ export class SignalIngestor {
       } else {
         await this.archive.appendBatch(signals);
       }
-      logger.info(`Ingested ${signals.length} signals`);
+      logger.info(`Ingested ${signals.length} signals${dropped > 0 ? `, ${dropped} dropped (not in portfolio)` : ''}`);
+
+      // Auto-curate: run deterministic curation immediately after ingestion
+      if (this.postIngestHook) {
+        try {
+          await this.postIngestHook(signals.length);
+        } catch (err) {
+          logger.warn('Post-ingest curation failed', { error: err });
+        }
+      }
     }
 
     return result;
@@ -295,10 +338,19 @@ export class SignalIngestor {
     return 'NEWS';
   }
 
-  /** SHA-256 content hash for dedup. Source-agnostic — same event from different sources yields the same hash. */
+  /**
+   * SHA-256 content hash for dedup. Source-agnostic — same event from
+   * different sources yields the same hash.
+   *
+   * Uses day-precision for publishedAt so that the same article/data point
+   * published at different times on the same day is still detected as a
+   * duplicate (e.g. RSS feeds republishing with updated timestamps, or
+   * enrichment signals re-ingested on the same day).
+   */
   private computeHash(title: string, publishedAt: string): string {
     const normalized = title.trim().toLowerCase();
-    return createHash('sha256').update(`${normalized}|${publishedAt}`).digest('hex');
+    const day = publishedAt.slice(0, 10); // YYYY-MM-DD
+    return createHash('sha256').update(`${normalized}|${day}`).digest('hex');
   }
 
   /** Weighted confidence — bonus scales with average reliability so low-quality sources can't inflate score. */

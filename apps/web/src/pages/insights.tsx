@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useSubscription } from 'urql';
 import { cn } from '../lib/utils';
 import {
+  CURATED_SIGNALS_QUERY,
   INSIGHTS_WORKFLOW_STATUS_QUERY,
   LATEST_INSIGHT_REPORT_QUERY,
   ON_WORKFLOW_PROGRESS_SUBSCRIPTION,
@@ -10,6 +11,8 @@ import {
 } from '../api/documents';
 import { usePositions } from '../api/hooks/use-portfolio';
 import type {
+  CuratedSignalsQueryResult,
+  CuratedSignalsVariables,
   InsightRating,
   InsightReport,
   InsightsWorkflowStatusQueryResult,
@@ -19,6 +22,7 @@ import type {
   PortfolioHealth,
   PositionInsight,
   ProcessInsightsMutationResult,
+  Signal,
   SignalSummary,
   WorkflowProgressEvent,
 } from '../api/types';
@@ -89,6 +93,16 @@ const signalTypeVariant: Record<string, BadgeVariant> = {
   SENTIMENT: 'warning',
   TECHNICAL: 'neutral',
   MACRO: 'error',
+  FILINGS: 'neutral',
+  SOCIALS: 'info',
+  TRADING_LOGIC_TRIGGER: 'warning',
+};
+
+const sentimentVariant: Record<string, BadgeVariant> = {
+  BULLISH: 'success',
+  BEARISH: 'error',
+  NEUTRAL: 'neutral',
+  MIXED: 'warning',
 };
 
 export default function Insights() {
@@ -100,7 +114,37 @@ export default function Insights() {
 
   // Check if the user has positions in their portfolio
   const [positionsResult] = usePositions();
-  const hasPositions = (positionsResult.data?.positions?.length ?? 0) > 0;
+  const positions = useMemo(() => positionsResult.data?.positions ?? [], [positionsResult.data]);
+  const hasPositions = positions.length > 0;
+
+  // Fetch curated signals and group client-side by ticker.
+  // Memoize variables so the `since` timestamp doesn't change on every render.
+  const signalVars: CuratedSignalsVariables = useMemo(
+    () => ({ limit: 200, since: new Date(Date.now() - 7 * 86_400_000).toISOString() }),
+    [],
+  );
+  const [signalsResult] = useQuery<CuratedSignalsQueryResult, CuratedSignalsVariables>({
+    query: CURATED_SIGNALS_QUERY,
+    variables: signalVars,
+  });
+  const signalsByTicker = useMemo(() => {
+    const curated = signalsResult.data?.curatedSignals ?? [];
+    const byTicker = new Map<string, Signal[]>();
+    for (const cs of curated) {
+      for (const score of cs.scores) {
+        const bucket = byTicker.get(score.ticker);
+        if (bucket) {
+          if (!bucket.some((s) => s.id === cs.signal.id)) bucket.push(cs.signal);
+        } else {
+          byTicker.set(score.ticker, [cs.signal]);
+        }
+      }
+    }
+    return Array.from(byTicker.entries())
+      .map(([ticker, signals]) => ({ ticker, signals }))
+      .sort((a, b) => b.signals.length - a.signals.length);
+  }, [signalsResult.data]);
+  const totalSignals = useMemo(() => signalsByTicker.reduce((sum, g) => sum + g.signals.length, 0), [signalsByTicker]);
 
   // Check if a workflow is already running (e.g. user navigated away and back)
   const [statusResult, reexecuteStatusQuery] = useQuery<InsightsWorkflowStatusQueryResult>({
@@ -160,64 +204,44 @@ export default function Insights() {
 
   const report = mutationResult.data?.processInsights ?? queryResult.data?.latestInsightReport ?? null;
 
+  // Deep analysis collapsible state
+  const [deepAnalysisOpen, setDeepAnalysisOpen] = useState(false);
+
+  // Auto-expand deep analysis section when workflow starts or report exists from mutation
+  useEffect(() => {
+    if (loading) setDeepAnalysisOpen(true);
+  }, [loading]);
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <header className="flex items-center justify-between px-6 pt-6 pb-4">
         <div>
           <h1 className="text-lg font-semibold text-text-primary">Insights</h1>
-          {report && (
-            <p className="mt-1 text-sm text-text-muted">
-              {new Date(report.createdAt).toLocaleString()} · {(report.durationMs / 1000).toFixed(1)}s
-            </p>
-          )}
+          <p className="mt-1 text-sm text-text-muted">
+            {signalsResult.fetching
+              ? 'Loading signals...'
+              : totalSignals > 0
+                ? `${totalSignals} signal${totalSignals !== 1 ? 's' : ''} in the last 7 days · ${signalsByTicker.length} position${signalsByTicker.length !== 1 ? 's' : ''} with signals`
+                : 'No recent signals'}
+          </p>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <Button size="lg" onClick={handleProcess} loading={loading} disabled={!hasPositions && !loading}>
-            {loading ? 'Processing...' : 'Process Insights'}
-          </Button>
-          {!hasPositions && !positionsResult.fetching && (
-            <p className="text-xs text-text-muted">
-              <Link to="/portfolio" className="text-accent-primary hover:underline">
-                Add positions
-              </Link>{' '}
-              to your portfolio first
-            </p>
-          )}
+        <div className="flex items-center gap-3">
+          <Link to="/signals" className="text-sm text-accent-primary hover:underline flex items-center gap-1">
+            All Signals
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+            </svg>
+          </Link>
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto px-6 pb-6">
-        {loading && <WorkflowDiagram events={progressEvents} />}
+      <div className="flex-1 overflow-auto px-6 pb-6 space-y-6">
+        {/* ================================================================= */}
+        {/* PRIMARY VIEW: Signals grouped by portfolio position               */}
+        {/* ================================================================= */}
 
-        {/* Error display */}
-        {!loading && error && (
-          <Card className="p-5 mb-6 border border-error/30 bg-error/5">
-            <div className="flex items-start gap-3">
-              <svg
-                className="h-5 w-5 text-error flex-shrink-0 mt-0.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-                />
-              </svg>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-error">Processing failed</p>
-                <p className="mt-1 text-sm text-text-secondary break-words">{error.message}</p>
-              </div>
-              <Button size="sm" onClick={handleProcess}>
-                Retry
-              </Button>
-            </div>
-          </Card>
-        )}
-
-        {!loading && !report && !error && !queryResult.fetching && (
+        {/* Empty state: no positions */}
+        {!hasPositions && !positionsResult.fetching && (
           <div className="flex flex-col items-center justify-center gap-4 py-24">
             <svg
               className="h-14 w-14 text-text-muted"
@@ -229,19 +253,305 @@ export default function Insights() {
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605"
+                d="M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
               />
             </svg>
-            <p className="text-base text-text-muted">No insights yet. Click "Process Insights" to run analysis.</p>
+            <p className="text-base text-text-muted">Connect data sources to start receiving signals.</p>
+            <Link to="/portfolio" className="text-sm text-accent-primary hover:underline">
+              Add positions to your portfolio
+            </Link>
           </div>
         )}
 
-        {report && <InsightReportView report={report} />}
+        {/* Empty state: positions exist but no signals */}
+        {hasPositions && !signalsResult.fetching && totalSignals === 0 && (
+          <div className="flex flex-col items-center justify-center gap-4 py-24">
+            <svg
+              className="h-14 w-14 text-text-muted"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
+              />
+            </svg>
+            <p className="text-base text-text-muted">No signals yet. Fetch data sources to ingest signals.</p>
+            <Link to="/settings" className="text-sm text-accent-primary hover:underline">
+              Configure data sources
+            </Link>
+          </div>
+        )}
+
+        {/* Signal cards grouped by position */}
+        {signalsByTicker.length > 0 && (
+          <div className="space-y-3">
+            {signalsByTicker.map((group) => {
+              const position = positions.find((p) => p.symbol === group.ticker);
+              return (
+                <PositionSignalCard
+                  key={group.ticker}
+                  ticker={group.ticker}
+                  name={position?.name ?? group.ticker}
+                  signals={group.signals}
+                />
+              );
+            })}
+          </div>
+        )}
+
+        {/* Link to full signal archive for non-portfolio signals */}
+
+        {/* ================================================================= */}
+        {/* DEEP ANALYSIS: Collapsible section at bottom                      */}
+        {/* ================================================================= */}
+
+        <Card className="p-0 overflow-hidden">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between p-5 cursor-pointer"
+            onClick={() => setDeepAnalysisOpen(!deepAnalysisOpen)}
+          >
+            <div>
+              <h2 className="text-base font-semibold text-text-primary">Deep Analysis</h2>
+              <p className="mt-1 text-sm text-text-muted">
+                Run multi-agent analysis to get ratings, thesis, and action items for each position.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+              {report && !loading && (
+                <span className="text-xs text-text-muted">
+                  Last run: {new Date(report.createdAt).toLocaleString()} ({(report.durationMs / 1000).toFixed(1)}s)
+                </span>
+              )}
+              <svg
+                className={cn('h-5 w-5 text-text-muted transition-transform', deepAnalysisOpen && 'rotate-180')}
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+              </svg>
+            </div>
+          </button>
+
+          {deepAnalysisOpen && (
+            <div className="border-t border-border px-5 pb-5 pt-4 space-y-5">
+              {/* Action button */}
+              <div className="flex items-center gap-3">
+                <Button size="lg" onClick={handleProcess} loading={loading} disabled={!hasPositions && !loading}>
+                  {loading ? 'Processing...' : 'Run Deep Analysis'}
+                </Button>
+                {!hasPositions && !positionsResult.fetching && (
+                  <p className="text-xs text-text-muted">
+                    <Link to="/portfolio" className="text-accent-primary hover:underline">
+                      Add positions
+                    </Link>{' '}
+                    to your portfolio first
+                  </p>
+                )}
+              </div>
+
+              {/* Workflow diagram while loading */}
+              {loading && <WorkflowDiagram events={progressEvents} />}
+
+              {/* Error display */}
+              {!loading && error && (
+                <Card className="p-5 border border-error/30 bg-error/5">
+                  <div className="flex items-start gap-3">
+                    <svg
+                      className="h-5 w-5 text-error flex-shrink-0 mt-0.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={1.5}
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+                      />
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-error">Processing failed</p>
+                      <p className="mt-1 text-sm text-text-secondary break-words">{error.message}</p>
+                    </div>
+                    <Button size="sm" onClick={handleProcess}>
+                      Retry
+                    </Button>
+                  </div>
+                </Card>
+              )}
+
+              {/* Report view */}
+              {!loading && report && <InsightReportView report={report} />}
+
+              {/* No report yet */}
+              {!loading && !report && !error && !queryResult.fetching && (
+                <p className="text-sm text-text-muted py-4 text-center">
+                  No deep analysis report yet. Click "Run Deep Analysis" to generate one.
+                </p>
+              )}
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Position signal card (primary view — signals grouped by ticker)
+// ---------------------------------------------------------------------------
+
+function PositionSignalCard({ ticker, name, signals }: { ticker: string; name: string; signals: Signal[] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  // Sort signals by publishedAt descending (most recent first)
+  const sorted = useMemo(
+    () => [...signals].sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()),
+    [signals],
+  );
+
+  // Count by sentiment
+  const sentimentCounts = useMemo(() => {
+    const counts = { BULLISH: 0, BEARISH: 0, NEUTRAL: 0, OTHER: 0 };
+    for (const s of signals) {
+      if (s.sentiment === 'BULLISH') counts.BULLISH++;
+      else if (s.sentiment === 'BEARISH') counts.BEARISH++;
+      else if (s.sentiment === 'NEUTRAL') counts.NEUTRAL++;
+      else counts.OTHER++;
+    }
+    return counts;
+  }, [signals]);
+
+  return (
+    <Card className="p-4">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between cursor-pointer"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-base font-semibold text-text-primary">{ticker}</span>
+          {name !== ticker && <span className="text-sm text-text-muted">{name}</span>}
+        </div>
+        <div className="flex items-center gap-3">
+          {/* Signal count badge */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-bg-tertiary">
+            <svg
+              className="h-3 w-3 text-text-muted"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546"
+              />
+            </svg>
+            <span className="text-xs font-medium text-text-secondary">{signals.length}</span>
+            {/* Sentiment dots */}
+            {sentimentCounts.BULLISH > 0 && (
+              <span className="h-1.5 w-1.5 rounded-full bg-success" title={`${sentimentCounts.BULLISH} bullish`} />
+            )}
+            {sentimentCounts.BEARISH > 0 && (
+              <span className="h-1.5 w-1.5 rounded-full bg-error" title={`${sentimentCounts.BEARISH} bearish`} />
+            )}
+          </div>
+
+          {/* Link to signals page filtered by ticker */}
+          <Link
+            to={`/signals?ticker=${ticker}`}
+            onClick={(e) => e.stopPropagation()}
+            className="text-xs font-medium text-accent-primary hover:underline flex items-center gap-1"
+          >
+            View all
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+            </svg>
+          </Link>
+
+          <svg
+            className={cn('h-5 w-5 text-text-muted transition-transform', expanded && 'rotate-180')}
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+          </svg>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="mt-3 border-t border-border pt-3 space-y-2">
+          {sorted.map((signal) => (
+            <div key={signal.id} className="flex items-start gap-3 rounded-lg bg-bg-secondary p-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <Badge variant={signalTypeVariant[signal.type] ?? 'neutral'} size="xs">
+                    {signal.type}
+                  </Badge>
+                  {signal.tier1 && (
+                    <Badge
+                      variant={
+                        signal.tier1 === 'CRITICAL' ? 'error' : signal.tier1 === 'IMPORTANT' ? 'warning' : 'neutral'
+                      }
+                      size="xs"
+                    >
+                      {signal.tier1}
+                    </Badge>
+                  )}
+                  {signal.sentiment && (
+                    <Badge variant={sentimentVariant[signal.sentiment] ?? 'neutral'} size="xs">
+                      {signal.sentiment}
+                    </Badge>
+                  )}
+                  <span className="text-2xs text-text-muted">{formatTimeAgo(new Date(signal.publishedAt))}</span>
+                  <span className="text-2xs text-text-muted">
+                    · {signal.sources.map((s) => s.name).join(', ')}
+                    {signal.sourceCount > 1 && ` (${signal.sourceCount})`}
+                  </span>
+                </div>
+                <Link
+                  to={`/signals?highlight=${signal.id}`}
+                  className="text-xs font-medium text-text-primary hover:text-accent-primary transition-colors"
+                >
+                  {signal.title}
+                </Link>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-1.5 w-16">
+                  <div className="flex-1 h-1 rounded-full bg-bg-tertiary">
+                    <div
+                      className={cn(
+                        'h-1 rounded-full transition-all',
+                        signal.confidence >= 0.8 ? 'bg-success' : signal.confidence >= 0.5 ? 'bg-warning' : 'bg-error',
+                      )}
+                      style={{ width: `${Math.round(signal.confidence * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-2xs text-text-muted w-6 text-right">
+                    {Math.round(signal.confidence * 100)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // Report view
 // ---------------------------------------------------------------------------
@@ -442,21 +752,21 @@ function PositionInsightCard({ position }: { position: PositionInsight }) {
 function SignalGroup({ signals, impact }: { signals: SignalSummary[]; impact: string }) {
   const config: Record<string, { icon: string; color: string; borderColor: string; bgColor: string; label: string }> = {
     POSITIVE: {
-      icon: '↑',
+      icon: '\u2191',
       color: 'text-success',
       borderColor: 'border-success/20',
       bgColor: 'bg-success/5',
       label: 'Bullish',
     },
     NEGATIVE: {
-      icon: '↓',
+      icon: '\u2193',
       color: 'text-error',
       borderColor: 'border-error/20',
       bgColor: 'bg-error/5',
       label: 'Bearish',
     },
     NEUTRAL: {
-      icon: '→',
+      icon: '\u2192',
       color: 'text-text-muted',
       borderColor: 'border-border',
       bgColor: 'bg-bg-secondary',
@@ -604,7 +914,7 @@ function WorkflowDiagram({ events }: { events: WorkflowProgressEvent[] }) {
   const visibleActivities = activities.slice(-MAX_VISIBLE_ACTIVITIES);
 
   return (
-    <div className="py-8">
+    <div className="py-4">
       <Card className="p-6">
         <h3 className="text-sm font-semibold text-text-secondary mb-6 text-center">Multi-Agent Pipeline</h3>
 
@@ -808,4 +1118,21 @@ function StageIcon({ index, active }: { index: number; active: boolean }) {
       />
     </svg>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Utility
+// ---------------------------------------------------------------------------
+
+function formatTimeAgo(date: Date): string {
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `${diffH}h ago`;
+  const diffD = Math.floor(diffH / 24);
+  if (diffD < 7) return `${diffD}d ago`;
+  return date.toLocaleDateString();
 }

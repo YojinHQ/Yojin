@@ -462,6 +462,11 @@ export const typeDefs = /* GraphQL */ `
     version: Int!
   }
 
+  type TickerSignals {
+    ticker: String!
+    signals: [Signal!]!
+  }
+
   type SignalGroup {
     id: String!
     signals: [Signal!]!
@@ -470,6 +475,11 @@ export const typeDefs = /* GraphQL */ `
     outputType: SignalOutputType!
     firstEventAt: String!
     lastEventAt: String!
+  }
+
+  type TickerSignalGroups {
+    ticker: String!
+    groups: [SignalGroup!]!
   }
 
   # ---------------------------------------------------------------------------
@@ -926,7 +936,9 @@ export const typeDefs = /* GraphQL */ `
       outputType: SignalOutputType
       limit: Int
     ): [Signal!]!
+    signalsByTicker(since: String, limit: Int): [TickerSignals!]!
     signalGroups(ticker: String, since: String, limit: Int): [SignalGroup!]!
+    signalGroupsByTicker(since: String, limit: Int): [TickerSignalGroups!]!
     curatedSignals(ticker: String, since: String, limit: Int): [CuratedSignal!]!
     curationStatus: CurationStatus!
     curationWorkflowStatus: WorkflowStatus!

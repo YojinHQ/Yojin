@@ -1,5 +1,9 @@
-import { useState } from 'react';
-import { cn } from '../../lib/utils';
+import { useMemo, useState } from 'react';
+import { useQuery } from 'urql';
+import { INTEL_FEED_QUERY } from '../../api/documents';
+import type { IntelFeedQueryResult, IntelFeedQueryVariables } from '../../api/types';
+import { cn, timeAgo } from '../../lib/utils';
+import Spinner from '../common/spinner';
 
 type ItemType = 'action' | 'alert' | 'insight';
 type FilterTab = 'all' | 'actions' | 'alerts' | 'insights';
@@ -22,101 +26,32 @@ interface IntelFeedItem {
   primaryAction: string;
 }
 
-const items: IntelFeedItem[] = [
-  {
-    id: 'act-1',
-    type: 'action',
-    title: 'Rebalance Portfolio',
-    time: 'Just now',
-    icon: 'rebalance',
-    description: 'Tech allocation exceeds 45% target by 8.2%. Consider trimming NVDA and MSFT to rebalance.',
-    data: [
-      { label: 'Current Tech %', value: '53.2%', highlight: true },
-      { label: 'Target', value: '45%' },
-    ],
-    primaryAction: 'View Details',
-  },
-  {
-    id: 'act-2',
-    type: 'action',
-    title: 'Review Tax-Loss Harvest',
-    time: '2m',
-    icon: 'dollar',
-    description: 'You have 3 positions with unrealized losses eligible for tax-loss harvesting before quarter end.',
-    data: [
-      { label: 'Eligible Amount', value: '$4,280', highlight: true },
-      { label: 'Positions', value: '3' },
-    ],
-    primaryAction: 'Review Positions',
-  },
-  {
-    id: 'act-3',
-    type: 'action',
-    title: 'Review Stop Loss Orders',
-    time: '15m',
-    icon: 'box',
-    description: 'META approaching -8% drawdown threshold. Current stop loss may trigger within the session.',
-    data: [
-      { label: 'Current Drawdown', value: '-7.4%', highlight: true },
-      { label: 'Stop Loss At', value: '-8%' },
-    ],
-    primaryAction: 'Adjust Orders',
-  },
-  {
-    id: 'alt-1',
-    type: 'alert',
-    title: 'Concentration Risk Exceeded',
-    time: '5m',
-    icon: 'warehouse',
-    description: 'NVDA position now represents 18% of portfolio. Single-stock concentration limit is 15%.',
-    data: [
-      { label: 'NVDA Weight', value: '18.3%', highlight: true },
-      { label: 'Limit', value: '15%' },
-    ],
-    primaryAction: 'View Details',
-  },
-  {
-    id: 'alt-2',
-    type: 'alert',
-    title: 'Earnings Report in 3 Days',
-    time: '30m',
-    icon: 'clock',
-    description: 'AAPL reports earnings Thursday after market close. Current position: 150 shares.',
-    primaryAction: 'View Details',
-  },
-  {
-    id: 'ins-1',
-    type: 'insight',
-    title: 'Demand Spike Detected',
-    time: '2m',
-    icon: 'trending',
-    description:
-      'Unusual volume spike detected in semiconductor sector. NVDA, AMD, AVGO all showing 2x average volume.',
-    primaryAction: 'Explore',
-  },
-  {
-    id: 'ins-2',
-    type: 'insight',
-    title: 'Correlation Shift: MSFT-GOOGL',
-    time: '1h',
-    icon: 'bubble',
-    description: 'MSFT and GOOGL 30-day correlation dropped from 0.92 to 0.67. Diversification benefit increasing.',
-    data: [
-      { label: 'Previous Correlation', value: '0.92' },
-      { label: 'Current Correlation', value: '0.67', highlight: true },
-    ],
-    primaryAction: 'Analyze',
-  },
-  {
-    id: 'ins-3',
-    type: 'insight',
-    title: 'Sector Rotation Trending',
-    time: '3h',
-    icon: 'trending-up',
-    description: 'Capital flowing from growth to value sectors over the past 2 weeks. Your portfolio is growth-heavy.',
-    primaryAction: 'Explore',
-  },
-];
+/** Map signal type to an icon name. */
+const signalTypeIcon: Record<string, IconName> = {
+  NEWS: 'trending',
+  FUNDAMENTAL: 'dollar',
+  TECHNICAL: 'trending-up',
+  MACRO: 'warehouse',
+  SENTIMENT: 'bubble',
+  FILINGS: 'box',
+  SOCIALS: 'bubble',
+  TRADING_LOGIC_TRIGGER: 'clock',
+};
+
+/** Classify a signal as alert or insight based on sentiment/type. */
+function classifySignal(signal: { sentiment: string | null; type: string }): ItemType {
+  if (signal.sentiment === 'BEARISH') return 'alert';
+  const alertTypes = ['PRICE_MOVE', 'CONCENTRATION_DRIFT', 'CORRELATION_WARNING', 'EARNINGS_PROXIMITY'];
+  if (alertTypes.includes(signal.type)) return 'alert';
+  return 'insight';
+}
+
+/** Primary action label for each item type. */
+const primaryActionLabel: Record<ItemType, string> = {
+  action: 'Review',
+  alert: 'View Details',
+  insight: 'Explore',
+};
 
 const typeLabel: Record<ItemType, string> = {
   action: 'ACTION',
@@ -385,6 +320,66 @@ export default function IntelFeed() {
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const [{ data, fetching }] = useQuery<IntelFeedQueryResult, IntelFeedQueryVariables>({
+    query: INTEL_FEED_QUERY,
+    variables: { limit: 30 },
+  });
+
+  // Map API data into IntelFeedItem[]
+  const items: IntelFeedItem[] = useMemo(() => {
+    if (!data) return [];
+
+    const signalItems: IntelFeedItem[] = data.curatedSignals.map((cs) => {
+      const s = cs.signal;
+      const itemType = classifySignal(s);
+      const topScore =
+        cs.scores.length > 0
+          ? cs.scores.reduce((best, sc) => (sc.compositeScore > best.compositeScore ? sc : best), cs.scores[0])
+          : null;
+      return {
+        id: s.id,
+        type: itemType,
+        title: s.title,
+        time: timeAgo(s.publishedAt),
+        icon: signalTypeIcon[s.type] ?? 'trending',
+        description: s.tier1 ?? s.title,
+        data:
+          s.tickers.length > 0
+            ? [
+                { label: 'Tickers', value: s.tickers.join(', ') },
+                { label: 'Confidence', value: `${Math.round(s.confidence * 100)}%`, highlight: s.confidence >= 0.8 },
+                ...(topScore
+                  ? [
+                      {
+                        label: 'Relevance',
+                        value: `${Math.round(topScore.compositeScore * 100)}%`,
+                        highlight: topScore.compositeScore >= 0.6,
+                      },
+                    ]
+                  : []),
+              ]
+            : undefined,
+        primaryAction: primaryActionLabel[itemType],
+      };
+    });
+
+    const actionItems: IntelFeedItem[] = data.actions.map((a) => ({
+      id: a.id,
+      type: 'action' as const,
+      title: a.what,
+      time: timeAgo(a.createdAt),
+      icon: 'rebalance' as const,
+      description: a.why,
+      data: [
+        { label: 'Source', value: a.source },
+        { label: 'Expires', value: timeAgo(a.expiresAt) },
+      ],
+      primaryAction: 'Review',
+    }));
+
+    return [...actionItems, ...signalItems];
+  }, [data]);
+
   const filteredItems = filterMap[activeFilter] ? items.filter((item) => item.type === filterMap[activeFilter]) : items;
 
   const totalCount = filteredItems.length;
@@ -431,21 +426,32 @@ export default function IntelFeed() {
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-auto px-3 pb-4">
-        {sections.map((section) => (
-          <div key={section.type}>
-            <SectionHeader type={section.type} />
-            <div className="space-y-1.5">
-              {section.items.map((item) => (
-                <IntelFeedCard
-                  key={item.id}
-                  item={item}
-                  expanded={expandedId === item.id}
-                  onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                />
-              ))}
-            </div>
+        {fetching ? (
+          <div className="flex items-center justify-center pt-12">
+            <Spinner size="md" label="Loading intel..." />
           </div>
-        ))}
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center pt-12 text-center">
+            <p className="text-sm text-text-muted">No intel yet</p>
+            <p className="mt-1 text-xs text-text-muted">Signals and actions will appear here as they come in.</p>
+          </div>
+        ) : (
+          sections.map((section) => (
+            <div key={section.type}>
+              <SectionHeader type={section.type} />
+              <div className="space-y-1.5">
+                {section.items.map((item) => (
+                  <IntelFeedCard
+                    key={item.id}
+                    item={item}
+                    expanded={expandedId === item.id}
+                    onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </aside>
   );

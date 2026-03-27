@@ -63,16 +63,19 @@ export class CuratedSignalStore {
 
     const dateFiles = await this.listDateFiles(since);
     const results: CuratedSignal[] = [];
+    const seenIds = new Set<string>();
 
-    // Read newest first (reverse chronological)
+    // Read newest first (reverse chronological) — dedup by signal ID, keeping latest
     for (let i = dateFiles.length - 1; i >= 0; i--) {
       const lines = await this.readDateFile(dateFiles[i]);
 
       for (let j = lines.length - 1; j >= 0; j--) {
         const cs = lines[j];
+        if (seenIds.has(cs.signal.id)) continue;
         // Match if any score ticker is in the requested set
         const matches = cs.scores.some((s) => tickerSet.has(s.ticker));
         if (matches) {
+          seenIds.add(cs.signal.id);
           results.push(cs);
           if (results.length >= limit) return results;
         }
@@ -80,6 +83,19 @@ export class CuratedSignalStore {
     }
 
     return results;
+  }
+
+  /** Find a single curated signal by its inner signal ID. Returns early on first match. */
+  async getBySignalId(signalId: string): Promise<CuratedSignal | null> {
+    const dateFiles = await this.listDateFiles();
+    // Search newest first
+    for (let i = dateFiles.length - 1; i >= 0; i--) {
+      const lines = await this.readDateFile(dateFiles[i]);
+      for (const cs of lines) {
+        if (cs.signal.id === signalId) return cs;
+      }
+    }
+    return null;
   }
 
   /** Get the latest watermark, or null if pipeline has never run. */

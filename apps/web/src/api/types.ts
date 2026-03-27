@@ -572,6 +572,15 @@ export interface SignalsQueryResult {
   signals: Signal[];
 }
 
+export interface TickerSignals {
+  ticker: string;
+  signals: Signal[];
+}
+
+export interface SignalsByTickerQueryResult {
+  signalsByTicker: TickerSignals[];
+}
+
 // ---------------------------------------------------------------------------
 // Signal Groups
 // ---------------------------------------------------------------------------
@@ -588,6 +597,15 @@ export interface SignalGroup {
 
 export interface SignalGroupsQueryResult {
   signalGroups: SignalGroup[];
+}
+
+export interface TickerSignalGroups {
+  ticker: string;
+  groups: SignalGroup[];
+}
+
+export interface SignalGroupsByTickerQueryResult {
+  signalGroupsByTicker: TickerSignalGroups[];
 }
 
 export interface SignalGroupsVariables {
@@ -910,6 +928,30 @@ export interface OnWorkflowProgressVariables {
 // Curation
 // ---------------------------------------------------------------------------
 
+export interface PortfolioRelevanceScore {
+  signalId: string;
+  ticker: string;
+  exposureWeight: number;
+  typeRelevance: number;
+  compositeScore: number;
+}
+
+export interface CuratedSignal {
+  signal: Signal;
+  scores: PortfolioRelevanceScore[];
+  curatedAt: string;
+}
+
+export interface CuratedSignalsQueryResult {
+  curatedSignals: CuratedSignal[];
+}
+
+export interface CuratedSignalsVariables {
+  ticker?: string;
+  since?: string;
+  limit?: number;
+}
+
 export interface RunFullCurationMutationResult {
   runFullCuration: boolean;
 }
@@ -919,6 +961,68 @@ export interface CurationWorkflowStatusQueryResult {
     running: boolean;
     startedAt: string | null;
   };
+}
+
+// ---------------------------------------------------------------------------
+// Actions
+// ---------------------------------------------------------------------------
+
+export type ActionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
+
+export interface Action {
+  id: string;
+  signalId: string | null;
+  skillId: string | null;
+  what: string;
+  why: string;
+  source: string;
+  riskContext: string | null;
+  status: ActionStatus;
+  expiresAt: string;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Intel Feed
+// ---------------------------------------------------------------------------
+
+export interface IntelFeedSignal {
+  id: string;
+  title: string;
+  type: string;
+  sentiment: string | null;
+  tickers: string[];
+  publishedAt: string;
+  confidence: number;
+  sources: { name: string; reliability: number }[];
+  tier1: string | null;
+}
+
+export interface IntelFeedCuratedSignal {
+  signal: IntelFeedSignal;
+  scores: { ticker: string; compositeScore: number }[];
+  curatedAt: string;
+}
+
+export interface IntelFeedAction {
+  id: string;
+  what: string;
+  why: string;
+  source: string;
+  status: ActionStatus;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface IntelFeedQueryResult {
+  curatedSignals: IntelFeedCuratedSignal[];
+  actions: IntelFeedAction[];
+}
+
+export interface IntelFeedQueryVariables {
+  limit?: number;
 }
 
 // ---------------------------------------------------------------------------

@@ -638,6 +638,75 @@ export const SIGNALS_QUERY = gql`
   }
 `;
 
+export const CURATED_SIGNALS_QUERY = gql`
+  query CuratedSignals($ticker: String, $since: String, $limit: Int) {
+    curatedSignals(ticker: $ticker, since: $since, limit: $limit) {
+      signal {
+        id
+        type
+        title
+        content
+        publishedAt
+        ingestedAt
+        confidence
+        contentHash
+        tickers
+        sources {
+          id
+          name
+          type
+          reliability
+        }
+        sourceCount
+        link
+        tier1
+        tier2
+        sentiment
+        outputType
+        groupId
+        version
+      }
+      scores {
+        signalId
+        ticker
+        exposureWeight
+        typeRelevance
+        compositeScore
+      }
+      curatedAt
+    }
+  }
+`;
+
+export const SIGNALS_BY_TICKER_QUERY = gql`
+  query SignalsByTicker($since: String, $limit: Int) {
+    signalsByTicker(since: $since, limit: $limit) {
+      ticker
+      signals {
+        id
+        type
+        title
+        content
+        publishedAt
+        ingestedAt
+        confidence
+        tickers
+        sources {
+          id
+          name
+          type
+          reliability
+        }
+        sentiment
+        outputType
+        tier1
+        tier2
+        link
+      }
+    }
+  }
+`;
+
 // ---------------------------------------------------------------------------
 // Queries — Signal Groups
 // ---------------------------------------------------------------------------
@@ -676,6 +745,47 @@ export const SIGNAL_GROUPS_QUERY = gql`
       outputType
       firstEventAt
       lastEventAt
+    }
+  }
+`;
+
+export const SIGNAL_GROUPS_BY_TICKER_QUERY = gql`
+  query SignalGroupsByTicker($since: String, $limit: Int) {
+    signalGroupsByTicker(since: $since, limit: $limit) {
+      ticker
+      groups {
+        id
+        signals {
+          id
+          type
+          title
+          content
+          publishedAt
+          ingestedAt
+          confidence
+          contentHash
+          tickers
+          sources {
+            id
+            name
+            type
+            reliability
+          }
+          sourceCount
+          link
+          tier1
+          tier2
+          sentiment
+          outputType
+          groupId
+          version
+        }
+        tickers
+        summary
+        outputType
+        firstEventAt
+        lastEventAt
+      }
     }
   }
 `;
@@ -1022,6 +1132,45 @@ export const ON_WORKFLOW_PROGRESS_SUBSCRIPTION = gql`
       error
       message
       timestamp
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Queries — Intel Feed
+// ---------------------------------------------------------------------------
+
+export const INTEL_FEED_QUERY = gql`
+  query IntelFeed($limit: Int) {
+    curatedSignals(limit: $limit) {
+      signal {
+        id
+        title
+        type
+        sentiment
+        tickers
+        publishedAt
+        confidence
+        sources {
+          name
+          reliability
+        }
+        tier1
+      }
+      scores {
+        ticker
+        compositeScore
+      }
+      curatedAt
+    }
+    actions(status: PENDING, limit: 10) {
+      id
+      what
+      why
+      source
+      status
+      expiresAt
+      createdAt
     }
   }
 `;
