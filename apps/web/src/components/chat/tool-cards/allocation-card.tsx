@@ -1,7 +1,7 @@
 import { PieChart } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { cn } from '../../../lib/utils';
-import { usePositions } from '../../../api';
+import { usePortfolio } from '../../../api';
 import Spinner from '../../common/spinner';
 import RichCard from '../rich-card';
 
@@ -21,7 +21,8 @@ function formatCurrency(n: number): string {
 }
 
 export default function AllocationCard() {
-  const [{ data, fetching, error }] = usePositions();
+  const [{ data: portfolioData, fetching, error }] = usePortfolio();
+  const data = portfolioData?.portfolio;
   const navigate = useNavigate();
 
   if (fetching) {

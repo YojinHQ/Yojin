@@ -16,7 +16,7 @@ const sseClient = createSSEClient({
  *
  * Key resolution:
  * - Most types use `id` (default).
- * - Position / EnrichedPosition are keyed by `symbol` (no `id` field).
+ * - Position is keyed by `symbol:platform` (no `id` field).
  * - SectorWeight, Concentration, CorrelationCluster are embedded values (no key).
  *
  * Cache updates:
@@ -26,15 +26,13 @@ const sseClient = createSSEClient({
 const cache = cacheExchange({
   keys: {
     Position: (data) => `${data.symbol as string}:${data.platform as string}`,
-    EnrichedPosition: (data) => `${data.symbol as string}:${data.platform as string}`,
     AlertRule: () => null, // embedded, not an entity
+    PortfolioHistoryPoint: () => null, // embedded — nested under PortfolioSnapshot
     SectorWeight: () => null,
     Concentration: () => null,
     CorrelationCluster: () => null,
     PriceEvent: () => null,
     SignalSource: () => null, // embedded — same source id appears on many signals
-    TickerSignals: (data) => data.ticker as string,
-    TickerSignalGroups: (data) => data.ticker as string,
     CuratedSignal: () => null, // embedded — wraps Signal with scores
     PortfolioRelevanceScore: () => null, // embedded
     AiConfig: () => null, // singleton — no id field
@@ -51,56 +49,32 @@ const cache = cacheExchange({
     Mutation: {
       refreshPositions(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
-        cache.invalidate('Query', 'positions');
-        cache.invalidate('Query', 'enrichedSnapshot');
       },
       addManualPosition(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
-        cache.invalidate('Query', 'positions');
-        cache.invalidate('Query', 'enrichedSnapshot');
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
-        cache.invalidate('Query', 'signalsByTicker');
-        cache.invalidate('Query', 'signalGroupsByTicker');
       },
       confirmPositions(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
-        cache.invalidate('Query', 'positions');
-        cache.invalidate('Query', 'portfolioHistory');
-        cache.invalidate('Query', 'enrichedSnapshot');
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
-        cache.invalidate('Query', 'signalsByTicker');
-        cache.invalidate('Query', 'signalGroupsByTicker');
       },
       completeOnboarding(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
-        cache.invalidate('Query', 'positions');
-        cache.invalidate('Query', 'portfolioHistory');
-        cache.invalidate('Query', 'enrichedSnapshot');
         cache.invalidate('Query', 'listConnections');
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
-        cache.invalidate('Query', 'signalsByTicker');
-        cache.invalidate('Query', 'signalGroupsByTicker');
       },
       editPosition(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
-        cache.invalidate('Query', 'positions');
-        cache.invalidate('Query', 'enrichedSnapshot');
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
-        cache.invalidate('Query', 'signalsByTicker');
-        cache.invalidate('Query', 'signalGroupsByTicker');
       },
       removePosition(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
-        cache.invalidate('Query', 'positions');
-        cache.invalidate('Query', 'enrichedSnapshot');
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
-        cache.invalidate('Query', 'signalsByTicker');
-        cache.invalidate('Query', 'signalGroupsByTicker');
       },
       processInsights(_result, _args, cache) {
         cache.invalidate('Query', 'signals');
@@ -114,8 +88,6 @@ const cache = cacheExchange({
       runFullCuration(_result, _args, cache) {
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
-        cache.invalidate('Query', 'signalsByTicker');
-        cache.invalidate('Query', 'signalGroupsByTicker');
       },
       createAlert(_result, _args, cache) {
         cache.invalidate('Query', 'alerts');
@@ -131,12 +103,10 @@ const cache = cacheExchange({
       },
       clearAppData(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
-        cache.invalidate('Query', 'positions');
-        cache.invalidate('Query', 'portfolioHistory');
-        cache.invalidate('Query', 'enrichedSnapshot');
         cache.invalidate('Query', 'riskReport');
         cache.invalidate('Query', 'alerts');
         cache.invalidate('Query', 'signals');
+        cache.invalidate('Query', 'curatedSignals');
         cache.invalidate('Query', 'sessions');
         cache.invalidate('Query', 'latestInsightReport');
         cache.invalidate('Query', 'insightReports');

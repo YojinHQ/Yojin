@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useMutation } from 'urql';
 import ReactMarkdown from 'react-markdown';
 import { useOnboarding } from '../../lib/onboarding-context';
 import { cn } from '../../lib/utils';
@@ -6,6 +7,7 @@ import { OnboardingShell } from '../../components/onboarding/onboarding-shell';
 import { ChipSelect } from '../../components/onboarding/chip-select';
 import Button from '../../components/common/button';
 import Input from '../../components/common/input';
+import { GENERATE_PERSONA_MUTATION, CONFIRM_PERSONA_MUTATION } from '../../api/documents';
 
 type RiskTolerance = 'conservative' | 'moderate' | 'aggressive';
 type CommunicationStyle = 'concise' | 'detailed' | 'technical';
@@ -115,6 +117,9 @@ export function Step2Persona() {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState('');
 
+  const [, executeGenerate] = useMutation(GENERATE_PERSONA_MUTATION);
+  const [, executeConfirm] = useMutation(CONFIRM_PERSONA_MUTATION);
+
   const isFormValid = name.trim() && risk && assets.length > 0 && style;
 
   const generatePreview = useCallback(async () => {
@@ -122,24 +127,20 @@ export function Step2Persona() {
     setError('');
     setGenerating(true);
     try {
-      const res = await fetch('/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `mutation ($input: PersonaInput!) { generatePersona(input: $input) { markdown } }`,
-          variables: {
-            input: {
-              name: name.trim(),
-              riskTolerance: risk.toUpperCase(),
-              assetClasses: assets,
-              communicationStyle: style.toUpperCase(),
-              hardRules: hardRules.trim() || null,
-            },
-          },
-        }),
+      const result = await executeGenerate({
+        input: {
+          name: name.trim(),
+          riskTolerance: risk.toUpperCase(),
+          assetClasses: assets,
+          communicationStyle: style.toUpperCase(),
+          hardRules: hardRules.trim() || null,
+        },
       });
-      const json = await res.json();
-      const md = json?.data?.generatePersona?.markdown;
+      if (result.error) {
+        setError(result.error.message || 'Connection failed.');
+        return;
+      }
+      const md = result.data?.generatePersona?.markdown;
       if (md) {
         setPreview(md);
       } else {
@@ -150,23 +151,19 @@ export function Step2Persona() {
     } finally {
       setGenerating(false);
     }
-  }, [name, risk, assets, style, hardRules, isFormValid]);
+  }, [name, risk, assets, style, hardRules, isFormValid, executeGenerate]);
 
   const handleConfirm = useCallback(async () => {
     if (!risk || !style) return;
     setConfirming(true);
     setError('');
     try {
-      const res = await fetch('/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `mutation ($markdown: String!) { confirmPersona(markdown: $markdown) }`,
-          variables: { markdown: preview },
-        }),
-      });
-      const json = await res.json();
-      if (json?.data?.confirmPersona) {
+      const result = await executeConfirm({ markdown: preview });
+      if (result.error) {
+        setError(result.error.message || 'Connection failed.');
+        return;
+      }
+      if (result.data?.confirmPersona) {
         updateState({
           persona: {
             name: name.trim(),
@@ -187,7 +184,7 @@ export function Step2Persona() {
     } finally {
       setConfirming(false);
     }
-  }, [preview, name, risk, assets, style, hardRules, updateState, nextStep]);
+  }, [preview, name, risk, assets, style, hardRules, updateState, nextStep, executeConfirm]);
 
   return (
     <OnboardingShell currentStep={2}>

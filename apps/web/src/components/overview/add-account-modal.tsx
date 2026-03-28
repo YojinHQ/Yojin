@@ -8,7 +8,7 @@ import { PlatformLogo } from '../platforms/platform-logos';
 import { DropZone } from '../onboarding/drop-zone';
 import { EditableTable } from '../onboarding/editable-table';
 import type { ExtractedPosition } from '../onboarding/editable-table';
-import { CONFIRM_POSITIONS_MUTATION } from '../../api/documents';
+import { CONFIRM_POSITIONS_MUTATION, PARSE_PORTFOLIO_SCREENSHOT_MUTATION } from '../../api/documents';
 import { lookupSymbolName } from '../../lib/symbol-names';
 import {
   sanitizeSymbol,
@@ -65,6 +65,7 @@ export default function AddAccountModal({ open, onClose, onSuccess, connectedPla
   const [confirming, setConfirming] = useState(false);
   const [manualEntries, setManualEntries] = useState<ManualEntry[]>([{ ...EMPTY_MANUAL }]);
   const [, executeConfirmPositions] = useMutation(CONFIRM_POSITIONS_MUTATION);
+  const [, executeParseScreenshot] = useMutation(PARSE_PORTFOLIO_SCREENSHOT_MUTATION);
   const [customPlatformName, setCustomPlatformName] = useState('');
   const [entryErrors, setEntryErrors] = useState<ManualEntryErrors[]>([]);
 
@@ -113,18 +114,14 @@ export default function AddAccountModal({ open, onClose, onSuccess, connectedPla
           reader.readAsDataURL(file);
         });
 
-        const res = await fetch('/graphql', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: `mutation ($input: ScreenshotInput!) { parsePortfolioScreenshot(input: $input) { success positions { symbol name quantity avgEntry marketPrice marketValue } confidence warnings error } }`,
-            variables: {
-              input: { image: base64, mediaType: file.type, platform: selectedPlatformId },
-            },
-          }),
+        const mutResult = await executeParseScreenshot({
+          input: { image: base64, mediaType: file.type, platform: selectedPlatformId },
         });
-        const json = await res.json();
-        const result = json?.data?.parsePortfolioScreenshot;
+        if (mutResult.error) {
+          setUploadError(mutResult.error.message || 'Upload failed.');
+          return;
+        }
+        const result = mutResult.data?.parsePortfolioScreenshot;
         if (result?.success && result.positions?.length) {
           setExtractedPositions(result.positions);
           setScreen('verify');
@@ -139,7 +136,7 @@ export default function AddAccountModal({ open, onClose, onSuccess, connectedPla
         setUploading(false);
       }
     },
-    [selectedPlatformId],
+    [selectedPlatformId, executeParseScreenshot],
   );
 
   const handleManualDone = () => {

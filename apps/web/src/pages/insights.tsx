@@ -11,7 +11,7 @@ import {
   INSIGHTS_WORKFLOW_STATUS_QUERY,
   PROCESS_INSIGHTS_MUTATION,
 } from '../api/documents';
-import { usePositions } from '../api/hooks/use-portfolio';
+import { usePortfolio } from '../api/hooks/use-portfolio';
 import type {
   CuratedSignal,
   CuratedSignalsQueryResult,
@@ -227,8 +227,8 @@ export default function Insights() {
   const navigateToAnalysis = useCallback(() => setViewTab('position'), []);
 
   // Portfolio positions
-  const [positionsResult] = usePositions();
-  const positions = useMemo(() => positionsResult.data?.positions ?? [], [positionsResult.data]);
+  const [portfolioResult] = usePortfolio();
+  const positions = useMemo(() => portfolioResult.data?.portfolio?.positions ?? [], [portfolioResult.data]);
   const hasPositions = positions.length > 0;
 
   // Curated signals — one query, all tickers, 7-day window; filter client-side
@@ -592,7 +592,7 @@ export default function Insights() {
         {/* By Position */}
         {viewTab === 'position' && (
           <>
-            {!hasPositions && !positionsResult.fetching && (
+            {!hasPositions && !portfolioResult.fetching && (
               <EmptyState icon="signal" message="Connect data sources to start receiving signals.">
                 <Link to="/portfolio" className="text-sm text-accent-primary hover:underline">
                   Add positions to your portfolio

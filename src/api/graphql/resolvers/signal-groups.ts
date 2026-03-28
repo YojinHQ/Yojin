@@ -6,7 +6,6 @@
  */
 
 import { toGql as signalToGql } from './signals.js';
-import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { SignalArchive } from '../../../signals/archive.js';
 import type { SignalGroupArchive, SignalGroupQueryFilter } from '../../../signals/group-archive.js';
 import type { SignalGroup } from '../../../signals/group-types.js';
@@ -17,7 +16,6 @@ import type { SignalGroup } from '../../../signals/group-types.js';
 
 let groupArchive: SignalGroupArchive | null = null;
 let signalArchive: SignalArchive | null = null;
-let snapshotStore: PortfolioSnapshotStore | null = null;
 
 export function setSignalGroupArchive(a: SignalGroupArchive): void {
   groupArchive = a;
@@ -25,10 +23,6 @@ export function setSignalGroupArchive(a: SignalGroupArchive): void {
 
 export function setGroupSignalArchive(a: SignalArchive): void {
   signalArchive = a;
-}
-
-export function setGroupSnapshotStore(store: PortfolioSnapshotStore): void {
-  snapshotStore = store;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,13 +53,6 @@ function groupToGql(group: SignalGroup): SignalGroupGql {
 }
 
 // ---------------------------------------------------------------------------
-// Ticker-grouped shape
-// ---------------------------------------------------------------------------
-
-interface TickerSignalGroupsGql {
-  ticker: string;
-  groups: SignalGroupGql[];
-}
 
 // ---------------------------------------------------------------------------
 // Query Resolvers
@@ -84,49 +71,6 @@ export async function signalGroupsResolver(
 
   const groups = await groupArchive.query(filter);
   return groups.map(groupToGql);
-}
-
-/**
- * Groups signal groups by their primary ticker (first ticker in the array),
- * filtered to only portfolio tickers.
- * Each ticker appears once; groups are sorted by signal count descending.
- */
-export async function signalGroupsByTickerResolver(
-  _parent: unknown,
-  args: { since?: string; limit?: number },
-): Promise<TickerSignalGroupsGql[]> {
-  if (!groupArchive) return [];
-
-  // Get portfolio tickers — push into the query filter to skip non-portfolio
-  // groups during the JSONL scan instead of filtering in memory.
-  const snapshot = snapshotStore ? await snapshotStore.getLatest() : null;
-  const positionTickerList =
-    snapshot && snapshot.positions.length > 0 ? snapshot.positions.map((p) => p.symbol.toUpperCase()) : null;
-
-  const filter: SignalGroupQueryFilter = {};
-  if (positionTickerList) filter.tickers = positionTickerList;
-  if (args.since) filter.since = args.since;
-  filter.limit = args.limit ?? 100;
-
-  const groups = await groupArchive.query(filter);
-  const gqlGroups = groups.map(groupToGql);
-
-  // Group by primary ticker (first in tickers array), case-insensitive
-  const byTicker = new Map<string, SignalGroupGql[]>();
-  for (const g of gqlGroups) {
-    const primary = (g.tickers[0] ?? 'OTHER').toUpperCase();
-    const bucket = byTicker.get(primary);
-    if (bucket) {
-      bucket.push(g);
-    } else {
-      byTicker.set(primary, [g]);
-    }
-  }
-
-  // Sort tickers by total group count descending
-  return Array.from(byTicker.entries())
-    .sort((a, b) => b[1].length - a[1].length)
-    .map(([ticker, tickerGroups]) => ({ ticker, groups: tickerGroups }));
 }
 
 export async function signalGroupResolver(_parent: unknown, args: { id: string }): Promise<SignalGroupGql | null> {

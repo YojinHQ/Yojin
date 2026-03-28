@@ -27,7 +27,7 @@ import {
 } from './api/graphql/resolvers/data-sources.js';
 import { setFetchDeps } from './api/graphql/resolvers/fetch-data-source.js';
 import { setInsightStore } from './api/graphql/resolvers/insights.js';
-import { setMarketJintelClient, setMarketSnapshotStore } from './api/graphql/resolvers/market.js';
+import { setMarketJintelClient } from './api/graphql/resolvers/market.js';
 import {
   setJintelKeyValidatedCallback,
   setOnboardingConnectionManager,
@@ -38,11 +38,7 @@ import {
 } from './api/graphql/resolvers/onboarding.js';
 import { setPortfolioConnectionManager, setPortfolioJintelClient } from './api/graphql/resolvers/portfolio.js';
 import { setAssessmentStore } from './api/graphql/resolvers/signal-assessments.js';
-import {
-  setGroupSignalArchive,
-  setGroupSnapshotStore,
-  setSignalGroupArchive,
-} from './api/graphql/resolvers/signal-groups.js';
+import { setGroupSignalArchive, setSignalGroupArchive } from './api/graphql/resolvers/signal-groups.js';
 import { setSignalArchive, setSignalSnapshotStore } from './api/graphql/resolvers/signals.js';
 import { setSkillStore } from './api/graphql/resolvers/skills.js';
 import { setSnapStore } from './api/graphql/resolvers/snap.js';
@@ -276,7 +272,6 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
 
   // 4b. Portfolio snapshot store (created early — ConnectionManager needs it)
   const snapshotStore = new PortfolioSnapshotStore(dataRoot);
-  setMarketSnapshotStore(snapshotStore);
 
   // 4c. ConnectionManager (requires unlocked vault)
   let connectionManager: ConnectionManager | undefined;
@@ -366,7 +361,6 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   setSignalSnapshotStore(snapshotStore);
   setSignalGroupArchive(signalGroupArchive);
   setGroupSignalArchive(signalArchive);
-  setGroupSnapshotStore(snapshotStore);
   setDataSourceConfigPath(dsConfigPath);
   setFetchDeps({ configPath: dsConfigPath, ingestor: signalIngestor, vault });
 

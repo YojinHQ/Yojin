@@ -8,7 +8,7 @@ import { EditableTable } from '../../components/onboarding/editable-table';
 import type { ExtractedPosition } from '../../components/onboarding/editable-table';
 import Button from '../../components/common/button';
 import Input from '../../components/common/input';
-import { CONFIRM_POSITIONS_MUTATION } from '../../api/documents';
+import { CONFIRM_POSITIONS_MUTATION, PARSE_PORTFOLIO_SCREENSHOT_MUTATION } from '../../api/documents';
 import {
   sanitizeSymbol,
   sanitizeNumeric,
@@ -42,6 +42,7 @@ const CRYPTO_PLATFORMS = new Set(['COINBASE', 'BINANCE', 'METAMASK', 'PHANTOM'])
 export function Step4Platforms() {
   const { state, updateState, nextStep, prevStep } = useOnboarding();
   const [, executeConfirmPositions] = useMutation(CONFIRM_POSITIONS_MUTATION);
+  const [, executeParseScreenshot] = useMutation(PARSE_PORTFOLIO_SCREENSHOT_MUTATION);
 
   const [screen, setScreen] = useState<Screen>('grid');
   const [selectedPlatformId, setSelectedPlatformId] = useState<string | null>(null);
@@ -88,25 +89,20 @@ export function Step4Platforms() {
           reader.readAsDataURL(file);
         });
 
-        const res = await fetch('/graphql', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: `mutation ($input: ScreenshotInput!) { parsePortfolioScreenshot(input: $input) { success positions { symbol name quantity avgEntry marketPrice marketValue } confidence warnings error } }`,
-            variables: {
-              input: { image: base64, mediaType: file.type, platform: selectedPlatformId },
-            },
-          }),
+        const mutResult = await executeParseScreenshot({
+          input: { image: base64, mediaType: file.type, platform: selectedPlatformId },
         });
-        const json = await res.json();
-        const gqlError = json?.errors?.[0]?.message;
-        const result = json?.data?.parsePortfolioScreenshot;
+        if (mutResult.error) {
+          setUploadError(mutResult.error.message || 'Upload failed.');
+          return;
+        }
+        const result = mutResult.data?.parsePortfolioScreenshot;
         if (result?.success && result.positions?.length) {
           setExtractedPositions(result.positions);
           setScreen('verify');
         } else {
           setUploadError(
-            result?.error || gqlError || 'Could not extract positions from this screenshot. Try again or add manually.',
+            result?.error || 'Could not extract positions from this screenshot. Try again or add manually.',
           );
         }
       } catch {
@@ -115,7 +111,7 @@ export function Step4Platforms() {
         setUploading(false);
       }
     },
-    [selectedPlatformId],
+    [selectedPlatformId, executeParseScreenshot],
   );
 
   const handleManualDone = () => {

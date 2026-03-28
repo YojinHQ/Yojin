@@ -1,10 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useMutation } from 'urql';
 import { useOnboarding } from '../../lib/onboarding-context';
 import { OnboardingShell } from '../../components/onboarding/onboarding-shell';
 import Button from '../../components/common/button';
 import Input from '../../components/common/input';
 import Badge from '../../components/common/badge';
 import { cn } from '../../lib/utils';
+import {
+  DETECT_AI_CREDENTIAL_QUERY,
+  DETECT_KEYCHAIN_TOKEN_QUERY,
+  VALIDATE_AI_CREDENTIAL_MUTATION,
+} from '../../api/documents';
 
 type Provider = 'claude' | 'openai' | 'openrouter';
 
@@ -34,61 +40,53 @@ export function Step1AiBrain() {
   const [error, setError] = useState('');
   const [autoDetected, setAutoDetected] = useState(false);
 
-  // Auto-detect credentials from env vars, vault, and macOS Keychain on mount.
+  // Auto-detect: env vars / vault
+  const skipDetect = isReset || validated;
+  const [envResult] = useQuery({
+    query: DETECT_AI_CREDENTIAL_QUERY,
+    requestPolicy: 'network-only',
+    pause: skipDetect,
+  });
+
+  // Auto-detect: macOS Keychain (only runs after env detection completes without a match)
+  const skipKeychain = skipDetect || envResult.fetching || !!envResult.data?.detectAiCredential;
+  const [keychainResult] = useQuery({
+    query: DETECT_KEYCHAIN_TOKEN_QUERY,
+    requestPolicy: 'network-only',
+    pause: skipKeychain,
+  });
+
+  const [, executeValidate] = useMutation(VALIDATE_AI_CREDENTIAL_MUTATION);
+
+  // Handle env detection result
   useEffect(() => {
-    let cancelled = false;
-
-    async function detectEnv() {
-      try {
-        const res = await fetch('/graphql', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: '{ detectAiCredential { method model } }' }),
-        });
-        const json = await res.json();
-        const cred = json?.data?.detectAiCredential;
-        if (!cancelled && cred) {
-          setAutoDetected(true);
-          setValidated(true);
-          setValidatedModel(cred.model || 'Claude');
-          updateState({ aiProvider: { method: 'env-detected', model: cred.model, validated: true } });
-        }
-      } catch {
-        // No env credential
-      }
+    const cred = envResult.data?.detectAiCredential;
+    if (cred) {
+      setAutoDetected(true);
+      setValidated(true);
+      setValidatedModel(cred.model || 'Claude');
+      updateState({ aiProvider: { method: 'env-detected', model: cred.model, validated: true } });
     }
+  }, [envResult.data, updateState]);
 
-    async function detectKeychain() {
-      try {
-        const res = await fetch('/graphql', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: '{ detectKeychainToken { found model error } }' }),
-        });
-        const json = await res.json();
-        const keychain = json?.data?.detectKeychainToken;
-        if (!cancelled && keychain?.found && !keychain.error) {
-          const model = keychain.model || 'Claude (Keychain)';
-          setAutoDetected(true);
-          setValidated(true);
-          setValidatedModel(model);
-          updateState({ aiProvider: { method: 'keychain', model, validated: true } });
-        }
-      } catch {
-        // No keychain token
-      }
+  // Handle keychain detection result
+  useEffect(() => {
+    const keychain = keychainResult.data?.detectKeychainToken;
+    if (keychain?.found && !keychain.error) {
+      const model = keychain.model || 'Claude (Keychain)';
+      setAutoDetected(true);
+      setValidated(true);
+      setValidatedModel(model);
+      updateState({ aiProvider: { method: 'keychain', model, validated: true } });
     }
+  }, [keychainResult.data, updateState]);
 
-    if (!isReset && !validated) {
-      detectEnv().then(() => {
-        if (!cancelled) detectKeychain();
-      });
+  // Surface auto-detection errors as a non-blocking hint
+  useEffect(() => {
+    if (envResult.error || keychainResult.error) {
+      setError('Could not auto-detect credentials — enter an API key manually.');
     }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isReset, validated, updateState]);
+  }, [envResult.error, keychainResult.error]);
 
   const handleSelectProvider = (p: Provider) => {
     if (p === provider) return;
@@ -109,35 +107,31 @@ export function Step1AiBrain() {
     setError('');
     setValidating(true);
     try {
-      const res = await fetch('/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `mutation ($input: ValidateCredentialInput!) { validateAiCredential(input: $input) { success model error } }`,
-          variables: {
-            input: {
-              method: 'API_KEY',
-              apiKey: apiKey.trim(),
-              provider: provider === 'openrouter' ? 'OPENROUTER' : provider === 'openai' ? 'OPENAI' : 'ANTHROPIC',
-            },
-          },
-        }),
+      const result = await executeValidate({
+        input: {
+          method: 'API_KEY',
+          apiKey: apiKey.trim(),
+          provider: provider === 'openrouter' ? 'OPENROUTER' : provider === 'openai' ? 'OPENAI' : 'ANTHROPIC',
+        },
       });
-      const json = await res.json();
-      const result = json?.data?.validateAiCredential;
-      if (result?.success) {
+      if (result.error) {
+        setError(result.error.message || 'Connection failed.');
+        return;
+      }
+      const data = result.data?.validateAiCredential;
+      if (data?.success) {
         setValidated(true);
-        setValidatedModel(result.model || 'Claude');
-        updateState({ aiProvider: { method: 'api-key', model: result.model, validated: true } });
+        setValidatedModel(data.model || 'Claude');
+        updateState({ aiProvider: { method: 'api-key', model: data.model, validated: true } });
       } else {
-        setError(result?.error || 'Invalid API key.');
+        setError(data?.error || 'Invalid API key.');
       }
     } catch {
       setError('Connection failed. Make sure the backend is running.');
     } finally {
       setValidating(false);
     }
-  }, [apiKey, provider, updateState]);
+  }, [apiKey, provider, updateState, executeValidate]);
 
   // ── Navigation ─────────────────────────────────────────────────────────────
 

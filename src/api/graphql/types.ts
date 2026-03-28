@@ -85,33 +85,6 @@ export interface PortfolioHistoryPoint {
 }
 
 // ---------------------------------------------------------------------------
-// Enriched
-// ---------------------------------------------------------------------------
-
-export interface EnrichedPosition extends Position {
-  sentimentScore?: number;
-  sentimentLabel?: string;
-  analystRating?: string;
-  targetPrice?: number;
-  peRatio?: number;
-  dividendYield?: number;
-  beta?: number;
-  fiftyTwoWeekHigh?: number;
-  fiftyTwoWeekLow?: number;
-}
-
-export interface EnrichedSnapshot {
-  id: string;
-  positions: EnrichedPosition[];
-  totalValue: number;
-  totalCost: number;
-  totalPnl: number;
-  totalPnlPercent: number;
-  timestamp: string;
-  enrichedAt: string;
-}
-
-// ---------------------------------------------------------------------------
 // Risk
 // ---------------------------------------------------------------------------
 

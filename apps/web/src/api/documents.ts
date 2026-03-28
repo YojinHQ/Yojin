@@ -30,31 +30,6 @@ export const POSITION_FIELDS = gql`
   }
 `;
 
-export const ENRICHED_POSITION_FIELDS = gql`
-  fragment EnrichedPositionFields on EnrichedPosition {
-    symbol
-    name
-    quantity
-    costBasis
-    currentPrice
-    marketValue
-    unrealizedPnl
-    unrealizedPnlPercent
-    sector
-    assetClass
-    platform
-    sentimentScore
-    sentimentLabel
-    analystRating
-    targetPrice
-    peRatio
-    dividendYield
-    beta
-    fiftyTwoWeekHigh
-    fiftyTwoWeekLow
-  }
-`;
-
 export const ALERT_FIELDS = gql`
   fragment AlertFields on Alert {
     id
@@ -89,48 +64,21 @@ export const PORTFOLIO_QUERY = gql`
       totalPnlPercent
       timestamp
       platform
-    }
-  }
-  ${POSITION_FIELDS}
-`;
-
-export const POSITIONS_QUERY = gql`
-  query Positions {
-    positions {
-      ...PositionFields
-    }
-  }
-  ${POSITION_FIELDS}
-`;
-
-export const PORTFOLIO_HISTORY_QUERY = gql`
-  query PortfolioHistory {
-    portfolioHistory {
-      timestamp
-      totalValue
-      totalCost
-      totalPnl
-      totalPnlPercent
-    }
-  }
-`;
-
-export const ENRICHED_SNAPSHOT_QUERY = gql`
-  query EnrichedSnapshot {
-    enrichedSnapshot {
-      id
-      positions {
-        ...EnrichedPositionFields
+      history {
+        timestamp
+        totalValue
+        totalCost
+        totalPnl
+        totalPnlPercent
       }
-      totalValue
-      totalCost
-      totalPnl
-      totalPnlPercent
-      timestamp
-      enrichedAt
+      sectorExposure {
+        sector
+        weight
+        value
+      }
     }
   }
-  ${ENRICHED_POSITION_FIELDS}
+  ${POSITION_FIELDS}
 `;
 
 // ---------------------------------------------------------------------------
@@ -163,17 +111,6 @@ export const RISK_REPORT_QUERY = gql`
   }
 `;
 
-export const SECTOR_EXPOSURE_QUERY = gql`
-  query SectorExposure {
-    sectorExposure {
-      sector
-      weight
-      value
-    }
-  }
-`;
-
-// ---------------------------------------------------------------------------
 // Queries — Alerts
 // ---------------------------------------------------------------------------
 
@@ -284,6 +221,68 @@ export const VALIDATE_JINTEL_KEY_MUTATION = gql`
   mutation ValidateJintelKey($apiKey: String!) {
     validateJintelKey(apiKey: $apiKey) {
       success
+      error
+    }
+  }
+`;
+
+export const DETECT_AI_CREDENTIAL_QUERY = gql`
+  query DetectAiCredential {
+    detectAiCredential {
+      method
+      model
+    }
+  }
+`;
+
+export const DETECT_KEYCHAIN_TOKEN_QUERY = gql`
+  query DetectKeychainToken {
+    detectKeychainToken {
+      found
+      model
+      error
+    }
+  }
+`;
+
+export const VALIDATE_AI_CREDENTIAL_MUTATION = gql`
+  mutation ValidateAiCredential($input: ValidateCredentialInput!) {
+    validateAiCredential(input: $input) {
+      success
+      model
+      error
+    }
+  }
+`;
+
+export const GENERATE_PERSONA_MUTATION = gql`
+  mutation GeneratePersona($input: PersonaInput!) {
+    generatePersona(input: $input) {
+      markdown
+    }
+  }
+`;
+
+export const CONFIRM_PERSONA_MUTATION = gql`
+  mutation ConfirmPersona($markdown: String!) {
+    confirmPersona(markdown: $markdown)
+  }
+`;
+
+export const PARSE_PORTFOLIO_SCREENSHOT_MUTATION = gql`
+  mutation ParsePortfolioScreenshot($input: ScreenshotInput!) {
+    parsePortfolioScreenshot(input: $input) {
+      success
+      positions {
+        symbol
+        name
+        quantity
+        avgEntry
+        marketPrice
+        marketValue
+      }
+      confidence
+      warnings
       error
     }
   }
@@ -608,7 +607,7 @@ export const CHECK_CLI_COMMANDS_QUERY = gql`
 
 export const SIGNALS_QUERY = gql`
   query Signals(
-    $type: String
+    $type: SignalType
     $ticker: String
     $sourceId: String
     $since: String
@@ -695,122 +694,6 @@ export const CURATED_SIGNALS_QUERY = gql`
     }
   }
 `;
-
-export const SIGNALS_BY_TICKER_QUERY = gql`
-  query SignalsByTicker($since: String, $limit: Int) {
-    signalsByTicker(since: $since, limit: $limit) {
-      ticker
-      signals {
-        id
-        type
-        title
-        content
-        publishedAt
-        ingestedAt
-        confidence
-        tickers
-        sources {
-          id
-          name
-          type
-          reliability
-        }
-        sentiment
-        outputType
-        tier1
-        tier2
-        link
-      }
-    }
-  }
-`;
-
-// ---------------------------------------------------------------------------
-// Queries — Signal Groups
-// ---------------------------------------------------------------------------
-
-export const SIGNAL_GROUPS_QUERY = gql`
-  query SignalGroups($ticker: String, $since: String, $limit: Int) {
-    signalGroups(ticker: $ticker, since: $since, limit: $limit) {
-      id
-      signals {
-        id
-        type
-        title
-        content
-        publishedAt
-        ingestedAt
-        confidence
-        contentHash
-        tickers
-        sources {
-          id
-          name
-          type
-          reliability
-        }
-        sourceCount
-        link
-        tier1
-        tier2
-        sentiment
-        outputType
-        groupId
-        version
-      }
-      tickers
-      summary
-      outputType
-      firstEventAt
-      lastEventAt
-    }
-  }
-`;
-
-export const SIGNAL_GROUPS_BY_TICKER_QUERY = gql`
-  query SignalGroupsByTicker($since: String, $limit: Int) {
-    signalGroupsByTicker(since: $since, limit: $limit) {
-      ticker
-      groups {
-        id
-        signals {
-          id
-          type
-          title
-          content
-          publishedAt
-          ingestedAt
-          confidence
-          contentHash
-          tickers
-          sources {
-            id
-            name
-            type
-            reliability
-          }
-          sourceCount
-          link
-          tier1
-          tier2
-          sentiment
-          outputType
-          groupId
-          version
-        }
-        tickers
-        summary
-        outputType
-        firstEventAt
-        lastEventAt
-      }
-    }
-  }
-`;
-
-// ---------------------------------------------------------------------------
-// Queries — Vault
-// ---------------------------------------------------------------------------
 
 export const VAULT_STATUS_QUERY = gql`
   query VaultStatus {

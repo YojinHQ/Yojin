@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { useMutation } from 'urql';
 import { useOnboarding } from '../../lib/onboarding-context';
 import { OnboardingShell } from '../../components/onboarding/onboarding-shell';
 import { TimePicker } from '../../components/onboarding/time-picker';
@@ -7,6 +8,7 @@ import Toggle from '../../components/common/toggle';
 import Button from '../../components/common/button';
 import { cn } from '../../lib/utils';
 import { setTimezone as persistTimezone } from '../../lib/timezone';
+import { SAVE_BRIEFING_CONFIG_MUTATION } from '../../api/documents';
 
 interface DigestSection {
   key: string;
@@ -71,6 +73,7 @@ export function Step5Briefing() {
   const channel = 'web';
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [, executeSave] = useMutation(SAVE_BRIEFING_CONFIG_MUTATION);
 
   // Persist timezone to localStorage so the header clock can use it
   useEffect(() => {
@@ -85,18 +88,12 @@ export function Step5Briefing() {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch('/graphql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `mutation ($input: BriefingConfigInput!) { saveBriefingConfig(input: $input) }`,
-          variables: {
-            input: { time, timezone, sections, channel },
-          },
-        }),
-      });
-      const json = await res.json();
-      if (json?.data?.saveBriefingConfig) {
+      const result = await executeSave({ input: { time, timezone, sections, channel } });
+      if (result.error) {
+        setError(result.error.message || 'Connection failed.');
+        return;
+      }
+      if (result.data?.saveBriefingConfig) {
         updateState({ briefing: { time, timezone, sections, channel: 'web' as const } });
         nextStep();
       } else {
@@ -107,7 +104,7 @@ export function Step5Briefing() {
     } finally {
       setSaving(false);
     }
-  }, [time, timezone, sections, updateState, nextStep]);
+  }, [time, timezone, sections, updateState, nextStep, executeSave]);
 
   return (
     <OnboardingShell currentStep={5}>

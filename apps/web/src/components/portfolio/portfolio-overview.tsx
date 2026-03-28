@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cn } from '../../lib/utils';
-import { usePortfolioHistory } from '../../api';
+import { usePortfolio } from '../../api';
 import { CardEmptyState } from '../common/card-empty-state';
 import Spinner from '../common/spinner';
 import { timeScales, type TimeScale } from '../../lib/time-scales';
@@ -10,8 +10,8 @@ import { PerformanceOvertime } from './performance-overtime';
 
 export function PortfolioOverview() {
   const [scale, setScale] = useState<TimeScale>('7D');
-  const [{ data: historyData, fetching }] = usePortfolioHistory();
-  const history = historyData?.portfolioHistory ?? [];
+  const [{ data: portfolioData, fetching }] = usePortfolio();
+  const history = portfolioData?.portfolio?.history ?? [];
   const hasHistory = history.length > 0;
 
   const timeScaleButtons = (

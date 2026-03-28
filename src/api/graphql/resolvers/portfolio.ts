@@ -13,12 +13,11 @@ import type { ConnectionManager } from '../../../scraper/connection-manager.js';
 import { pubsub } from '../pubsub.js';
 import type {
   AssetClass,
-  EnrichedPosition,
-  EnrichedSnapshot,
   Platform,
   PortfolioHistoryPoint,
   PortfolioSnapshot,
   Position,
+  SectorWeight,
 } from '../types.js';
 
 const log = getLogger().sub('portfolio-resolver');
@@ -172,12 +171,6 @@ export async function portfolioQuery(): Promise<PortfolioSnapshot> {
   return enrichWithLiveQuotes(snapshot);
 }
 
-export async function positionsQuery(): Promise<Position[]> {
-  const snapshot = await getSnapshot();
-  const enriched = await enrichWithLiveQuotes(snapshot);
-  return enriched.positions;
-}
-
 export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> {
   if (!snapshotStore) return [];
   const snapshots = await snapshotStore.getAll();
@@ -236,48 +229,6 @@ export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> 
   return history;
 }
 
-export async function enrichedSnapshotQuery(): Promise<EnrichedSnapshot> {
-  const snapshot = await getSnapshot();
-  const liveSnapshot = await enrichWithLiveQuotes(snapshot);
-  const enriched: EnrichedPosition[] = await Promise.all(
-    liveSnapshot.positions.map(async (p): Promise<EnrichedPosition> => {
-      if (!jintelClient) {
-        return { ...p };
-      }
-
-      const result = await jintelClient.enrichEntity(p.symbol, ['market']).catch(() => ({
-        success: false as const,
-        error: 'enrichEntity threw',
-      }));
-      if (!result.success || !('data' in result) || !result.data.market?.fundamentals) {
-        return { ...p };
-      }
-
-      const f = result.data.market.fundamentals;
-      return {
-        ...p,
-        peRatio: f.peRatio ?? undefined,
-        dividendYield: f.dividendYield ?? undefined,
-        beta: f.beta ?? undefined,
-        fiftyTwoWeekHigh: f.fiftyTwoWeekHigh ?? undefined,
-        fiftyTwoWeekLow: f.fiftyTwoWeekLow ?? undefined,
-        sector: f.sector ?? undefined,
-      };
-    }),
-  );
-
-  return {
-    id: `enriched-${Date.now()}`,
-    positions: enriched,
-    totalValue: liveSnapshot.totalValue,
-    totalCost: liveSnapshot.totalCost,
-    totalPnl: liveSnapshot.totalPnl,
-    totalPnlPercent: liveSnapshot.totalPnlPercent,
-    timestamp: liveSnapshot.timestamp,
-    enrichedAt: new Date().toISOString(),
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Mutation resolvers
 // ---------------------------------------------------------------------------
@@ -330,8 +281,9 @@ export async function addManualPositionMutation(
     platform: effectivePlatform,
     existingSnapshot: existing,
   });
-  pubsub.publish('portfolioUpdate', snapshot);
-  return snapshot;
+  const enriched = await enrichWithLiveQuotes(snapshot);
+  pubsub.publish('portfolioUpdate', enriched);
+  return enriched;
 }
 
 export async function editPositionMutation(
@@ -380,8 +332,9 @@ export async function editPositionMutation(
       positions: existing.positions.filter((p) => (p.platform ?? '').toUpperCase() !== targetPlatform),
     },
   });
-  pubsub.publish('portfolioUpdate', snapshot);
-  return snapshot;
+  const enriched = await enrichWithLiveQuotes(snapshot);
+  pubsub.publish('portfolioUpdate', enriched);
+  return enriched;
 }
 
 export async function removePositionMutation(
@@ -410,8 +363,9 @@ export async function removePositionMutation(
       positions: existing.positions.filter((p) => (p.platform ?? '').toUpperCase() !== targetPlatform),
     },
   });
-  pubsub.publish('portfolioUpdate', snapshot);
-  return snapshot;
+  const enriched = await enrichWithLiveQuotes(snapshot);
+  pubsub.publish('portfolioUpdate', enriched);
+  return enriched;
 }
 
 export async function refreshPositionsMutation(
@@ -440,6 +394,37 @@ export async function refreshPositionsMutation(
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// PortfolioSnapshot field resolvers (nested sub-graph)
+// ---------------------------------------------------------------------------
+
+export const portfolioSnapshotFieldResolvers = {
+  /** Nested: historical portfolio values (deduplicated by day, latest live-priced). */
+  history: (): Promise<PortfolioHistoryPoint[]> => portfolioHistoryQuery(),
+
+  /** Nested: sector allocation from the live-priced positions. */
+  sectorExposure: (parent: PortfolioSnapshot): SectorWeight[] => {
+    if (parent.positions.length === 0) return [];
+
+    const sectorMap = new Map<string, number>();
+    let total = 0;
+
+    for (const pos of parent.positions) {
+      const sector = pos.sector || 'Other';
+      sectorMap.set(sector, (sectorMap.get(sector) ?? 0) + pos.marketValue);
+      total += pos.marketValue;
+    }
+
+    if (total <= 0) return [];
+
+    return Array.from(sectorMap.entries()).map(([sector, value]) => ({
+      sector,
+      weight: value / total,
+      value,
+    }));
+  },
+};
+
 // Position field resolvers
 // ---------------------------------------------------------------------------
 
