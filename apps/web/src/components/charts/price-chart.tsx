@@ -54,7 +54,12 @@ export function PriceChart({ data }: PriceChartProps) {
     const container = containerRef.current;
     if (!container || data.length === 0) return;
 
+    const { width, height } = container.getBoundingClientRect();
+    if (width === 0 || height === 0) return;
+
     const chart = createChart(container, {
+      width,
+      height,
       layout: {
         background: { type: ColorType.Solid, color: COLORS.bg },
         textColor: COLORS.text,
@@ -110,8 +115,8 @@ export function PriceChart({ data }: PriceChartProps) {
     // Resize observer
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        chart.applyOptions({ width, height });
+        const { width: w, height: h } = entry.contentRect;
+        if (w > 0 && h > 0) chart.applyOptions({ width: w, height: h });
       }
     });
     observer.observe(container);

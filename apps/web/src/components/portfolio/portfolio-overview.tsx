@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { cn } from '../../lib/utils';
 import { usePortfolio } from '../../api';
 import { CardEmptyState } from '../common/card-empty-state';
 import Spinner from '../common/spinner';
-import { timeScales, type TimeScale } from '../../lib/time-scales';
+import { timeScales, getScaleDays, type TimeScale } from '../../lib/time-scales';
 import { DashboardCard } from '../common/dashboard-card';
 import { TotalValueGraph } from './total-value-graph';
 import { PerformanceOvertime } from './performance-overtime';
 
 export function PortfolioOverview() {
   const [scale, setScale] = useState<TimeScale>('7D');
-  const [{ data: portfolioData, fetching }] = usePortfolio();
+  const days = useMemo(() => getScaleDays(scale), [scale]);
+  const vars = useMemo(() => ({ historyDays: days }), [days]);
+  const [{ data: portfolioData, fetching }] = usePortfolio(vars);
   const history = portfolioData?.portfolio?.history ?? [];
   const hasHistory = history.length > 0;
 
@@ -66,14 +68,14 @@ export function PortfolioOverview() {
       <div className="flex min-h-0 flex-1 flex-col">
         {/* Total Value */}
         <div className="min-h-0 flex-[3] border-b border-border px-3 pb-1">
-          <TotalValueGraph scale={scale} history={history} />
+          <TotalValueGraph history={history} />
         </div>
 
         {/* Performance Over Time */}
         <div className="flex min-h-0 flex-[2] flex-col">
           <span className="px-4 pt-2 text-2xs font-medium uppercase tracking-wider text-text-muted">P&L</span>
           <div className="min-h-0 flex-1 px-3 pb-1">
-            <PerformanceOvertime scale={scale} history={history} />
+            <PerformanceOvertime history={history} />
           </div>
         </div>
       </div>

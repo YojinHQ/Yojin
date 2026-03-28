@@ -171,7 +171,7 @@ export async function portfolioQuery(): Promise<PortfolioSnapshot> {
   return enrichWithLiveQuotes(snapshot);
 }
 
-export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> {
+export async function portfolioHistoryQuery(days?: number | null): Promise<PortfolioHistoryPoint[]> {
   if (!snapshotStore) return [];
   const snapshots = await snapshotStore.getAll();
   if (snapshots.length === 0) return [];
@@ -204,9 +204,25 @@ export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> 
     }
   }
 
-  // Use stored totalValue for each historical snapshot — this preserves
-  // the actual portfolio value at the time of capture.
-  const history: PortfolioHistoryPoint[] = deduped.map((s) => ({
+  // Apply days filter if provided
+  let filtered = deduped;
+  if (days != null && days > 0) {
+    const latestTs = new Date(deduped[deduped.length - 1].timestamp).getTime();
+    const cutoff = latestTs - days * 24 * 60 * 60 * 1000;
+    filtered = deduped.filter((s) => new Date(s.timestamp).getTime() >= cutoff);
+  }
+
+  // Deduplicate to one point per day (keep last snapshot per day)
+  const dayDedup = new Map<string, PortfolioSnapshot>();
+  for (const s of filtered) {
+    const day = s.timestamp.slice(0, 10);
+    dayDedup.set(day, s);
+  }
+  const final = [...dayDedup.values()].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  );
+
+  const history: PortfolioHistoryPoint[] = final.map((s) => ({
     timestamp: s.timestamp,
     totalValue: s.totalValue,
     totalCost: s.totalCost,
@@ -214,18 +230,26 @@ export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> 
     totalPnlPercent: s.totalPnlPercent,
   }));
 
-  // Append a live-priced data point so the chart's trailing edge
+  // Replace the trailing point with live-priced data so the chart's edge
   // matches the Portfolio Value card (which uses enrichWithLiveQuotes).
-  const latest = deduped[deduped.length - 1];
-  const liveSnapshot = await enrichWithLiveQuotes(latest);
-  if (liveSnapshot.totalValue !== latest.totalValue) {
-    history.push({
+  if (final.length > 0) {
+    const latest = final[final.length - 1];
+    const liveSnapshot = await enrichWithLiveQuotes(latest);
+    const livePoint: PortfolioHistoryPoint = {
       timestamp: new Date().toISOString(),
       totalValue: liveSnapshot.totalValue,
       totalCost: liveSnapshot.totalCost,
       totalPnl: liveSnapshot.totalPnl,
       totalPnlPercent: liveSnapshot.totalPnlPercent,
-    });
+    };
+    // Replace last entry if same day, otherwise append
+    const liveDay = livePoint.timestamp.slice(0, 10);
+    const lastDay = history[history.length - 1]?.timestamp.slice(0, 10);
+    if (liveDay === lastDay) {
+      history[history.length - 1] = livePoint;
+    } else {
+      history.push(livePoint);
+    }
   }
 
   return history;
@@ -402,7 +426,8 @@ export async function refreshPositionsMutation(
 
 export const portfolioSnapshotFieldResolvers = {
   /** Nested: historical portfolio values (deduplicated by day, latest live-priced). */
-  history: (): Promise<PortfolioHistoryPoint[]> => portfolioHistoryQuery(),
+  history: (_parent: PortfolioSnapshot, args: { days?: number | null }): Promise<PortfolioHistoryPoint[]> =>
+    portfolioHistoryQuery(args.days),
 
   /** Nested: sector allocation from the live-priced positions. */
   sectorExposure: (parent: PortfolioSnapshot): SectorWeight[] => {

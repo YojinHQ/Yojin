@@ -52,7 +52,7 @@ export const ALERT_FIELDS = gql`
 // ---------------------------------------------------------------------------
 
 export const PORTFOLIO_QUERY = gql`
-  query Portfolio {
+  query Portfolio($historyDays: Int) {
     portfolio {
       id
       positions {
@@ -64,7 +64,7 @@ export const PORTFOLIO_QUERY = gql`
       totalPnlPercent
       timestamp
       platform
-      history {
+      history(days: $historyDays) {
         timestamp
         totalValue
         totalCost

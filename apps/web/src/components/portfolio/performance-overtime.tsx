@@ -1,85 +1,37 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { createChart, type IChartApi, type Time, ColorType } from 'lightweight-charts';
-import { getScaleDays, type TimeScale } from '../../lib/time-scales';
 import type { PortfolioHistoryPoint } from '../../api/types';
 
-interface PnlDataPoint {
-  date: string;
-  pnl: number;
-}
-
 interface PerformanceOvertimeProps {
-  scale: TimeScale;
   history: PortfolioHistoryPoint[];
 }
 
-/** Local-timezone date key (YYYY-MM-DD). */
-function toLocalDateKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+/** Convert history points to chart-ready { date, pnl } with YYYY-MM-DD keys. */
+function toChartData(history: PortfolioHistoryPoint[]): { date: string; pnl: number }[] {
+  return history.map((h) => {
+    const ts = new Date(h.timestamp);
+    const y = ts.getFullYear();
+    const m = String(ts.getMonth() + 1).padStart(2, '0');
+    const d = String(ts.getDate()).padStart(2, '0');
+    return { date: `${y}-${m}-${d}`, pnl: h.totalPnl };
+  });
 }
 
-/**
- * Derive daily P&L from portfolio history snapshots.
- */
-function derivePnlFromHistory(history: PortfolioHistoryPoint[], scale: TimeScale): PnlDataPoint[] {
-  if (history.length < 2) return [];
-
-  const days = getScaleDays(scale);
-  const latestTs = new Date(history[history.length - 1].timestamp);
-  const cutoff = new Date(latestTs.getTime() - days * 24 * 60 * 60 * 1000);
-
-  const valueByDay = new Map<string, number>();
-  for (const h of history) {
-    const day = toLocalDateKey(new Date(h.timestamp));
-    valueByDay.set(day, h.totalValue);
-  }
-
-  const points: PnlDataPoint[] = [];
-  const cursor = new Date(cutoff);
-  cursor.setHours(0, 0, 0, 0);
-  const end = new Date(latestTs);
-  end.setHours(23, 59, 59, 999);
-
-  let prevValue: number | undefined;
-
-  for (const h of history) {
-    const t = new Date(h.timestamp);
-    if (t <= cutoff) {
-      prevValue = h.totalValue;
-    }
-  }
-
-  while (cursor <= end) {
-    const dayKey = toLocalDateKey(cursor);
-    const value = valueByDay.get(dayKey);
-
-    if (value !== undefined) {
-      const pnl = prevValue !== undefined ? Math.round((value - prevValue) * 100) / 100 : 0;
-      points.push({ date: dayKey, pnl });
-      prevValue = value;
-    } else if (prevValue !== undefined) {
-      points.push({ date: dayKey, pnl: 0 });
-    }
-
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return points;
-}
-
-export function PerformanceOvertime({ scale, history }: PerformanceOvertimeProps) {
+export function PerformanceOvertime({ history }: PerformanceOvertimeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const data = useMemo(() => derivePnlFromHistory(history, scale), [history, scale]);
+  const data = useMemo(() => toChartData(history), [history]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container || data.length === 0) return;
 
+    const { width, height } = container.getBoundingClientRect();
+    if (width === 0 || height === 0) return;
+
     const chart = createChart(container, {
+      width,
+      height,
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: '#737373',
@@ -129,8 +81,8 @@ export function PerformanceOvertime({ scale, history }: PerformanceOvertimeProps
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        chart.applyOptions({ width, height });
+        const { width: w, height: h } = entry.contentRect;
+        if (w > 0 && h > 0) chart.applyOptions({ width: w, height: h });
       }
     });
     observer.observe(container);

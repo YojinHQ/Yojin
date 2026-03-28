@@ -746,6 +746,10 @@ export interface PriceEvent {
 // Query result wrappers (what useQuery returns in `data`)
 // ---------------------------------------------------------------------------
 
+export interface PortfolioQueryVariables {
+  historyDays?: number | null;
+}
+
 export interface PortfolioQueryResult {
   portfolio: PortfolioSnapshot | null;
 }

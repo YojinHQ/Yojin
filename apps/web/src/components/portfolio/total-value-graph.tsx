@@ -1,49 +1,38 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { createChart, type IChartApi, type Time, ColorType } from 'lightweight-charts';
 import { CardEmptyState } from '../common/card-empty-state';
-import { getScaleDays, type TimeScale } from '../../lib/time-scales';
 import type { PortfolioHistoryPoint } from '../../api/types';
 
 interface TotalValueGraphProps {
-  scale: TimeScale;
   history: PortfolioHistoryPoint[];
 }
 
-function ensureMinPoints(points: { date: string; value: number }[]): { date: string; value: number }[] {
-  if (points.length >= 2) return points;
-  if (points.length === 0) return [];
-  const only = points[0];
-  return [{ date: only.date, value: only.value }, only];
+/** Convert history points to chart-ready { date, value } with YYYY-MM-DD keys. */
+function toChartData(history: PortfolioHistoryPoint[]): { date: string; value: number }[] {
+  return history.map((p) => {
+    const ts = new Date(p.timestamp);
+    const y = ts.getFullYear();
+    const m = String(ts.getMonth() + 1).padStart(2, '0');
+    const d = String(ts.getDate()).padStart(2, '0');
+    return { date: `${y}-${m}-${d}`, value: p.totalValue };
+  });
 }
 
-export function TotalValueGraph({ scale, history }: TotalValueGraphProps) {
+export function TotalValueGraph({ history }: TotalValueGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-
-  const chartData = useMemo(() => {
-    if (history.length === 0) return [];
-
-    const days = getScaleDays(scale);
-    const latest = new Date(history[history.length - 1].timestamp).getTime();
-    const cutoff = latest - days * 24 * 60 * 60 * 1000;
-    const filtered = history.filter((p) => new Date(p.timestamp).getTime() >= cutoff);
-
-    const mapped = filtered.map((p) => {
-      const ts = new Date(p.timestamp);
-      const y = ts.getFullYear();
-      const m = String(ts.getMonth() + 1).padStart(2, '0');
-      const d = String(ts.getDate()).padStart(2, '0');
-      return { date: `${y}-${m}-${d}`, value: p.totalValue };
-    });
-
-    return ensureMinPoints(mapped);
-  }, [history, scale]);
+  const chartData = useMemo(() => toChartData(history), [history]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container || chartData.length === 0) return;
 
+    const { width, height } = container.getBoundingClientRect();
+    if (width === 0 || height === 0) return;
+
     const chart = createChart(container, {
+      width,
+      height,
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: '#737373',
@@ -97,8 +86,8 @@ export function TotalValueGraph({ scale, history }: TotalValueGraphProps) {
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        chart.applyOptions({ width, height });
+        const { width: w, height: h } = entry.contentRect;
+        if (w > 0 && h > 0) chart.applyOptions({ width: w, height: h });
       }
     });
     observer.observe(container);

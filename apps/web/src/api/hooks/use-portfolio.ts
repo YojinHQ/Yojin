@@ -9,6 +9,7 @@ import {
 } from '../documents.js';
 import type {
   PortfolioQueryResult,
+  PortfolioQueryVariables,
   RefreshPositionsMutationResult,
   RefreshPositionsVariables,
   AddManualPositionMutationResult,
@@ -20,8 +21,8 @@ import type {
 } from '../types.js';
 
 /** Full portfolio snapshot with positions, history, sector exposure, and P&L. */
-export function usePortfolio() {
-  return useQuery<PortfolioQueryResult>({ query: PORTFOLIO_QUERY });
+export function usePortfolio(variables?: PortfolioQueryVariables) {
+  return useQuery<PortfolioQueryResult, PortfolioQueryVariables>({ query: PORTFOLIO_QUERY, variables });
 }
 
 /** Trigger a position refresh from a specific brokerage platform. */

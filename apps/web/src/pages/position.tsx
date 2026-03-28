@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router';
 import { useQuery } from 'urql';
 import { cn } from '../lib/utils';
@@ -23,6 +23,10 @@ import { timeAgo } from '../lib/utils';
 
 /** Stable 7-day lookback for signal queries (computed once at module load). */
 const SEVEN_DAYS_AGO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+const PRICE_RANGES = ['5d', '1m', '3m', '6m', '1y'] as const;
+type PriceRange = (typeof PRICE_RANGES)[number];
+const RANGE_LABELS: Record<PriceRange, string> = { '5d': '5D', '1m': '1M', '3m': '3M', '6m': '6M', '1y': '1Y' };
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -156,10 +160,10 @@ export default function Position() {
   const [quoteResult] = useQuote(upperSymbol);
   const quote = quoteResult.data?.quote ?? undefined;
 
-  // 1-year price history from Jintel
+  const [priceRange, setPriceRange] = useState<PriceRange>('1y');
   const historyVars = useMemo<PriceHistoryQueryVariables>(
-    () => ({ tickers: upperSymbol ? [upperSymbol] : [], range: '1y' }),
-    [upperSymbol],
+    () => ({ tickers: upperSymbol ? [upperSymbol] : [], range: priceRange }),
+    [upperSymbol, priceRange],
   );
   const [historyResult] = useQuery<PriceHistoryQueryResult, PriceHistoryQueryVariables>({
     query: PRICE_HISTORY_QUERY,
@@ -295,8 +299,26 @@ export default function Position() {
         </Card>
       )}
 
-      {/* Price Chart (1 year) */}
-      <Card title="Price — 1 Year">
+      {/* Price Chart */}
+      <Card
+        title="Price"
+        headerAction={
+          <div className="flex gap-0.5">
+            {PRICE_RANGES.map((r) => (
+              <button
+                key={r}
+                onClick={() => setPriceRange(r)}
+                className={cn(
+                  'cursor-pointer rounded px-1.5 py-px text-2xs font-medium transition-colors',
+                  priceRange === r ? 'bg-accent-primary text-white' : 'text-text-muted hover:text-text-secondary',
+                )}
+              >
+                {RANGE_LABELS[r]}
+              </button>
+            ))}
+          </div>
+        }
+      >
         {priceHistory.length > 0 ? (
           <PriceChart data={priceHistory} />
         ) : historyResult.fetching ? (

@@ -116,8 +116,9 @@ export const typeDefs = /* GraphQL */ `
     platform: String
     """
     Nested: historical portfolio values (delegates to PortfolioSnapshotStore).
+    Optional days param limits the lookback window (e.g. 7, 30, 90).
     """
-    history: [PortfolioHistoryPoint!]!
+    history(days: Int): [PortfolioHistoryPoint!]!
     """
     Nested: sector allocation breakdown (computed from positions).
     """
