@@ -135,10 +135,21 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
           return (
             `You are evaluating curated portfolio signals for relevance and quality. ` +
             `ALL data is provided below — no tools are available.\n\n` +
-            `For EACH signal, classify it as:\n` +
-            `- CRITICAL: Must-see signal that could change a position decision\n` +
-            `- IMPORTANT: Useful context that reinforces or challenges the thesis\n` +
-            `- NOISE: Redundant, stale, generic, or irrelevant to this position\n\n` +
+            `For EACH signal:\n` +
+            `1. Classify verdict:\n` +
+            `   - CRITICAL: Must-see signal that could change a position decision\n` +
+            `   - IMPORTANT: Useful context that reinforces or challenges the thesis\n` +
+            `   - NOISE: Redundant, stale, generic, or irrelevant to this position\n` +
+            `2. Reclassify signal type if the heuristic got it wrong. The current type is shown ` +
+            `in the data — override it if the content clearly belongs to a different category:\n` +
+            `   - FUNDAMENTAL: earnings, revenue, EPS, dividends, guidance, valuations, profit, M&A, buyback\n` +
+            `   - MACRO: Fed, interest rates, GDP, inflation, tariffs, sanctions, geopolitical, trade policy\n` +
+            `   - TECHNICAL: moving averages, RSI, MACD, support/resistance, breakout, volume, price targets\n` +
+            `   - SENTIMENT: analyst ratings, upgrades/downgrades, social buzz, fear/greed, investor mood\n` +
+            `   - FILINGS: SEC filings, proxy statements, insider transactions, regulatory filings\n` +
+            `   - SOCIALS: social media activity, viral posts, influencer mentions, Reddit/Twitter/TikTok\n` +
+            `   - NEWS: general market news, industry developments, product launches, partnerships, leadership\n` +
+            `   - TRADING_LOGIC_TRIGGER: price alerts, stop-loss triggers, rebalancing signals\n\n` +
             `Watch for:\n` +
             `- Clustered signals (same group: tag) — count as ONE event, pick the best source\n` +
             `- Generic roundup articles — usually NOISE\n` +
@@ -146,7 +157,7 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
             `- Signals that contradict the thesis — these are CRITICAL even if low-confidence\n\n` +
             `Output a structured list per ticker:\n` +
             `## TICKER\n` +
-            `- [signal-id] VERDICT: reasoning (1 sentence)\n\n` +
+            `- [signal-id] VERDICT (TYPE if reclassified): reasoning (1 sentence)\n\n` +
             `Be concise. Complete in 1 iteration.\n\n` +
             `${signalData}`
           );
@@ -182,6 +193,7 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
             `  - reasoning: 1-2 sentences\n` +
             `  - thesisAlignment: SUPPORTS/CHALLENGES/NEUTRAL\n` +
             `  - actionability: 0-1 how actionable\n` +
+            `  - signalType: include ONLY if the RA flagged a reclassification (e.g. NEWS→MACRO)\n` +
             `- thesisSummary: your current thesis in 2-3 sentences\n\n` +
             `Be concise. Focus on why each signal matters (or doesn't) to your thesis.`
           );

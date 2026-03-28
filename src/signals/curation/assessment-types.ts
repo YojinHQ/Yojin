@@ -8,6 +8,8 @@
 
 import { z } from 'zod';
 
+import { SignalTypeSchema } from '../types.js';
+
 // ---------------------------------------------------------------------------
 // Verdict & alignment enums
 // ---------------------------------------------------------------------------
@@ -33,6 +35,8 @@ export const SignalAssessmentSchema = z.object({
   thesisAlignment: ThesisAlignmentSchema,
   /** How actionable is this signal (0–1). */
   actionability: z.number().min(0).max(1),
+  /** LLM-reclassified signal type — overrides the heuristic classification from ingestion. */
+  signalType: SignalTypeSchema.optional(),
 });
 export type SignalAssessment = z.infer<typeof SignalAssessmentSchema>;
 

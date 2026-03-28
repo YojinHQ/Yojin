@@ -14,17 +14,22 @@ import type { AssessmentStore } from './assessment-store.js';
 import { SignalVerdictSchema, ThesisAlignmentSchema } from './assessment-types.js';
 import type { ToolDefinition, ToolResult } from '../../core/types.js';
 import { getLogger } from '../../logging/index.js';
+import type { SignalArchive } from '../archive.js';
+import { SignalTypeSchema } from '../types.js';
+import type { SignalType } from '../types.js';
 
 const log = getLogger().sub('assessment-tools');
 
 export interface AssessmentToolsOptions {
   assessmentStore: AssessmentStore;
+  /** Signal archive for writing back reclassified signal types. */
+  signalArchive?: SignalArchive;
   /** Set by the workflow beforeWorkflow to track total pipeline duration. */
   workflowStartMs?: { value: number };
 }
 
 export function createAssessmentTools(options: AssessmentToolsOptions): ToolDefinition[] {
-  const { assessmentStore, workflowStartMs } = options;
+  const { assessmentStore, signalArchive, workflowStartMs } = options;
 
   const saveSignalAssessment: ToolDefinition = {
     name: 'save_signal_assessment',
@@ -48,6 +53,10 @@ export function createAssessmentTools(options: AssessmentToolsOptions): ToolDefi
               'Does this signal SUPPORT, CHALLENGE, or is NEUTRAL to the active thesis?',
             ),
             actionability: z.number().min(0).max(1).describe('How actionable is this signal (0-1)'),
+            signalType: SignalTypeSchema.optional().describe(
+              'Reclassified signal type if the heuristic got it wrong. ' +
+                'NEWS | FUNDAMENTAL | SENTIMENT | TECHNICAL | MACRO | FILINGS | SOCIALS | TRADING_LOGIC_TRIGGER',
+            ),
           }),
         )
         .min(1)
@@ -63,6 +72,7 @@ export function createAssessmentTools(options: AssessmentToolsOptions): ToolDefi
         reasoning: string;
         thesisAlignment: string;
         actionability: number;
+        signalType?: string;
       }>;
       thesisSummary: string;
     }): Promise<ToolResult> {
@@ -82,6 +92,7 @@ export function createAssessmentTools(options: AssessmentToolsOptions): ToolDefi
           reasoning: a.reasoning,
           thesisAlignment: a.thesisAlignment as 'SUPPORTS' | 'CHALLENGES' | 'NEUTRAL',
           actionability: a.actionability,
+          ...(a.signalType ? { signalType: a.signalType as SignalType } : {}),
         })),
         signalsInput: params.assessments.length,
         signalsKept: kept.length,
@@ -90,6 +101,35 @@ export function createAssessmentTools(options: AssessmentToolsOptions): ToolDefi
       };
 
       await assessmentStore.save(report);
+
+      // Write reclassified signal types back to the archive
+      if (signalArchive) {
+        const reclassified = params.assessments.filter((a) => a.signalType);
+        if (reclassified.length > 0) {
+          let updated = 0;
+          for (const a of reclassified) {
+            try {
+              const signal = await signalArchive.getById(a.signalId);
+              if (signal && signal.type !== a.signalType) {
+                await signalArchive.appendUpdate({
+                  ...signal,
+                  type: a.signalType as SignalType,
+                  version: signal.version + 1,
+                });
+                updated++;
+              }
+            } catch (err) {
+              log.warn('Failed to reclassify signal type', {
+                signalId: a.signalId,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }
+          if (updated > 0) {
+            log.info(`Reclassified ${updated} signal types in archive`);
+          }
+        }
+      }
 
       log.info('Signal assessment saved', {
         id: report.id,

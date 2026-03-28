@@ -596,7 +596,11 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   // Assessment tools (1 tool: save_signal_assessment)
   // Mutable ref allows workflows to inject their start time for accurate durationMs
   const assessmentWorkflowStartMs = { value: 0 };
-  for (const tool of createAssessmentTools({ assessmentStore, workflowStartMs: assessmentWorkflowStartMs })) {
+  for (const tool of createAssessmentTools({
+    assessmentStore,
+    signalArchive,
+    workflowStartMs: assessmentWorkflowStartMs,
+  })) {
     toolRegistry.register(tool);
   }
 

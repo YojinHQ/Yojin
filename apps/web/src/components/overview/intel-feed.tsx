@@ -19,6 +19,7 @@ interface DataRow {
 interface IntelFeedItem {
   id: string;
   type: ItemType;
+  signalType: string;
   title: string;
   time: string;
   icon: IconName;
@@ -37,6 +38,30 @@ const signalTypeIcon: Record<string, IconName> = {
   FILINGS: 'box',
   SOCIALS: 'bubble',
   TRADING_LOGIC_TRIGGER: 'clock',
+};
+
+/** Human-readable label for each signal type. */
+const signalTypeLabel: Record<string, string> = {
+  NEWS: 'News',
+  FUNDAMENTAL: 'Fundamental',
+  TECHNICAL: 'Technical',
+  MACRO: 'Macro',
+  SENTIMENT: 'Sentiment',
+  FILINGS: 'Filing',
+  SOCIALS: 'Social',
+  TRADING_LOGIC_TRIGGER: 'Trigger',
+};
+
+/** Tailwind color class for each signal type badge. */
+const signalTypeBadgeColor: Record<string, string> = {
+  NEWS: 'bg-text-muted/10 text-text-muted',
+  FUNDAMENTAL: 'bg-info/10 text-info',
+  TECHNICAL: 'bg-accent-primary/10 text-accent-primary',
+  MACRO: 'bg-warning/10 text-warning',
+  SENTIMENT: 'bg-success/10 text-success',
+  FILINGS: 'bg-info/10 text-info',
+  SOCIALS: 'bg-accent-primary/10 text-accent-primary',
+  TRADING_LOGIC_TRIGGER: 'bg-warning/10 text-warning',
 };
 
 /** Classify a signal using its outputType field. */
@@ -276,9 +301,19 @@ function IntelFeedCard({
       <div className="flex items-center gap-3 px-3 py-2.5" onClick={onToggle}>
         <ItemIcon icon={item.icon} type={item.type} />
         <div className="min-w-0 flex-1">
-          <span className={cn('text-2xs font-semibold tracking-wide uppercase', typeLabelColor[item.type])}>
-            {typeLabel[item.type]}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className={cn('text-2xs font-semibold tracking-wide uppercase', typeLabelColor[item.type])}>
+              {typeLabel[item.type]}
+            </span>
+            <span
+              className={cn(
+                'rounded-full px-1.5 py-0.5 text-[9px] font-medium leading-none',
+                signalTypeBadgeColor[item.signalType] ?? 'bg-text-muted/10 text-text-muted',
+              )}
+            >
+              {signalTypeLabel[item.signalType] ?? item.signalType}
+            </span>
+          </div>
           <p className="text-xs font-medium leading-tight text-text-primary truncate">{item.title}</p>
         </div>
         <span className="flex-shrink-0 text-2xs text-text-muted">{item.time}</span>
@@ -377,6 +412,7 @@ export default function IntelFeed() {
       return {
         id: s.id,
         type: itemType,
+        signalType: s.type,
         title: s.title,
         time: timeAgo(s.publishedAt),
         icon: signalTypeIcon[s.type] ?? 'trending',
@@ -404,6 +440,7 @@ export default function IntelFeed() {
     const actionItems: IntelFeedItem[] = data.actions.map((a) => ({
       id: a.id,
       type: 'action' as const,
+      signalType: 'TRADING_LOGIC_TRIGGER',
       title: a.what,
       time: timeAgo(a.createdAt),
       icon: 'rebalance' as const,
