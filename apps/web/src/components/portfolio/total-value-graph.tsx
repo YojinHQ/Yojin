@@ -1,6 +1,5 @@
-import { useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { tooltipStyle } from '../../lib/chart-utils';
+import { useEffect, useRef, useMemo } from 'react';
+import { createChart, type IChartApi, type Time, ColorType } from 'lightweight-charts';
 import { CardEmptyState } from '../common/card-empty-state';
 import { getScaleDays, type TimeScale } from '../../lib/time-scales';
 import type { PortfolioHistoryPoint } from '../../api/types';
@@ -8,23 +7,6 @@ import type { PortfolioHistoryPoint } from '../../api/types';
 interface TotalValueGraphProps {
   scale: TimeScale;
   history: PortfolioHistoryPoint[];
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Recharts tooltip payload type
-function ValueTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.[0]) return null;
-  const value = payload[0].value as number;
-  const formatted = `$${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-
-  return (
-    <div style={tooltipStyle}>
-      <p style={{ margin: 0, padding: '4px 8px' }}>
-        <span style={{ color: 'var(--color-text-secondary)' }}>{label}</span>
-        {' · '}
-        <span style={{ fontWeight: 600 }}>{formatted}</span>
-      </p>
-    </div>
-  );
 }
 
 function ensureMinPoints(points: { date: string; value: number }[]): { date: string; value: number }[] {
@@ -35,6 +17,9 @@ function ensureMinPoints(points: { date: string; value: number }[]): { date: str
 }
 
 export function TotalValueGraph({ scale, history }: TotalValueGraphProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+
   const chartData = useMemo(() => {
     if (history.length === 0) return [];
 
@@ -43,25 +28,87 @@ export function TotalValueGraph({ scale, history }: TotalValueGraphProps) {
     const cutoff = latest - days * 24 * 60 * 60 * 1000;
     const filtered = history.filter((p) => new Date(p.timestamp).getTime() >= cutoff);
 
-    // When all points are from the same day, show time labels (intraday view).
-    // Otherwise show date labels (multi-day view).
-    const firstDay = filtered[0].timestamp.slice(0, 10);
-    const allSameDay = filtered.every((p) => p.timestamp.slice(0, 10) === firstDay);
-
     const mapped = filtered.map((p) => {
       const ts = new Date(p.timestamp);
-      return {
-        date: allSameDay
-          ? ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-          : ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        value: p.totalValue,
-      };
+      const y = ts.getFullYear();
+      const m = String(ts.getMonth() + 1).padStart(2, '0');
+      const d = String(ts.getDate()).padStart(2, '0');
+      return { date: `${y}-${m}-${d}`, value: p.totalValue };
     });
 
     return ensureMinPoints(mapped);
   }, [history, scale]);
 
-  const baselineValue = chartData[0]?.value ?? 0;
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || chartData.length === 0) return;
+
+    const chart = createChart(container, {
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: '#737373',
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+        fontSize: 10,
+      },
+      grid: {
+        vertLines: { visible: false },
+        horzLines: { color: '#3d3d3d', style: 4 },
+      },
+      crosshair: {
+        vertLine: { color: '#737373', labelBackgroundColor: '#737373' },
+        horzLine: { color: '#737373', labelBackgroundColor: '#737373' },
+      },
+      rightPriceScale: {
+        borderVisible: false,
+      },
+      timeScale: {
+        borderVisible: false,
+        fixLeftEdge: true,
+        fixRightEdge: true,
+      },
+      handleScroll: { vertTouchDrag: false },
+    });
+
+    chartRef.current = chart;
+
+    const isUp = chartData.length >= 2 && chartData[chartData.length - 1].value >= chartData[0].value;
+    const lineColor = isUp ? '#5bb98c' : '#ff5a5e';
+
+    const series = chart.addAreaSeries({
+      lineColor,
+      lineWidth: 2,
+      topColor: isUp ? 'rgba(91, 185, 140, 0.3)' : 'rgba(255, 90, 94, 0.3)',
+      bottomColor: isUp ? 'rgba(91, 185, 140, 0)' : 'rgba(255, 90, 94, 0)',
+      crosshairMarkerRadius: 4,
+      priceFormat: {
+        type: 'custom',
+        formatter: (p: number) => `$${p.toLocaleString('en-US', { minimumFractionDigits: 0 })}`,
+      },
+    });
+
+    series.setData(
+      chartData.map((d) => ({
+        time: d.date as Time,
+        value: d.value,
+      })),
+    );
+
+    chart.timeScale().fitContent();
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        chart.applyOptions({ width, height });
+      }
+    });
+    observer.observe(container);
+
+    return () => {
+      observer.disconnect();
+      chart.remove();
+      chartRef.current = null;
+    };
+  }, [chartData]);
 
   if (chartData.length === 0) {
     return (
@@ -81,33 +128,5 @@ export function TotalValueGraph({ scale, history }: TotalValueGraphProps) {
     );
   }
 
-  const values = chartData.map((d) => d.value);
-  const minVal = Math.min(...values);
-  const maxVal = Math.max(...values);
-  const pad = Math.max(5, (maxVal - minVal) * 0.1 || maxVal * 0.1);
-
-  return (
-    <ResponsiveContainer width="100%" height="100%" minHeight={1}>
-      <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
-        <defs>
-          <linearGradient id="totalValueGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-accent-primary)" stopOpacity={0.3} />
-            <stop offset="100%" stopColor="var(--color-accent-primary)" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <XAxis dataKey="date" hide />
-        <YAxis hide domain={[Math.max(0, minVal - pad), maxVal + pad]} />
-        <ReferenceLine y={baselineValue} stroke="var(--color-text-muted)" strokeDasharray="4 4" strokeOpacity={0.6} />
-        <Tooltip content={<ValueTooltip />} />
-        <Area
-          type="monotone"
-          dataKey="value"
-          stroke="var(--color-accent-primary)"
-          strokeWidth={2}
-          fill="url(#totalValueGrad)"
-          dot={false}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
-  );
+  return <div ref={containerRef} className="h-full w-full" />;
 }
