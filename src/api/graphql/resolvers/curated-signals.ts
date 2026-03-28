@@ -154,47 +154,55 @@ interface RefreshIntelFeedResult {
   error: string | null;
 }
 
+let activeRefresh: Promise<RefreshIntelFeedResult> | null = null;
+
 export async function refreshIntelFeedResolver(): Promise<RefreshIntelFeedResult> {
   if (!store || !snapshotStore || !signalArchive || !curationConfig) {
     return { signalsFetched: 0, signalsCurated: 0, error: 'Intel feed pipeline not initialized' };
   }
 
-  if (getCurationWorkflowStatus().running) {
+  if (activeRefresh || getCurationWorkflowStatus().running) {
     return { signalsFetched: 0, signalsCurated: 0, error: 'Curation already in progress' };
   }
 
-  try {
-    // Step 1: Fetch fresh signals from all enabled data sources
-    const fetchResult = await fetchAllEnabledSources();
-    log.info('Intel feed refresh — data fetch complete', {
-      ingested: fetchResult.totalIngested,
-      duplicates: fetchResult.totalDuplicates,
-      sources: fetchResult.sourcesAttempted,
-    });
+  activeRefresh = (async () => {
+    try {
+      // Step 1: Fetch fresh signals from all enabled data sources
+      const fetchResult = await fetchAllEnabledSources();
+      log.info('Intel feed refresh — data fetch complete', {
+        ingested: fetchResult.totalIngested,
+        duplicates: fetchResult.totalDuplicates,
+        sources: fetchResult.sourcesAttempted,
+      });
 
-    // Step 2: Run Tier 1 curation pipeline
-    const curationResult = await runCurationPipeline({
-      signalArchive,
-      curatedStore: store,
-      snapshotStore,
-      config: curationConfig,
-    });
+      // Step 2: Run Tier 1 curation pipeline
+      const curationResult = await runCurationPipeline({
+        signalArchive,
+        curatedStore: store,
+        snapshotStore,
+        config: curationConfig,
+      });
 
-    log.info('Intel feed refresh — curation complete', {
-      processed: curationResult.signalsProcessed,
-      curated: curationResult.signalsCurated,
-    });
+      log.info('Intel feed refresh — curation complete', {
+        processed: curationResult.signalsProcessed,
+        curated: curationResult.signalsCurated,
+      });
 
-    return {
-      signalsFetched: fetchResult.totalIngested,
-      signalsCurated: curationResult.signalsCurated,
-      error: fetchResult.errors.length > 0 ? fetchResult.errors.join('; ') : null,
-    };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.error('Intel feed refresh failed', { error: msg });
-    return { signalsFetched: 0, signalsCurated: 0, error: msg };
-  }
+      return {
+        signalsFetched: fetchResult.totalIngested,
+        signalsCurated: curationResult.signalsCurated,
+        error: fetchResult.errors.length > 0 ? fetchResult.errors.join('; ') : null,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error('Intel feed refresh failed', { error: msg });
+      return { signalsFetched: 0, signalsCurated: 0, error: msg };
+    } finally {
+      activeRefresh = null;
+    }
+  })();
+
+  return activeRefresh;
 }
 
 export async function runFullCurationResolver(): Promise<boolean> {
