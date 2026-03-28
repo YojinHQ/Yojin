@@ -1,7 +1,6 @@
-import { useId, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useParams, Link } from 'react-router';
 import { useQuery } from 'urql';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 import { cn } from '../lib/utils';
 import { usePortfolio, useQuote, useOnPriceMove } from '../api';
 import type { Position as PositionType, Quote, PositionInsight, InsightRating } from '../api/types';
@@ -14,6 +13,7 @@ import type {
   PriceHistoryQueryResult,
   PriceHistoryQueryVariables,
 } from '../api/types';
+import { PriceChart } from '../components/charts/price-chart';
 import Card from '../components/common/card';
 import Badge from '../components/common/badge';
 import type { BadgeVariant } from '../components/common/badge';
@@ -135,62 +135,6 @@ function DayRange({ low, high, current }: { low: number; high: number; current: 
         />
       </div>
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Price chart (Recharts)
-// ---------------------------------------------------------------------------
-
-function PriceChart({ data }: { data: { date: string; close: number }[] }) {
-  const gradId = useId();
-  const isUp = data.length >= 2 && data[data.length - 1].close >= data[0].close;
-  const color = isUp ? 'var(--color-success)' : 'var(--color-error)';
-
-  return (
-    <ResponsiveContainer width="100%" height={240}>
-      <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-        <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.2} />
-            <stop offset="100%" stopColor={color} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <XAxis
-          dataKey="date"
-          tickFormatter={(d: string) => {
-            const dt = new Date(d);
-            return `${dt.toLocaleString('en-US', { month: 'short' })} ${dt.getFullYear().toString().slice(2)}`;
-          }}
-          tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }}
-          axisLine={false}
-          tickLine={false}
-          interval="preserveStartEnd"
-          minTickGap={60}
-        />
-        <YAxis
-          domain={['auto', 'auto']}
-          tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }}
-          axisLine={false}
-          tickLine={false}
-          tickFormatter={(v: number) => `$${v.toFixed(0)}`}
-          width={50}
-        />
-        <Tooltip
-          contentStyle={{
-            backgroundColor: 'var(--color-bg-card)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '8px',
-            fontSize: '12px',
-          }}
-          labelFormatter={(d) =>
-            new Date(String(d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-          }
-          formatter={(v) => [fmtCurrency(Number(v)), 'Close']}
-        />
-        <Area type="monotone" dataKey="close" stroke={color} strokeWidth={1.5} fill={`url(#${gradId})`} />
-      </AreaChart>
-    </ResponsiveContainer>
   );
 }
 
