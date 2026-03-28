@@ -16,16 +16,16 @@ interface PriceChartProps {
 
 /** Color palette — matches Yojin theme tokens. */
 const COLORS = {
-  bg: '#262626',
+  bg: 'transparent',
   text: '#737373',
   border: '#3d3d3d',
   up: '#5bb98c',
   upWick: '#5bb98c',
-  down: '#e57373',
-  downWick: '#e57373',
+  down: '#ff5a5e',
+  downWick: '#ff5a5e',
   crosshair: '#737373',
   volumeUp: 'rgba(91, 185, 140, 0.25)',
-  volumeDown: 'rgba(229, 115, 115, 0.25)',
+  volumeDown: 'rgba(255, 90, 94, 0.25)',
 } as const;
 
 function toChartData(data: PriceChartDatum[]): CandlestickData<Time>[] {

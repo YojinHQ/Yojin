@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { cn } from '../../lib/utils';
 import { SymbolLogo } from '../common/symbol-logo';
@@ -61,6 +61,7 @@ const TH = 'whitespace-nowrap px-3 py-2 text-2xs font-medium uppercase tracking-
 export default function PositionsPreview() {
   const [{ data: portfolioData, fetching, error }] = usePortfolio();
   const data = portfolioData?.portfolio;
+  const navigate = useNavigate();
 
   const viewAllLink = (
     <Link to="/portfolio" className="text-2xs text-accent-primary transition-colors hover:text-accent-primary/80">
@@ -124,7 +125,11 @@ export default function PositionsPreview() {
               const arrow = isUp ? '\u25B2' : isDown ? '\u25BC' : '';
 
               return (
-                <tr key={`${pos.symbol}:${pos.platform}`} className="border-b border-border last:border-b-0">
+                <tr
+                  key={`${pos.symbol}:${pos.platform}`}
+                  className="border-b border-border last:border-b-0 cursor-pointer transition-colors hover:bg-bg-hover"
+                  onClick={() => navigate(`/portfolio/${pos.symbol.toLowerCase()}`)}
+                >
                   {/* Asset: logo + symbol + name */}
                   <td className="px-3 py-2">
                     <div className="flex min-w-0 items-center gap-2">
