@@ -179,20 +179,34 @@ export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> 
   // Sort chronologically — JSONL insertion order may not be time-ordered
   snapshots.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-  // Deduplicate to one snapshot per day (keep the latest per day).
-  // Multiple snapshots on the same day come from sequential position
-  // additions and create chart noise + ghost P&L bars.
-  const byDay = new Map<string, PortfolioSnapshot>();
+  // Group by day. Older days are deduplicated to one snapshot (the latest).
+  // The most recent day keeps all intraday points so the chart shows
+  // movement on day 1 (e.g. portfolio being built up during onboarding).
+  const byDay = new Map<string, PortfolioSnapshot[]>();
   for (const s of snapshots) {
     const day = s.timestamp.slice(0, 10); // YYYY-MM-DD
-    byDay.set(day, s); // later (sorted) snapshot overwrites earlier
+    const arr = byDay.get(day) ?? [];
+    arr.push(s);
+    byDay.set(day, arr);
   }
-  const daily = [...byDay.values()];
+
+  const sortedDays = [...byDay.keys()].sort();
+  const latestDay = sortedDays[sortedDays.length - 1];
+
+  const deduped: PortfolioSnapshot[] = [];
+  for (const day of sortedDays) {
+    const daySnapshots = byDay.get(day) ?? [];
+    if (day === latestDay) {
+      deduped.push(...daySnapshots);
+    } else {
+      // Keep only the last snapshot per older day
+      deduped.push(daySnapshots[daySnapshots.length - 1]);
+    }
+  }
 
   // Use stored totalValue for each historical snapshot — this preserves
-  // the actual portfolio value at the time of capture. Re-pricing all
-  // history at today's prices would destroy the time-series.
-  const history: PortfolioHistoryPoint[] = daily.map((s) => ({
+  // the actual portfolio value at the time of capture.
+  const history: PortfolioHistoryPoint[] = deduped.map((s) => ({
     timestamp: s.timestamp,
     totalValue: s.totalValue,
     totalCost: s.totalCost,
@@ -200,30 +214,18 @@ export async function portfolioHistoryQuery(): Promise<PortfolioHistoryPoint[]> 
     totalPnlPercent: s.totalPnlPercent,
   }));
 
-  // Replace or append a live-priced data point so the chart's trailing edge
+  // Append a live-priced data point so the chart's trailing edge
   // matches the Portfolio Value card (which uses enrichWithLiveQuotes).
-  // If the latest stored snapshot is from today, replace it instead of
-  // appending — otherwise the chart has two same-day points with different
-  // values and the tooltip shows the stale stored value.
-  const latest = daily[daily.length - 1];
+  const latest = deduped[deduped.length - 1];
   const liveSnapshot = await enrichWithLiveQuotes(latest);
   if (liveSnapshot.totalValue !== latest.totalValue) {
-    const livePoint: PortfolioHistoryPoint = {
+    history.push({
       timestamp: new Date().toISOString(),
       totalValue: liveSnapshot.totalValue,
       totalCost: liveSnapshot.totalCost,
       totalPnl: liveSnapshot.totalPnl,
       totalPnlPercent: liveSnapshot.totalPnlPercent,
-    };
-
-    const today = livePoint.timestamp.slice(0, 10);
-    const lastDay = latest.timestamp.slice(0, 10);
-    if (today === lastDay) {
-      // Same day — replace stored value with live-priced value
-      history[history.length - 1] = livePoint;
-    } else {
-      history.push(livePoint);
-    }
+    });
   }
 
   return history;

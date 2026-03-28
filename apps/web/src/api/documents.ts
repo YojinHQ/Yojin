@@ -1049,6 +1049,7 @@ export const INTEL_FEED_QUERY = gql`
         title
         type
         sentiment
+        outputType
         tickers
         publishedAt
         confidence
@@ -1072,6 +1073,22 @@ export const INTEL_FEED_QUERY = gql`
       status
       expiresAt
       createdAt
+    }
+  }
+`;
+
+export const DISMISS_SIGNAL_MUTATION = gql`
+  mutation DismissSignal($signalId: ID!) {
+    dismissSignal(signalId: $signalId)
+  }
+`;
+
+export const REFRESH_INTEL_FEED_MUTATION = gql`
+  mutation RefreshIntelFeed {
+    refreshIntelFeed {
+      signalsFetched
+      signalsCurated
+      error
     }
   }
 `;

@@ -9,13 +9,12 @@
  * injecting into an agent's context without overflow.
  */
 
-import type { JintelClient, MarketQuote } from '@yojinhq/jintel-client';
+import type { Entity, JintelClient, MarketQuote } from '@yojinhq/jintel-client';
 import { buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
 import type { InsightStore } from './insight-store.js';
 import type { InsightReport } from './types.js';
 import type { Position } from '../api/graphql/types.js';
-import type { ExtendedEntity } from '../jintel/types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { SignalMemoryStore } from '../memory/memory-store.js';
 import type { MemoryEntry } from '../memory/types.js';
@@ -62,6 +61,8 @@ export interface DataBrief {
   recentFilings: FilingBrief[];
   // Enrichment — technicals
   technicals: TechnicalsBrief | null;
+  // Social sentiment
+  socialSentiment: SocialSentimentBrief | null;
   // Signals
   signalCount: number;
   signals: SignalBrief[];
@@ -100,6 +101,14 @@ export interface TechnicalsBrief {
   atr: number | null;
   vwma: number | null;
   mfi: number | null;
+}
+
+export interface SocialSentimentBrief {
+  rank: number;
+  mentions: number;
+  upvotes: number;
+  rank24hAgo: number;
+  mentions24hAgo: number;
 }
 
 export interface MemoryBrief {
@@ -162,7 +171,7 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
       : Promise.resolve(null),
     // Unified enrichment + news (1 API call per 20 tickers)
     // Returns Map<inputTicker, entity> — preserves portfolio ticker → entity association
-    jintelClient ? batchEnrichAllChunked(jintelClient, tickers) : Promise.resolve(new Map<string, ExtendedEntity>()),
+    jintelClient ? batchEnrichAllChunked(jintelClient, tickers) : Promise.resolve(new Map<string, Entity>()),
     // Curated signals (local, already scored by the curation pipeline)
     curatedSignalStore.queryByTickers(tickers, { since: sevenDaysAgo, limit: 100 * tickers.length }),
     // Memories (local, fast)
@@ -251,6 +260,18 @@ export function formatBriefsForContext(briefs: DataBrief[]): string {
       if (t.atr != null) techParts.push(`ATR: ${t.atr.toFixed(2)}`);
       if (t.mfi != null) techParts.push(`MFI: ${t.mfi.toFixed(1)}`);
       if (techParts.length > 0) lines.push(`Technicals: ${techParts.join(' | ')}`);
+    }
+
+    // Social sentiment
+    if (b.socialSentiment) {
+      const ss = b.socialSentiment;
+      const rankDelta = ss.rank24hAgo - ss.rank;
+      const rankDir = rankDelta > 0 ? `↑${rankDelta}` : rankDelta < 0 ? `↓${Math.abs(rankDelta)}` : '→';
+      const mentionDelta = ss.mentions - ss.mentions24hAgo;
+      const mentionDir = mentionDelta > 0 ? `+${mentionDelta}` : `${mentionDelta}`;
+      lines.push(
+        `Social: Rank #${ss.rank} (${rankDir}) | Mentions: ${ss.mentions} (${mentionDir}) | Upvotes: ${ss.upvotes}`,
+      );
     }
 
     // Risk signals
@@ -388,8 +409,8 @@ export function formatRiskMetrics(briefs: DataBrief[]): string {
 // Unified Jintel enrichment — single query for ALL signal types
 // ---------------------------------------------------------------------------
 
-/** Batch enrich query including all fields (market, risk, regulatory, news, etc.) */
-const BATCH_ENRICH_QUERY = buildBatchEnrichQuery(['market', 'risk', 'regulatory']);
+/** Batch enrich query: market + risk + regulatory + technicals + sentiment. */
+const BATCH_ENRICH_QUERY = buildBatchEnrichQuery(['market', 'risk', 'regulatory', 'technicals', 'sentiment']);
 
 /**
  * Batch enrich tickers with ALL fields (market, risk, regulatory, news)
@@ -399,16 +420,16 @@ const BATCH_ENRICH_QUERY = buildBatchEnrichQuery(['market', 'risk', 'regulatory'
  * that downstream code always knows which portfolio position an entity belongs to,
  * even if the entity's own `tickers` field has a different format or ordering.
  */
-async function batchEnrichAllChunked(client: JintelClient, tickers: string[]): Promise<Map<string, ExtendedEntity>> {
+async function batchEnrichAllChunked(client: JintelClient, tickers: string[]): Promise<Map<string, Entity>> {
   const CHUNK_SIZE = 20;
-  const result = new Map<string, ExtendedEntity>();
+  const result = new Map<string, Entity>();
   for (let i = 0; i < tickers.length; i += CHUNK_SIZE) {
     const chunk = tickers.slice(i, i + CHUNK_SIZE);
     try {
-      const data = await client.request<ExtendedEntity[]>(BATCH_ENRICH_QUERY, { tickers: chunk });
+      const data = await client.request<Entity[]>(BATCH_ENRICH_QUERY, { tickers: chunk });
 
       // Build a case-insensitive lookup: entity ticker → entity
-      const entityByTicker = new Map<string, ExtendedEntity>();
+      const entityByTicker = new Map<string, Entity>();
       for (const entity of data) {
         for (const t of entity.tickers ?? []) {
           entityByTicker.set(t.toUpperCase(), entity);
@@ -525,7 +546,7 @@ function buildBrief(
   pos: Position,
   signals: Signal[],
   quote: MarketQuote | undefined,
-  entity: ExtendedEntity | undefined,
+  entity: Entity | undefined,
   memories: MemoryBrief[],
 ): DataBrief {
   // Compute sentiment direction from signal-level sentiment (with keyword fallback)
@@ -606,6 +627,15 @@ function buildBrief(
           atr: entity.technicals.atr ?? null,
           vwma: entity.technicals.vwma ?? null,
           mfi: entity.technicals.mfi ?? null,
+        }
+      : null,
+    socialSentiment: entity?.sentiment
+      ? {
+          rank: entity.sentiment.rank,
+          mentions: entity.sentiment.mentions,
+          upvotes: entity.sentiment.upvotes,
+          rank24hAgo: entity.sentiment.rank24hAgo,
+          mentions24hAgo: entity.sentiment.mentions24hAgo,
         }
       : null,
     signalCount: signals.length,

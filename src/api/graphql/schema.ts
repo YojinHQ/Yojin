@@ -437,6 +437,12 @@ export const typeDefs = /* GraphQL */ `
     error: String
   }
 
+  type RefreshIntelFeedResult {
+    signalsFetched: Int!
+    signalsCurated: Int!
+    error: String
+  }
+
   # ---------------------------------------------------------------------------
   # Signals
   # ---------------------------------------------------------------------------
@@ -981,6 +987,7 @@ export const typeDefs = /* GraphQL */ `
     removePosition(symbol: String!, platform: String!): PortfolioSnapshot!
     createAlert(rule: AlertRuleInput!): Alert!
     dismissAlert(id: ID!): Alert!
+    dismissSignal(signalId: ID!): Boolean!
     sendMessage(threadId: String!, message: String!, imageBase64: String, imageMediaType: String): SendMessagePayload!
     createSession: SessionSummary!
     deleteSession(id: ID!): Boolean!
@@ -1011,6 +1018,7 @@ export const typeDefs = /* GraphQL */ `
     validateJintelKey(apiKey: String!): ValidateJintelKeyResult!
     processInsights: InsightReport
     runFullCuration: Boolean!
+    refreshIntelFeed: RefreshIntelFeedResult!
     addToWatchlist(symbol: String!, name: String!, assetClass: AssetClass!): WatchlistResult!
     removeFromWatchlist(symbol: String!): WatchlistResult!
     approveAction(id: ID!): Action!

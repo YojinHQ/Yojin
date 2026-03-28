@@ -42,6 +42,7 @@ const cache = cacheExchange({
     PortfolioInsight: () => null, // embedded — nested under InsightReport
     PortfolioItem: () => null, // embedded — nested under PortfolioInsight
     EmotionState: () => null, // embedded — nested under InsightReport
+    RefreshIntelFeedResult: () => null, // embedded — mutation result
     SessionSummary: (data) => data.id as string,
     SessionDetail: (data) => data.id as string,
   },

@@ -43,23 +43,77 @@ function isActivityEventType(value: string): value is ActivityEventType {
   return VALID_TYPES.has(value);
 }
 
+// ---------------------------------------------------------------------------
+// Agent display names
+// ---------------------------------------------------------------------------
+
+const AGENT_DISPLAY: Record<string, string> = {
+  'research-analyst': 'Research Analyst',
+  strategist: 'Strategist',
+  'risk-manager': 'Risk Manager',
+  trader: 'Trader',
+  'bull-researcher': 'Bull Researcher',
+  'bear-researcher': 'Bear Researcher',
+  chat: 'Chat',
+};
+
+/**
+ * Map raw event-log types to ActivityEvent.
+ *
+ * Direct types (TRADE, SYSTEM, etc.) pass through. Dotted namespaced types
+ * (agent.run.start, agent.run.complete, agent.run.error) are mapped to SYSTEM
+ * with a human-readable message.
+ */
 function eventLogEntryToActivity(entry: {
   id: string;
   type: string;
   timestamp: string;
   data: Record<string, unknown>;
 }): ActivityEvent | null {
-  const mappedType = entry.type.toUpperCase();
-  if (!isActivityEventType(mappedType)) return null;
+  // Direct match (e.g. type is already "system", "trade", etc.)
+  const upperType = entry.type.toUpperCase();
+  if (isActivityEventType(upperType)) {
+    return {
+      id: entry.id,
+      type: upperType,
+      message: typeof entry.data.message === 'string' ? entry.data.message : `${entry.type} event`,
+      timestamp: entry.timestamp,
+      ticker: typeof entry.data.ticker === 'string' ? entry.data.ticker : undefined,
+      metadata: entry.data ? JSON.stringify(entry.data) : undefined,
+    };
+  }
 
-  return {
-    id: entry.id,
-    type: mappedType,
-    message: typeof entry.data.message === 'string' ? entry.data.message : `${entry.type} event`,
-    timestamp: entry.timestamp,
-    ticker: typeof entry.data.ticker === 'string' ? entry.data.ticker : undefined,
-    metadata: entry.data ? JSON.stringify(entry.data) : undefined,
-  };
+  // Map namespaced event types to activity types
+  const agentId = typeof entry.data.agentId === 'string' ? entry.data.agentId : '';
+  const agentName = AGENT_DISPLAY[agentId] ?? agentId;
+
+  // Skip start events — they're noisy. Only show completions and errors.
+  if (entry.type === 'agent.run.start') {
+    return null;
+  }
+
+  if (entry.type === 'agent.run.complete') {
+    const iterations = typeof entry.data.iterations === 'number' ? entry.data.iterations : 0;
+    return {
+      id: entry.id,
+      type: 'SYSTEM',
+      message: `${agentName} completed analysis (${iterations} iteration${iterations !== 1 ? 's' : ''})`,
+      timestamp: entry.timestamp,
+      metadata: JSON.stringify(entry.data),
+    };
+  }
+
+  if (entry.type === 'agent.run.error') {
+    return {
+      id: entry.id,
+      type: 'ALERT',
+      message: `${agentName} agent failed: ${typeof entry.data.error === 'string' ? entry.data.error : 'unknown error'}`,
+      timestamp: entry.timestamp,
+      metadata: JSON.stringify(entry.data),
+    };
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------

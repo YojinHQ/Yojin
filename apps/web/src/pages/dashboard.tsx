@@ -1,7 +1,7 @@
 import ActivityLog from '../components/activity/activity-log';
 import RightPanel from '../components/layout/right-panel';
 import ConnectedAccountsCard from '../components/overview/connected-accounts-card';
-import NewsFeed from '../components/overview/news-feed';
+import IntelFeed from '../components/overview/intel-feed';
 import PortfolioValueCard from '../components/overview/portfolio-value-card';
 import PositionsPreview from '../components/overview/positions-preview';
 import YojinSnapCard from '../components/overview/yojin-snap-card';
@@ -22,7 +22,7 @@ export default function Dashboard() {
 
       {/* Right panel — unified feed */}
       <RightPanel>
-        <NewsFeed />
+        <IntelFeed />
       </RightPanel>
     </div>
   );

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from 'urql';
-import { INTEL_FEED_QUERY } from '../../api/documents';
-import type { IntelFeedQueryResult, IntelFeedQueryVariables } from '../../api/types';
+import { useNavigate } from 'react-router';
+import { useMutation, useQuery } from 'urql';
+import { DISMISS_SIGNAL_MUTATION, INTEL_FEED_QUERY, REFRESH_INTEL_FEED_MUTATION } from '../../api/documents';
+import type { IntelFeedQueryResult, IntelFeedQueryVariables, RefreshIntelFeedMutationResult } from '../../api/types';
 import { cn, timeAgo } from '../../lib/utils';
 import Spinner from '../common/spinner';
 
@@ -38,11 +39,10 @@ const signalTypeIcon: Record<string, IconName> = {
   TRADING_LOGIC_TRIGGER: 'clock',
 };
 
-/** Classify a signal as alert or insight based on sentiment/type. */
-function classifySignal(signal: { sentiment: string | null; type: string }): ItemType {
-  if (signal.sentiment === 'BEARISH') return 'alert';
-  const alertTypes = ['PRICE_MOVE', 'CONCENTRATION_DRIFT', 'CORRELATION_WARNING', 'EARNINGS_PROXIMITY'];
-  if (alertTypes.includes(signal.type)) return 'alert';
+/** Classify a signal using its outputType field. */
+function classifySignal(signal: { outputType?: string | null }): ItemType {
+  if (signal.outputType === 'ALERT') return 'alert';
+  if (signal.outputType === 'ACTION') return 'action';
   return 'insight';
 }
 
@@ -252,7 +252,19 @@ function SectionHeader({ type }: { type: ItemType }) {
   );
 }
 
-function IntelFeedCard({ item, expanded, onToggle }: { item: IntelFeedItem; expanded: boolean; onToggle: () => void }) {
+function IntelFeedCard({
+  item,
+  expanded,
+  onToggle,
+  onDismiss,
+  onExplore,
+}: {
+  item: IntelFeedItem;
+  expanded: boolean;
+  onToggle: () => void;
+  onDismiss: () => void;
+  onExplore: () => void;
+}) {
   return (
     <div
       className={cn(
@@ -302,10 +314,22 @@ function IntelFeedCard({ item, expanded, onToggle }: { item: IntelFeedItem; expa
 
             {/* Action buttons */}
             <div className="mt-3 flex gap-2">
-              <button className="flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDismiss();
+                }}
+                className="flex-1 cursor-pointer rounded-lg border border-border bg-transparent px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+              >
                 Dismiss
               </button>
-              <button className="flex-1 rounded-lg bg-accent-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-secondary">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onExplore();
+                }}
+                className="flex-1 cursor-pointer rounded-lg bg-accent-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-secondary"
+              >
                 {item.primaryAction}
               </button>
             </div>
@@ -317,13 +341,27 @@ function IntelFeedCard({ item, expanded, onToggle }: { item: IntelFeedItem; expa
 }
 
 export default function IntelFeed() {
+  const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [, dismissSignal] = useMutation(DISMISS_SIGNAL_MUTATION);
+  const [, refreshIntelFeed] = useMutation<RefreshIntelFeedMutationResult>(REFRESH_INTEL_FEED_MUTATION);
 
-  const [{ data, fetching }] = useQuery<IntelFeedQueryResult, IntelFeedQueryVariables>({
+  const [{ data, fetching, error }, reexecute] = useQuery<IntelFeedQueryResult, IntelFeedQueryVariables>({
     query: INTEL_FEED_QUERY,
     variables: { limit: 30 },
   });
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshIntelFeed({});
+      reexecute({ requestPolicy: 'network-only' });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Map API data into IntelFeedItem[]
   const items: IntelFeedItem[] = useMemo(() => {
@@ -395,13 +433,37 @@ export default function IntelFeed() {
     }
   }
 
+  // Determine content state
+  const isLoading = fetching && !data;
+  const hasError = !!error;
+  const isEmpty = !fetching && !error && items.length === 0;
+
   return (
-    <aside className="flex w-[320px] flex-shrink-0 flex-col overflow-hidden border-l border-border bg-bg-secondary">
+    <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
       <div className="px-4 pt-3.5 pb-1">
         <div className="flex items-center justify-between">
           <h2 className="text-2xs font-medium tracking-wide text-text-secondary uppercase">Intel Feed</h2>
-          <span className="text-2xs tabular-nums text-text-muted">{totalCount} items</span>
+          <div className="flex items-center gap-2">
+            <span className="text-2xs tabular-nums text-text-muted">{totalCount} items</span>
+            <button
+              onClick={() => void handleRefresh()}
+              disabled={refreshing}
+              title="Fetch latest signals and curate"
+              className={cn(
+                'cursor-pointer rounded p-0.5 text-text-muted transition-colors hover:bg-bg-hover hover:text-text-secondary',
+                refreshing && 'animate-spin',
+              )}
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182M21.015 4.356v4.992"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -424,16 +486,74 @@ export default function IntelFeed() {
         ))}
       </div>
 
+      {/* Refreshing banner */}
+      {refreshing && (
+        <div className="flex items-center gap-2 border-b border-border px-4 py-2 text-2xs text-accent-primary">
+          <Spinner size="sm" />
+          <span>Fetching signals and curating...</span>
+        </div>
+      )}
+
       {/* Scrollable content */}
       <div className="flex-1 overflow-auto px-3 pb-4">
-        {fetching ? (
+        {isLoading ? (
           <div className="flex items-center justify-center pt-12">
             <Spinner size="md" label="Loading intel..." />
           </div>
-        ) : items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center pt-12 text-center">
-            <p className="text-sm text-text-muted">No intel yet</p>
-            <p className="mt-1 text-xs text-text-muted">Signals and actions will appear here as they come in.</p>
+        ) : hasError ? (
+          <div className="flex flex-col items-center justify-center gap-3 pt-12 text-center">
+            <svg
+              className="h-7 w-7 text-text-muted"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+              />
+            </svg>
+            <div>
+              <p className="text-sm text-text-muted">Failed to load intel</p>
+              <p className="mt-1 text-xs text-text-muted">{error.message}</p>
+            </div>
+            <button
+              onClick={() => reexecute({ requestPolicy: 'network-only' })}
+              className="mt-1 cursor-pointer rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+            >
+              Retry
+            </button>
+          </div>
+        ) : isEmpty ? (
+          <div className="flex flex-col items-center justify-center gap-3 pt-12 text-center">
+            <svg
+              className="h-7 w-7 text-text-muted"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"
+              />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-text-secondary">No intel yet</p>
+              <p className="mt-1 text-xs leading-relaxed text-text-muted">
+                Click refresh to fetch signals from your data sources and curate them against your portfolio.
+              </p>
+            </div>
+            <button
+              onClick={() => void handleRefresh()}
+              disabled={refreshing}
+              className="mt-1 cursor-pointer rounded-lg bg-accent-primary px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-secondary disabled:opacity-50"
+            >
+              {refreshing ? 'Refreshing...' : 'Refresh Intel'}
+            </button>
           </div>
         ) : (
           sections.map((section) => (
@@ -446,6 +566,13 @@ export default function IntelFeed() {
                     item={item}
                     expanded={expandedId === item.id}
                     onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                    onDismiss={() => {
+                      if (expandedId === item.id) setExpandedId(null);
+                      void dismissSignal({ signalId: item.id }).then(() =>
+                        reexecute({ requestPolicy: 'network-only' }),
+                      );
+                    }}
+                    onExplore={() => void navigate(`/signals?id=${item.id}`)}
                   />
                 ))}
               </div>
@@ -453,6 +580,6 @@ export default function IntelFeed() {
           ))
         )}
       </div>
-    </aside>
+    </div>
   );
 }

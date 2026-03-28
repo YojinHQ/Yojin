@@ -5,17 +5,16 @@
  * (news, risk, fundamentals, technicals, filings) into the signal pipeline.
  */
 
-import type { EconomicDataPoint, JintelClient, SP500DataPoint } from '@yojinhq/jintel-client';
+import type { EconomicDataPoint, Entity, JintelClient, SP500DataPoint } from '@yojinhq/jintel-client';
 import { GDP, INFLATION, INTEREST_RATES, SP500_MULTIPLES, buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
 import { riskSignalsToRaw } from './tools.js';
-import type { ExtendedEntity } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
 
 const logger = createSubsystemLogger('jintel-signal-fetcher');
 
-const BATCH_ENRICH_QUERY = buildBatchEnrichQuery(['market', 'risk', 'regulatory', 'technicals', 'news']);
+const BATCH_ENRICH_QUERY = buildBatchEnrichQuery(['market', 'risk', 'regulatory', 'technicals', 'news', 'sentiment']);
 const CHUNK_SIZE = 20;
 
 export interface JintelFetchResult {
@@ -41,10 +40,10 @@ export async function fetchJintelSignals(
   for (let i = 0; i < tickers.length; i += CHUNK_SIZE) {
     const chunk = tickers.slice(i, i + CHUNK_SIZE);
     try {
-      const entities = await client.request<ExtendedEntity[]>(BATCH_ENRICH_QUERY, { tickers: chunk });
+      const entities = await client.request<Entity[]>(BATCH_ENRICH_QUERY, { tickers: chunk });
 
       // Build ticker → entity map
-      const entityByTicker = new Map<string, ExtendedEntity>();
+      const entityByTicker = new Map<string, Entity>();
       for (const entity of entities) {
         for (const t of entity.tickers ?? []) {
           entityByTicker.set(t.toUpperCase(), entity);
@@ -99,7 +98,7 @@ function formatLargeNumber(n: number): string {
   return n.toLocaleString();
 }
 
-function enrichmentToSignals(entity: ExtendedEntity, tickers: string[]): RawSignalInput[] {
+function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[] {
   // Day-precision timestamp — stable hash prevents duplicate signals across re-runs
   const now = new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z';
   const signals: RawSignalInput[] = [];
@@ -242,6 +241,27 @@ function enrichmentToSignals(entity: ExtendedEntity, tickers: string[]): RawSign
         confidence: 0.9,
       });
     }
+  }
+
+  // 7. Social sentiment
+  if (entity.sentiment) {
+    const s = entity.sentiment;
+    const rankDelta = s.rank24hAgo - s.rank;
+    const rankDir = rankDelta > 0 ? `↑${rankDelta}` : rankDelta < 0 ? `↓${Math.abs(rankDelta)}` : '→';
+    const mentionDelta = s.mentions - s.mentions24hAgo;
+    const mentionDir = mentionDelta > 0 ? `+${mentionDelta}` : `${mentionDelta}`;
+    signals.push({
+      sourceId: 'jintel-sentiment',
+      sourceName: 'Jintel Social Sentiment',
+      sourceType: 'ENRICHMENT',
+      reliability: 0.7,
+      title: `${entity.name ?? tickers[0]} Social: Rank #${s.rank} (${rankDir}) | ${s.mentions} mentions (${mentionDir})`,
+      content: `Social sentiment for ${s.name}: Rank #${s.rank}, ${s.mentions} mentions, ${s.upvotes} upvotes (24h ago: rank #${s.rank24hAgo}, ${s.mentions24hAgo} mentions)`,
+      publishedAt: now,
+      type: 'SENTIMENT',
+      tickers,
+      confidence: 0.7,
+    });
   }
 
   return signals;

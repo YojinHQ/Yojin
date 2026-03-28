@@ -30,7 +30,9 @@ import {
 import {
   curatedSignalsResolver,
   curationStatusResolver,
+  dismissSignalResolver,
   getCurationWorkflowStatus,
+  refreshIntelFeedResolver,
   runFullCurationResolver,
 } from './resolvers/curated-signals.js';
 import {
@@ -189,6 +191,8 @@ const schema = createSchema({
       validateJintelKey: validateJintelKeyMutation,
       processInsights: processInsightsMutation,
       runFullCuration: runFullCurationResolver,
+      refreshIntelFeed: refreshIntelFeedResolver,
+      dismissSignal: dismissSignalResolver,
       addToWatchlist: addToWatchlistMutation,
       removeFromWatchlist: removeFromWatchlistMutation,
       approveAction: approveActionMutation,

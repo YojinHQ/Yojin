@@ -4,11 +4,18 @@
  * Module-level state: setCuratedSignalStore and setCurationOrchestrator are called at startup.
  */
 
+import { fetchAllEnabledSources } from './fetch-data-source.js';
 import { toGql } from './signals.js';
 import type { SignalGql } from './signals.js';
 import type { Orchestrator } from '../../../agents/orchestrator.js';
+import { createSubsystemLogger } from '../../../logging/logger.js';
 import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
+import type { SignalArchive } from '../../../signals/archive.js';
 import type { CuratedSignalStore } from '../../../signals/curation/curated-signal-store.js';
+import { runCurationPipeline } from '../../../signals/curation/pipeline.js';
+import type { CurationConfig } from '../../../signals/curation/types.js';
+
+const log = createSubsystemLogger('curated-signals-resolver');
 
 // ---------------------------------------------------------------------------
 // State
@@ -17,6 +24,8 @@ import type { CuratedSignalStore } from '../../../signals/curation/curated-signa
 let store: CuratedSignalStore | null = null;
 let curationOrchestrator: Orchestrator | null = null;
 let snapshotStore: PortfolioSnapshotStore | null = null;
+let signalArchive: SignalArchive | null = null;
+let curationConfig: CurationConfig | null = null;
 
 export function setCuratedSignalStore(s: CuratedSignalStore): void {
   store = s;
@@ -28,6 +37,11 @@ export function setCurationOrchestrator(o: Orchestrator): void {
 
 export function setCuratedSnapshotStore(s: PortfolioSnapshotStore): void {
   snapshotStore = s;
+}
+
+export function setCurationPipelineDeps(deps: { archive: SignalArchive; config: CurationConfig }): void {
+  signalArchive = deps.archive;
+  curationConfig = deps.config;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,12 +90,18 @@ export async function curatedSignalsResolver(
   }
   if (tickers.length === 0) return [];
 
-  const curated = await store.queryByTickers(tickers, {
-    since: args.since,
-    limit: args.limit ?? 200,
-  });
+  const [curated, dismissedIds] = await Promise.all([
+    store.queryByTickers(tickers, {
+      since: args.since,
+      limit: args.limit ?? 200,
+    }),
+    store.getDismissedIds(),
+  ]);
 
-  return curated.map((cs) => ({
+  // Filter out dismissed signals
+  const visible = curated.filter((cs) => !dismissedIds.has(cs.signal.id));
+
+  return visible.map((cs) => ({
     signal: toGql(cs.signal),
     scores: cs.scores.map((s) => ({
       signalId: s.signalId,
@@ -116,6 +136,61 @@ let fullCurationStartedAt: string | null = null;
 
 export function getCurationWorkflowStatus(): { running: boolean; startedAt: string | null } {
   return { running: activeFullCuration !== null, startedAt: fullCurationStartedAt };
+}
+
+export async function dismissSignalResolver(_parent: unknown, args: { signalId: string }): Promise<boolean> {
+  if (!store) throw new Error('CuratedSignalStore not available');
+  await store.dismiss(args.signalId);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Refresh Intel Feed — fetch data sources + run Tier 1 curation
+// ---------------------------------------------------------------------------
+
+interface RefreshIntelFeedResult {
+  signalsFetched: number;
+  signalsCurated: number;
+  error: string | null;
+}
+
+export async function refreshIntelFeedResolver(): Promise<RefreshIntelFeedResult> {
+  if (!store || !snapshotStore || !signalArchive || !curationConfig) {
+    return { signalsFetched: 0, signalsCurated: 0, error: 'Intel feed pipeline not initialized' };
+  }
+
+  try {
+    // Step 1: Fetch fresh signals from all enabled data sources
+    const fetchResult = await fetchAllEnabledSources();
+    log.info('Intel feed refresh — data fetch complete', {
+      ingested: fetchResult.totalIngested,
+      duplicates: fetchResult.totalDuplicates,
+      sources: fetchResult.sourcesAttempted,
+    });
+
+    // Step 2: Run Tier 1 curation pipeline
+    const curationResult = await runCurationPipeline({
+      signalArchive,
+      curatedStore: store,
+      snapshotStore,
+      config: curationConfig,
+    });
+
+    log.info('Intel feed refresh — curation complete', {
+      processed: curationResult.signalsProcessed,
+      curated: curationResult.signalsCurated,
+    });
+
+    return {
+      signalsFetched: fetchResult.totalIngested,
+      signalsCurated: curationResult.signalsCurated,
+      error: fetchResult.errors.length > 0 ? fetchResult.errors.join('; ') : null,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.error('Intel feed refresh failed', { error: msg });
+    return { signalsFetched: 0, signalsCurated: 0, error: msg };
+  }
 }
 
 export async function runFullCurationResolver(): Promise<boolean> {

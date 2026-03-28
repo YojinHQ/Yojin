@@ -16,7 +16,10 @@ import { z } from 'zod';
 import type { ActionStore } from './actions/action-store.js';
 import type { Orchestrator } from './agents/orchestrator.js';
 import { emitProgress } from './agents/orchestrator.js';
+import { fetchAllEnabledSources } from './api/graphql/resolvers/fetch-data-source.js';
 import { AlertsConfigSchema } from './config/config.js';
+import type { EventLog } from './core/event-log.js';
+import type { InsightStore } from './insights/insight-store.js';
 import { createSubsystemLogger } from './logging/logger.js';
 import type { ReflectionEngine } from './memory/reflection.js';
 import type { PortfolioSnapshotStore } from './portfolio/snapshot-store.js';
@@ -25,6 +28,8 @@ import type { CuratedSignalStore } from './signals/curation/curated-signal-store
 import { runCurationPipeline } from './signals/curation/pipeline.js';
 import type { CurationConfig } from './signals/curation/types.js';
 import type { SkillEvaluator } from './skills/skill-evaluator.js';
+import { snapFromInsight } from './snap/snap-from-insight.js';
+import type { SnapStore } from './snap/snap-store.js';
 
 const logger = createSubsystemLogger('scheduler');
 
@@ -110,6 +115,12 @@ export interface SchedulerOptions {
   actionStore?: ActionStore;
   /** Portfolio snapshot store — used to build PortfolioContext for skill evaluation. */
   snapshotStore?: PortfolioSnapshotStore;
+  /** Snap store — snap brief is regenerated after each curation cycle. */
+  snapStore?: SnapStore;
+  /** Insight store — latest report is used to derive the snap brief. */
+  insightStore?: InsightStore;
+  /** Event log — emits domain-specific events for the Activity Log. */
+  eventLog?: EventLog;
 }
 
 /** Minimum interval between curation runs (15 minutes). */
@@ -127,6 +138,9 @@ export class Scheduler {
   private readonly skillEvaluator?: SkillEvaluator;
   private readonly actionStore?: ActionStore;
   private readonly snapshotStore?: PortfolioSnapshotStore;
+  private readonly snapStore?: SnapStore;
+  private readonly insightStore?: InsightStore;
+  private readonly eventLog?: EventLog;
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
 
@@ -139,6 +153,9 @@ export class Scheduler {
     this.skillEvaluator = options.skillEvaluator;
     this.actionStore = options.actionStore;
     this.snapshotStore = options.snapshotStore;
+    this.snapStore = options.snapStore;
+    this.insightStore = options.insightStore;
+    this.eventLog = options.eventLog;
   }
 
   /** Start the scheduler. Checks once per minute. */
@@ -195,13 +212,32 @@ export class Scheduler {
       if (elapsed < CURATION_INTERVAL_MS) return;
     }
 
-    logger.info('Triggering scheduled curation pipeline');
+    logger.info('Triggering scheduled data fetch + curation pipeline');
 
     // Persist the watermark before execution to prevent re-runs on crash
     state.lastRuns['run-curation'] = new Date().toISOString();
     await this.saveState(state);
 
     try {
+      // Fetch fresh signals from all enabled data sources before curation
+      const fetchResult = await fetchAllEnabledSources();
+      if (fetchResult.totalIngested > 0) {
+        logger.info('Pre-curation data fetch', {
+          ingested: fetchResult.totalIngested,
+          duplicates: fetchResult.totalDuplicates,
+          sources: fetchResult.sourcesAttempted,
+        });
+
+        if (this.eventLog) {
+          await this.eventLog.append({
+            type: 'system',
+            data: {
+              message: `Fetched ${fetchResult.totalIngested} new signal${fetchResult.totalIngested !== 1 ? 's' : ''} from ${fetchResult.sourcesAttempted} data source${fetchResult.sourcesAttempted !== 1 ? 's' : ''}`,
+            },
+          });
+        }
+      }
+
       const result = await runCurationPipeline(this.curationPipeline);
 
       logger.info('Scheduled curation complete', {
@@ -210,10 +246,62 @@ export class Scheduler {
         durationMs: result.durationMs,
       });
 
+      if (this.eventLog && result.signalsProcessed > 0) {
+        await this.eventLog.append({
+          type: 'system',
+          data: {
+            message: `Signal curation completed — ${result.signalsCurated} of ${result.signalsProcessed} signals curated`,
+          },
+        });
+      }
+
+      // Save a history snapshot so the Total Value chart accumulates data
+      // over time — even when positions aren't modified.
+      const historyStore = this.snapshotStore ?? this.curationPipeline?.snapshotStore;
+      if (historyStore) {
+        try {
+          const latest = await historyStore.getLatest();
+          if (latest && latest.positions.length > 0) {
+            await historyStore.appendHistoryPoint(latest);
+          }
+        } catch (err) {
+          logger.warn('Failed to save history snapshot', { error: err });
+        }
+      }
+
+      // Regenerate snap brief from latest insight report
+      await this.regenerateSnap();
+
       // Evaluate active skills after curation
       await this.evaluateSkillsAfterCuration();
     } catch (err) {
       logger.error('Scheduled curation failed', { error: err });
+    }
+  }
+
+  /**
+   * Regenerate the snap brief from the latest insight report.
+   * Runs after each curation cycle (~every 15 minutes).
+   */
+  private async regenerateSnap(): Promise<void> {
+    if (!this.snapStore || !this.insightStore) return;
+
+    try {
+      const report = await this.insightStore.getLatest();
+      if (!report) return;
+
+      const snap = snapFromInsight(report);
+      await this.snapStore.save(snap);
+      logger.info('Snap brief regenerated', { snapId: snap.id });
+
+      if (this.eventLog) {
+        await this.eventLog.append({
+          type: 'system',
+          data: { message: 'Snap brief updated' },
+        });
+      }
+    } catch (err) {
+      logger.warn('Failed to regenerate snap', { error: err });
     }
   }
 
@@ -265,6 +353,14 @@ export class Scheduler {
     }
 
     logger.info(`${evaluations.length} skill trigger(s) fired — creating actions`);
+
+    if (this.eventLog) {
+      const names = evaluations.map((e) => e.skillName).join(', ');
+      await this.eventLog.append({
+        type: 'action',
+        data: { message: `${evaluations.length} skill trigger${evaluations.length !== 1 ? 's' : ''} fired: ${names}` },
+      });
+    }
 
     const expiresAt = new Date(Date.now() + ACTION_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
     const now = new Date().toISOString();
@@ -347,6 +443,13 @@ export class Scheduler {
       });
 
       logger.info('Scheduled process-insights completed');
+
+      if (this.eventLog) {
+        await this.eventLog.append({
+          type: 'insight',
+          data: { message: 'Daily portfolio insights report generated' },
+        });
+      }
 
       // Run reflection sweep after insights — grades past predictions older than 7 days
       if (this.reflectionEngine) {

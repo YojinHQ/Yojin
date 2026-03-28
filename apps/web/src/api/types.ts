@@ -944,6 +944,7 @@ export interface IntelFeedSignal {
   title: string;
   type: string;
   sentiment: string | null;
+  outputType: string | null;
   tickers: string[];
   publishedAt: string;
   confidence: number;
@@ -974,6 +975,16 @@ export interface IntelFeedQueryResult {
 
 export interface IntelFeedQueryVariables {
   limit?: number;
+}
+
+export interface RefreshIntelFeedResult {
+  signalsFetched: number;
+  signalsCurated: number;
+  error: string | null;
+}
+
+export interface RefreshIntelFeedMutationResult {
+  refreshIntelFeed: RefreshIntelFeedResult;
 }
 
 // ---------------------------------------------------------------------------

@@ -130,6 +130,22 @@ export class PortfolioSnapshotStore {
     }
   }
 
+  /**
+   * Append a timestamped copy of a snapshot for history tracking.
+   * Unlike `save()`, this does not merge platforms — it simply records
+   * the current portfolio state as a new data point for the chart.
+   */
+  async appendHistoryPoint(snapshot: PortfolioSnapshot): Promise<void> {
+    await mkdir(join(this.filePath, '..'), { recursive: true });
+    const point: PortfolioSnapshot = {
+      ...snapshot,
+      id: `snap-${randomUUID().slice(0, 8)}`,
+      timestamp: new Date().toISOString(),
+    };
+    await appendFile(this.filePath, JSON.stringify(point) + '\n');
+    logger.debug('History point appended', { id: point.id, totalValue: point.totalValue });
+  }
+
   /** Read all snapshots (for history). */
   async getAll(): Promise<PortfolioSnapshot[]> {
     let content: string;

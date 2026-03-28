@@ -43,10 +43,20 @@ export function TotalValueGraph({ scale, history }: TotalValueGraphProps) {
     const cutoff = latest - days * 24 * 60 * 60 * 1000;
     const filtered = history.filter((p) => new Date(p.timestamp).getTime() >= cutoff);
 
-    const mapped = filtered.map((p) => ({
-      date: new Date(p.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: p.totalValue,
-    }));
+    // When all points are from the same day, show time labels (intraday view).
+    // Otherwise show date labels (multi-day view).
+    const firstDay = filtered[0].timestamp.slice(0, 10);
+    const allSameDay = filtered.every((p) => p.timestamp.slice(0, 10) === firstDay);
+
+    const mapped = filtered.map((p) => {
+      const ts = new Date(p.timestamp);
+      return {
+        date: allSameDay
+          ? ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+          : ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        value: p.totalValue,
+      };
+    });
 
     return ensureMinPoints(mapped);
   }, [history, scale]);

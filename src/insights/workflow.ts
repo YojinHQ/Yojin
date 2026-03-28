@@ -22,6 +22,8 @@ import type { Orchestrator } from '../agents/orchestrator.js';
 import { emitProgress } from '../agents/orchestrator.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { SignalMemoryStore } from '../memory/memory-store.js';
+import { snapFromInsight } from '../snap/snap-from-insight.js';
+import type { SnapStore } from '../snap/snap-store.js';
 
 const logger = createSubsystemLogger('process-insights');
 
@@ -30,6 +32,8 @@ export interface ProcessInsightsOptions {
   gathererOptions?: DataGathererOptions;
   /** Memory store for the analyst role — used to store insight predictions for future reflection. */
   memoryStore?: SignalMemoryStore;
+  /** Snap store — when provided, a snap brief is derived from the insight report. */
+  snapStore?: SnapStore;
 }
 
 // Tools to disable per agent when data is pre-aggregated.
@@ -91,7 +95,7 @@ const STRATEGIST_DISABLED_TOOLS = [
 ];
 
 export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, options: ProcessInsightsOptions): void {
-  const { insightStore, gathererOptions, memoryStore } = options;
+  const { insightStore, gathererOptions, memoryStore, snapStore } = options;
   const hasGatherer = !!gathererOptions;
 
   // Shared state between beforeWorkflow and afterWorkflow hooks
@@ -407,17 +411,28 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
           }
 
           // 2. Store insight predictions as memories for outcome feedback loop
-          if (memoryStore) {
-            const latestReport = await insightStore.getLatest();
-            if (latestReport) {
-              try {
-                const { stored, skipped } = await storeInsightMemories(latestReport, memoryStore);
-                logger.info('Insight memories stored for reflection', { stored, skipped });
-              } catch (err) {
-                logger.warn('Failed to store insight memories', {
-                  error: err instanceof Error ? err.message : String(err),
-                });
-              }
+          const latestReport = await insightStore.getLatest();
+          if (latestReport && memoryStore) {
+            try {
+              const { stored, skipped } = await storeInsightMemories(latestReport, memoryStore);
+              logger.info('Insight memories stored for reflection', { stored, skipped });
+            } catch (err) {
+              logger.warn('Failed to store insight memories', {
+                error: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }
+
+          // 3. Derive a snap brief from the latest insight report
+          if (latestReport && snapStore) {
+            try {
+              const snap = snapFromInsight(latestReport);
+              await snapStore.save(snap);
+              logger.info('Snap brief derived from insight report', { snapId: snap.id });
+            } catch (err) {
+              logger.warn('Failed to derive snap from insight report', {
+                error: err instanceof Error ? err.message : String(err),
+              });
             }
           }
         }

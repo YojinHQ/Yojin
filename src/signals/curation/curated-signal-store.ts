@@ -98,6 +98,34 @@ export class CuratedSignalStore {
     return null;
   }
 
+  // ---------------------------------------------------------------------------
+  // Dismiss tracking
+  // ---------------------------------------------------------------------------
+
+  private get dismissedPath(): string {
+    return join(this.baseDir, 'dismissed.json');
+  }
+
+  /** Load the set of dismissed signal IDs. */
+  async getDismissedIds(): Promise<Set<string>> {
+    try {
+      const raw = await readFile(this.dismissedPath, 'utf-8');
+      const ids = JSON.parse(raw) as string[];
+      return new Set(ids);
+    } catch {
+      return new Set();
+    }
+  }
+
+  /** Mark a signal as dismissed. */
+  async dismiss(signalId: string): Promise<void> {
+    const dismissed = await this.getDismissedIds();
+    dismissed.add(signalId);
+    await mkdir(this.baseDir, { recursive: true });
+    await writeFile(this.dismissedPath, JSON.stringify([...dismissed], null, 2));
+    logger.info('Signal dismissed', { signalId });
+  }
+
   /** Get the latest watermark, or null if pipeline has never run. */
   async getLatestWatermark(): Promise<CurationWatermark | null> {
     try {

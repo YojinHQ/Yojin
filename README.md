@@ -110,13 +110,19 @@ Fully offline — BM25 only, no vector database. Configurable capacity (default 
 
 ### Jintel
 
-Jintel is the intelligence layer that powers Yojin's market awareness. It is accessed via the `DataSourceRegistry` in `src/data-sources/`; signal ingestion runs as a background pipeline in `src/signals/`, writing to a local JSONL archive that agents query via `globSignals`, `grepSignals`, and `readSignals` tools.
+Jintel is the intelligence layer that powers Yojin's market awareness. Accessed via `@yojinhq/jintel-client`, it provides batch enrichment across eight data domains — all ingested as signals into the local JSONL archive that agents query via `globSignals`, `grepSignals`, and `readSignals` tools.
 
-- **News signals** — real-time and archived news ingested and indexed by ticker, sector, and macro theme
-- **Sentiment** — aggregated market sentiment per asset, updated continuously
-- **Entity schema** — a standardized representation of each asset (equity, crypto, commodity) that unifies data from disparate sources into a single queryable model
-- **Portfolio-aware processing** — signals are filtered and ranked against your actual positions, so you only see intelligence that's relevant to what you hold
-Jintel is accessed via the `@yojinhq/jintel-client` npm package. PII redaction runs before every Jintel call — Jintel receives sanitized, anonymized data only.
+- **Market data** — real-time quotes, fundamentals (P/E, EPS, market cap, 52-week range), and significant price moves
+- **Risk signals** — sanctions screening, adverse media, regulatory actions, litigation, and PEP flags
+- **Regulatory filings** — SEC filings (10-K, 10-Q, 8-K) indexed by ticker
+- **Technical indicators** — RSI, MACD, Bollinger Bands, EMA, SMA, ATR, VWMA, MFI
+- **News** — real-time news from multiple sources, ingested and indexed by ticker
+- **Research** — web research results via Exa, scored by relevance
+- **Social sentiment** — social media rank, mention count, upvote trends, and 24h momentum per ticker
+- **Macro indicators** — GDP, inflation, interest rates, S&P 500 P/E and CAPE ratios
+- **Portfolio-aware processing** — signals are scored and ranked against your actual positions via the curation pipeline, so you only see intelligence relevant to what you hold
+
+PII redaction runs before every Jintel call — Jintel receives sanitized, anonymized data only.
 
 ### Core Components
 
@@ -350,7 +356,7 @@ yojin/
 │   ├── memory/         # BM25 memory store, reflection engine, per-role learning
 │   ├── insights/       # ProcessInsights workflow, insight reports, data gatherer, triage, signal assignment
 │   ├── signals/        # Signal ingestion, archive, ticker extraction
-│   ├── jintel/         # Jintel client (price provider, tools)
+│   ├── jintel/         # Jintel client, signal fetcher, agent tools, price provider
 │   ├── data-sources/   # Data source registry and interfaces (Jintel)
 │   ├── scraper/        # Playwright automation (platforms/)
 │   ├── portfolio/      # Snapshot store

@@ -16,7 +16,7 @@ import { ProviderRouter } from '../ai-providers/router.js';
 import { VercelAIProvider } from '../ai-providers/vercel-ai.js';
 import { setEventLog } from '../api/graphql/resolvers/activity-log.js';
 import { setAiConfigProviderRouter } from '../api/graphql/resolvers/ai-config.js';
-import { setCurationOrchestrator } from '../api/graphql/resolvers/curated-signals.js';
+import { setCurationOrchestrator, setCurationPipelineDeps } from '../api/graphql/resolvers/curated-signals.js';
 import { setInsightsOrchestrator } from '../api/graphql/resolvers/insights.js';
 import { setOnboardingClaudeCodeProvider, setOnboardingProvider } from '../api/graphql/resolvers/onboarding.js';
 import { buildContext } from '../composition.js';
@@ -85,6 +85,7 @@ export async function runMain(args: string[]): Promise<void> {
 async function buildFullRuntime(): Promise<{
   agentRuntime: AgentRuntime;
   dataRoot: string;
+  eventLog: EventLog;
   services: Awaited<ReturnType<typeof buildContext>>;
   sessionStore: JsonlSessionStore;
 }> {
@@ -134,11 +135,11 @@ async function buildFullRuntime(): Promise<{
     dataRoot,
   });
 
-  return { agentRuntime, dataRoot, services, sessionStore };
+  return { agentRuntime, dataRoot, eventLog, services, sessionStore };
 }
 
 async function startGateway(): Promise<void> {
-  const { agentRuntime, dataRoot, services, sessionStore } = await buildFullRuntime();
+  const { agentRuntime, dataRoot, eventLog, services, sessionStore } = await buildFullRuntime();
 
   // Wire the orchestrator for ProcessInsights mutation
   const orchestrator = new Orchestrator(agentRuntime);
@@ -146,6 +147,7 @@ async function startGateway(): Promise<void> {
     reflectionEngine: services.reflectionEngine,
     insightStore: services.insightStore,
     memoryStore: services.memoryStores.get('analyst'),
+    snapStore: services.snapStore,
     gathererOptions: {
       snapshotStore: services.snapshotStore,
       curatedSignalStore: services.curatedSignalStore,
@@ -166,6 +168,10 @@ async function startGateway(): Promise<void> {
   // Auto-curate: run Tier 1 deterministic curation after every ingestion
   services.signalIngestor.setPostIngestHook(async (ingested) => {
     if (ingested === 0) return;
+    await eventLog.append({
+      type: 'system',
+      data: { message: `Ingested ${ingested} new signal${ingested !== 1 ? 's' : ''} — running curation` },
+    });
     await runCurationPipeline({
       signalArchive: services.signalArchive,
       curatedStore: services.curatedSignalStore,
@@ -187,6 +193,7 @@ async function startGateway(): Promise<void> {
     assessmentWorkflowStartMs: services.assessmentWorkflowStartMs,
   });
   setCurationOrchestrator(orchestrator);
+  setCurationPipelineDeps({ archive: services.signalArchive, config: curationConfig });
 
   // Broadcast workflow progress events to GraphQL subscribers + persist to log file
   const { pubsub } = await import('../api/graphql/pubsub.js');
@@ -213,6 +220,9 @@ async function startGateway(): Promise<void> {
     skillEvaluator: services.skillEvaluator,
     actionStore: services.actionStore,
     snapshotStore: services.snapshotStore,
+    snapStore: services.snapStore,
+    insightStore: services.insightStore,
+    eventLog,
   });
   scheduler.start();
 
@@ -268,6 +278,7 @@ async function runInsights(): Promise<void> {
     reflectionEngine: services.reflectionEngine,
     insightStore: services.insightStore,
     memoryStore: services.memoryStores.get('analyst'),
+    snapStore: services.snapStore,
     gathererOptions: {
       snapshotStore: services.snapshotStore,
       curatedSignalStore: services.curatedSignalStore,
