@@ -25,11 +25,10 @@ function Sparkline({ data, dayChangePercent }: { symbol: string; data: number[];
   const max = Math.max(...data);
   const range = max - min || 1;
 
-  // Build SVG polyline points — map values to 0..100% of the viewBox
   const points = data
     .map((v, i) => {
       const x = (i / (data.length - 1)) * 120;
-      const y = 32 - ((v - min) / range) * 28 - 2; // 2px padding top/bottom
+      const y = 32 - ((v - min) / range) * 24 - 4; // 4px padding for labels
       return `${x},${y}`;
     })
     .join(' ');
@@ -42,10 +41,12 @@ function Sparkline({ data, dayChangePercent }: { symbol: string; data: number[];
         : 'var(--color-text-muted)';
 
   return (
-    <div className="pointer-events-none h-8 w-[120px]">
-      <svg viewBox="0 0 120 32" className="h-full w-full" preserveAspectRatio="none">
-        <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
-      </svg>
+    <div className="pointer-events-none flex items-center gap-1">
+      <div className="h-7 w-[80px]">
+        <svg viewBox="0 0 120 32" className="h-full w-full" preserveAspectRatio="none">
+          <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+        </svg>
+      </div>
     </div>
   );
 }
@@ -103,7 +104,7 @@ export default function PositionsPreview() {
           <thead className="sticky top-0 z-10 bg-bg-card">
             <tr className="border-b border-border">
               <th className={TH}>Asset</th>
-              <th className={cn(TH, 'w-[120px]')} />
+              <th className={cn(TH, 'w-[80px]')} />
               <th className={cn(TH, 'text-right')}>Price Today</th>
               <th className={cn(TH, 'text-right')}>Change $</th>
               <th className={cn(TH, 'text-right')}>Change %</th>
