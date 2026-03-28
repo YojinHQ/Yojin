@@ -1,6 +1,4 @@
-import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { cn } from '../../lib/utils';
 import { SymbolLogo } from '../common/symbol-logo';
 import { usePortfolio } from '../../api';
@@ -21,9 +19,21 @@ function formatPercent(n: number): string {
   return `${Math.abs(n).toFixed(2)}%`;
 }
 
-/** Inline sparkline area chart — green when up, red when down, muted when flat. */
-function Sparkline({ symbol, data, dayChangePercent }: { symbol: string; data: number[]; dayChangePercent: number }) {
-  const chartData = useMemo(() => data.map((v) => ({ v })), [data]);
+/** Inline sparkline — sharp linear segments like real trading platforms. */
+function Sparkline({ data, dayChangePercent }: { symbol: string; data: number[]; dayChangePercent: number }) {
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+
+  // Build SVG polyline points — map values to 0..100% of the viewBox
+  const points = data
+    .map((v, i) => {
+      const x = (i / (data.length - 1)) * 120;
+      const y = 32 - ((v - min) / range) * 28 - 2; // 2px padding top/bottom
+      return `${x},${y}`;
+    })
+    .join(' ');
+
   const color =
     dayChangePercent > 0
       ? 'var(--color-success)'
@@ -32,26 +42,10 @@ function Sparkline({ symbol, data, dayChangePercent }: { symbol: string; data: n
         : 'var(--color-text-muted)';
 
   return (
-    <div className="pointer-events-none h-8 w-[100px]">
-      <ResponsiveContainer width="100%" height="100%" minHeight={1}>
-        <AreaChart data={chartData} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
-          <defs>
-            <linearGradient id={`positions-preview-spark-${symbol}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity={0.25} />
-              <stop offset="100%" stopColor={color} stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <Area
-            type="monotone"
-            dataKey="v"
-            stroke={color}
-            strokeWidth={1.5}
-            fill={`url(#positions-preview-spark-${symbol})`}
-            dot={false}
-            isAnimationActive={false}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+    <div className="pointer-events-none h-8 w-[120px]">
+      <svg viewBox="0 0 120 32" className="h-full w-full" preserveAspectRatio="none">
+        <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+      </svg>
     </div>
   );
 }
@@ -109,7 +103,7 @@ export default function PositionsPreview() {
           <thead className="sticky top-0 z-10 bg-bg-card">
             <tr className="border-b border-border">
               <th className={TH}>Asset</th>
-              <th className={cn(TH, 'w-[100px]')} />
+              <th className={cn(TH, 'w-[120px]')} />
               <th className={cn(TH, 'text-right')}>Price Today</th>
               <th className={cn(TH, 'text-right')}>Change $</th>
               <th className={cn(TH, 'text-right')}>Change %</th>
