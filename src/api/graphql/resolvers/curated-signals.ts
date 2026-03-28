@@ -159,6 +159,10 @@ export async function refreshIntelFeedResolver(): Promise<RefreshIntelFeedResult
     return { signalsFetched: 0, signalsCurated: 0, error: 'Intel feed pipeline not initialized' };
   }
 
+  if (getCurationWorkflowStatus().running) {
+    return { signalsFetched: 0, signalsCurated: 0, error: 'Curation already in progress' };
+  }
+
   try {
     // Step 1: Fetch fresh signals from all enabled data sources
     const fetchResult = await fetchAllEnabledSources();

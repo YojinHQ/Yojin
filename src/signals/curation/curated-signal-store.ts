@@ -17,6 +17,7 @@ const logger = createSubsystemLogger('curated-signal-store');
 export class CuratedSignalStore {
   private readonly baseDir: string;
   private readonly watermarkPath: string;
+  private cachedDismissedIds: Set<string> | null = null;
 
   constructor(dataRoot: string) {
     this.baseDir = join(dataRoot, 'signals', 'curated');
@@ -106,15 +107,17 @@ export class CuratedSignalStore {
     return join(this.baseDir, 'dismissed.json');
   }
 
-  /** Load the set of dismissed signal IDs. */
+  /** Load the set of dismissed signal IDs (cached in memory after first load). */
   async getDismissedIds(): Promise<Set<string>> {
+    if (this.cachedDismissedIds) return this.cachedDismissedIds;
     try {
       const raw = await readFile(this.dismissedPath, 'utf-8');
       const ids = JSON.parse(raw) as string[];
-      return new Set(ids);
+      this.cachedDismissedIds = new Set(ids);
     } catch {
-      return new Set();
+      this.cachedDismissedIds = new Set();
     }
+    return this.cachedDismissedIds;
   }
 
   /** Mark a signal as dismissed. */
