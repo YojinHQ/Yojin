@@ -66,7 +66,7 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
       log.warn('Jintel quotes call failed', { error: String(err) });
       return undefined;
     }),
-    jintelClient.priceHistory(symbols, '5d').catch((err: unknown) => {
+    jintelClient.priceHistory(symbols, '1m').catch((err: unknown) => {
       log.warn('Jintel priceHistory call failed', { error: String(err) });
       return undefined;
     }),
