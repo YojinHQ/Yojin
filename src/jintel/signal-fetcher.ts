@@ -91,10 +91,40 @@ export async function fetchJintelSignals(
         signals: rawSignals.length,
       });
     } catch (err) {
-      logger.warn('Jintel batch fetch failed', {
-        chunk: chunk.slice(0, 3),
+      logger.warn('Jintel batch fetch failed, retrying tickers individually', {
+        chunk,
         error: err instanceof Error ? err.message : String(err),
       });
+
+      // Retry each ticker individually to isolate the problematic one(s)
+      for (const ticker of chunk) {
+        try {
+          const entities = await client.request<Entity[]>(query, { tickers: [ticker] });
+          const entity = entities[0];
+          if (!entity) {
+            logger.debug('Jintel entity not found for ticker', { ticker });
+            continue;
+          }
+
+          const entityTickers = entity.tickers ?? [];
+          const signalTickers = entityTickers.some((t) => t.toUpperCase() === ticker.toUpperCase())
+            ? entityTickers
+            : [ticker, ...entityTickers];
+
+          const rawSignals = enrichmentToSignals(entity, signalTickers);
+          if (rawSignals.length > 0) {
+            const result = await ingestor.ingest(rawSignals);
+            totalIngested += result.ingested;
+            totalDuplicates += result.duplicates;
+          }
+          logger.debug('Jintel individual ticker fetched', { ticker, signals: rawSignals.length });
+        } catch (tickerErr) {
+          logger.warn('Jintel fetch failed for ticker, skipping', {
+            ticker,
+            error: tickerErr instanceof Error ? tickerErr.message : String(tickerErr),
+          });
+        }
+      }
     }
   }
 
