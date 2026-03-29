@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useClient, useMutation, useSubscription } from 'urql';
-import { SESSION_DETAIL_QUERY } from './session-queries';
+import { ACTIVE_SESSION_QUERY, SESSION_DETAIL_QUERY } from './session-queries';
 
 export interface ToolCardRef {
   tool: string;
@@ -86,6 +86,7 @@ interface ChatContextValue {
 }
 
 const STORAGE_KEY = 'yojin-active-thread';
+const SESSION_STORAGE_KEY = 'yojin-active-session';
 
 const ChatContext = createContext<ChatContextValue | null>(null);
 
@@ -167,7 +168,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const stored = localStorage.getItem(STORAGE_KEY);
     return stored || `web-${crypto.randomUUID()}`;
   });
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(() => localStorage.getItem(SESSION_STORAGE_KEY));
 
   // Version counter — bumped whenever the backend session list may have changed
   const [sessionVersion, setSessionVersion] = useState(0);
@@ -181,14 +182,50 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const piiTypesRef = useRef<string[]>([]);
   // Accumulate tool cards during streaming — attached to the message on MESSAGE_COMPLETE
   const toolCardsRef = useRef<ToolCardRef[]>([]);
+  // Mirror sessionId as a ref so the subscription handler can read it without re-creating
+  const sessionIdRef = useRef(sessionId);
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
 
   const [, sendMessageMutation] = useMutation(SEND_MESSAGE_MUTATION);
   const processQueueRef = useRef<() => void>(() => {});
 
-  // Persist active threadId to localStorage
+  // Persist active threadId and sessionId to localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, threadId);
   }, [threadId]);
+  useEffect(() => {
+    if (sessionId) {
+      localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+    } else {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    }
+  }, [sessionId]);
+
+  // Restore session messages on mount if we have a persisted sessionId
+  useEffect(() => {
+    if (!sessionId) return;
+    let cancelled = false;
+    void (async () => {
+      const result = await client
+        .query(SESSION_DETAIL_QUERY, { id: sessionId }, { requestPolicy: 'network-only' })
+        .toPromise();
+      if (cancelled) return;
+      if (result.data?.session) {
+        const session = result.data.session as {
+          threadId: string;
+          messages: { id: string; role: string; content: string; toolCards?: ToolCardRef[] }[];
+        };
+        setThreadId(session.threadId);
+        setMessages(collapseSessionMessages(session.messages));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const resetStreamingState = useCallback(() => {
     setStreamingContent('');
@@ -298,6 +335,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         ]);
         // Notify sidebar that the session list may have changed (new session created, message count updated)
         setSessionVersion((v) => v + 1);
+        // Resolve sessionId if this is the first message (backend creates session async)
+        if (!sessionIdRef.current) {
+          void client
+            .query(ACTIVE_SESSION_QUERY, {}, { requestPolicy: 'network-only' })
+            .toPromise()
+            .then((r) => {
+              const active = r.data?.activeSession as { id: string } | null;
+              if (active?.id) setSessionId(active.id);
+            });
+        }
         resetStreamingState();
         setTimeout(() => processQueue(), 0);
       } else if (event.type === 'ERROR') {
@@ -310,7 +357,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       return data;
     },
-    [processQueue, resetStreamingState],
+    [client, processQueue, resetStreamingState],
   );
 
   // Always subscribe to the active thread
