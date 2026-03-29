@@ -542,7 +542,7 @@ export default function IntelFeed() {
           ? cs.scores.reduce((best, sc) => (sc.compositeScore > best.compositeScore ? sc : best), cs.scores[0])
           : null;
       const sourceName = s.sources?.[0]?.name;
-      const ticker = topScore?.ticker ?? s.tickers[0] ?? '';
+      const ticker = topScore?.ticker ?? s.tickers[0] ?? 'MACRO';
       // Prefer LLM summaries; fall back to raw title (which is unique per signal)
       const headline = s.tier1 ?? s.title;
       const detail = s.tier2 ?? (s.tier1 ? s.title : '');
