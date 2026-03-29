@@ -105,8 +105,8 @@ export default function PositionsPreview() {
     );
   }
 
-  // Sort by market value descending, show top 5
-  const top = [...data.positions].sort((a, b) => b.marketValue - a.marketValue).slice(0, 5);
+  // Sort by market value descending, show top 8
+  const top = [...data.positions].sort((a, b) => b.marketValue - a.marketValue).slice(0, 8);
 
   return (
     <DashboardCard title="Portfolio" headerAction={viewAllLink}>
@@ -116,9 +116,10 @@ export default function PositionsPreview() {
             <tr className="border-b border-border">
               <th className={TH}>Asset</th>
               <th className={cn(TH, 'w-[80px]')} />
-              <th className={cn(TH, 'text-right')}>Price Today</th>
-              <th className={cn(TH, 'text-right')}>Change $</th>
-              <th className={cn(TH, 'text-right')}>Change %</th>
+              <th className={cn(TH, 'text-right')}>Price</th>
+              <th className={cn(TH, 'text-right')}>Day</th>
+              <th className={cn(TH, 'text-right')}>Value</th>
+              <th className={cn(TH, 'text-right')}>P&L</th>
             </tr>
           </thead>
           <tbody>
@@ -162,24 +163,12 @@ export default function PositionsPreview() {
                     )}
                   </td>
 
-                  {/* Price Today */}
+                  {/* Price */}
                   <td className="whitespace-nowrap px-3 py-2 text-right text-xs font-medium tabular-nums text-text-primary">
                     {formatCurrency(pos.currentPrice)}
                   </td>
 
-                  {/* Change $ */}
-                  <td className={cn('whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums', colorClass)}>
-                    {dc != null ? (
-                      <>
-                        {arrow && <span className="mr-0.5 text-2xs">{arrow}</span>}
-                        {formatChange(dc)}
-                      </>
-                    ) : (
-                      <span className="text-text-muted/40">—</span>
-                    )}
-                  </td>
-
-                  {/* Change % */}
+                  {/* Day Change % */}
                   <td className={cn('whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums', colorClass)}>
                     {dcp != null ? (
                       <>
@@ -189,6 +178,21 @@ export default function PositionsPreview() {
                     ) : (
                       <span className="text-text-muted/40">—</span>
                     )}
+                  </td>
+
+                  {/* Market Value */}
+                  <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-text-primary">
+                    {formatCurrency(pos.marketValue)}
+                  </td>
+
+                  {/* Unrealized P&L */}
+                  <td
+                    className={cn(
+                      'whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums',
+                      pos.unrealizedPnl > 0 ? 'text-success' : pos.unrealizedPnl < 0 ? 'text-error' : 'text-text-muted',
+                    )}
+                  >
+                    {formatChange(pos.unrealizedPnl)} ({formatPercent(pos.unrealizedPnlPercent)})
                   </td>
                 </tr>
               );
