@@ -5,8 +5,8 @@ import { VercelAIProvider } from '../../src/ai-providers/vercel-ai.js';
 describe('VercelAIProvider', () => {
   it('has correct id and name', () => {
     const provider = new VercelAIProvider();
-    expect(provider.id).toBe('vercel-ai');
-    expect(provider.name).toBe('Vercel AI SDK');
+    expect(provider.id).toBe('codex');
+    expect(provider.name).toBe('Codex');
   });
 
   it('lists models from supported SDK families', () => {
