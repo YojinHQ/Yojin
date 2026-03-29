@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { useQuery, useSubscription } from 'urql';
 import { cn } from '../lib/utils';
 import {
@@ -9,7 +9,6 @@ import {
   CURATION_WORKFLOW_STATUS_QUERY,
   INSIGHTS_WORKFLOW_STATUS_QUERY,
 } from '../api/documents';
-import { usePortfolio } from '../api/hooks/use-portfolio';
 import type {
   CuratedSignal,
   CuratedSignalsQueryResult,
@@ -20,16 +19,10 @@ import type {
   CurationWorkflowStatusQueryResult,
   InsightsWorkflowStatusQueryResult,
   WorkflowProgressEvent,
-  InsightRating,
-  InsightReport,
-  PortfolioHealth,
-  PositionInsight,
-  Signal,
 } from '../api/types';
 import Badge from '../components/common/badge';
 import type { BadgeVariant } from '../components/common/badge';
 import Card from '../components/common/card';
-import Tabs from '../components/common/tabs';
 import { PageFeatureGate } from '../components/common/feature-gate';
 import { collectInsightSignalIds } from '../lib/insight-signals';
 
@@ -53,62 +46,11 @@ const CONFIDENCE_PRESETS = [
   { label: '>90%', value: 0.9 },
 ] as const;
 
-const VIEW_TABS = [
-  { label: 'By Position', value: 'position' },
-  { label: 'All Signals', value: 'all' },
-] as const;
-
-type ViewTab = (typeof VIEW_TABS)[number]['value'];
-
-const VALID_TABS: ViewTab[] = ['position', 'all'];
-
 // ---------------------------------------------------------------------------
 // Badge variant maps
 // ---------------------------------------------------------------------------
 
 const typeVariant: Record<string, BadgeVariant> = {
-  NEWS: 'info',
-  FUNDAMENTAL: 'success',
-  SENTIMENT: 'warning',
-  TECHNICAL: 'neutral',
-  MACRO: 'error',
-  FILINGS: 'neutral',
-  SOCIALS: 'info',
-  TRADING_LOGIC_TRIGGER: 'warning',
-};
-
-const sentimentVariant: Record<string, BadgeVariant> = {
-  BULLISH: 'success',
-  BEARISH: 'error',
-  NEUTRAL: 'neutral',
-  MIXED: 'warning',
-};
-
-const ratingVariant: Record<InsightRating, BadgeVariant> = {
-  VERY_BULLISH: 'success',
-  BULLISH: 'success',
-  NEUTRAL: 'warning',
-  BEARISH: 'error',
-  VERY_BEARISH: 'error',
-};
-
-const ratingLabel: Record<InsightRating, string> = {
-  VERY_BULLISH: 'Very Bullish',
-  BULLISH: 'Bullish',
-  NEUTRAL: 'Neutral',
-  BEARISH: 'Bearish',
-  VERY_BEARISH: 'Very Bearish',
-};
-
-const healthVariant: Record<PortfolioHealth, BadgeVariant> = {
-  STRONG: 'success',
-  HEALTHY: 'success',
-  CAUTIOUS: 'warning',
-  WEAK: 'error',
-  CRITICAL: 'error',
-};
-
-const signalTypeVariant: Record<string, BadgeVariant> = {
   NEWS: 'info',
   FUNDAMENTAL: 'success',
   SENTIMENT: 'warning',
@@ -187,17 +129,10 @@ function InsightsContent() {
   const initialTicker = searchParams.get('ticker') ?? '';
   const initialType = searchParams.get('type') ?? 'ALL';
   const initialSearch = searchParams.get('search') ?? '';
-  const tabParam = searchParams.get('tab') as ViewTab | null;
-  const initialTab: ViewTab = VALID_TABS.includes(tabParam as ViewTab)
-    ? (tabParam as ViewTab)
-    : urlHighlight
-      ? 'all'
-      : 'position';
 
-  const [viewTab, setViewTab] = useState<ViewTab>(initialTab);
-  const [highlightId, setHighlightId] = useState(urlHighlight);
+  const [highlightId] = useState(urlHighlight);
 
-  // All Signals tab filter state
+  // Filter state
   const [search, setSearch] = useState(initialSearch);
   const [typeFilter, setTypeFilter] = useState<string>(initialType);
   const [tickerFilter, setTickerFilter] = useState(initialTicker);
@@ -210,20 +145,6 @@ function InsightsContent() {
     setDateRangeLabel(days);
     setSince(days ? new Date(Date.now() - Number(days) * 86_400_000).toISOString() : undefined);
   }, []);
-
-  // Intra-page navigation helpers
-  const navigateToSignals = useCallback((ticker: string) => {
-    setTickerFilter(ticker);
-    setHighlightId(null);
-    setViewTab('all');
-  }, []);
-
-  const navigateToAnalysis = useCallback(() => setViewTab('position'), []);
-
-  // Portfolio positions
-  const [portfolioResult] = usePortfolio();
-  const positions = useMemo(() => portfolioResult.data?.portfolio?.positions ?? [], [portfolioResult.data]);
-  const hasPositions = positions.length > 0;
 
   // Curated signals — one query, all tickers, 7-day window; filter client-side
   const curatedVars: CuratedSignalsVariables = useMemo(
@@ -304,9 +225,6 @@ function InsightsContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reexecute functions are stable
   }, [lastInsightsEvent?.stage]);
 
-  // Insight report
-  const report = insightQueryResult.data?.latestInsightReport ?? null;
-
   // Cross-reference: which signals appear in the analysis report
   const insightSignalIds = useMemo(
     () => collectInsightSignalIds(insightQueryResult.data?.latestInsightReport),
@@ -324,28 +242,7 @@ function InsightsContent() {
     return map;
   }, [insightQueryResult.data]);
 
-  // By Position view: signals grouped by ticker
-  const signalsByTicker = useMemo(() => {
-    const byTicker = new Map<string, Signal[]>();
-    for (const cs of allCuratedSignals) {
-      for (const score of cs.scores) {
-        const bucket = byTicker.get(score.ticker);
-        if (bucket) {
-          if (!bucket.some((s) => s.id === cs.signal.id)) bucket.push(cs.signal);
-        } else {
-          byTicker.set(score.ticker, [cs.signal]);
-        }
-      }
-    }
-    return Array.from(byTicker.entries())
-      .map(([ticker, signals]) => ({
-        ticker,
-        signals: signals.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)),
-      }))
-      .sort((a, b) => b.signals.length - a.signals.length);
-  }, [allCuratedSignals]);
-
-  // All Signals view: client-side filtered
+  // Client-side filtered signals
   const filteredSignals = useMemo(() => {
     let items = allCuratedSignals;
     if (tickerFilter) {
@@ -384,36 +281,23 @@ function InsightsContent() {
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [allCuratedSignals]);
 
-  const totalSignals = allCuratedSignals.length;
   const usedInAnalysis = allCuratedSignals.filter((cs) => insightSignalIds.has(cs.signal.id)).length;
   const loading = curatedResult.fetching;
 
   const subtitle = useMemo(() => {
     if (loading) return 'Loading...';
-    switch (viewTab) {
-      case 'position':
-        return totalSignals > 0
-          ? `${totalSignals} signal${totalSignals !== 1 ? 's' : ''} · ${signalsByTicker.length} position${signalsByTicker.length !== 1 ? 's' : ''}`
-          : 'No recent signals';
-      case 'all':
-        return `${filteredSignals.length} signal${filteredSignals.length !== 1 ? 's' : ''}${usedInAnalysis > 0 ? ` · ${usedInAnalysis} in analysis` : ''}`;
-    }
-  }, [viewTab, loading, totalSignals, signalsByTicker.length, filteredSignals.length, usedInAnalysis]);
+    return `${filteredSignals.length} signal${filteredSignals.length !== 1 ? 's' : ''}${usedInAnalysis > 0 ? ` · ${usedInAnalysis} in analysis` : ''}`;
+  }, [loading, filteredSignals.length, usedInAnalysis]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
       <header className="px-6 pt-6 pb-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold text-text-primary">Signals</h1>
-            <p className="mt-1 text-sm text-text-muted">{subtitle}</p>
-          </div>
-          <Tabs tabs={[...VIEW_TABS]} value={viewTab} onChange={(v) => setViewTab(v as ViewTab)} size="sm" />
-        </div>
+        <h1 className="text-lg font-semibold text-text-primary">Signals</h1>
+        <p className="mt-1 text-sm text-text-muted">{subtitle}</p>
       </header>
 
-      {/* Workflow activity logs — visible regardless of active tab */}
+      {/* Workflow activity logs */}
       {curationLoading && <CurationActivityLog events={curationEvents} />}
       {insightsLoading && (
         <div className="px-6 pb-4">
@@ -421,166 +305,114 @@ function InsightsContent() {
         </div>
       )}
 
-      {/* All Signals tab filters */}
-      {viewTab === 'all' && (
-        <div className="px-6 pb-4 space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <input
-              type="text"
-              placeholder="Search signals..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-8 rounded-lg border border-border bg-bg-secondary px-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none w-56"
-            />
-            <input
-              type="text"
-              placeholder="Ticker (e.g. AAPL)"
-              value={tickerFilter}
-              onChange={(e) => setTickerFilter(e.target.value)}
-              className="h-8 rounded-lg border border-border bg-bg-secondary px-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none w-36"
-            />
-            {sources.length > 1 && (
-              <select
-                value={sourceFilter}
-                onChange={(e) => setSourceFilter(e.target.value)}
-                className="h-8 rounded-lg border border-border bg-bg-secondary px-2 text-sm text-text-primary focus:border-accent-primary focus:outline-none"
+      {/* Filters */}
+      <div className="px-6 pb-4 space-y-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <input
+            type="text"
+            placeholder="Search signals..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-8 rounded-lg border border-border bg-bg-secondary px-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none w-56"
+          />
+          <input
+            type="text"
+            placeholder="Ticker (e.g. AAPL)"
+            value={tickerFilter}
+            onChange={(e) => setTickerFilter(e.target.value)}
+            className="h-8 rounded-lg border border-border bg-bg-secondary px-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none w-36"
+          />
+          {sources.length > 1 && (
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className="h-8 rounded-lg border border-border bg-bg-secondary px-2 text-sm text-text-primary focus:border-accent-primary focus:outline-none"
+            >
+              <option value="">All sources</option>
+              {sources.map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex gap-1">
+            {SIGNAL_TYPES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTypeFilter(t)}
+                className={cn(
+                  'px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer',
+                  typeFilter === t
+                    ? 'bg-accent-primary text-white'
+                    : 'bg-bg-tertiary text-text-secondary hover:text-text-primary',
+                )}
               >
-                <option value="">All sources</option>
-                {sources.map(([id, name]) => (
-                  <option key={id} value={id}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            )}
+                {t}
+              </button>
+            ))}
           </div>
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex gap-1">
-              {SIGNAL_TYPES.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTypeFilter(t)}
-                  className={cn(
-                    'px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer',
-                    typeFilter === t
-                      ? 'bg-accent-primary text-white'
-                      : 'bg-bg-tertiary text-text-secondary hover:text-text-primary',
-                  )}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-            <span className="h-4 w-px bg-border" />
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-text-muted mr-1">Period:</span>
-              {DATE_RANGES.map((d) => (
-                <button
-                  key={d.label}
-                  type="button"
-                  onClick={() => setDateRange(d.value)}
-                  className={cn(
-                    'px-2 py-0.5 text-xs font-medium rounded transition-colors cursor-pointer',
-                    dateRangeLabel === d.value
-                      ? 'bg-accent-primary/10 text-accent-primary'
-                      : 'text-text-muted hover:text-text-primary',
-                  )}
-                >
-                  {d.label}
-                </button>
-              ))}
-            </div>
-            <span className="h-4 w-px bg-border" />
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-text-muted mr-1">Confidence:</span>
-              {CONFIDENCE_PRESETS.map((c) => (
-                <button
-                  key={c.label}
-                  type="button"
-                  onClick={() => setMinConfidence(c.value)}
-                  className={cn(
-                    'px-2 py-0.5 text-xs font-medium rounded transition-colors cursor-pointer',
-                    minConfidence === c.value
-                      ? 'bg-accent-primary/10 text-accent-primary'
-                      : 'text-text-muted hover:text-text-primary',
-                  )}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
+          <span className="h-4 w-px bg-border" />
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-text-muted mr-1">Period:</span>
+            {DATE_RANGES.map((d) => (
+              <button
+                key={d.label}
+                type="button"
+                onClick={() => setDateRange(d.value)}
+                className={cn(
+                  'px-2 py-0.5 text-xs font-medium rounded transition-colors cursor-pointer',
+                  dateRangeLabel === d.value
+                    ? 'bg-accent-primary/10 text-accent-primary'
+                    : 'text-text-muted hover:text-text-primary',
+                )}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <span className="h-4 w-px bg-border" />
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-text-muted mr-1">Confidence:</span>
+            {CONFIDENCE_PRESETS.map((c) => (
+              <button
+                key={c.label}
+                type="button"
+                onClick={() => setMinConfidence(c.value)}
+                className={cn(
+                  'px-2 py-0.5 text-xs font-medium rounded transition-colors cursor-pointer',
+                  minConfidence === c.value
+                    ? 'bg-accent-primary/10 text-accent-primary'
+                    : 'text-text-muted hover:text-text-primary',
+                )}
+              >
+                {c.label}
+              </button>
+            ))}
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Tab content */}
+      {/* Signal list */}
       <div className="flex-1 overflow-auto px-6 pb-6">
-        {/* By Position */}
-        {viewTab === 'position' && (
-          <>
-            {!hasPositions && !portfolioResult.fetching && (
-              <EmptyState icon="signal" message="Connect data sources to start receiving signals.">
-                <Link to="/portfolio" className="text-sm text-accent-primary hover:underline">
-                  Add positions to your portfolio
-                </Link>
-              </EmptyState>
-            )}
-            {hasPositions && !loading && signalsByTicker.length === 0 && (
-              <EmptyState
-                icon="signal"
-                message="No recent signals. Signals will appear automatically as the pipeline runs."
-              />
-            )}
-            {/* Portfolio-level analysis summary */}
-            {report && <PortfolioSummaryCard report={report} />}
-
-            {signalsByTicker.length > 0 && (
-              <div className="space-y-3">
-                {signalsByTicker.map(({ ticker, signals }) => {
-                  const position = positions.find((p) => p.symbol === ticker);
-                  const insight = report?.positions.find((p) => p.symbol === ticker);
-                  return (
-                    <PositionSignalCard
-                      key={ticker}
-                      ticker={ticker}
-                      name={position?.name ?? ticker}
-                      signals={signals}
-                      insight={insight}
-                      onViewAll={navigateToSignals}
-                      onViewSignal={(id) => {
-                        setHighlightId(id);
-                        setViewTab('all');
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </>
+        {!loading && filteredSignals.length === 0 && (
+          <EmptyState icon="signal" message="No signals yet. Signals will appear automatically as the pipeline runs." />
         )}
-
-        {/* All Signals */}
-        {viewTab === 'all' && (
-          <>
-            {!loading && filteredSignals.length === 0 && (
-              <EmptyState icon="signal" message="No signals yet. Click Fetch Data to pull the latest signals." />
-            )}
-            <div className="space-y-2">
-              {filteredSignals.map((cs) => (
-                <SignalRow
-                  key={cs.signal.id}
-                  curated={cs}
-                  highlighted={cs.signal.id === highlightId}
-                  usedInInsight={insightSignalIds.has(cs.signal.id)}
-                  insightImpact={insightSignalImpact.get(cs.signal.id)}
-                  onFilterByTicker={navigateToSignals}
-                  onViewAnalysis={navigateToAnalysis}
-                />
-              ))}
-            </div>
-          </>
-        )}
+        <div className="space-y-2">
+          {filteredSignals.map((cs) => (
+            <SignalRow
+              key={cs.signal.id}
+              curated={cs}
+              highlighted={cs.signal.id === highlightId}
+              usedInInsight={insightSignalIds.has(cs.signal.id)}
+              insightImpact={insightSignalImpact.get(cs.signal.id)}
+              onFilterByTicker={setTickerFilter}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -653,396 +485,7 @@ function EmptyState({
 }
 
 // ---------------------------------------------------------------------------
-// Portfolio-level summary card (shown above position cards when analysis exists)
-// ---------------------------------------------------------------------------
-
-function PortfolioSummaryCard({ report }: { report: InsightReport }) {
-  return (
-    <div className="space-y-3 mb-4">
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Portfolio Health</h3>
-            <Badge variant={healthVariant[report.portfolio.overallHealth]} size="sm">
-              {report.portfolio.overallHealth}
-            </Badge>
-          </div>
-          <p className="text-sm text-text-primary leading-relaxed">{report.portfolio.summary}</p>
-        </Card>
-
-        <Card className="p-4">
-          <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Agent Confidence</h3>
-          <div className="space-y-3">
-            <ConfidenceBar label="Confidence" value={report.emotionState.confidence} />
-            <ConfidenceBar label="Risk Appetite" value={report.emotionState.riskAppetite} />
-          </div>
-          {report.emotionState.reason && (
-            <p className="mt-3 text-xs text-text-muted leading-relaxed">{report.emotionState.reason}</p>
-          )}
-        </Card>
-      </div>
-
-      {(report.portfolio.macroContext || report.portfolio.sectorThemes.length > 0) && (
-        <Card className="p-4">
-          {report.portfolio.macroContext && (
-            <>
-              <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Macro Context</h3>
-              <p className="text-sm text-text-primary leading-relaxed mb-3">{report.portfolio.macroContext}</p>
-            </>
-          )}
-          {report.portfolio.sectorThemes.length > 0 && (
-            <>
-              <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Sector Themes</h3>
-              <div className="flex flex-wrap gap-1.5">
-                {report.portfolio.sectorThemes.map((theme, i) => (
-                  <span key={i} className="px-2.5 py-1 rounded-md bg-bg-tertiary text-xs text-text-secondary">
-                    {theme}
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
-        </Card>
-      )}
-
-      {report.portfolio.actionItems.length > 0 && (
-        <Card className="p-4">
-          <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Action Items</h3>
-          <ul className="space-y-1.5">
-            {report.portfolio.actionItems.map((item, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
-                <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-primary" />
-                {item.text}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// By Position view: expandable signal item
-// ---------------------------------------------------------------------------
-
-function PositionSignalItem({ signal, onViewSignal }: { signal: Signal; onViewSignal: (id: string) => void }) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="rounded-lg bg-bg-secondary">
-      <button
-        type="button"
-        className="flex w-full items-start gap-3 p-3 cursor-pointer text-left"
-        onClick={() => setOpen(!open)}
-      >
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <Badge variant={signalTypeVariant[signal.type] ?? 'neutral'} size="xs">
-              {signal.type}
-            </Badge>
-            {signal.tier1 && (
-              <Badge
-                variant={signal.tier1 === 'CRITICAL' ? 'error' : signal.tier1 === 'IMPORTANT' ? 'warning' : 'neutral'}
-                size="xs"
-              >
-                {signal.tier1}
-              </Badge>
-            )}
-            {signal.sentiment && (
-              <Badge variant={sentimentVariant[signal.sentiment] ?? 'neutral'} size="xs">
-                {signal.sentiment}
-              </Badge>
-            )}
-            <span className="text-2xs text-text-muted">{formatTimeAgo(new Date(signal.publishedAt))}</span>
-            <span className="text-2xs text-text-muted">
-              · {signal.sources.map((s) => s.name).join(', ')}
-              {signal.sourceCount > 1 && ` (${signal.sourceCount})`}
-            </span>
-          </div>
-          <p className="text-xs font-medium text-text-primary">{signal.title}</p>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="flex items-center gap-1.5 w-16">
-            <div className="flex-1 h-1 rounded-full bg-bg-tertiary">
-              <div
-                className={cn(
-                  'h-1 rounded-full transition-all',
-                  signal.confidence >= 0.8 ? 'bg-success' : signal.confidence >= 0.5 ? 'bg-warning' : 'bg-error',
-                )}
-                style={{ width: `${Math.round(signal.confidence * 100)}%` }}
-              />
-            </div>
-            <span className="text-2xs text-text-muted w-6 text-right">{Math.round(signal.confidence * 100)}%</span>
-          </div>
-          <svg
-            className={cn('h-3.5 w-3.5 text-text-muted transition-transform', open && 'rotate-180')}
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-          </svg>
-        </div>
-      </button>
-
-      {open && (
-        <div className="px-3 pb-3 space-y-2">
-          <div className="border-t border-border pt-2" />
-          {signal.content && (
-            <p className="text-xs text-text-secondary leading-relaxed whitespace-pre-wrap">{signal.content}</p>
-          )}
-          <div className="flex items-center gap-3 text-2xs text-text-muted flex-wrap">
-            <span>Published: {new Date(signal.publishedAt).toLocaleString()}</span>
-            <span>· Source: {signal.sources.map((s) => s.name).join(', ')}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            {signal.link ? (
-              <a
-                href={signal.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-accent-primary hover:underline"
-              >
-                View source
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
-                  />
-                </svg>
-              </a>
-            ) : (
-              <span className="text-2xs text-text-muted italic">No external source link</span>
-            )}
-            <button
-              type="button"
-              onClick={() => onViewSignal(signal.id)}
-              className="inline-flex items-center gap-1 text-xs text-accent-primary hover:underline cursor-pointer"
-            >
-              View in Signals
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// By Position view: signal card per ticker
-// ---------------------------------------------------------------------------
-
-function PositionSignalCard({
-  ticker,
-  name,
-  signals,
-  insight,
-  onViewAll,
-  onViewSignal,
-}: {
-  ticker: string;
-  name: string;
-  signals: Signal[];
-  insight?: PositionInsight;
-  onViewAll: (ticker: string) => void;
-  onViewSignal: (signalId: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-
-  const sorted = useMemo(
-    () => [...signals].sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()),
-    [signals],
-  );
-
-  const sentimentCounts = useMemo(() => {
-    const counts = { BULLISH: 0, BEARISH: 0, NEUTRAL: 0, OTHER: 0 };
-    for (const s of signals) {
-      if (s.sentiment === 'BULLISH') counts.BULLISH++;
-      else if (s.sentiment === 'BEARISH') counts.BEARISH++;
-      else if (s.sentiment === 'NEUTRAL') counts.NEUTRAL++;
-      else counts.OTHER++;
-    }
-    return counts;
-  }, [signals]);
-
-  return (
-    <Card className="p-4">
-      <div
-        role="button"
-        tabIndex={0}
-        className="flex w-full items-center justify-between cursor-pointer"
-        onClick={() => setExpanded(!expanded)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            setExpanded(!expanded);
-          }
-        }}
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-base font-semibold text-text-primary">{ticker}</span>
-          {insight && (
-            <Badge variant={ratingVariant[insight.rating]} size="sm">
-              {ratingLabel[insight.rating]}
-            </Badge>
-          )}
-          {name !== ticker && <span className="text-sm text-text-muted">{name}</span>}
-          {insight && <ConvictionMeter value={insight.conviction} />}
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-bg-tertiary">
-            <svg
-              className="h-3 w-3 text-text-muted"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546"
-              />
-            </svg>
-            <span className="text-xs font-medium text-text-secondary">{signals.length}</span>
-            {sentimentCounts.BULLISH > 0 && (
-              <span className="h-1.5 w-1.5 rounded-full bg-success" title={`${sentimentCounts.BULLISH} bullish`} />
-            )}
-            {sentimentCounts.BEARISH > 0 && (
-              <span className="h-1.5 w-1.5 rounded-full bg-error" title={`${sentimentCounts.BEARISH} bearish`} />
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onViewAll(ticker);
-            }}
-            className="text-xs font-medium text-accent-primary hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            View all
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
-            </svg>
-          </button>
-          <svg
-            className={cn('h-5 w-5 text-text-muted transition-transform', expanded && 'rotate-180')}
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-          </svg>
-        </div>
-      </div>
-
-      {expanded && (
-        <div className="mt-3 border-t border-border pt-3 space-y-3">
-          {/* Analysis thesis — the "why" */}
-          {insight && <p className="text-sm text-text-primary leading-relaxed">{insight.thesis}</p>}
-
-          {/* Key signals from analysis — with contextualized detail */}
-          {insight && insight.keySignals.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted">Key Signals</h4>
-              {insight.keySignals.map((sig) => (
-                <div key={sig.signalId} className="flex items-start gap-2 rounded-lg bg-bg-secondary p-3">
-                  <Badge
-                    variant={sig.impact === 'POSITIVE' ? 'success' : sig.impact === 'NEGATIVE' ? 'error' : 'neutral'}
-                    size="xs"
-                  >
-                    {sig.impact}
-                  </Badge>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-text-primary">{sig.title}</p>
-                    {sig.detail && <p className="mt-1 text-xs text-text-secondary leading-relaxed">{sig.detail}</p>}
-                    {sig.url && (
-                      <a
-                        href={sig.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-1 inline-flex items-center gap-1 text-2xs text-accent-primary hover:underline"
-                      >
-                        Source
-                        <svg
-                          className="h-2.5 w-2.5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={2}
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
-                          />
-                        </svg>
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* All curated signals for this position */}
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-              All Signals ({signals.length})
-            </h4>
-            {sorted.map((signal) => (
-              <PositionSignalItem key={signal.id} signal={signal} onViewSignal={onViewSignal} />
-            ))}
-          </div>
-
-          {/* Risks & Opportunities from analysis */}
-          {insight && (insight.risks.length > 0 || insight.opportunities.length > 0) && (
-            <div className="grid grid-cols-2 gap-4 pt-2">
-              {insight.risks.length > 0 && (
-                <div>
-                  <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-text-muted">Risks</h4>
-                  <ul className="space-y-1">
-                    {insight.risks.map((risk) => (
-                      <li key={risk} className="flex items-start gap-2 text-xs text-text-secondary">
-                        <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-error" />
-                        {risk}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {insight.opportunities.length > 0 && (
-                <div>
-                  <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-text-muted">
-                    Opportunities
-                  </h4>
-                  <ul className="space-y-1">
-                    {insight.opportunities.map((opp) => (
-                      <li key={opp} className="flex items-start gap-2 text-xs text-text-secondary">
-                        <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-success" />
-                        {opp}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// All Signals view: flat signal row
+// Signal row
 // ---------------------------------------------------------------------------
 
 function SignalRow({
@@ -1051,14 +494,12 @@ function SignalRow({
   usedInInsight,
   insightImpact,
   onFilterByTicker,
-  onViewAnalysis,
 }: {
   curated: CuratedSignal;
   highlighted: boolean;
   usedInInsight: boolean;
   insightImpact?: string;
   onFilterByTicker: (ticker: string) => void;
-  onViewAnalysis: () => void;
 }) {
   const signal = curated.signal;
   const topScore =
@@ -1133,20 +574,11 @@ function SignalRow({
                 {signal.sourceCount > 1 && ` (${signal.sourceCount})`}
               </span>
               {usedInInsight && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onViewAnalysis();
-                  }}
-                  className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer"
-                >
-                  <Badge variant="accent" size="xs">
-                    {insightImpact === 'POSITIVE' && '↑ '}
-                    {insightImpact === 'NEGATIVE' && '↓ '}
-                    IN ANALYSIS
-                  </Badge>
-                </button>
+                <Badge variant="accent" size="xs">
+                  {insightImpact === 'POSITIVE' && '↑ '}
+                  {insightImpact === 'NEGATIVE' && '↓ '}
+                  IN ANALYSIS
+                </Badge>
               )}
             </div>
             <p className="text-sm font-medium text-text-primary truncate">{signal.title}</p>
@@ -1226,65 +658,10 @@ function SignalRow({
               ) : (
                 <span className="text-xs text-text-muted italic">No external source link</span>
               )}
-              {usedInInsight && (
-                <button
-                  type="button"
-                  onClick={onViewAnalysis}
-                  className="inline-flex items-center gap-1.5 text-sm text-accent-primary hover:underline cursor-pointer"
-                >
-                  View analysis
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605"
-                    />
-                  </svg>
-                </button>
-              )}
             </div>
           </div>
         )}
       </Card>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Confidence / conviction meters
-// ---------------------------------------------------------------------------
-
-function ConfidenceBar({ label, value }: { label: string; value: number }) {
-  const pct = Math.round(value * 100);
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-sm text-text-secondary">{label}</span>
-        <span className="text-sm font-semibold text-text-primary">{pct}%</span>
-      </div>
-      <div className="h-2 rounded-full bg-bg-tertiary">
-        <div
-          className={cn(
-            'h-2 rounded-full transition-all',
-            pct >= 70 ? 'bg-success' : pct >= 40 ? 'bg-warning' : 'bg-error',
-          )}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function ConvictionMeter({ value }: { value: number }) {
-  const pct = Math.round(value * 100);
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-sm text-text-muted">Conviction</span>
-      <span
-        className={cn('text-sm font-semibold', pct >= 70 ? 'text-success' : pct >= 40 ? 'text-warning' : 'text-error')}
-      >
-        {pct}%
-      </span>
     </div>
   );
 }
