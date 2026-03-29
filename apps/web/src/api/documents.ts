@@ -1058,8 +1058,8 @@ export const ON_WORKFLOW_PROGRESS_SUBSCRIPTION = gql`
 // ---------------------------------------------------------------------------
 
 export const INTEL_FEED_QUERY = gql`
-  query IntelFeed($limit: Int) {
-    curatedSignals(limit: $limit) {
+  query IntelFeed($limit: Int, $offset: Int) {
+    curatedSignals(limit: $limit, offset: $offset) {
       signal {
         id
         title
@@ -1074,21 +1074,16 @@ export const INTEL_FEED_QUERY = gql`
           reliability
         }
         tier1
+        tier2
       }
       scores {
         ticker
         compositeScore
       }
       curatedAt
-    }
-    actions(status: PENDING, limit: 10) {
-      id
-      what
-      why
-      source
-      status
-      expiresAt
-      createdAt
+      verdict
+      thesisAlignment
+      actionability
     }
   }
 `;

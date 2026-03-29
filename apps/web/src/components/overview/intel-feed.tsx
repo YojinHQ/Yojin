@@ -8,8 +8,8 @@ import { useFeatureStatus } from '../../lib/feature-status';
 import { FeatureCardGate } from '../common/feature-gate';
 import Spinner from '../common/spinner';
 
-type ItemType = 'action' | 'alert' | 'insight';
-type FilterTab = 'all' | 'actions' | 'alerts' | 'insights';
+type ItemType = 'alert' | 'insight';
+type FilterTab = 'all' | 'alerts' | 'insights';
 type IconName = 'rebalance' | 'dollar' | 'box' | 'warehouse' | 'clock' | 'trending' | 'bubble' | 'trending-up';
 
 interface DataRow {
@@ -22,12 +22,17 @@ interface IntelFeedItem {
   id: string;
   type: ItemType;
   signalType: string;
+  ticker: string;
+  sentiment: string | null;
   title: string;
   time: string;
   icon: IconName;
   description: string;
+  source: string | null;
   data?: DataRow[];
   primaryAction: string;
+  verdict: 'CRITICAL' | 'IMPORTANT' | 'NOISE' | null;
+  thesisAlignment: 'SUPPORTS' | 'CHALLENGES' | 'NEUTRAL' | null;
 }
 
 /** Map signal type to an icon name. */
@@ -69,75 +74,58 @@ const signalTypeBadgeColor: Record<string, string> = {
 /** Classify a signal using its outputType field. */
 function classifySignal(signal: { outputType?: string | null }): ItemType {
   if (signal.outputType === 'ALERT') return 'alert';
-  if (signal.outputType === 'ACTION') return 'action';
   return 'insight';
 }
 
 /** Primary action label for each item type. */
 const primaryActionLabel: Record<ItemType, string> = {
-  action: 'Review',
   alert: 'View Details',
   insight: 'Explore',
 };
 
 const typeLabel: Record<ItemType, string> = {
-  action: 'ACTION',
   alert: 'ALERT',
   insight: 'INSIGHT',
 };
 
 const typeLabelColor: Record<ItemType, string> = {
-  action: 'text-accent-primary',
   alert: 'text-warning',
   insight: 'text-success',
-};
-
-const typeIconBg: Record<ItemType, string> = {
-  action: 'bg-accent-primary/10',
-  alert: 'bg-warning/10',
-  insight: 'bg-success/10',
-};
-
-const typeIconColor: Record<ItemType, string> = {
-  action: 'text-accent-primary',
-  alert: 'text-warning',
-  insight: 'text-success',
-};
-
-const sectionHeaderColor: Record<ItemType, string> = {
-  action: 'text-accent-primary/60',
-  alert: 'text-warning/60',
-  insight: 'text-success/60',
-};
-
-const sectionLineColor: Record<ItemType, string> = {
-  action: 'bg-accent-primary/15',
-  alert: 'bg-warning/15',
-  insight: 'bg-success/15',
 };
 
 const dataAccentBorder: Record<ItemType, string> = {
-  action: 'border-accent-primary/30',
   alert: 'border-warning/30',
   insight: 'border-success/30',
 };
 
 const filterTabs: { key: FilterTab; label: string }[] = [
   { key: 'all', label: 'All' },
-  { key: 'actions', label: 'Actions' },
   { key: 'alerts', label: 'Alerts' },
   { key: 'insights', label: 'Insights' },
 ];
 
 const filterMap: Record<FilterTab, ItemType | null> = {
   all: null,
-  actions: 'action',
   alerts: 'alert',
   insights: 'insight',
 };
 
-function ItemIcon({ icon, type }: { icon: IconName; type: ItemType }) {
-  const svgClass = cn('h-3.5 w-3.5', typeIconColor[type]);
+const sentimentIconColor: Record<string, string> = {
+  BULLISH: 'text-success',
+  BEARISH: 'text-error',
+  MIXED: 'text-warning',
+  NEUTRAL: 'text-text-muted',
+};
+
+const sentimentIconBg: Record<string, string> = {
+  BULLISH: 'bg-success/10',
+  BEARISH: 'bg-error/10',
+  MIXED: 'bg-warning/10',
+  NEUTRAL: 'bg-bg-hover',
+};
+
+function ItemIcon({ icon, sentiment }: { icon: IconName; sentiment: string | null }) {
+  const svgClass = cn('h-3.5 w-3.5', sentimentIconColor[sentiment ?? 'NEUTRAL'] ?? 'text-text-muted');
 
   const icons: Record<IconName, React.ReactNode> = {
     rebalance: (
@@ -262,20 +250,149 @@ function ItemIcon({ icon, type }: { icon: IconName; type: ItemType }) {
   };
 
   return (
-    <div className={cn('flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg', typeIconBg[type])}>
+    <div
+      className={cn(
+        'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg',
+        sentimentIconBg[sentiment ?? 'NEUTRAL'] ?? 'bg-bg-hover',
+      )}
+    >
       {icons[icon]}
     </div>
   );
 }
 
-function SectionHeader({ type }: { type: ItemType }) {
+type Sentiment = 'BULLISH' | 'BEARISH' | 'MIXED' | 'NEUTRAL';
+
+const sentimentColor: Record<Sentiment, string> = {
+  BULLISH: 'text-success',
+  BEARISH: 'text-error',
+  MIXED: 'text-warning',
+  NEUTRAL: 'text-text-secondary',
+};
+
+const sentimentLineColor: Record<Sentiment, string> = {
+  BULLISH: 'bg-success/20',
+  BEARISH: 'bg-error/20',
+  MIXED: 'bg-warning/20',
+  NEUTRAL: 'bg-border',
+};
+
+const sentimentIcon: Record<Sentiment, React.ReactNode> = {
+  BULLISH: (
+    <svg
+      className="h-3 w-3"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+      <polyline points="16 7 22 7 22 13" />
+    </svg>
+  ),
+  BEARISH: (
+    <svg
+      className="h-3 w-3"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="22 17 13.5 8.5 8.5 13.5 2 7" />
+      <polyline points="16 17 22 17 22 11" />
+    </svg>
+  ),
+  MIXED: (
+    <svg
+      className="h-3 w-3"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  ),
+  NEUTRAL: (
+    <svg
+      className="h-3 w-3"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <line x1="8" y1="12" x2="16" y2="12" />
+    </svg>
+  ),
+};
+
+/** Determine the dominant sentiment from a group of items. */
+function dominantSentiment(items: IntelFeedItem[]): Sentiment {
+  const counts: Record<string, number> = {};
+  for (const item of items) {
+    const s = item.sentiment ?? 'NEUTRAL';
+    counts[s] = (counts[s] ?? 0) + 1;
+  }
+  let best = 'NEUTRAL';
+  let bestCount = 0;
+  for (const [key, count] of Object.entries(counts)) {
+    if (count > bestCount) {
+      best = key;
+      bestCount = count;
+    }
+  }
+  return best as Sentiment;
+}
+
+function TickerSectionHeader({
+  ticker,
+  alertCount,
+  itemCount,
+  sentiment,
+  collapsed,
+  onToggle,
+}: {
+  ticker: string;
+  alertCount: number;
+  itemCount: number;
+  sentiment: Sentiment;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   return (
-    <div className="flex items-center gap-2.5 px-1 pt-4 pb-2">
-      <span className={cn('text-2xs font-semibold tracking-[0.1em] uppercase', sectionHeaderColor[type])}>
-        {typeLabel[type]}s
+    <button onClick={onToggle} className="flex w-full cursor-pointer items-center gap-2.5 px-1 pt-4 pb-2 text-left">
+      <svg
+        className={cn('h-3 w-3 transition-transform', sentimentColor[sentiment], collapsed ? '-rotate-90' : 'rotate-0')}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+      <span className={cn('text-2xs font-semibold tracking-[0.1em] uppercase', sentimentColor[sentiment])}>
+        {ticker}
       </span>
-      <div className={cn('h-px flex-1', sectionLineColor[type])} />
-    </div>
+      <span className={cn('flex items-center', sentimentColor[sentiment])}>{sentimentIcon[sentiment]}</span>
+      {alertCount > 0 && (
+        <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+          {alertCount} {alertCount === 1 ? 'alert' : 'alerts'}
+        </span>
+      )}
+      <span className="text-[10px] tabular-nums text-text-muted">{itemCount}</span>
+      <div className={cn('h-px flex-1', sentimentLineColor[sentiment])} />
+    </button>
   );
 }
 
@@ -301,7 +418,7 @@ function IntelFeedCard({
     >
       {/* Collapsed header — always visible */}
       <div className="flex items-center gap-3 px-3 py-2.5" onClick={onToggle}>
-        <ItemIcon icon={item.icon} type={item.type} />
+        <ItemIcon icon={item.icon} sentiment={item.sentiment} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className={cn('text-2xs font-semibold tracking-wide uppercase', typeLabelColor[item.type])}>
@@ -315,8 +432,20 @@ function IntelFeedCard({
             >
               {signalTypeLabel[item.signalType] ?? item.signalType}
             </span>
+            {item.verdict && (
+              <span
+                className={cn(
+                  'rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none',
+                  item.verdict === 'CRITICAL' && 'bg-error/20 text-error',
+                  item.verdict === 'IMPORTANT' && 'bg-warning/20 text-warning',
+                  item.verdict === 'NOISE' && 'bg-text-muted/10 text-text-muted',
+                )}
+              >
+                {item.verdict}
+              </span>
+            )}
           </div>
-          <p className="text-xs font-medium leading-tight text-text-primary truncate">{item.title}</p>
+          <p className="text-xs font-medium leading-tight text-text-primary line-clamp-2">{item.title}</p>
         </div>
         <span className="flex-shrink-0 text-2xs text-text-muted">{item.time}</span>
       </div>
@@ -331,7 +460,8 @@ function IntelFeedCard({
         <div className="overflow-hidden">
           <div className="px-3 pb-3 pt-0.5">
             {/* Description */}
-            <p className="text-xs leading-relaxed text-text-secondary">{item.description}</p>
+            {item.description && <p className="text-xs leading-relaxed text-text-secondary">{item.description}</p>}
+            {item.source && <p className="mt-1 text-[10px] text-text-muted">via {item.source}</p>}
 
             {/* Data table */}
             {item.data && (
@@ -398,13 +528,15 @@ function IntelFeedContent() {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [collapsedTickers, setCollapsedTickers] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [, dismissSignal] = useMutation(DISMISS_SIGNAL_MUTATION);
   const [, refreshIntelFeed] = useMutation<RefreshIntelFeedMutationResult>(REFRESH_INTEL_FEED_MUTATION);
 
   const [{ data, fetching, error }, reexecute] = useQuery<IntelFeedQueryResult, IntelFeedQueryVariables>({
     query: INTEL_FEED_QUERY,
-    variables: { limit: 30 },
+    variables: { limit: 10 },
+    requestPolicy: 'network-only',
   });
 
   const handleRefresh = async () => {
@@ -428,18 +560,25 @@ function IntelFeedContent() {
         cs.scores.length > 0
           ? cs.scores.reduce((best, sc) => (sc.compositeScore > best.compositeScore ? sc : best), cs.scores[0])
           : null;
+      const sourceName = s.sources?.[0]?.name;
+      const ticker = topScore?.ticker ?? s.tickers[0] ?? 'MACRO';
+      // Prefer LLM summaries; fall back to raw title (which is unique per signal)
+      const headline = s.tier1 ?? s.title;
+      const detail = s.tier2 ?? (s.tier1 ? s.title : '');
       return {
         id: s.id,
         type: itemType,
         signalType: s.type,
-        title: s.title,
+        ticker,
+        sentiment: s.sentiment ?? null,
+        title: headline,
         time: timeAgo(s.publishedAt),
         icon: signalTypeIcon[s.type] ?? 'trending',
-        description: s.tier1 ?? s.title,
+        description: detail !== headline ? detail : '',
+        source: sourceName ?? null,
         data:
           s.tickers.length > 0
             ? [
-                { label: 'Tickers', value: s.tickers.join(', ') },
                 { label: 'Confidence', value: `${Math.round(s.confidence * 100)}%`, highlight: s.confidence >= 0.8 },
                 ...(topScore
                   ? [
@@ -453,39 +592,30 @@ function IntelFeedContent() {
               ]
             : undefined,
         primaryAction: primaryActionLabel[itemType],
+        verdict: cs.verdict ?? null,
+        thesisAlignment: cs.thesisAlignment ?? null,
       };
     });
 
-    const actionItems: IntelFeedItem[] = data.actions.map((a) => ({
-      id: a.id,
-      type: 'action' as const,
-      signalType: 'TRADING_LOGIC_TRIGGER',
-      title: a.what,
-      time: timeAgo(a.createdAt),
-      icon: 'rebalance' as const,
-      description: a.why,
-      data: [
-        { label: 'Source', value: a.source },
-        { label: 'Expires', value: timeAgo(a.expiresAt) },
-      ],
-      primaryAction: 'Review',
-    }));
-
-    return [...actionItems, ...signalItems];
+    return signalItems;
   }, [data]);
 
   const filteredItems = filterMap[activeFilter] ? items.filter((item) => item.type === filterMap[activeFilter]) : items;
 
   const totalCount = filteredItems.length;
 
-  // Group filtered items by type, preserving section order
-  const sections: { type: ItemType; items: IntelFeedItem[] }[] = [];
-  const typeOrder: ItemType[] = ['action', 'alert', 'insight'];
+  // Group filtered items by ticker, preserving order of first appearance (highest score first)
+  const tickerSections: { ticker: string; items: IntelFeedItem[] }[] = [];
+  const tickerMap = new Map<string, IntelFeedItem[]>();
 
-  for (const type of typeOrder) {
-    const typeItems = filteredItems.filter((item) => item.type === type);
-    if (typeItems.length > 0) {
-      sections.push({ type, items: typeItems });
+  for (const item of filteredItems) {
+    const group = tickerMap.get(item.ticker);
+    if (group) {
+      group.push(item);
+    } else {
+      const newGroup = [item];
+      tickerMap.set(item.ticker, newGroup);
+      tickerSections.push({ ticker: item.ticker, items: newGroup });
     }
   }
 
@@ -612,28 +742,50 @@ function IntelFeedContent() {
             </button>
           </div>
         ) : (
-          sections.map((section) => (
-            <div key={section.type}>
-              <SectionHeader type={section.type} />
-              <div className="space-y-1.5">
-                {section.items.map((item) => (
-                  <IntelFeedCard
-                    key={item.id}
-                    item={item}
-                    expanded={expandedId === item.id}
-                    onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                    onDismiss={() => {
-                      if (expandedId === item.id) setExpandedId(null);
-                      void dismissSignal({ signalId: item.id }).then(() =>
-                        reexecute({ requestPolicy: 'network-only' }),
-                      );
-                    }}
-                    onExplore={() => void navigate(`/signals?id=${item.id}`)}
-                  />
-                ))}
+          tickerSections.map((section) => {
+            const isCollapsed = collapsedTickers.has(section.ticker);
+            return (
+              <div key={section.ticker}>
+                <TickerSectionHeader
+                  ticker={section.ticker}
+                  alertCount={section.items.filter((i) => i.type === 'alert').length}
+                  itemCount={section.items.length}
+                  sentiment={dominantSentiment(section.items)}
+                  collapsed={isCollapsed}
+                  onToggle={() => {
+                    setCollapsedTickers((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(section.ticker)) {
+                        next.delete(section.ticker);
+                      } else {
+                        next.add(section.ticker);
+                      }
+                      return next;
+                    });
+                  }}
+                />
+                {!isCollapsed && (
+                  <div className="space-y-1.5">
+                    {section.items.map((item) => (
+                      <IntelFeedCard
+                        key={item.id}
+                        item={item}
+                        expanded={expandedId === item.id}
+                        onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                        onDismiss={() => {
+                          if (expandedId === item.id) setExpandedId(null);
+                          void dismissSignal({ signalId: item.id }).then(() =>
+                            reexecute({ requestPolicy: 'network-only' }),
+                          );
+                        }}
+                        onExplore={() => void navigate(`/signals?highlight=${item.id}&ticker=${section.ticker}`)}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

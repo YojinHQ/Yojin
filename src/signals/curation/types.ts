@@ -50,10 +50,11 @@ export type CurationRunResult = z.infer<typeof CurationRunResultSchema>;
 // ---------------------------------------------------------------------------
 
 export const CurationWeightsSchema = z.object({
-  exposure: z.number().min(0).max(1).default(0.3),
-  typeRelevance: z.number().min(0).max(1).default(0.25),
-  recency: z.number().min(0).max(1).default(0.25),
-  sourceReliability: z.number().min(0).max(1).default(0.2),
+  exposure: z.number().min(0).max(1).default(0.25),
+  typeRelevance: z.number().min(0).max(1).default(0.2),
+  recency: z.number().min(0).max(1).default(0.2),
+  sourceReliability: z.number().min(0).max(1).default(0.15),
+  contentQuality: z.number().min(0).max(1).default(0.2),
 });
 export type CurationWeights = z.infer<typeof CurationWeightsSchema>;
 
@@ -65,7 +66,19 @@ export const CurationConfigSchema = z.object({
   /** Pipeline run interval in minutes. */
   intervalMinutes: z.number().int().min(1).default(15),
   /** Regex patterns for spam title filtering (case-insensitive). */
-  spamPatterns: z.array(z.string()).default(['sponsored', 'press release', 'advertisement', 'partner content']),
+  spamPatterns: z
+    .array(z.string())
+    .default([
+      'sponsored',
+      'press release',
+      'advertisement',
+      'partner content',
+      'stock price, news, quote',
+      'check out .+ stock price',
+      'stock (?:price|chart) .+ tradingview',
+      'stock chart .+ tradingview',
+      'in real time$',
+    ]),
   /** Scoring weights (must sum to ~1.0). */
   weights: CurationWeightsSchema.default({}),
 });

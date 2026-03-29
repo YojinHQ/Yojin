@@ -17,6 +17,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import type { SignalArchive } from './archive.js';
 import type { SignalClustering } from './clustering.js';
+import type { SummaryGenerator } from './summary-generator.js';
 import { extractTickers } from './ticker-extractor.js';
 import type { SymbolResolver } from './ticker-extractor.js';
 import { SignalSchema } from './types.js';
@@ -75,6 +76,7 @@ export class SignalIngestor {
   private readonly archive: SignalArchive;
   private readonly symbolResolver?: SymbolResolver;
   private clustering?: SignalClustering;
+  private summaryGenerator?: SummaryGenerator;
   private portfolioTickerProvider?: PortfolioTickerProvider;
   private postIngestHook?: PostIngestHook;
   private knownHashes = new Map<string, string>(); // contentHash → signalId
@@ -99,6 +101,11 @@ export class SignalIngestor {
   /** Late-wire clustering after LLM provider becomes available. */
   setClustering(clustering: SignalClustering): void {
     this.clustering = clustering;
+  }
+
+  /** Late-wire summary generator — generates tier1/tier2 for signals that bypass clustering. */
+  setSummaryGenerator(generator: SummaryGenerator): void {
+    this.summaryGenerator = generator;
   }
 
   /** Reset cached state after external data wipe (clearAppData). */
@@ -197,10 +204,12 @@ export class SignalIngestor {
           await this.clustering.processSignals(signals);
         } catch (err) {
           logger.warn('Signal clustering failed, writing raw signals as fallback', { error: err });
-          await this.archive.appendBatch(signals);
+          const enriched = await this.enrichWithSummaries(signals);
+          await this.archive.appendBatch(enriched);
         }
       } else {
-        await this.archive.appendBatch(signals);
+        const enriched = await this.enrichWithSummaries(signals);
+        await this.archive.appendBatch(enriched);
       }
       logger.info(`Ingested ${signals.length} signals${dropped > 0 ? `, ${dropped} dropped (not in portfolio)` : ''}`);
 
@@ -365,5 +374,40 @@ export class SignalIngestor {
     const avgReliability = totalReliability / sources.length;
     const multiSourceBonus = avgReliability * 0.1 * (sources.length - 1);
     return Math.min(1, avgReliability + multiSourceBonus);
+  }
+
+  /**
+   * Generate tier1/tier2/sentiment for signals that don't go through clustering.
+   * Skips signals that already have summaries (from a previous run or manual override).
+   * Best-effort — LLM failures leave the signal unchanged.
+   */
+  private async enrichWithSummaries(signals: Signal[]): Promise<Signal[]> {
+    if (!this.summaryGenerator) return signals;
+
+    const results: Signal[] = [];
+    for (const signal of signals) {
+      // Skip if already has LLM-generated summaries
+      if (signal.tier1 && signal.tier2) {
+        results.push(signal);
+        continue;
+      }
+      try {
+        const summary = await this.summaryGenerator.generate(signal);
+        results.push({
+          ...signal,
+          tier1: summary.tier1,
+          tier2: summary.tier2,
+          sentiment: summary.sentiment,
+          outputType: summary.outputType,
+        });
+      } catch (err) {
+        logger.warn('Summary generation failed for signal, using raw', {
+          signalId: signal.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        results.push(signal);
+      }
+    }
+    return results;
   }
 }

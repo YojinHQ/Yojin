@@ -18,7 +18,11 @@ import { AgentRegistry } from './agents/registry.js';
 import { pubsub } from './api/graphql/pubsub.js';
 import { setActionStore } from './api/graphql/resolvers/actions.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
-import { setCuratedSignalStore, setCuratedSnapshotStore } from './api/graphql/resolvers/curated-signals.js';
+import {
+  setCuratedAssessmentStore,
+  setCuratedSignalStore,
+  setCuratedSnapshotStore,
+} from './api/graphql/resolvers/curated-signals.js';
 import {
   runHealthChecks,
   setDataSourceConfigPath,
@@ -575,6 +579,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   const assessmentStore = new AssessmentStore(dataRoot);
   setCuratedSignalStore(curatedSignalStore);
   setCuratedSnapshotStore(snapshotStore);
+  setCuratedAssessmentStore(assessmentStore);
   setAssessmentStore(assessmentStore);
 
   // Insight tools (1 tool: save_insight_report)

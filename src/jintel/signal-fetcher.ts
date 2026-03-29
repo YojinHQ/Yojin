@@ -113,6 +113,30 @@ function formatLargeNumber(n: number): string {
   return n.toLocaleString();
 }
 
+/** Check if text mentions any of the entity's tickers or name (word-boundary safe). */
+function mentionsEntity(text: string, tickers: string[], entityName: string | undefined): boolean {
+  const haystack = text.toUpperCase();
+  // Check tickers with word boundaries to avoid false positives (e.g. "A" matching "AI")
+  for (const ticker of tickers) {
+    const escaped = ticker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`(?<![A-Z0-9])${escaped}(?![A-Z0-9])`).test(haystack)) return true;
+  }
+  // Check entity name (e.g. "NVIDIA", "Tesla", "Apple", "Microsoft")
+  if (entityName) {
+    const name = entityName.toUpperCase();
+    // For short names, use word boundary; for longer names, simple includes is fine
+    if (name.length <= 3) {
+      if (new RegExp(`(?<![A-Z0-9])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Z0-9])`).test(haystack))
+        return true;
+    } else if (haystack.includes(name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const JUNK_TITLE_PATTERN = /stock price|in real time$|tradingview|quote & history|commission-free|buy and sell/i;
+
 function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[] {
   // Day-precision timestamp — stable hash prevents duplicate signals across re-runs
   const now = new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z';
@@ -212,9 +236,13 @@ function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[
     });
   }
 
-  // 5. News articles
+  // 5. News articles — only keep articles that actually mention the entity
+  const entityName = entity.name;
   for (const article of entity.news ?? []) {
     if (!article.title) continue;
+    if (JUNK_TITLE_PATTERN.test(article.title)) continue;
+    const text = `${article.title} ${article.snippet ?? ''}`;
+    if (!mentionsEntity(text, tickers, entityName)) continue;
     signals.push({
       sourceId: `jintel-news-${article.source.toLowerCase().replace(/\s+/g, '-')}`,
       sourceName: `Jintel News (${article.source})`,
@@ -230,9 +258,12 @@ function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[
     });
   }
 
-  // 6. Research articles
+  // 6. Research articles — skip junk page titles and irrelevant articles
   for (const article of entity.research ?? []) {
     if (!article.title) continue;
+    if (JUNK_TITLE_PATTERN.test(article.title)) continue;
+    const researchText = `${article.title} ${article.text ?? ''}`;
+    if (!mentionsEntity(researchText, tickers, entityName)) continue;
     signals.push({
       sourceId: 'jintel-research',
       sourceName: 'Jintel Research',

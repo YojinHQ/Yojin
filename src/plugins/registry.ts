@@ -54,11 +54,32 @@ export class PluginRegistry {
 
   async initializeAll(config: Record<string, unknown>): Promise<void> {
     for (const provider of this.providers.values()) {
-      await provider.initialize?.(config);
+      try {
+        await provider.initialize?.(config);
+      } catch (err) {
+        console.error(`[plugins] Provider "${provider.id}" failed to initialize:`, err);
+      }
     }
-    for (const channel of this.channels.values()) {
-      await channel.initialize?.(config);
-    }
+    // Initialize channels in parallel so a slow/hanging channel doesn't block others.
+    // Each channel gets a timeout — a hanging channel must not prevent others from starting.
+    const CHANNEL_INIT_TIMEOUT_MS = 15_000;
+    await Promise.allSettled(
+      Array.from(this.channels.values()).map(async (channel) => {
+        try {
+          await Promise.race([
+            channel.initialize?.(config),
+            new Promise<void>((_, reject) =>
+              setTimeout(
+                () => reject(new Error(`Channel "${channel.id}" initialization timed out`)),
+                CHANNEL_INIT_TIMEOUT_MS,
+              ),
+            ),
+          ]);
+        } catch (err) {
+          console.error(`[plugins] Channel "${channel.id}" failed to initialize:`, err);
+        }
+      }),
+    );
   }
 
   async shutdownAll(): Promise<void> {

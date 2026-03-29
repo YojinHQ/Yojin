@@ -859,6 +859,12 @@ export const typeDefs = /* GraphQL */ `
     signal: Signal!
     scores: [PortfolioRelevanceScore!]!
     curatedAt: String!
+    "Agent assessment verdict (CRITICAL/IMPORTANT/NOISE) — null if not yet assessed"
+    verdict: SignalVerdict
+    "Alignment with investment thesis — null if not yet assessed"
+    thesisAlignment: ThesisAlignment
+    "How actionable this signal is (0-1) — null if not yet assessed"
+    actionability: Float
   }
 
   type CurationStatus {
@@ -973,7 +979,7 @@ export const typeDefs = /* GraphQL */ `
       limit: Int
     ): [Signal!]!
     signalGroups(ticker: String, since: String, limit: Int): [SignalGroup!]!
-    curatedSignals(ticker: String, since: String, limit: Int): [CuratedSignal!]!
+    curatedSignals(ticker: String, since: String, limit: Int, offset: Int): [CuratedSignal!]!
     curationStatus: CurationStatus!
     curationWorkflowStatus: WorkflowStatus!
     signalAssessments(ticker: String, since: String, limit: Int): [AssessmentReport!]!

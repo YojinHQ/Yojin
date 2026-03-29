@@ -8,8 +8,11 @@ import { PortfolioSnapshotStore } from '../../src/portfolio/snapshot-store.js';
 import { SignalArchive } from '../../src/signals/archive.js';
 import { CuratedSignalStore } from '../../src/signals/curation/curated-signal-store.js';
 import {
+  classifyOutputType,
   computeCompositeScore,
+  computeContentQuality,
   computeExposureWeight,
+  computeNoveltyFactor,
   computeRecencyFactor,
   computeSourceReliability,
   computeTypeRelevance,
@@ -114,6 +117,44 @@ describe('Scoring helpers', () => {
     });
   });
 
+  describe('computeContentQuality', () => {
+    it('returns baseline for title-only signal', () => {
+      expect(computeContentQuality(makeSignal())).toBeCloseTo(0.3, 1);
+    });
+
+    it('scores higher with substantive content', () => {
+      const withContent = makeSignal({ content: 'A'.repeat(300) });
+      expect(computeContentQuality(withContent)).toBeGreaterThan(0.5);
+    });
+
+    it('scores higher with LLM summaries', () => {
+      const withSummary = makeSignal({ tier1: 'headline', tier2: 'summary text' });
+      expect(computeContentQuality(withSummary)).toBeGreaterThan(computeContentQuality(makeSignal()));
+    });
+
+    it('scores higher with multiple sources', () => {
+      const multiSource = makeSignal({
+        sources: [
+          { id: 's1', name: 'S1', type: 'API', reliability: 0.8 },
+          { id: 's2', name: 'S2', type: 'RSS', reliability: 0.7 },
+        ],
+      });
+      expect(computeContentQuality(multiSource)).toBeGreaterThan(computeContentQuality(makeSignal()));
+    });
+  });
+
+  describe('computeNoveltyFactor', () => {
+    it('returns 1.0 for novel signal', () => {
+      expect(computeNoveltyFactor(makeSignal(), new Set())).toBe(1.0);
+    });
+
+    it('returns low score for duplicate title', () => {
+      const signal = makeSignal();
+      const recentTitles = new Set([signal.title.trim().toLowerCase()]);
+      expect(computeNoveltyFactor(signal, recentTitles)).toBe(0.2);
+    });
+  });
+
   describe('computeCompositeScore', () => {
     it('combines weights correctly', () => {
       const score = computeCompositeScore(0.5, 0.8, 1.0, 0.9, DEFAULT_WEIGHTS);
@@ -124,6 +165,13 @@ describe('Scoring helpers', () => {
     it('clamps to [0, 1]', () => {
       expect(computeCompositeScore(1, 1, 1, 1, DEFAULT_WEIGHTS)).toBeLessThanOrEqual(1);
       expect(computeCompositeScore(0, 0, 0, 0, DEFAULT_WEIGHTS)).toBeGreaterThanOrEqual(0);
+    });
+
+    it('applies novelty as multiplier', () => {
+      const full = computeCompositeScore(0.5, 0.8, 1.0, 0.9, DEFAULT_WEIGHTS, 0.5, 1.0);
+      const penalized = computeCompositeScore(0.5, 0.8, 1.0, 0.9, DEFAULT_WEIGHTS, 0.5, 0.2);
+      expect(penalized).toBeLessThan(full);
+      expect(penalized).toBeCloseTo(full * 0.2, 2);
     });
   });
 });
@@ -200,8 +248,18 @@ describe('runCurationPipeline', () => {
   it('curates signals matching portfolio', async () => {
     await seedPortfolio();
     await signalArchive.appendBatch([
-      makeSignal({ id: 's1', contentHash: 'h1', assets: [{ ticker: 'AAPL', relevance: 0.9, linkType: 'DIRECT' }] }),
-      makeSignal({ id: 's2', contentHash: 'h2', assets: [{ ticker: 'MSFT', relevance: 0.8, linkType: 'DIRECT' }] }),
+      makeSignal({
+        id: 's1',
+        contentHash: 'h1',
+        title: 'AAPL earnings beat',
+        assets: [{ ticker: 'AAPL', relevance: 0.9, linkType: 'DIRECT' }],
+      }),
+      makeSignal({
+        id: 's2',
+        contentHash: 'h2',
+        title: 'MSFT cloud revenue up',
+        assets: [{ ticker: 'MSFT', relevance: 0.8, linkType: 'DIRECT' }],
+      }),
     ]);
 
     const result = await runCurationPipeline({ signalArchive, curatedStore, snapshotStore, config });
@@ -238,6 +296,52 @@ describe('runCurationPipeline', () => {
     expect(result.signalsCurated).toBe(1);
   });
 
+  it('filters out data snapshot signals', async () => {
+    await seedPortfolio();
+    await signalArchive.appendBatch([
+      makeSignal({
+        id: 's1',
+        contentHash: 'h1',
+        title: 'AAPL: $180.50 | +1.2% | RSI 65',
+        sources: [{ id: 'jintel-snapshot', name: 'Jintel', type: 'ENRICHMENT', reliability: 0.95 }],
+      }),
+      makeSignal({
+        id: 's2',
+        contentHash: 'h2',
+        title: 'Apple beats Q4 estimates',
+        sources: [{ id: 'jintel-news-reuters', name: 'Jintel News (Reuters)', type: 'API', reliability: 0.8 }],
+      }),
+    ]);
+
+    const result = await runCurationPipeline({ signalArchive, curatedStore, snapshotStore, config });
+    expect(result.signalsCurated).toBe(1); // only the news signal
+  });
+
+  it('drops redundant price-move when news exists for same ticker+day', async () => {
+    await seedPortfolio();
+    await signalArchive.appendBatch([
+      makeSignal({
+        id: 's1',
+        contentHash: 'h1',
+        title: 'AAPL down 3.2% to $174.50',
+        type: 'TECHNICAL',
+        sources: [{ id: 'jintel-market', name: 'Jintel Market', type: 'ENRICHMENT', reliability: 0.95 }],
+      }),
+      makeSignal({
+        id: 's2',
+        contentHash: 'h2',
+        title: 'Apple misses revenue expectations',
+        type: 'NEWS',
+        sources: [{ id: 'jintel-news-reuters', name: 'Reuters', type: 'API', reliability: 0.8 }],
+      }),
+    ]);
+
+    const result = await runCurationPipeline({ signalArchive, curatedStore, snapshotStore, config });
+    expect(result.signalsCurated).toBe(1);
+    const curated = await curatedStore.queryByTickers(['AAPL']);
+    expect(curated[0].signal.type).toBe('NEWS');
+  });
+
   it('filters out signals with no portfolio ticker', async () => {
     await seedPortfolio();
     await signalArchive.appendBatch([
@@ -260,6 +364,7 @@ describe('runCurationPipeline', () => {
       makeSignal({
         id: `s${i}`,
         contentHash: `h${i}`,
+        title: `AAPL signal ${i}`,
         confidence: 0.5 + (i % 10) * 0.05,
         assets: [{ ticker: 'AAPL', relevance: 0.9, linkType: 'DIRECT' }],
       }),
@@ -283,5 +388,87 @@ describe('runCurationPipeline', () => {
     expect(watermark).not.toBeNull();
     expect(watermark!.signalsProcessed).toBe(1);
     expect(watermark!.signalsCurated).toBe(1);
+  });
+
+  it('classifies BEARISH high-confidence signals as ALERT', async () => {
+    await seedPortfolio();
+    await signalArchive.appendBatch([
+      makeSignal({ id: 's1', contentHash: 'h1', sentiment: 'BEARISH', confidence: 0.85 }),
+    ]);
+
+    await runCurationPipeline({ signalArchive, curatedStore, snapshotStore, config });
+    const curated = await curatedStore.queryByTickers(['AAPL']);
+    expect(curated).toHaveLength(1);
+    expect(curated[0].signal.outputType).toBe('ALERT');
+  });
+
+  it('classifies FILINGS signals as ALERT', async () => {
+    await seedPortfolio();
+    await signalArchive.appendBatch([makeSignal({ id: 's1', contentHash: 'h1', type: 'FILINGS', confidence: 0.5 })]);
+
+    await runCurationPipeline({ signalArchive, curatedStore, snapshotStore, config });
+    const curated = await curatedStore.queryByTickers(['AAPL']);
+    expect(curated).toHaveLength(1);
+    expect(curated[0].signal.outputType).toBe('ALERT');
+  });
+
+  it('preserves INSIGHT for low-confidence neutral NEWS', async () => {
+    await seedPortfolio();
+    await signalArchive.appendBatch([
+      makeSignal({ id: 's1', contentHash: 'h1', type: 'NEWS', sentiment: 'NEUTRAL', confidence: 0.5 }),
+    ]);
+
+    await runCurationPipeline({ signalArchive, curatedStore, snapshotStore, config });
+    const curated = await curatedStore.queryByTickers(['AAPL']);
+    expect(curated).toHaveLength(1);
+    expect(curated[0].signal.outputType).toBe('INSIGHT');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// classifyOutputType
+// ---------------------------------------------------------------------------
+
+describe('classifyOutputType', () => {
+  it('returns ALERT for BEARISH sentiment with confidence > 0.7', () => {
+    expect(classifyOutputType(makeSignal({ sentiment: 'BEARISH', confidence: 0.8 }))).toBe('ALERT');
+  });
+
+  it('returns INSIGHT for BEARISH sentiment with confidence <= 0.7', () => {
+    expect(classifyOutputType(makeSignal({ sentiment: 'BEARISH', confidence: 0.5 }))).toBe('INSIGHT');
+  });
+
+  it('returns ALERT for FILINGS type regardless of sentiment', () => {
+    expect(classifyOutputType(makeSignal({ type: 'FILINGS', sentiment: 'NEUTRAL', confidence: 0.4 }))).toBe('ALERT');
+  });
+
+  it('returns ALERT for TRADING_LOGIC_TRIGGER type', () => {
+    expect(classifyOutputType(makeSignal({ type: 'TRADING_LOGIC_TRIGGER' }))).toBe('ALERT');
+  });
+
+  it('returns ALERT for TECHNICAL type with confidence > 0.8', () => {
+    expect(classifyOutputType(makeSignal({ type: 'TECHNICAL', confidence: 0.9 }))).toBe('ALERT');
+  });
+
+  it('returns INSIGHT for TECHNICAL type with confidence <= 0.8', () => {
+    expect(classifyOutputType(makeSignal({ type: 'TECHNICAL', confidence: 0.7 }))).toBe('INSIGHT');
+  });
+
+  it('preserves existing ALERT outputType from LLM', () => {
+    expect(classifyOutputType(makeSignal({ outputType: 'ALERT', sentiment: 'NEUTRAL', confidence: 0.3 }))).toBe(
+      'ALERT',
+    );
+  });
+
+  it('preserves existing ACTION outputType', () => {
+    expect(classifyOutputType(makeSignal({ outputType: 'ACTION' }))).toBe('ACTION');
+  });
+
+  it('returns INSIGHT for default NEWS signal', () => {
+    expect(classifyOutputType(makeSignal({ type: 'NEWS', sentiment: 'NEUTRAL', confidence: 0.5 }))).toBe('INSIGHT');
+  });
+
+  it('returns INSIGHT for BULLISH signals', () => {
+    expect(classifyOutputType(makeSignal({ sentiment: 'BULLISH', confidence: 0.9 }))).toBe('INSIGHT');
   });
 });

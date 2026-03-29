@@ -6,6 +6,7 @@
 
 import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { SignalArchive, SignalQueryFilter } from '../../../signals/archive.js';
+import { classifyOutputType } from '../../../signals/curation/pipeline.js';
 import type { Signal, SignalSentiment, SignalType, SourceType } from '../../../signals/types.js';
 
 // ---------------------------------------------------------------------------
@@ -77,7 +78,7 @@ export function toGql(signal: Signal): SignalGql {
     tier1: signal.tier1 ?? null,
     tier2: signal.tier2 ?? null,
     sentiment: signal.sentiment ?? null,
-    outputType: signal.outputType ?? 'INSIGHT',
+    outputType: classifyOutputType(signal),
     groupId: signal.groupId ?? null,
     version: signal.version ?? 1,
   };

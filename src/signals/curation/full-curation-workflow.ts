@@ -222,9 +222,15 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
           timestamp: new Date().toISOString(),
         });
 
+        // Use curation watermark to only fetch signals newer than last run
+        const fetchWatermark = await curatedSignalStore.getLatestWatermark();
+        const fetchSince = fetchWatermark?.lastRunAt;
+
         // Fetch ticker-specific signals and macro indicators in parallel
         const [fetchResult, macroResult] = await Promise.all([
-          fetchJintelSignals(jintelClient, signalIngestor, portfolioTickers),
+          fetchJintelSignals(jintelClient, signalIngestor, portfolioTickers, {
+            since: fetchSince,
+          }),
           fetchMacroIndicators(jintelClient, signalIngestor),
         ]);
         emitProgress({

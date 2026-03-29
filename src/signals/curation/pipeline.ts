@@ -11,7 +11,7 @@ import type { AssetClass } from '../../api/graphql/types.js';
 import { createSubsystemLogger } from '../../logging/logger.js';
 import type { PortfolioSnapshotStore } from '../../portfolio/snapshot-store.js';
 import type { SignalArchive } from '../archive.js';
-import type { PortfolioRelevanceScore, Signal, SignalType } from '../types.js';
+import type { PortfolioRelevanceScore, Signal, SignalOutputType, SignalType } from '../types.js';
 import type { CuratedSignalStore } from './curated-signal-store.js';
 import type { CuratedSignal, CurationConfig, CurationRunResult } from './types.js';
 
@@ -34,6 +34,10 @@ const TYPE_RELEVANCE: Record<SignalType, Record<AssetClass, number>> = {
 
 const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Source IDs that produce recurring data snapshots (daily price, technicals, sentiment).
+// These are valuable for insight generation but not actionable as standalone Intel Feed cards.
+const DATA_SNAPSHOT_SOURCES = new Set(['jintel-snapshot', 'jintel-technicals', 'jintel-sentiment']);
 
 // ---------------------------------------------------------------------------
 // Pipeline options
@@ -72,19 +76,92 @@ export function computeSourceReliability(signal: Signal): number {
   return sum / signal.sources.length;
 }
 
+/**
+ * Content quality — signals with substantive content are more valuable than title-only.
+ * Multi-source signals also get a boost (corroborated from multiple feeds).
+ */
+export function computeContentQuality(signal: Signal): number {
+  let score = 0.3; // baseline for title-only
+
+  // Has body content
+  const contentLen = signal.content?.length ?? 0;
+  if (contentLen > 50) score += 0.2;
+  if (contentLen > 200) score += 0.15;
+  if (contentLen > 500) score += 0.1;
+
+  // Has LLM-generated summary (processed by clustering or summary generator)
+  if (signal.tier1 && signal.tier2) score += 0.15;
+
+  // Multi-source corroboration
+  if (signal.sources.length >= 2) score += 0.1;
+
+  return Math.min(1, score);
+}
+
+/**
+ * Novelty factor — penalize signals whose title closely matches recently curated signals.
+ * Receives a set of recent normalized titles for O(1) lookup.
+ */
+export function computeNoveltyFactor(signal: Signal, recentTitles: Set<string>): number {
+  const normalized = signal.title.trim().toLowerCase();
+  // Exact title match — very low novelty (not 0, in case scoring or source differs)
+  if (recentTitles.has(normalized)) return 0.2;
+  return 1.0;
+}
+
 export function computeCompositeScore(
   exposureWeight: number,
   typeRelevance: number,
   recencyFactor: number,
   sourceReliability: number,
   weights: CurationConfig['weights'],
+  contentQuality?: number,
+  noveltyFactor?: number,
 ): number {
+  const cq = contentQuality ?? 0.5;
+  const nf = noveltyFactor ?? 1.0;
+
   const raw =
     weights.exposure * exposureWeight +
     weights.typeRelevance * typeRelevance +
     weights.recency * recencyFactor +
-    weights.sourceReliability * sourceReliability;
-  return Math.max(0, Math.min(1, raw));
+    weights.sourceReliability * sourceReliability +
+    (weights.contentQuality ?? 0) * cq;
+  // Novelty is a multiplier, not an additive factor — novel signals keep full score,
+  // repeat signals get penalized proportionally
+  return Math.max(0, Math.min(1, raw * nf));
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic outputType classification (exported for testing)
+// ---------------------------------------------------------------------------
+
+/**
+ * Classify a signal's outputType using deterministic rules.
+ *
+ * If the signal already has an LLM-assigned outputType (from clustering/summary),
+ * we preserve it — this function only upgrades from the default 'INSIGHT'.
+ *
+ * Rules (checked in order, first match wins):
+ *   ALERT:
+ *     - BEARISH sentiment with confidence > 0.7
+ *     - FILINGS type (SEC filings are always time-sensitive)
+ *     - TRADING_LOGIC_TRIGGER type (automated strategy signals)
+ *     - TECHNICAL type with confidence > 0.8 (strong technical breakout/breakdown)
+ *     - Signal already marked ALERT by LLM (preserve)
+ *   INSIGHT:
+ *     - Everything else
+ */
+export function classifyOutputType(signal: Signal): SignalOutputType {
+  // Preserve LLM-assigned non-default outputType
+  if (signal.outputType === 'ALERT' || signal.outputType === 'ACTION') return signal.outputType;
+
+  if (signal.sentiment === 'BEARISH' && signal.confidence > 0.7) return 'ALERT';
+  if (signal.type === 'FILINGS') return 'ALERT';
+  if (signal.type === 'TRADING_LOGIC_TRIGGER') return 'ALERT';
+  if (signal.type === 'TECHNICAL' && signal.confidence > 0.8) return 'ALERT';
+
+  return 'INSIGHT';
 }
 
 // ---------------------------------------------------------------------------
@@ -120,10 +197,21 @@ export async function runCurationPipeline(options: CurationPipelineOptions): Pro
     return { signalsProcessed: 0, signalsCurated: 0, signalsDropped: 0, durationMs: Date.now() - start };
   }
 
-  // 2. FILTER — confidence, spam, portfolio match
+  // 1b. DEDUP — load already-curated signal IDs to skip re-processing
+  const alreadyCurated = await curatedStore.queryByTickers([...portfolioTickers], { limit: 10000 });
+  const alreadyCuratedIds = new Set(alreadyCurated.map((cs) => cs.signal.id));
+
+  // 2. FILTER — confidence, spam, portfolio match, already-curated
   const spamRegexes = config.spamPatterns.map((p) => new RegExp(p, 'i'));
 
   const filtered = rawSignals.filter((signal) => {
+    // Skip already-curated signals
+    if (alreadyCuratedIds.has(signal.id)) return false;
+
+    // Skip recurring data snapshots (price, technicals, sentiment) — they feed insight
+    // generation via DataBrief but aren't actionable as standalone Intel Feed cards.
+    if (signal.sources.some((s) => DATA_SNAPSHOT_SOURCES.has(s.id))) return false;
+
     // Confidence threshold
     if (signal.confidence < config.minConfidence) return false;
 
@@ -138,6 +226,9 @@ export async function runCurationPipeline(options: CurationPipelineOptions): Pro
   const now = Date.now();
   const curatedSignals: CuratedSignal[] = [];
 
+  // Build recent title set for novelty scoring — titles of already-curated signals
+  const recentTitles = new Set(alreadyCurated.map((cs) => cs.signal.title.trim().toLowerCase()));
+
   // Group scores by ticker for rank/trim
   const scoresByTicker = new Map<string, Array<{ signal: Signal; score: PortfolioRelevanceScore }>>();
 
@@ -145,6 +236,8 @@ export async function runCurationPipeline(options: CurationPipelineOptions): Pro
     const scores: PortfolioRelevanceScore[] = [];
     const reliability = computeSourceReliability(signal);
     const recency = computeRecencyFactor(signal.publishedAt, now);
+    const contentQuality = computeContentQuality(signal);
+    const novelty = computeNoveltyFactor(signal, recentTitles);
 
     for (const asset of signal.assets) {
       const position = positionByTicker.get(asset.ticker);
@@ -152,7 +245,15 @@ export async function runCurationPipeline(options: CurationPipelineOptions): Pro
 
       const exposure = computeExposureWeight(position.marketValue, snapshot.totalValue);
       const typeRel = computeTypeRelevance(signal.type, position.assetClass);
-      const composite = computeCompositeScore(exposure, typeRel, recency, reliability, config.weights);
+      const composite = computeCompositeScore(
+        exposure,
+        typeRel,
+        recency,
+        reliability,
+        config.weights,
+        contentQuality,
+        novelty,
+      );
 
       const relevanceScore: PortfolioRelevanceScore = {
         signalId: signal.id,
@@ -174,8 +275,12 @@ export async function runCurationPipeline(options: CurationPipelineOptions): Pro
     }
 
     if (scores.length > 0) {
+      // Deterministic outputType classification — upgrades default INSIGHT to ALERT when rules match
+      const outputType = classifyOutputType(signal);
+      const classified = outputType !== signal.outputType ? { ...signal, outputType } : signal;
+
       curatedSignals.push({
-        signal,
+        signal: classified,
         scores,
         curatedAt: new Date().toISOString(),
       });
@@ -196,7 +301,45 @@ export async function runCurationPipeline(options: CurationPipelineOptions): Pro
     }
   }
 
-  const finalCurated = curatedSignals.filter((cs) => keptSignalIds.has(cs.signal.id));
+  const rankedCurated = curatedSignals.filter((cs) => keptSignalIds.has(cs.signal.id));
+
+  // 4b. TITLE DEDUP — keep only the highest-scoring signal per normalized title.
+  // Prevents near-identical signals (same headline from different sources/runs) from cluttering the feed.
+  const byTitle = new Map<string, CuratedSignal>();
+  for (const cs of rankedCurated) {
+    const key = cs.signal.title.trim().toLowerCase();
+    const existing = byTitle.get(key);
+    if (!existing) {
+      byTitle.set(key, cs);
+    } else {
+      // Keep the one with the higher max composite score
+      const maxExisting = Math.max(...existing.scores.map((s) => s.compositeScore));
+      const maxCurrent = Math.max(...cs.scores.map((s) => s.compositeScore));
+      if (maxCurrent > maxExisting) {
+        byTitle.set(key, cs);
+      }
+    }
+  }
+  // 4c. CROSS-TYPE EVENT GROUPING — when the same ticker has both a price-move signal
+  // (TECHNICAL from jintel-market) and a news/fundamental signal on the same day,
+  // the price move is redundant — the news explains the move. Drop the price-move
+  // signal if a more informative signal exists for the same ticker+day.
+  const REDUNDANT_SOURCES = new Set(['jintel-market']); // price-move signals
+  const tickerDayHasExplanation = new Set<string>();
+  for (const cs of byTitle.values()) {
+    if (!cs.signal.sources.some((s) => REDUNDANT_SOURCES.has(s.id))) {
+      const day = cs.signal.publishedAt.slice(0, 10);
+      for (const score of cs.scores) {
+        tickerDayHasExplanation.add(`${score.ticker}|${day}`);
+      }
+    }
+  }
+  const finalCurated = [...byTitle.values()].filter((cs) => {
+    if (!cs.signal.sources.some((s) => REDUNDANT_SOURCES.has(s.id))) return true;
+    // Drop price-move signal if there's already a news/fundamental signal for same ticker+day
+    const day = cs.signal.publishedAt.slice(0, 10);
+    return !cs.scores.some((score) => tickerDayHasExplanation.has(`${score.ticker}|${day}`));
+  });
 
   // 5. STORE — write curated signals + update watermark
   await curatedStore.writeBatch(finalCurated);

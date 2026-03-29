@@ -28,10 +28,13 @@ import { createReflectionEngine } from '../memory/adapter.js';
 import { resolveDataRoot } from '../paths.js';
 import { Scheduler } from '../scheduler.js';
 import { JsonlSessionStore } from '../sessions/jsonl-store.js';
+import { SignalClustering } from '../signals/clustering.js';
+import type { ClassificationResult, ClassifyInput } from '../signals/clustering.js';
 import { AssessmentConfigSchema } from '../signals/curation/assessment-types.js';
 import { registerFullCurationWorkflow } from '../signals/curation/full-curation-workflow.js';
 import { runCurationPipeline } from '../signals/curation/pipeline.js';
 import { CurationConfigSchema } from '../signals/curation/types.js';
+import { SummaryGenerator } from '../signals/summary-generator.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
 
 const require = createRequire(import.meta.url);
@@ -103,8 +106,50 @@ async function buildFullRuntime(): Promise<{
   setOnboardingClaudeCodeProvider(claudeProvider);
   setAiConfigProviderRouter(providerRouter);
 
-  // Signal clustering disabled — signals go straight to archive without LLM calls.
-  // The group archive and schema remain for future use but no Haiku classify calls run.
+  // Wire signal clustering — LLM-based dedup, linking, and summary/outputType classification.
+  // Uses a lightweight completion adapter so SummaryGenerator and classify calls go through ProviderRouter.
+  const llmComplete = async (prompt: string): Promise<string> => {
+    const result = await providerRouter.completeWithTools({
+      model: 'haiku',
+      messages: [{ role: 'user', content: prompt }],
+      maxTokens: 512,
+    });
+    const text = result.content
+      .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+    return text;
+  };
+
+  const summaryGenerator = new SummaryGenerator({ complete: llmComplete });
+
+  const classify = async (input: ClassifyInput): Promise<ClassificationResult> => {
+    const prompt = `You are a financial news deduplication classifier. Compare these two signals and respond with exactly one word: SAME, RELATED, or DIFFERENT.
+
+Signal A: [${input.existing.type}] "${input.existing.title}" (tickers: ${input.existing.tickers.join(', ')}, time: ${input.existing.time})
+Signal B: [${input.incoming.type}] "${input.incoming.title}" (tickers: ${input.incoming.tickers.join(', ')}, time: ${input.incoming.time})
+
+SAME = identical event from different sources
+RELATED = causally connected events (e.g. earnings report + analyst reaction)
+DIFFERENT = unrelated events that happen to share a ticker
+
+Answer:`;
+    const raw = await llmComplete(prompt);
+    const trimmed = raw.trim().toUpperCase();
+    if (trimmed === 'SAME' || trimmed === 'RELATED' || trimmed === 'DIFFERENT') return trimmed;
+    // Fallback: if LLM returns something unexpected, treat as DIFFERENT to avoid bad merges
+    return 'DIFFERENT';
+  };
+
+  const clustering = new SignalClustering({
+    archive: services.signalArchive,
+    groupArchive: services.signalGroupArchive,
+    classify,
+    generator: summaryGenerator,
+    concurrencyLimit: 5,
+  });
+  services.signalIngestor.setClustering(clustering);
+  services.signalIngestor.setSummaryGenerator(summaryGenerator);
 
   // ReflectionEngine with lazy price provider — reads jintelToolOptions.client at call time.
   const priceProvider = createJintelPriceProvider({

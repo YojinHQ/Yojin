@@ -248,6 +248,7 @@ function InsightsContent() {
   const [curatedResult, reexecuteCurated] = useQuery<CuratedSignalsQueryResult, CuratedSignalsVariables>({
     query: CURATED_SIGNALS_QUERY,
     variables: curatedVars,
+    requestPolicy: 'network-only',
   });
   const allCuratedSignals = useMemo(() => curatedResult.data?.curatedSignals ?? [], [curatedResult.data]);
 

@@ -11,6 +11,8 @@ import type { Orchestrator } from '../../../agents/orchestrator.js';
 import { createSubsystemLogger } from '../../../logging/logger.js';
 import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { SignalArchive } from '../../../signals/archive.js';
+import type { AssessmentStore } from '../../../signals/curation/assessment-store.js';
+import type { SignalAssessment } from '../../../signals/curation/assessment-types.js';
 import type { CuratedSignalStore } from '../../../signals/curation/curated-signal-store.js';
 import { runCurationPipeline } from '../../../signals/curation/pipeline.js';
 import type { CurationConfig } from '../../../signals/curation/types.js';
@@ -22,6 +24,7 @@ const log = createSubsystemLogger('curated-signals-resolver');
 // ---------------------------------------------------------------------------
 
 let store: CuratedSignalStore | null = null;
+let assessmentStore: AssessmentStore | null = null;
 let curationOrchestrator: Orchestrator | null = null;
 let snapshotStore: PortfolioSnapshotStore | null = null;
 let signalArchive: SignalArchive | null = null;
@@ -29,6 +32,10 @@ let curationConfig: CurationConfig | null = null;
 
 export function setCuratedSignalStore(s: CuratedSignalStore): void {
   store = s;
+}
+
+export function setCuratedAssessmentStore(s: AssessmentStore): void {
+  assessmentStore = s;
 }
 
 export function setCurationOrchestrator(o: Orchestrator): void {
@@ -60,6 +67,9 @@ interface CuratedSignalGql {
   signal: SignalGql;
   scores: PortfolioRelevanceScoreGql[];
   curatedAt: string;
+  verdict: string | null;
+  thesisAlignment: string | null;
+  actionability: number | null;
 }
 
 interface CurationStatusGql {
@@ -74,7 +84,7 @@ interface CurationStatusGql {
 
 export async function curatedSignalsResolver(
   _parent: unknown,
-  args: { ticker?: string; since?: string; limit?: number },
+  args: { ticker?: string; since?: string; limit?: number; offset?: number },
 ): Promise<CuratedSignalGql[]> {
   if (!store) return [];
 
@@ -98,20 +108,78 @@ export async function curatedSignalsResolver(
     store.getDismissedIds(),
   ]);
 
-  // Filter out dismissed signals
-  const visible = curated.filter((cs) => !dismissedIds.has(cs.signal.id));
+  // Load latest assessments for verdict enrichment — keyed by signalId for O(1) join
+  let assessmentBySignalId = new Map<string, SignalAssessment>();
+  if (assessmentStore) {
+    try {
+      const reports = await assessmentStore.queryByTickers(tickers, { limit: 10 });
+      for (const report of reports) {
+        for (const a of report.assessments) {
+          // Keep the most recent assessment per signal (reports are newest-first)
+          if (!assessmentBySignalId.has(a.signalId)) {
+            assessmentBySignalId.set(a.signalId, a);
+          }
+        }
+      }
+    } catch {
+      // Best-effort — assessments are enrichment, not critical
+      assessmentBySignalId = new Map();
+    }
+  }
 
-  return visible.map((cs) => ({
-    signal: toGql(cs.signal),
-    scores: cs.scores.map((s) => ({
-      signalId: s.signalId,
-      ticker: s.ticker,
-      exposureWeight: s.exposureWeight,
-      typeRelevance: s.typeRelevance,
-      compositeScore: s.compositeScore,
-    })),
-    curatedAt: cs.curatedAt,
-  }));
+  // CRITICAL verdict boost — multiply composite score for ranking
+  const VERDICT_BOOST: Record<string, number> = { CRITICAL: 1.5, IMPORTANT: 1.1, NOISE: 0.5 };
+
+  // Filter out dismissed signals, dedup by normalized title (keep highest score), sort by composite score
+  const nonDismissed = curated.filter((cs) => !dismissedIds.has(cs.signal.id));
+
+  // Title-level dedup — keep the curated signal with the highest composite score per unique title
+  const byTitle = new Map<string, (typeof nonDismissed)[number]>();
+  for (const cs of nonDismissed) {
+    const key = cs.signal.title.trim().toLowerCase();
+    const existing = byTitle.get(key);
+    if (!existing) {
+      byTitle.set(key, cs);
+    } else {
+      const maxExisting = Math.max(...existing.scores.map((s) => s.compositeScore));
+      const maxCurrent = Math.max(...cs.scores.map((s) => s.compositeScore));
+      if (maxCurrent > maxExisting) byTitle.set(key, cs);
+    }
+  }
+
+  // Sort with verdict-boosted scores — CRITICAL signals bubble to top
+  const sorted = [...byTitle.values()].sort((a, b) => {
+    const assessA = assessmentBySignalId.get(a.signal.id);
+    const assessB = assessmentBySignalId.get(b.signal.id);
+    const boostA = assessA ? (VERDICT_BOOST[assessA.verdict] ?? 1) : 1;
+    const boostB = assessB ? (VERDICT_BOOST[assessB.verdict] ?? 1) : 1;
+    const maxA = Math.max(...a.scores.map((s) => s.compositeScore)) * boostA;
+    const maxB = Math.max(...b.scores.map((s) => s.compositeScore)) * boostB;
+    return maxB - maxA;
+  });
+
+  // Pagination — offset/limit applied after dedup + sort
+  const offset = args.offset ?? 0;
+  const limit = args.limit ?? 200;
+  const visible = sorted.slice(offset, offset + limit);
+
+  return visible.map((cs) => {
+    const assessment = assessmentBySignalId.get(cs.signal.id);
+    return {
+      signal: toGql(cs.signal),
+      scores: cs.scores.map((s) => ({
+        signalId: s.signalId,
+        ticker: s.ticker,
+        exposureWeight: s.exposureWeight,
+        typeRelevance: s.typeRelevance,
+        compositeScore: s.compositeScore,
+      })),
+      curatedAt: cs.curatedAt,
+      verdict: assessment?.verdict ?? null,
+      thesisAlignment: assessment?.thesisAlignment ?? null,
+      actionability: assessment?.actionability ?? null,
+    };
+  });
 }
 
 export async function curationStatusResolver(): Promise<CurationStatusGql> {
