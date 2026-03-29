@@ -20,8 +20,9 @@ import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
 
 const logger = createSubsystemLogger('jintel-signal-fetcher');
 
-const ENRICHMENT_FIELDS = ['market', 'risk', 'regulatory', 'technicals', 'news', 'research', 'sentiment'] as const;
-const CHUNK_SIZE = 20;
+// Only request fields that produce signals — risk and regulatory add load without signal output
+const ENRICHMENT_FIELDS = ['market', 'technicals', 'news', 'research', 'sentiment'] as const;
+const CHUNK_SIZE = 5;
 
 export interface JintelFetchResult {
   ingested: number;
