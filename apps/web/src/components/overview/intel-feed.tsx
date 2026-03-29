@@ -743,7 +743,7 @@ export default function IntelFeed() {
                             reexecute({ requestPolicy: 'network-only' }),
                           );
                         }}
-                        onExplore={() => void navigate(`/signals?id=${item.id}`)}
+                        onExplore={() => void navigate(`/signals?highlight=${item.id}&ticker=${section.ticker}`)}
                       />
                     ))}
                   </div>
