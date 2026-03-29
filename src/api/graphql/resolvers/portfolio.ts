@@ -331,6 +331,14 @@ export async function editPositionMutation(
   const targetPlatform = args.platform.toUpperCase();
   const { symbol, name, quantity, costBasis, assetClass, platform, entryDate } = args.input;
 
+  // Look up existing position first so we can preserve its entry date
+  const targetPlatformPositions = existing.positions.filter((p) => (p.platform ?? '').toUpperCase() === targetPlatform);
+  const existingPosition = targetPlatformPositions.find((p) => p.symbol.toUpperCase() === targetSymbol);
+
+  if (!existingPosition) {
+    throw new Error(`Position ${targetSymbol} not found on platform ${targetPlatform}`);
+  }
+
   const updatedPosition: Position = {
     symbol: symbol.toUpperCase(),
     name: name ?? symbol.toUpperCase(),
@@ -342,16 +350,8 @@ export async function editPositionMutation(
     unrealizedPnlPercent: 0,
     assetClass: (assetClass as AssetClass) ?? 'EQUITY',
     platform: ((platform as Position['platform']) ?? targetPlatform).toUpperCase(),
-    entryDate: entryDate || new Date().toISOString().slice(0, 10),
+    entryDate: entryDate || existingPosition.entryDate || new Date().toISOString().slice(0, 10),
   };
-
-  // Replace the matching position within the target platform only
-  const targetPlatformPositions = existing.positions.filter((p) => (p.platform ?? '').toUpperCase() === targetPlatform);
-
-  const positionExists = targetPlatformPositions.some((p) => p.symbol.toUpperCase() === targetSymbol);
-  if (!positionExists) {
-    throw new Error(`Position ${targetSymbol} not found on platform ${targetPlatform}`);
-  }
 
   const updatedPlatformPositions = targetPlatformPositions.map((p) =>
     p.symbol.toUpperCase() === targetSymbol ? updatedPosition : p,
