@@ -53,7 +53,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    label: 'Insights',
+    label: 'Signals',
     path: '/insights',
     icon: (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">

@@ -7,6 +7,25 @@ import { CardEmptyState } from '../common/card-empty-state';
 import { FeatureCardGate } from '../common/feature-gate';
 import Spinner from '../common/spinner';
 import { DashboardCard } from '../common/dashboard-card';
+import Badge from '../common/badge';
+import type { BadgeVariant } from '../common/badge';
+import type { PositionInsight, InsightRating } from '../../api/types';
+
+const ratingVariant: Record<InsightRating, BadgeVariant> = {
+  VERY_BULLISH: 'success',
+  BULLISH: 'success',
+  NEUTRAL: 'warning',
+  BEARISH: 'error',
+  VERY_BEARISH: 'error',
+};
+
+const ratingLabel: Record<InsightRating, string> = {
+  VERY_BULLISH: 'Very Bullish',
+  BULLISH: 'Bullish',
+  NEUTRAL: 'Neutral',
+  BEARISH: 'Bearish',
+  VERY_BEARISH: 'Very Bearish',
+};
 
 function formatCurrency(n: number): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -30,7 +49,7 @@ function Sparkline({ data, dayChangePercent }: { symbol: string; data: number[];
   const points = data
     .map((v, i) => {
       const x = (i / (data.length - 1)) * 120;
-      const y = 32 - ((v - min) / range) * 24 - 4; // 4px padding for labels
+      const y = 32 - ((v - min) / range) * 24 - 4;
       return `${x},${y}`;
     })
     .join(' ');
@@ -55,7 +74,7 @@ function Sparkline({ data, dayChangePercent }: { symbol: string; data: number[];
 
 const TH = 'whitespace-nowrap px-3 py-2 text-2xs font-medium uppercase tracking-wider text-text-muted';
 
-export default function PositionsPreview() {
+export default function PositionsPreview({ insights }: { insights?: PositionInsight[] }) {
   const { jintelConfigured } = useFeatureStatus();
   const [{ data: portfolioData, fetching, error }] = usePortfolio();
   const data = portfolioData?.portfolio;
@@ -107,18 +126,22 @@ export default function PositionsPreview() {
 
   // Sort by market value descending, show top 5
   const top = [...data.positions].sort((a, b) => b.marketValue - a.marketValue).slice(0, 5);
+  const totalValue = data.totalValue || data.positions.reduce((sum, p) => sum + p.marketValue, 0);
+  const insightMap = new Map(insights?.map((i) => [i.symbol, i]) ?? []);
 
   return (
-    <DashboardCard title="Portfolio" headerAction={viewAllLink}>
-      <div className="min-h-0 flex-1 overflow-auto">
+    <DashboardCard title="Portfolio" headerAction={viewAllLink} className="min-h-fit">
+      <div>
         <table className="w-full text-left">
           <thead className="sticky top-0 z-10 bg-bg-card">
             <tr className="border-b border-border">
               <th className={TH}>Asset</th>
               <th className={cn(TH, 'w-[80px]')} />
-              <th className={cn(TH, 'text-right')}>Price Today</th>
-              <th className={cn(TH, 'text-right')}>Change $</th>
-              <th className={cn(TH, 'text-right')}>Change %</th>
+              <th className={cn(TH, 'text-right')}>Price</th>
+              <th className={cn(TH, 'text-right')}>Value</th>
+              <th className={cn(TH, 'text-right')}>Weight</th>
+              <th className={cn(TH, 'text-right')}>Change</th>
+              <th className={cn(TH, 'text-center')}>Rating</th>
             </tr>
           </thead>
           <tbody>
@@ -129,6 +152,7 @@ export default function PositionsPreview() {
               const isDown = dc != null && dc < 0;
               const colorClass = isUp ? 'text-success' : isDown ? 'text-error' : 'text-text-muted';
               const arrow = isUp ? '\u25B2' : isDown ? '\u25BC' : '';
+              const insight = insightMap.get(pos.symbol);
 
               return (
                 <tr
@@ -156,38 +180,50 @@ export default function PositionsPreview() {
                     {pos.sparkline ? (
                       <Sparkline symbol={pos.symbol} data={pos.sparkline} dayChangePercent={dcp ?? 0} />
                     ) : (
-                      <div className="flex h-8 w-[100px] items-center justify-center">
-                        <span className="text-2xs text-text-muted/40">—</span>
+                      <div className="flex h-8 w-[80px] items-center justify-center">
+                        <span className="text-2xs text-text-muted/40">&mdash;</span>
                       </div>
                     )}
                   </td>
 
-                  {/* Price Today */}
+                  {/* Price */}
                   <td className="whitespace-nowrap px-3 py-2 text-right text-xs font-medium tabular-nums text-text-primary">
                     {formatCurrency(pos.currentPrice)}
                   </td>
 
-                  {/* Change $ */}
+                  {/* Market Value */}
+                  <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-text-primary">
+                    {formatCurrency(pos.marketValue)}
+                  </td>
+
+                  {/* Weight % */}
+                  <td className="whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums text-text-secondary">
+                    {totalValue > 0 ? `${((pos.marketValue / totalValue) * 100).toFixed(1)}%` : '\u2014'}
+                  </td>
+
+                  {/* Change ($ + %) combined */}
                   <td className={cn('whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums', colorClass)}>
                     {dc != null ? (
-                      <>
-                        {arrow && <span className="mr-0.5 text-2xs">{arrow}</span>}
-                        {formatChange(dc)}
-                      </>
+                      <div className="flex flex-col items-end">
+                        <span>
+                          {arrow && <span className="mr-0.5 text-2xs">{arrow}</span>}
+                          {formatChange(dc)}
+                        </span>
+                        <span className="text-2xs">{formatPercent(dcp ?? 0)}</span>
+                      </div>
                     ) : (
-                      <span className="text-text-muted/40">—</span>
+                      <span className="text-text-muted/40">&mdash;</span>
                     )}
                   </td>
 
-                  {/* Change % */}
-                  <td className={cn('whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums', colorClass)}>
-                    {dcp != null ? (
-                      <>
-                        {arrow && <span className="mr-0.5 text-2xs">{arrow}</span>}
-                        {formatPercent(dcp)}
-                      </>
+                  {/* Insight Rating */}
+                  <td className="whitespace-nowrap px-3 py-2 text-center">
+                    {insight ? (
+                      <Badge variant={ratingVariant[insight.rating]} size="xs">
+                        {ratingLabel[insight.rating]}
+                      </Badge>
                     ) : (
-                      <span className="text-text-muted/40">—</span>
+                      <span className="text-2xs text-text-muted/40">&mdash;</span>
                     )}
                   </td>
                 </tr>

@@ -406,7 +406,7 @@ function InsightsContent() {
       <header className="px-6 pt-6 pb-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-text-primary">Insights</h1>
+            <h1 className="text-lg font-semibold text-text-primary">Signals</h1>
             <p className="mt-1 text-sm text-text-muted">{subtitle}</p>
           </div>
           <Tabs tabs={[...VIEW_TABS]} value={viewTab} onChange={(v) => setViewTab(v as ViewTab)} size="sm" />
