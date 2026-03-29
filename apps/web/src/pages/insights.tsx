@@ -1,15 +1,13 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { useMutation, useQuery, useSubscription } from 'urql';
+import { useQuery, useSubscription } from 'urql';
 import { cn } from '../lib/utils';
 import {
   CURATED_SIGNALS_QUERY,
   LATEST_INSIGHT_REPORT_QUERY,
   ON_WORKFLOW_PROGRESS_SUBSCRIPTION,
-  RUN_FULL_CURATION_MUTATION,
   CURATION_WORKFLOW_STATUS_QUERY,
   INSIGHTS_WORKFLOW_STATUS_QUERY,
-  PROCESS_INSIGHTS_MUTATION,
 } from '../api/documents';
 import { usePortfolio } from '../api/hooks/use-portfolio';
 import type {
@@ -19,10 +17,8 @@ import type {
   LatestInsightReportQueryResult,
   OnWorkflowProgressSubscriptionResult,
   OnWorkflowProgressVariables,
-  RunFullCurationMutationResult,
   CurationWorkflowStatusQueryResult,
   InsightsWorkflowStatusQueryResult,
-  ProcessInsightsMutationResult,
   WorkflowProgressEvent,
   InsightRating,
   InsightReport,
@@ -32,7 +28,6 @@ import type {
 } from '../api/types';
 import Badge from '../components/common/badge';
 import type { BadgeVariant } from '../components/common/badge';
-import Button from '../components/common/button';
 import Card from '../components/common/card';
 import Tabs from '../components/common/tabs';
 import { PageFeatureGate } from '../components/common/feature-gate';
@@ -42,17 +37,7 @@ import { collectInsightSignalIds } from '../lib/insight-signals';
 // Constants
 // ---------------------------------------------------------------------------
 
-const SIGNAL_TYPES = [
-  'ALL',
-  'NEWS',
-  'FUNDAMENTAL',
-  'SENTIMENT',
-  'TECHNICAL',
-  'MACRO',
-  'FILINGS',
-  'SOCIALS',
-  'TRADING_LOGIC_TRIGGER',
-] as const;
+const SIGNAL_TYPES = ['ALL', 'NEWS', 'FUNDAMENTAL', 'SENTIMENT', 'TECHNICAL', 'MACRO'] as const;
 
 const DATE_RANGES = [
   { label: '24h', value: '1' },
@@ -267,32 +252,12 @@ function InsightsContent() {
     requestPolicy: 'network-only',
   });
 
-  // Mutations
-  const [curationMutResult, runFullCuration] = useMutation<RunFullCurationMutationResult>(RUN_FULL_CURATION_MUTATION);
-  const [insightsMutResult, processInsightsMutation] =
-    useMutation<ProcessInsightsMutationResult>(PROCESS_INSIGHTS_MUTATION);
-
-  // Reconnection state
-  const [curationReconnecting, setCurationReconnecting] = useState(false);
-  const [insightsReconnecting, setInsightsReconnecting] = useState(false);
-
+  // Background workflow status — detect when scheduler-triggered workflows are running
   const backendCurationRunning = curationStatusResult.data?.curationWorkflowStatus.running ?? false;
   const backendInsightsRunning = insightsStatusResult.data?.insightsWorkflowStatus.running ?? false;
 
-  useEffect(() => {
-    if (backendCurationRunning && !curationMutResult.fetching && !curationReconnecting) {
-      setCurationReconnecting(true);
-    }
-  }, [backendCurationRunning, curationMutResult.fetching, curationReconnecting]);
-
-  useEffect(() => {
-    if (backendInsightsRunning && !insightsMutResult.fetching && !insightsReconnecting) {
-      setInsightsReconnecting(true);
-    }
-  }, [backendInsightsRunning, insightsMutResult.fetching, insightsReconnecting]);
-
-  const curationLoading = curationMutResult.fetching || curationReconnecting;
-  const insightsLoading = insightsMutResult.fetching || insightsReconnecting;
+  const curationLoading = backendCurationRunning;
+  const insightsLoading = backendInsightsRunning;
 
   // Curation progress subscription
   const [curationProgressResult] = useSubscription<
@@ -322,10 +287,9 @@ function InsightsContent() {
   const insightsEvents = insightsProgressResult.data ?? [];
   const lastInsightsEvent = insightsEvents[insightsEvents.length - 1];
 
-  // Handle workflow completions
+  // Refresh data when background workflows complete
   useEffect(() => {
     if (lastCurationEvent?.stage === 'complete' || lastCurationEvent?.stage === 'error') {
-      setCurationReconnecting(false);
       reexecuteCurated({ requestPolicy: 'network-only' });
       reexecuteCurationStatus({ requestPolicy: 'network-only' });
     }
@@ -334,25 +298,14 @@ function InsightsContent() {
 
   useEffect(() => {
     if (lastInsightsEvent?.stage === 'complete' || lastInsightsEvent?.stage === 'error') {
-      setInsightsReconnecting(false);
       reexecuteInsights({ requestPolicy: 'network-only' });
       reexecuteInsightsStatus({ requestPolicy: 'network-only' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reexecute functions are stable
   }, [lastInsightsEvent?.stage]);
 
-  const handleRunCuration = async () => {
-    setCurationReconnecting(false);
-    await runFullCuration({});
-  };
-
-  const handleProcessInsights = async () => {
-    setInsightsReconnecting(false);
-    await processInsightsMutation({});
-  };
-
   // Insight report
-  const report = insightsMutResult.data?.processInsights ?? insightQueryResult.data?.latestInsightReport ?? null;
+  const report = insightQueryResult.data?.latestInsightReport ?? null;
 
   // Cross-reference: which signals appear in the analysis report
   const insightSignalIds = useMemo(
@@ -385,7 +338,10 @@ function InsightsContent() {
       }
     }
     return Array.from(byTicker.entries())
-      .map(([ticker, signals]) => ({ ticker, signals }))
+      .map(([ticker, signals]) => ({
+        ticker,
+        signals: signals.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)),
+      }))
       .sort((a, b) => b.signals.length - a.signals.length);
   }, [allCuratedSignals]);
 
@@ -414,7 +370,8 @@ function InsightsContent() {
     if (sourceFilter) {
       items = items.filter((cs) => cs.signal.sources.some((src) => src.id === sourceFilter));
     }
-    return items;
+    // Sort newest first by publishedAt
+    return [...items].sort((a, b) => b.signal.publishedAt.localeCompare(a.signal.publishedAt));
   }, [allCuratedSignals, tickerFilter, typeFilter, search, minConfidence, since, sourceFilter]);
 
   const sources = useMemo(() => {
@@ -452,21 +409,7 @@ function InsightsContent() {
             <h1 className="text-lg font-semibold text-text-primary">Insights</h1>
             <p className="mt-1 text-sm text-text-muted">{subtitle}</p>
           </div>
-          <div className="flex items-center gap-3">
-            <Tabs tabs={[...VIEW_TABS]} value={viewTab} onChange={(v) => setViewTab(v as ViewTab)} size="sm" />
-            <Button size="lg" onClick={handleRunCuration} loading={curationLoading}>
-              {curationLoading ? 'Fetching...' : 'Fetch Data'}
-            </Button>
-            <Button
-              size="lg"
-              variant="secondary"
-              onClick={handleProcessInsights}
-              loading={insightsLoading}
-              disabled={!hasPositions && !insightsLoading}
-            >
-              {insightsLoading ? 'Processing...' : 'Process Insights'}
-            </Button>
-          </div>
+          <Tabs tabs={[...VIEW_TABS]} value={viewTab} onChange={(v) => setViewTab(v as ViewTab)} size="sm" />
         </div>
       </header>
 
@@ -475,32 +418,6 @@ function InsightsContent() {
       {insightsLoading && (
         <div className="px-6 pb-4">
           <WorkflowDiagram events={insightsEvents} />
-        </div>
-      )}
-
-      {/* Errors */}
-      {!curationLoading && curationMutResult.error && (
-        <div className="px-6 pb-4">
-          <Card className="p-4 border border-error/30 bg-error/5">
-            <div className="flex items-center gap-3">
-              <p className="text-sm text-error flex-1">{curationMutResult.error.message}</p>
-              <Button size="sm" onClick={handleRunCuration}>
-                Retry
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
-      {!insightsLoading && insightsMutResult.error && (
-        <div className="px-6 pb-4">
-          <Card className="p-4 border border-error/30 bg-error/5">
-            <div className="flex items-center gap-3">
-              <p className="text-sm text-error flex-1">{insightsMutResult.error.message}</p>
-              <Button size="sm" onClick={handleProcessInsights}>
-                Retry
-              </Button>
-            </div>
-          </Card>
         </div>
       )}
 
@@ -610,7 +527,10 @@ function InsightsContent() {
               </EmptyState>
             )}
             {hasPositions && !loading && signalsByTicker.length === 0 && (
-              <EmptyState icon="signal" message="No recent signals. Click Fetch Data to pull the latest signals." />
+              <EmptyState
+                icon="signal"
+                message="No recent signals. Signals will appear automatically as the pipeline runs."
+              />
             )}
             {/* Portfolio-level analysis summary */}
             {report && <PortfolioSummaryCard report={report} />}

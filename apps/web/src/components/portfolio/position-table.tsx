@@ -372,7 +372,6 @@ export default function PositionTable({ positions, onAdd }: { positions: Positio
 function EditPositionModal({ position, onClose }: { position: Position; onClose: () => void }) {
   const [quantity, setQuantity] = useState(String(position.quantity));
   const [costBasis, setCostBasis] = useState(String(position.costBasis));
-  const [entryDate, setEntryDate] = useState(position.entryDate ?? '');
   const [error, setError] = useState('');
   const [{ fetching }, editPosition] = useEditPosition();
 
@@ -399,7 +398,6 @@ function EditPositionModal({ position, onClose }: { position: Position; onClose:
         costBasis: p,
         assetClass: position.assetClass,
         platform: position.platform,
-        ...(entryDate ? { entryDate } : {}),
       },
     });
 
@@ -408,7 +406,7 @@ function EditPositionModal({ position, onClose }: { position: Position; onClose:
       return;
     }
     onClose();
-  }, [quantity, costBasis, entryDate, position, editPosition, onClose]);
+  }, [quantity, costBasis, position, editPosition, onClose]);
 
   const q = parseFloat(quantity);
   const p = parseFloat(costBasis);
@@ -448,19 +446,6 @@ function EditPositionModal({ position, onClose }: { position: Position; onClose:
               {totalValue > 0 ? `$${totalValue.toFixed(2)}` : '\u2014'}
             </div>
           </div>
-        </div>
-
-        <div className="mb-4 w-44">
-          <Input
-            label="Entry Date (optional)"
-            type="date"
-            value={entryDate}
-            onChange={(e) => {
-              setEntryDate(e.target.value);
-              setError('');
-            }}
-            size="sm"
-          />
         </div>
 
         {error && <p className="mb-3 text-xs font-medium text-error">{error}</p>}

@@ -6,6 +6,7 @@
 
 import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { SignalArchive, SignalQueryFilter } from '../../../signals/archive.js';
+import type { AssessmentStore } from '../../../signals/curation/assessment-store.js';
 import { classifyOutputType } from '../../../signals/curation/pipeline.js';
 import type { Signal, SignalSentiment, SignalType, SourceType } from '../../../signals/types.js';
 
@@ -15,6 +16,7 @@ import type { Signal, SignalSentiment, SignalType, SourceType } from '../../../s
 
 let archive: SignalArchive | null = null;
 let snapshotStore: PortfolioSnapshotStore | null = null;
+let assessmentStore: AssessmentStore | null = null;
 
 export function setSignalArchive(a: SignalArchive): void {
   archive = a;
@@ -22,6 +24,10 @@ export function setSignalArchive(a: SignalArchive): void {
 
 export function setSignalSnapshotStore(store: PortfolioSnapshotStore): void {
   snapshotStore = store;
+}
+
+export function setSignalAssessmentStore(s: AssessmentStore): void {
+  assessmentStore = s;
 }
 
 // ---------------------------------------------------------------------------
@@ -136,7 +142,29 @@ export async function signalsResolver(
     }
   }
 
-  const deduped = [...byTitle.values()];
+  let deduped = [...byTitle.values()];
+
+  // Filter out NOISE-verdicted signals — agents determined these have no value
+  if (assessmentStore) {
+    try {
+      const tickers = args.ticker ? [args.ticker] : (positionTickers ?? []);
+      if (tickers.length > 0) {
+        const reports = await assessmentStore.queryByTickers(tickers, { limit: 10 });
+        const noiseIds = new Set<string>();
+        for (const report of reports) {
+          for (const a of report.assessments) {
+            if (a.verdict === 'NOISE') noiseIds.add(a.signalId);
+          }
+        }
+        if (noiseIds.size > 0) {
+          deduped = deduped.filter((s) => !noiseIds.has(s.id));
+        }
+      }
+    } catch {
+      // Best-effort — assessments are enrichment, not critical
+    }
+  }
+
   deduped.sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : a.publishedAt > b.publishedAt ? -1 : 0));
   return deduped.map(toGql);
 }

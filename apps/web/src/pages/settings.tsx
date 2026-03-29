@@ -58,19 +58,10 @@ export default function Settings() {
   });
   const jintelConfigured = statusData?.onboardingStatus?.jintelConfigured ?? false;
 
-  const [notifications, setNotifications] = useState({
-    priceAlerts: true,
-    riskWarnings: true,
-    agentActivity: false,
-  });
   const [privacy, setPrivacy] = useState({
     piiRedaction: true,
     auditLogging: true,
   });
-
-  const updateNotification = (key: keyof typeof notifications) => (value: boolean) => {
-    setNotifications((prev) => ({ ...prev, [key]: value }));
-  };
 
   const updatePrivacy = (key: keyof typeof privacy) => (value: boolean) => {
     setPrivacy((prev) => ({ ...prev, [key]: value }));
@@ -90,36 +81,6 @@ export default function Settings() {
             <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">Daily Insights</h3>
           </div>
           <BriefingEditor disabled={!jintelConfigured} />
-        </div>
-
-        <div className="border-t border-border" />
-
-        {/* Section: Notifications */}
-        <div className="p-5 space-y-4">
-          <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">Notifications</h3>
-          <div className="space-y-4">
-            <Toggle
-              label="Price alerts"
-              description="Notify when positions hit target price"
-              checked={notifications.priceAlerts}
-              onChange={updateNotification('priceAlerts')}
-              disabled={!jintelConfigured}
-            />
-            <Toggle
-              label="Risk warnings"
-              description="Alert on concentration or exposure changes"
-              checked={notifications.riskWarnings}
-              onChange={updateNotification('riskWarnings')}
-              disabled={!jintelConfigured}
-            />
-            <Toggle
-              label="Agent activity"
-              description="Notify when agents complete tasks"
-              checked={notifications.agentActivity}
-              onChange={updateNotification('agentActivity')}
-              disabled={!jintelConfigured}
-            />
-          </div>
         </div>
 
         <div className="border-t border-border" />

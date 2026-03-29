@@ -62,7 +62,7 @@ export default function YojinActionsCard() {
             </svg>
           }
           title="No action items"
-          description="Fetch Data then Process Insights to generate observations."
+          description="Action items will appear here automatically as insights are generated."
         />
       </DashboardCard>
     );

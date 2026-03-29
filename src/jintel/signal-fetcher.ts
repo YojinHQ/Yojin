@@ -136,7 +136,16 @@ function mentionsEntity(text: string, tickers: string[], entityName: string | un
   return false;
 }
 
-const JUNK_TITLE_PATTERN = /stock price|in real time$|tradingview|quote & history|commission-free|buy and sell/i;
+const JUNK_TITLE_PATTERN =
+  /stock price|in real time$|tradingview|quote & history|commission-free|buy and sell|spy vs\.? spy/i;
+
+/** Titles that are just entity names with optional ticker suffix (e.g. "Invesco QQQ ETF | ICVT") */
+function isEntityNameTitle(title: string, entityName: string | undefined): boolean {
+  if (!entityName) return false;
+  // Strip trailing " | TICKER" and compare to entity name
+  const cleaned = title.replace(/\s*\|\s*[A-Z0-9.]+$/, '').trim();
+  return cleaned.toLowerCase() === entityName.toLowerCase();
+}
 
 function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[] {
   // Day-precision timestamp — stable hash prevents duplicate signals across re-runs
@@ -242,6 +251,7 @@ function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[
   for (const article of entity.news ?? []) {
     if (!article.title) continue;
     if (JUNK_TITLE_PATTERN.test(article.title)) continue;
+    if (isEntityNameTitle(article.title, entityName)) continue;
     const text = `${article.title} ${article.snippet ?? ''}`;
     if (!mentionsEntity(text, tickers, entityName)) continue;
     signals.push({
@@ -263,6 +273,7 @@ function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[
   for (const article of entity.research ?? []) {
     if (!article.title) continue;
     if (JUNK_TITLE_PATTERN.test(article.title)) continue;
+    if (isEntityNameTitle(article.title, entityName)) continue;
     const researchText = `${article.title} ${article.text ?? ''}`;
     if (!mentionsEntity(researchText, tickers, entityName)) continue;
     signals.push({

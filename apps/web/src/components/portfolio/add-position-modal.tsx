@@ -61,10 +61,9 @@ interface FormData {
   account: string;
   quantity: string;
   costBasis: string;
-  entryDate: string;
 }
 
-const EMPTY_FORM: FormData = { symbol: '', account: '', quantity: '', costBasis: '', entryDate: '' };
+const EMPTY_FORM: FormData = { symbol: '', account: '', quantity: '', costBasis: '' };
 
 interface AddPositionModalProps {
   onOpenAddAccount?: () => void;
@@ -131,7 +130,6 @@ export default function AddPositionModal({ onOpenAddAccount }: AddPositionModalP
         costBasis: parseFloat(formData.costBasis),
         assetClass: inferAssetClass(symbol),
         platform: inferPlatform(formData.account),
-        ...(formData.entryDate ? { entryDate: formData.entryDate } : {}),
       },
     });
 
@@ -241,17 +239,6 @@ export default function AddPositionModal({ onOpenAddAccount }: AddPositionModalP
             </div>
           </div>
 
-          {/* Entry Date (optional) */}
-          <div className="mb-4 w-44">
-            <Input
-              label="Entry Date (optional)"
-              type="date"
-              value={formData.entryDate}
-              onChange={(e) => updateField('entryDate', e.target.value)}
-              size="sm"
-            />
-          </div>
-
           {error && <p className="mb-3 text-xs font-medium text-error">{error}</p>}
 
           <div className="flex items-center justify-between">
@@ -284,7 +271,6 @@ export default function AddPositionModal({ onOpenAddAccount }: AddPositionModalP
               <SummaryRow label="Account" value={formData.account} />
               <SummaryRow label="Quantity" value={qty.toString()} />
               <SummaryRow label="Avg Cost" value={`$${price.toFixed(2)}`} />
-              {formData.entryDate && <SummaryRow label="Entry Date" value={formData.entryDate} />}
               <div className="border-t border-border/40 pt-3">
                 <SummaryRow label="Total Value" value={`$${totalValue.toFixed(2)}`} bold />
               </div>

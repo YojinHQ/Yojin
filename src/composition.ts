@@ -45,7 +45,7 @@ import { onAppDataCleared } from './api/graphql/resolvers/profile.js';
 import { setProfileStore } from './api/graphql/resolvers/profiles.js';
 import { setAssessmentStore } from './api/graphql/resolvers/signal-assessments.js';
 import { setGroupSignalArchive, setSignalGroupArchive } from './api/graphql/resolvers/signal-groups.js';
-import { setSignalArchive, setSignalSnapshotStore } from './api/graphql/resolvers/signals.js';
+import { setSignalArchive, setSignalAssessmentStore, setSignalSnapshotStore } from './api/graphql/resolvers/signals.js';
 import { setSkillStore } from './api/graphql/resolvers/skills.js';
 import { setSnapStore } from './api/graphql/resolvers/snap.js';
 import { setVault, setVaultSecretChangedCallback } from './api/graphql/resolvers/vault.js';
@@ -583,6 +583,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   setCuratedSnapshotStore(snapshotStore);
   setCuratedAssessmentStore(assessmentStore);
   setAssessmentStore(assessmentStore);
+  setSignalAssessmentStore(assessmentStore);
 
   // Insight tools (1 tool: save_insight_report)
   const { insightStore, tools: insightTools } = wireInsights({ dataRoot, curatedSignalStore });

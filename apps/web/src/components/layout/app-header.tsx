@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router';
 import WorldClock from './world-clock';
-import NotificationsCenter from './notifications-center';
 import { getTimezone } from '../../lib/timezone';
 
 const segmentLabels: Record<string, string> = {
@@ -110,11 +109,6 @@ export default function AppHeader() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
           </svg>
         </button>
-
-        {/* Divider */}
-        <div className="h-4 w-px bg-border" />
-
-        <NotificationsCenter />
       </div>
 
       <WorldClock open={clockOpen} onClose={() => setClockOpen(false)} />

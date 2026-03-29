@@ -1,6 +1,9 @@
 /**
- * Lightweight job scheduler — runs curation every 15 minutes and
- * optionally fires the process-insights workflow on a daily cron schedule.
+ * Lightweight job scheduler — runs a unified intelligence pipeline:
+ *
+ * 1. Every 15 minutes: fetch data sources → Tier 1 curation → skill evaluation
+ * 2. After curation: if meaningful new signals exist AND enough time has passed,
+ *    automatically trigger the process-insights workflow (multi-agent analysis).
  *
  * State is persisted to data/cron/state.json so restarts don't re-run
  * a job that already fired within its cooldown window.
@@ -125,6 +128,12 @@ export interface SchedulerOptions {
 
 /** Minimum interval between curation runs (15 minutes). */
 const CURATION_INTERVAL_MS = 15 * 60 * 1000;
+
+/** Minimum interval between insight runs (2 hours) — prevents over-processing. */
+const INSIGHTS_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+
+/** Minimum curated signals to justify an insights run. */
+const MIN_SIGNALS_FOR_INSIGHTS = 3;
 
 /** Default expiry window for actions created from skill triggers. */
 const ACTION_EXPIRY_HOURS = 24;
@@ -274,6 +283,11 @@ export class Scheduler {
 
       // Evaluate active skills after curation
       await this.evaluateSkillsAfterCuration();
+
+      // Trigger insights if meaningful new signals warrant it
+      if (result.signalsCurated >= MIN_SIGNALS_FOR_INSIGHTS) {
+        await this.maybeRunInsights(result.signalsCurated);
+      }
     } catch (err) {
       logger.error('Scheduled curation failed', { error: err });
     }
@@ -397,14 +411,40 @@ export class Scheduler {
   }
 
   // ---------------------------------------------------------------------------
-  // Insights schedule (daily cron — available for manual/skill-triggered use)
+  // Insights — triggered automatically after curation when warranted
   // ---------------------------------------------------------------------------
 
   /**
-   * Check if the process-insights workflow should run.
+   * Run insights if enough time has passed since the last run.
+   * Called after curation when new signals were curated.
    *
-   * NOTE: This runs on a daily cron schedule from alerts.json. It is also
-   * available for manual or skill-triggered invocation via the orchestrator.
+   * Gate logic:
+   * - No insights ever generated → always run (first-time bootstrap)
+   * - Last insights run < INSIGHTS_COOLDOWN_MS ago → skip
+   * - Otherwise → run
+   */
+  private async maybeRunInsights(signalsCurated: number): Promise<void> {
+    const state = await this.loadState();
+    const lastInsightsRun = state.lastRuns['process-insights'];
+
+    if (lastInsightsRun) {
+      const elapsed = Date.now() - new Date(lastInsightsRun).getTime();
+      if (elapsed < INSIGHTS_COOLDOWN_MS) {
+        logger.info('Skipping insights — cooldown not elapsed', {
+          elapsedMin: Math.round(elapsed / 60_000),
+          cooldownMin: Math.round(INSIGHTS_COOLDOWN_MS / 60_000),
+          signalsCurated,
+        });
+        return;
+      }
+    }
+
+    await this.runInsightsWorkflow(`Auto-triggered after curation — ${signalsCurated} new signals curated`);
+  }
+
+  /**
+   * Also check the daily cron schedule — ensures insights run at least once
+   * per day even if curation produces fewer than MIN_SIGNALS_FOR_INSIGHTS.
    */
   private async checkInsightsSchedule(): Promise<void> {
     const config = await this.loadAlertsConfig();
@@ -419,35 +459,36 @@ export class Scheduler {
     const state = await this.loadState();
     if (alreadyRanToday(state.lastRuns['process-insights'], timezone)) return;
 
-    // Fire the workflow
-    logger.info('Triggering scheduled process-insights workflow', {
-      cron,
-      timezone,
-      time: now.toISOString(),
-    });
+    await this.runInsightsWorkflow('Scheduled daily portfolio insights');
+  }
+
+  /** Shared insights execution — used by both auto-trigger and daily cron. */
+  private async runInsightsWorkflow(reason: string): Promise<void> {
+    logger.info('Triggering process-insights workflow', { reason });
 
     emitProgress({
       workflowId: 'process-insights',
       stage: 'activity',
-      message: 'Scheduled daily insights processing starting...',
+      message: reason,
       timestamp: new Date().toISOString(),
     });
 
-    // Persist attempt before executing so a crash/retry can't re-fire the same day
+    // Persist attempt before executing to prevent re-triggering
+    const state = await this.loadState();
     state.lastRuns['process-insights'] = new Date().toISOString();
     await this.saveState(state);
 
     try {
       await this.orchestrator.execute('process-insights', {
-        message: 'Scheduled daily portfolio insights',
+        message: reason,
       });
 
-      logger.info('Scheduled process-insights completed');
+      logger.info('Process-insights completed');
 
       if (this.eventLog) {
         await this.eventLog.append({
           type: 'insight',
-          data: { message: 'Daily portfolio insights report generated' },
+          data: { message: 'Portfolio insights report generated' },
         });
       }
 
@@ -461,7 +502,7 @@ export class Scheduler {
         }
       }
     } catch (err) {
-      logger.error('Scheduled process-insights failed', { error: err });
+      logger.error('Process-insights failed', { error: err });
     }
   }
 

@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery } from 'urql';
-import { DISMISS_SIGNAL_MUTATION, INTEL_FEED_QUERY, REFRESH_INTEL_FEED_MUTATION } from '../../api/documents';
-import type { IntelFeedQueryResult, IntelFeedQueryVariables, RefreshIntelFeedMutationResult } from '../../api/types';
+import { DISMISS_SIGNAL_MUTATION, INTEL_FEED_QUERY } from '../../api/documents';
+import type { IntelFeedQueryResult, IntelFeedQueryVariables } from '../../api/types';
 import { cn, timeAgo } from '../../lib/utils';
 import { useFeatureStatus } from '../../lib/feature-status';
 import { FeatureCardGate } from '../common/feature-gate';
@@ -529,25 +529,13 @@ function IntelFeedContent() {
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [collapsedTickers, setCollapsedTickers] = useState<Set<string>>(new Set());
-  const [refreshing, setRefreshing] = useState(false);
   const [, dismissSignal] = useMutation(DISMISS_SIGNAL_MUTATION);
-  const [, refreshIntelFeed] = useMutation<RefreshIntelFeedMutationResult>(REFRESH_INTEL_FEED_MUTATION);
 
   const [{ data, fetching, error }, reexecute] = useQuery<IntelFeedQueryResult, IntelFeedQueryVariables>({
     query: INTEL_FEED_QUERY,
     variables: { limit: 10 },
     requestPolicy: 'network-only',
   });
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await refreshIntelFeed({});
-      reexecute({ requestPolicy: 'network-only' });
-    } finally {
-      setRefreshing(false);
-    }
-  };
 
   // Map API data into IntelFeedItem[]
   const items: IntelFeedItem[] = useMemo(() => {
@@ -630,26 +618,7 @@ function IntelFeedContent() {
       <div className="px-4 pt-3.5 pb-1">
         <div className="flex items-center justify-between">
           <h2 className="text-2xs font-medium tracking-wide text-text-secondary uppercase">Intel Feed</h2>
-          <div className="flex items-center gap-2">
-            <span className="text-2xs tabular-nums text-text-muted">{totalCount} items</span>
-            <button
-              onClick={() => void handleRefresh()}
-              disabled={refreshing}
-              title="Fetch latest signals and curate"
-              className={cn(
-                'cursor-pointer rounded p-0.5 text-text-muted transition-colors hover:bg-bg-hover hover:text-text-secondary',
-                refreshing && 'animate-spin',
-              )}
-            >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182M21.015 4.356v4.992"
-                />
-              </svg>
-            </button>
-          </div>
+          <span className="text-2xs tabular-nums text-text-muted">{totalCount} items</span>
         </div>
       </div>
 
@@ -671,14 +640,6 @@ function IntelFeedContent() {
           </button>
         ))}
       </div>
-
-      {/* Refreshing banner */}
-      {refreshing && (
-        <div className="flex items-center gap-2 border-b border-border px-4 py-2 text-2xs text-accent-primary">
-          <Spinner size="sm" />
-          <span>Fetching signals and curating...</span>
-        </div>
-      )}
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-auto px-3 pb-4">
@@ -730,16 +691,9 @@ function IntelFeedContent() {
             <div>
               <p className="text-sm font-medium text-text-secondary">No intel yet</p>
               <p className="mt-1 text-xs leading-relaxed text-text-muted">
-                Click refresh to fetch signals from your data sources and curate them against your portfolio.
+                Intel signals will appear here once your data sources are configured and the curation pipeline runs.
               </p>
             </div>
-            <button
-              onClick={() => void handleRefresh()}
-              disabled={refreshing}
-              className="mt-1 cursor-pointer rounded-lg bg-accent-primary px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-secondary disabled:opacity-50"
-            >
-              {refreshing ? 'Refreshing...' : 'Refresh Intel'}
-            </button>
           </div>
         ) : (
           tickerSections.map((section) => {

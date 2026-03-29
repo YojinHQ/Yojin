@@ -292,7 +292,7 @@ export async function addManualPositionMutation(
     unrealizedPnlPercent: 0,
     assetClass: (assetClass as AssetClass) ?? 'EQUITY',
     platform: ((platform as Position['platform']) ?? 'MANUAL').toUpperCase(),
-    ...(entryDate ? { entryDate } : {}),
+    entryDate: entryDate || new Date().toISOString().slice(0, 10),
   };
 
   const effectivePlatform = newPosition.platform;
@@ -342,7 +342,7 @@ export async function editPositionMutation(
     unrealizedPnlPercent: 0,
     assetClass: (assetClass as AssetClass) ?? 'EQUITY',
     platform: ((platform as Position['platform']) ?? targetPlatform).toUpperCase(),
-    ...(entryDate !== undefined ? { entryDate: entryDate || undefined } : {}),
+    entryDate: entryDate || new Date().toISOString().slice(0, 10),
   };
 
   // Replace the matching position within the target platform only

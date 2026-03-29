@@ -460,10 +460,26 @@ function QuoteDetails({ quote }: { quote: Quote }) {
 }
 
 function SignalRow({ signal }: { signal: Signal }) {
+  const destination = signal.link ?? `/insights?tab=all&highlight=${signal.id}`;
+  const isExternal = !!signal.link;
+
   return (
     <li className="flex items-start gap-2 py-1.5 border-b border-border-light last:border-0">
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-text-primary truncate">{signal.title}</p>
+        {isExternal ? (
+          <a
+            href={destination}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-text-primary hover:text-accent-primary truncate block cursor-pointer"
+          >
+            {signal.title}
+          </a>
+        ) : (
+          <Link to={destination} className="text-sm text-text-primary hover:text-accent-primary truncate block">
+            {signal.title}
+          </Link>
+        )}
         <div className="flex items-center gap-2 mt-0.5">
           <Badge variant={signalTypeVariant[signal.type] ?? 'neutral'} size="xs">
             {signal.type}
@@ -481,19 +497,24 @@ function SignalRow({ signal }: { signal: Signal }) {
 }
 
 function NewsSignalRow({ signal }: { signal: Signal }) {
+  const destination = signal.link ?? `/insights?tab=all&highlight=${signal.id}`;
+  const isExternal = !!signal.link;
+
   return (
     <li className="py-1.5 border-b border-border-light last:border-0">
-      {signal.link ? (
+      {isExternal ? (
         <a
-          href={signal.link}
+          href={destination}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm text-text-primary hover:text-accent-primary truncate block"
+          className="text-sm text-text-primary hover:text-accent-primary truncate block cursor-pointer"
         >
           {signal.title}
         </a>
       ) : (
-        <p className="text-sm text-text-primary truncate">{signal.title}</p>
+        <Link to={destination} className="text-sm text-text-primary hover:text-accent-primary truncate block">
+          {signal.title}
+        </Link>
       )}
       <div className="flex items-center gap-2 mt-0.5">
         {signal.sources[0] && <span className="text-2xs text-text-muted">{signal.sources[0].name}</span>}
