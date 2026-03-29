@@ -128,10 +128,15 @@ export async function curatedSignalsResolver(
   }
 
   // CRITICAL verdict boost — multiply composite score for ranking
-  const VERDICT_BOOST: Record<string, number> = { CRITICAL: 1.5, IMPORTANT: 1.1, NOISE: 0.5 };
+  const VERDICT_BOOST: Record<string, number> = { CRITICAL: 1.5, IMPORTANT: 1.1 };
 
-  // Filter out dismissed signals, dedup by normalized title (keep highest score), sort by composite score
-  const nonDismissed = curated.filter((cs) => !dismissedIds.has(cs.signal.id));
+  // Filter out dismissed signals and NOISE verdicts — NOISE means the agents determined
+  // the signal has no value, so it shouldn't appear in the feed at all.
+  const noiseIds = new Set<string>();
+  for (const [id, assessment] of assessmentBySignalId) {
+    if (assessment.verdict === 'NOISE') noiseIds.add(id);
+  }
+  const nonDismissed = curated.filter((cs) => !dismissedIds.has(cs.signal.id) && !noiseIds.has(cs.signal.id));
 
   // Title-level dedup — keep the curated signal with the highest composite score per unique title
   const byTitle = new Map<string, (typeof nonDismissed)[number]>();
