@@ -40,8 +40,28 @@ if [ ! -f "$ENV_FILE" ]; then
   echo "Creating .env.docker configuration file..."
   echo ""
 
-  # Anthropic API Key
-  read -rp "  Anthropic API Key (sk-ant-...): " ANTHROPIC_API_KEY
+  # Anthropic API Key — try macOS Keychain first
+  ANTHROPIC_API_KEY=""
+  CLAUDE_CODE_OAUTH_TOKEN=""
+  if [[ "$(uname)" == "Darwin" ]]; then
+    KEYCHAIN_JSON=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null || true)
+    if [ -n "$KEYCHAIN_JSON" ]; then
+      KEYCHAIN_TOKEN=$(echo "$KEYCHAIN_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('claudeAiOauth',{}).get('accessToken',''))" 2>/dev/null || true)
+      if [ -n "$KEYCHAIN_TOKEN" ]; then
+        echo "  Found Claude Code credentials in macOS Keychain!"
+        read -rp "  Use Keychain token? [Y/n]: " USE_KEYCHAIN
+        if [[ "${USE_KEYCHAIN:-Y}" =~ ^[Yy]?$ ]]; then
+          CLAUDE_CODE_OAUTH_TOKEN="$KEYCHAIN_TOKEN"
+          echo "  ✓ Using Keychain token"
+          echo ""
+        fi
+      fi
+    fi
+  fi
+
+  if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+    read -rp "  Anthropic API Key (sk-ant-...): " ANTHROPIC_API_KEY
+  fi
   echo ""
 
   # Slack (optional)
@@ -68,6 +88,7 @@ if [ ! -f "$ENV_FILE" ]; then
 
 # ── AI Provider (required) ───────────────────────
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
 
 # ── Slack Channel (optional) ─────────────────────
 SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
