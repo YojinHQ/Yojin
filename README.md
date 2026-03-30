@@ -330,6 +330,31 @@ yojin version        Print version
 yojin help           Show help
 ```
 
+### Docker
+
+Run Yojin in Docker — one command gives you the web UI, API, and channel integrations (Slack, etc.):
+
+```bash
+./docker-setup.sh
+```
+
+The setup script prompts for your API keys, builds the image, and starts everything. Once running:
+
+| Service | URL |
+|---------|-----|
+| Web UI | `http://localhost:8080` |
+| API | `http://localhost:3000` |
+| Health | `http://localhost:3000/health` |
+
+Or run manually:
+
+```bash
+cp .env.example .env.docker        # Edit with your keys
+docker compose --env-file .env.docker up -d
+```
+
+Stop with `docker compose down`. Data persists in Docker volumes (`yojin_data`, `yojin_vault`).
+
 ### Dev Commands
 
 ```bash
