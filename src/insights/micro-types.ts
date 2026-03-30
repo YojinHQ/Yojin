@@ -37,7 +37,7 @@ export const MicroInsightSchema = z.object({
 
   // Micro-level outputs
   assetSnap: z.string(), // 1-sentence notable observation
-  assetActions: z.array(z.string()), // per-asset action items
+  assetActions: z.array(z.string()), // per-asset observations worth paying attention to
 
   // Metadata
   generatedAt: z.string().min(1),

@@ -1,10 +1,10 @@
 /**
- * Micro Analyzer — single Haiku LLM call per asset.
+ * Micro Analyzer — single Sonnet LLM call per asset.
  *
  * Takes a pre-built DataBrief and produces a MicroInsight via a direct
  * ProviderRouter call (no agent loop, no orchestrator overhead).
  *
- * Cost: ~$0.001 per call, <10 seconds.
+ * Output is strictly observational — no advice, no recommendations.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -18,24 +18,26 @@ import { createSubsystemLogger } from '../logging/logger.js';
 
 const logger = createSubsystemLogger('micro-analyzer');
 
-const SYSTEM_PROMPT = `You are a concise equity research analyst. Analyze the provided asset data and produce a structured JSON research note.
+const SYSTEM_PROMPT = `You are a neutral market observer. Summarize what is happening with the provided asset based strictly on the data. Do NOT give advice, opinions, or recommendations. Do NOT use terms like "buy", "sell", "hold", "recommend", or "should". Your job is to surface facts and observations so the user can draw their own conclusions.
 
 Output ONLY valid JSON matching this schema:
 {
   "rating": "VERY_BULLISH" | "BULLISH" | "NEUTRAL" | "BEARISH" | "VERY_BEARISH",
   "conviction": 0.0-1.0,
-  "thesis": "2-3 sentence outlook",
-  "keyDevelopments": ["up to 3 bullet points of notable recent developments"],
-  "risks": ["up to 3 risk factors"],
-  "opportunities": ["up to 3 opportunity factors"],
+  "thesis": "2-3 sentence factual summary of what is happening with this asset",
+  "keyDevelopments": ["up to 3 notable recent developments — facts only"],
+  "risks": ["up to 3 observed risk factors"],
+  "opportunities": ["up to 3 observed positive factors"],
   "sentiment": "BULLISH" | "BEARISH" | "MIXED" | "NEUTRAL",
-  "assetSnap": "1 sentence: what is most notable about this asset right now",
-  "assetActions": ["0-2 concrete observation-style action items, framed as neutral observations not directives"]
+  "assetSnap": "1 sentence: the single most notable observation about this asset right now",
+  "assetActions": ["0-2 observations that deserve attention, e.g. 'RSI at 22 — historically oversold territory' not 'Consider buying'"]
 }
 
 Rules:
 - Base your analysis ONLY on the provided data. Do not hallucinate.
-- Frame action items as observations, not buy/sell recommendations. Example: "RSI at 22 suggests oversold conditions" not "Buy now".
+- NEVER give directional advice. State what IS happening, not what the user should DO.
+- Rating and sentiment reflect observed market conditions, not your recommendation.
+- assetActions are things worth paying attention to, not things to act on. Frame as "X is happening" not "do Y".
 - If data is limited, express lower conviction and say so in the thesis.
 - Be concise. Every field should be information-dense.`;
 
@@ -52,7 +54,7 @@ export async function analyzeTicker(
   const briefText = formatBriefsForContext([brief]);
 
   const result = await providerRouter.completeWithTools({
-    model: 'haiku',
+    model: 'sonnet',
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: `Analyze ${brief.symbol} (${brief.name}):\n\n${briefText}` }],
     maxTokens: 1024,

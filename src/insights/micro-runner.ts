@@ -80,7 +80,7 @@ export async function runMicroResearch(
   // 4. Save
   await deps.microInsightStore.save(insight);
 
-  // 5. Create actions from assetActions
+  // 5. Create actions from asset observations
   if (deps.actionStore && insight.assetActions.length > 0) {
     const expiresAt = new Date(Date.now() + ACTION_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
     const now = new Date().toISOString();
@@ -89,8 +89,8 @@ export async function runMicroResearch(
       await deps.actionStore.create({
         id: randomUUID(),
         what: actionText,
-        why: `Micro research for ${ticker}: ${insight.thesis.slice(0, 100)}`,
-        source: `micro-research: ${ticker}`,
+        why: `Observation from ${ticker} research: ${insight.thesis.slice(0, 100)}`,
+        source: `micro-observation: ${ticker}`,
         status: 'PENDING',
         expiresAt,
         createdAt: now,
