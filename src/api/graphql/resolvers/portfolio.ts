@@ -31,13 +31,27 @@ export function setPortfolioJintelClient(c: JintelClient | undefined): void {
 }
 
 // ---------------------------------------------------------------------------
+// Market hours detection
+// ---------------------------------------------------------------------------
+
+/** Check if the US stock market is currently in regular trading hours (9:30–16:00 ET, Mon–Fri). */
+export function isUSMarketOpen(): boolean {
+  const now = new Date();
+  const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day = et.getDay();
+  if (day === 0 || day === 6) return false; // weekend
+  const minutes = et.getHours() * 60 + et.getMinutes();
+  return minutes >= 570 && minutes < 960; // 9:30 (570) to 16:00 (960)
+}
+
+// ---------------------------------------------------------------------------
 // Live quote enrichment — batch-fetch from Jintel and merge onto positions
 // ---------------------------------------------------------------------------
 
-/** Build a sparkline from real price history closing prices, appending the live price. */
+/** Build a sparkline from price history closing prices, appending the live price. */
 function buildSparkline(history: TickerPriceHistory, livePrice: number): number[] {
   const points = history.history.map((p) => p.close);
-  // Append today's live price so the sparkline extends to "now"
+  // Append live price so the sparkline extends to "now"
   points.push(livePrice);
   return points;
 }
@@ -57,19 +71,33 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
     return snapshot;
   }
 
+  const client = jintelClient;
   const symbols = [...new Set(snapshot.positions.map((p) => p.symbol))];
   log.debug('Fetching live quotes', { symbols });
 
-  // Fetch quotes and 5-day price history in parallel
-  const [result, historyResult] = await Promise.all([
-    jintelClient.quotes(symbols).catch((err: unknown) => {
+  // Crypto trades 24/7 → always intraday. Equities → intraday only during US market hours.
+  const cryptoSet = new Set(snapshot.positions.filter((p) => p.assetClass === 'CRYPTO').map((p) => p.symbol));
+  const equitySymbols = symbols.filter((s) => !cryptoSet.has(s));
+  const cryptoSymbols = symbols.filter((s) => cryptoSet.has(s));
+  const marketOpen = isUSMarketOpen();
+
+  // Parallel fetches: quotes + sparkline history per asset group
+  const fetchHistory = (tickers: string[], range: string, interval?: string) =>
+    client.priceHistory(tickers, range, interval).catch((err: unknown) => {
+      log.warn('Jintel priceHistory failed', { tickers, error: String(err) });
+      return undefined;
+    });
+
+  const equityRange = marketOpen ? '1d' : '5d';
+  const equityInterval = marketOpen ? '5m' : undefined;
+
+  const [result, equityHistory, cryptoHistory] = await Promise.all([
+    client.quotes(symbols).catch((err: unknown) => {
       log.warn('Jintel quotes call failed', { error: String(err) });
       return undefined;
     }),
-    jintelClient.priceHistory(symbols, '1m').catch((err: unknown) => {
-      log.warn('Jintel priceHistory call failed', { error: String(err) });
-      return undefined;
-    }),
+    equitySymbols.length > 0 ? fetchHistory(equitySymbols, equityRange, equityInterval) : undefined,
+    cryptoSymbols.length > 0 ? fetchHistory(cryptoSymbols, '1d', '5m') : undefined,
   ]);
 
   if (!result?.success) {
@@ -90,12 +118,14 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
 
   const quoteMap = new Map<string, MarketQuote>(validQuotes.map((q) => [q.ticker, q]));
 
-  // Build price history map for sparklines
+  // Merge sparkline history from both asset groups
   const historyMap = new Map<string, TickerPriceHistory>();
-  if (historyResult?.success) {
-    for (const h of historyResult.data) {
-      historyMap.set(h.ticker, h);
+  for (const res of [equityHistory, cryptoHistory]) {
+    if (res?.success) {
+      for (const h of res.data) historyMap.set(h.ticker, h);
     }
+  }
+  if (historyMap.size > 0) {
     log.debug('Jintel priceHistory received', { tickers: [...historyMap.keys()] });
   }
 

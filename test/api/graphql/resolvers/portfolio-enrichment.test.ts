@@ -1,7 +1,8 @@
 import type { JintelClient, MarketQuote } from '@yojinhq/jintel-client';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  isUSMarketOpen,
   portfolioQuery,
   positionFieldResolvers,
   setPortfolioJintelClient,
@@ -120,6 +121,40 @@ function createQuoteMockClient(
     }),
   } as unknown as JintelClient;
 }
+
+describe('isUSMarketOpen', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('returns true during regular trading hours (Mon–Fri 9:30–16:00 ET)', () => {
+    // Wednesday 2026-03-25 at 12:00 ET = 16:00 UTC
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-25T16:00:00Z'));
+    expect(isUSMarketOpen()).toBe(true);
+  });
+
+  it('returns false before market open', () => {
+    // Wednesday 2026-03-25 at 9:00 ET = 13:00 UTC
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-25T13:00:00Z'));
+    expect(isUSMarketOpen()).toBe(false);
+  });
+
+  it('returns false after market close', () => {
+    // Wednesday 2026-03-25 at 16:30 ET = 20:30 UTC
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-25T20:30:00Z'));
+    expect(isUSMarketOpen()).toBe(false);
+  });
+
+  it('returns false on weekends', () => {
+    // Saturday 2026-03-28 at 12:00 ET = 16:00 UTC
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-28T16:00:00Z'));
+    expect(isUSMarketOpen()).toBe(false);
+  });
+});
 
 describe('live quote enrichment', () => {
   beforeEach(() => {
