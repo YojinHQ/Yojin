@@ -11,9 +11,10 @@ services:
       - yojin_data:/home/node/.yojin
       - yojin_vault:/home/node/.yojin-vault
     environment:
-      # ── AI Provider (required — pick one) ──
+      # ── AI Provider (required — at least one) ──
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       # ── Slack Channel (optional) ──
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
       - SLACK_APP_TOKEN=${SLACK_APP_TOKEN:-}
