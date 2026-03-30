@@ -711,20 +711,16 @@ export interface InsightsWorkflowStatusQueryResult {
 // Snap (Strategist brief)
 // ---------------------------------------------------------------------------
 
-export type SnapSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
-
-export interface SnapAttentionItem {
-  label: string;
-  severity: SnapSeverity;
-  ticker: string | null;
+export interface SnapActionItem {
+  text: string;
+  signalIds: string[];
 }
 
 export interface Snap {
   id: string;
   generatedAt: string;
-  summary: string;
-  attentionItems: SnapAttentionItem[];
-  portfolioTickers: string[];
+  intelSummary: string;
+  actionItems: SnapActionItem[];
 }
 
 export interface SnapQueryResult {

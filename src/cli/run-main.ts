@@ -19,6 +19,7 @@ import { setAiConfigProviderRouter } from '../api/graphql/resolvers/ai-config.js
 import { setCurationOrchestrator, setCurationPipelineDeps } from '../api/graphql/resolvers/curated-signals.js';
 import { setInsightsOrchestrator } from '../api/graphql/resolvers/insights.js';
 import { setOnboardingClaudeCodeProvider, setOnboardingProvider } from '../api/graphql/resolvers/onboarding.js';
+import { setPortfolioChangedCallback } from '../api/graphql/resolvers/portfolio.js';
 import { buildContext } from '../composition.js';
 import { AgentRuntime } from '../core/agent-runtime.js';
 import { EventLog } from '../core/event-log.js';
@@ -277,8 +278,13 @@ async function startGateway(): Promise<void> {
     snapStore: services.snapStore,
     insightStore: services.insightStore,
     eventLog,
+    getJintelClient: () => services.jintelToolOptions.client,
+    signalIngestor: services.signalIngestor,
   });
   scheduler.start();
+
+  // Trigger micro flow when portfolio changes — fetches intel for the changed tickers only
+  setPortfolioChangedCallback((tickers) => scheduler.triggerMicroFlow(tickers));
 
   const gateway = new Gateway(services.config, agentRuntime, {
     snapshotStore: services.snapshotStore,

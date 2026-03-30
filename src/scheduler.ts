@@ -14,6 +14,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import type { JintelClient } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
 import type { ActionStore } from './actions/action-store.js';
@@ -23,6 +24,7 @@ import { fetchAllEnabledSources } from './api/graphql/resolvers/fetch-data-sourc
 import { AlertsConfigSchema } from './config/config.js';
 import type { EventLog } from './core/event-log.js';
 import type { InsightStore } from './insights/insight-store.js';
+import { fetchJintelSignals } from './jintel/signal-fetcher.js';
 import { createSubsystemLogger } from './logging/logger.js';
 import type { ReflectionEngine } from './memory/reflection.js';
 import type { PortfolioSnapshotStore } from './portfolio/snapshot-store.js';
@@ -30,6 +32,7 @@ import type { SignalArchive } from './signals/archive.js';
 import type { CuratedSignalStore } from './signals/curation/curated-signal-store.js';
 import { runCurationPipeline } from './signals/curation/pipeline.js';
 import type { CurationConfig } from './signals/curation/types.js';
+import type { SignalIngestor } from './signals/ingestor.js';
 import type { SkillEvaluator } from './skills/skill-evaluator.js';
 import { snapFromInsight } from './snap/snap-from-insight.js';
 import type { SnapStore } from './snap/snap-store.js';
@@ -124,6 +127,10 @@ export interface SchedulerOptions {
   insightStore?: InsightStore;
   /** Event log — emits domain-specific events for the Activity Log. */
   eventLog?: EventLog;
+  /** Jintel client getter — for fetching signals on portfolio change. */
+  getJintelClient?: () => JintelClient | undefined;
+  /** Signal ingestor — for ingesting Jintel signals. */
+  signalIngestor?: SignalIngestor;
 }
 
 /** Minimum interval between curation runs (15 minutes). */
@@ -150,6 +157,8 @@ export class Scheduler {
   private readonly snapStore?: SnapStore;
   private readonly insightStore?: InsightStore;
   private readonly eventLog?: EventLog;
+  private readonly getJintelClient?: () => JintelClient | undefined;
+  private readonly signalIngestor?: SignalIngestor;
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
 
@@ -165,6 +174,8 @@ export class Scheduler {
     this.snapStore = options.snapStore;
     this.insightStore = options.insightStore;
     this.eventLog = options.eventLog;
+    this.getJintelClient = options.getJintelClient;
+    this.signalIngestor = options.signalIngestor;
   }
 
   /** Start the scheduler. Checks once per minute. */
@@ -183,6 +194,165 @@ export class Scheduler {
       clearInterval(this.timer);
       this.timer = null;
       logger.info('Scheduler stopped');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Micro flow — per-asset reactive signal fetch + curation
+  // ---------------------------------------------------------------------------
+
+  /** Accumulated signals from micro flows since last macro run. */
+  private microFlowCount = 0;
+  /** Set when micro flow wants to trigger a macro flow after completing. */
+  private macroFlowPending = false;
+
+  /**
+   * Trigger a micro flow for specific tickers (e.g. after position add/edit).
+   * Debounced 3s to batch rapid position changes, then fetches signals for
+   * ONLY the specified tickers and curates.
+   */
+  private pendingMicroTickers: Set<string> = new Set();
+  private pendingMicroTimer: ReturnType<typeof setTimeout> | null = null;
+  triggerMicroFlow(tickers: string[]): void {
+    for (const t of tickers) this.pendingMicroTickers.add(t);
+    if (this.pendingMicroTimer) return; // already debounced
+    this.pendingMicroTimer = setTimeout(() => {
+      const batch = [...this.pendingMicroTickers];
+      this.pendingMicroTickers.clear();
+      this.pendingMicroTimer = null;
+      void this.runMicroFlow(batch);
+    }, 3_000);
+  }
+
+  /** Backward-compat alias — triggers micro flow for all portfolio tickers. */
+  triggerCuration(): void {
+    void this.runMacroFlow();
+  }
+
+  private async runMicroFlow(tickers: string[]): Promise<void> {
+    if (!this.curationPipeline || tickers.length === 0) return;
+    if (this.running) {
+      logger.info('Skipping micro flow — scheduler already running', { tickers });
+      return;
+    }
+
+    logger.info('Micro flow started', { tickers });
+    this.running = true;
+    try {
+      // Fetch Jintel signals for ONLY the specified tickers
+      let ingested = 0;
+      const jintelClient = this.getJintelClient?.();
+      if (jintelClient && this.signalIngestor) {
+        const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const result = await fetchJintelSignals(jintelClient, this.signalIngestor, tickers, { since });
+        ingested = result.ingested;
+        logger.info('Micro flow Jintel fetch complete', {
+          tickers,
+          ingested: result.ingested,
+          duplicates: result.duplicates,
+        });
+      }
+
+      // Run curation to process newly ingested signals
+      const result = await runCurationPipeline(this.curationPipeline);
+      logger.info('Micro flow curation complete', {
+        tickers,
+        signalsProcessed: result.signalsProcessed,
+        signalsCurated: result.signalsCurated,
+      });
+
+      if (this.eventLog && ingested > 0) {
+        await this.eventLog.append({
+          type: 'system',
+          data: {
+            message: `Intel fetched for ${tickers.join(', ')} — ${ingested} new signal${ingested !== 1 ? 's' : ''}`,
+          },
+        });
+      }
+
+      // Track accumulated micro flows — trigger macro when threshold is reached
+      this.microFlowCount += ingested;
+      if (this.microFlowCount >= MIN_SIGNALS_FOR_INSIGHTS) {
+        logger.info('Micro flow threshold reached — queueing macro flow', { accumulated: this.microFlowCount });
+        this.microFlowCount = 0;
+        this.macroFlowPending = true;
+      }
+    } catch (err) {
+      logger.error('Micro flow failed', { error: err, tickers });
+    } finally {
+      this.running = false;
+      // Run macro flow after micro completes (running flag is now false)
+      if (this.macroFlowPending) {
+        this.macroFlowPending = false;
+        void this.runMacroFlow();
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Macro flow — portfolio-wide analysis (insights, snap, actions)
+  // ---------------------------------------------------------------------------
+
+  private async runMacroFlow(): Promise<void> {
+    if (!this.curationPipeline) return;
+    if (this.running) {
+      logger.info('Skipping macro flow — scheduler already running');
+      return;
+    }
+
+    logger.info('Macro flow started — portfolio-wide analysis');
+    this.running = true;
+    try {
+      // Fetch CLI data sources
+      const fetchResult = await fetchAllEnabledSources();
+      if (fetchResult.totalIngested > 0 && this.eventLog) {
+        await this.eventLog.append({
+          type: 'system',
+          data: {
+            message: `Fetched ${fetchResult.totalIngested} new signal${fetchResult.totalIngested !== 1 ? 's' : ''} from ${fetchResult.sourcesAttempted} data source${fetchResult.sourcesAttempted !== 1 ? 's' : ''}`,
+          },
+        });
+      }
+
+      // Fetch Jintel signals for ALL portfolio tickers
+      let totalJintelIngested = 0;
+      const jintelClient = this.getJintelClient?.();
+      if (jintelClient && this.signalIngestor) {
+        const store = this.snapshotStore ?? this.curationPipeline.snapshotStore;
+        const snapshot = await store.getLatest();
+        if (snapshot && snapshot.positions.length > 0) {
+          const allTickers = snapshot.positions.map((p) => p.symbol);
+          const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+          const jintelResult = await fetchJintelSignals(jintelClient, this.signalIngestor, allTickers, { since });
+          totalJintelIngested = jintelResult.ingested;
+          logger.info('Macro flow Jintel fetch complete', {
+            ingested: jintelResult.ingested,
+            duplicates: jintelResult.duplicates,
+            tickers: jintelResult.tickers,
+          });
+        }
+      }
+
+      // Full curation pass
+      const result = await runCurationPipeline(this.curationPipeline);
+      logger.info('Macro flow curation complete', {
+        signalsProcessed: result.signalsProcessed,
+        signalsCurated: result.signalsCurated,
+      });
+
+      // Regenerate snap + evaluate skills
+      await this.regenerateSnap();
+      await this.evaluateSkillsAfterCuration();
+
+      // Trigger insights if enough new data
+      const totalCurated = result.signalsCurated + (totalJintelIngested > 0 ? totalJintelIngested : 0);
+      if (totalCurated >= MIN_SIGNALS_FOR_INSIGHTS) {
+        await this.maybeRunInsights(totalCurated);
+      }
+    } catch (err) {
+      logger.error('Macro flow failed', { error: err });
+    } finally {
+      this.running = false;
     }
   }
 

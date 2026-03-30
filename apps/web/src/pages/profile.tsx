@@ -6,8 +6,8 @@ import Spinner from '../components/common/spinner';
 import Button from '../components/common/button';
 import Badge from '../components/common/badge';
 import { JintelKeyForm } from '../components/jintel/jintel-key-form';
-import { ONBOARDING_STATUS_QUERY, RESET_ONBOARDING_MUTATION } from '../api/documents';
-import type { OnboardingStatusQueryResult } from '../api/types';
+import { ONBOARDING_STATUS_QUERY, RESET_ONBOARDING_MUTATION, VAULT_STATUS_QUERY } from '../api/documents';
+import type { OnboardingStatusQueryResult, VaultStatusQueryResult } from '../api/types';
 import { DataSourceCard } from '../components/data-sources/data-source-card';
 import { AddDataSourceModal } from '../components/data-sources/add-data-source-modal';
 import {
@@ -40,6 +40,8 @@ export default function Profile() {
   });
   const [, resetOnboarding] = useMutation(RESET_ONBOARDING_MUTATION);
   const { openOnboarding, resetOnboardingStatus } = useOnboardingStatus();
+  const [{ data: vaultData }] = useQuery<VaultStatusQueryResult>({ query: VAULT_STATUS_QUERY });
+  const vaultLocked = vaultData ? !vaultData.vaultStatus.isUnlocked : false;
   const jintelConfigured = statusData?.onboardingStatus?.jintelConfigured ?? false;
 
   function openAddDsModal() {
@@ -156,6 +158,21 @@ export default function Profile() {
                 </div>
                 <Badge variant="success" size="sm">
                   Connected
+                </Badge>
+              </div>
+            ) : vaultLocked ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-primary/10 flex-shrink-0">
+                    <BoltIcon />
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-text-primary">Jintel Intelligence</span>
+                    <p className="text-xs text-warning mt-0.5">Unlock the vault to check connection status.</p>
+                  </div>
+                </div>
+                <Badge variant="warning" size="sm">
+                  Vault Locked
                 </Badge>
               </div>
             ) : (

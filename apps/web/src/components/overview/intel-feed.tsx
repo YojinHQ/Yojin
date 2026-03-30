@@ -27,6 +27,7 @@ interface IntelFeedItem {
   sentiment: string | null;
   title: string;
   time: string;
+  publishedAt: string;
   icon: IconName;
   description: string;
   source: string | null;
@@ -565,6 +566,7 @@ function IntelFeedContent() {
         sentiment: s.sentiment ?? null,
         title: headline,
         time: timeAgo(s.publishedAt),
+        publishedAt: s.publishedAt,
         icon: signalTypeIcon[s.type] ?? 'trending',
         description: detail !== headline ? detail : '',
         source: sourceName ?? null,
@@ -589,6 +591,8 @@ function IntelFeedContent() {
       };
     });
 
+    // Sort newest first
+    signalItems.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     return signalItems;
   }, [data]);
 

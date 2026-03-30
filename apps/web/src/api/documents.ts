@@ -884,13 +884,11 @@ export const SNAP_QUERY = gql`
     snap {
       id
       generatedAt
-      summary
-      attentionItems {
-        label
-        severity
-        ticker
+      intelSummary
+      actionItems {
+        text
+        signalIds
       }
-      portfolioTickers
     }
   }
 `;

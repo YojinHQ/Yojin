@@ -1,8 +1,10 @@
+import { useMemo } from 'react';
+import { useNavigate } from 'react-router';
 import { useQuery } from 'urql';
 
-import { SNAP_QUERY } from '../../api/documents';
-import type { SnapQueryResult, SnapSeverity } from '../../api/types';
-import { cn, timeAgo } from '../../lib/utils';
+import { SNAP_QUERY, LATEST_INSIGHT_REPORT_QUERY } from '../../api/documents';
+import type { SnapQueryResult, LatestInsightReportQueryResult } from '../../api/types';
+import { timeAgo } from '../../lib/utils';
 import { useFeatureStatus } from '../../lib/feature-status';
 import { CardEmptyState } from '../common/card-empty-state';
 import { CardBlurGate } from '../common/card-blur-gate';
@@ -11,22 +13,35 @@ import { DashboardCard } from '../common/dashboard-card';
 import Spinner from '../common/spinner';
 import Button from '../common/button';
 import { useAddPositionModal } from '../../lib/add-position-modal-context';
+import { SignalChips } from './signal-chips';
 
-const SEVERITY_STYLES: Record<SnapSeverity, { dot: string; text: string }> = {
-  HIGH: { dot: 'bg-error', text: 'text-error/80' },
-  MEDIUM: { dot: 'bg-warning', text: 'text-warning/80' },
-  LOW: { dot: 'bg-info', text: 'text-info/80' },
-};
+function stripPrefix(text: string): string {
+  return text.replace(/^(CRITICAL|HIGH|MEDIUM|LOW):\s*/i, '');
+}
 
 export default function YojinSnapCard() {
   const { aiConfigured, jintelConfigured } = useFeatureStatus();
   const [result] = useQuery<SnapQueryResult>({ query: SNAP_QUERY });
+  const [insightResult] = useQuery<LatestInsightReportQueryResult>({ query: LATEST_INSIGHT_REPORT_QUERY });
   const { openModal } = useAddPositionModal();
+  const navigate = useNavigate();
   const snap = result.data?.snap;
+  const report = insightResult.data?.latestInsightReport;
+
+  const signalMap = useMemo(() => {
+    const map = new Map<string, { title: string; url: string | null; sourceCount?: number }>();
+    if (!report) return map;
+    for (const pos of report.positions) {
+      for (const sig of pos.keySignals ?? []) {
+        map.set(sig.signalId, { title: sig.title, url: sig.url, sourceCount: sig.sourceCount });
+      }
+    }
+    return map;
+  }, [report]);
 
   if (!jintelConfigured) {
     return (
-      <DashboardCard title="Yojin Snap" variant="feature" className="flex-1">
+      <DashboardCard title="Actions" variant="feature" className="flex-1">
         <CardBlurGate mockContent={<MockSnap />}>
           <FeatureCardGate requires="jintel" />
         </CardBlurGate>
@@ -36,7 +51,7 @@ export default function YojinSnapCard() {
 
   if (!aiConfigured) {
     return (
-      <DashboardCard title="Yojin Snap" variant="feature" className="flex-1">
+      <DashboardCard title="Actions" variant="feature" className="flex-1">
         <CardBlurGate mockContent={<MockSnap />}>
           <FeatureCardGate requires="ai" />
         </CardBlurGate>
@@ -46,7 +61,7 @@ export default function YojinSnapCard() {
 
   if (result.fetching) {
     return (
-      <DashboardCard title="Yojin Snap" variant="feature" className="flex-1">
+      <DashboardCard title="Actions" variant="feature" className="flex-1">
         <div className="flex flex-1 items-center justify-center px-5 pb-5">
           <Spinner size="md" label="Loading brief..." />
         </div>
@@ -54,9 +69,9 @@ export default function YojinSnapCard() {
     );
   }
 
-  if (!snap) {
+  if (!snap || snap.actionItems.length === 0) {
     return (
-      <DashboardCard title="Yojin Snap" variant="feature" className="flex-1">
+      <DashboardCard title="Actions" variant="feature" className="flex-1">
         <CardBlurGate mockContent={<MockSnap />}>
           <CardEmptyState
             icon={
@@ -68,7 +83,7 @@ export default function YojinSnapCard() {
                 />
               </svg>
             }
-            title="No snap brief yet"
+            title="No actions yet"
             description="Generated once your portfolio is loaded."
             action={
               <Button variant="primary" size="sm" onClick={openModal}>
@@ -83,84 +98,45 @@ export default function YojinSnapCard() {
 
   return (
     <DashboardCard
-      title="Yojin Snap"
+      title="Actions"
       variant="feature"
       className="flex-1"
-      headerAction={<span className="text-xs text-text-muted">{timeAgo(snap.generatedAt)}</span>}
+      headerAction={
+        <span className="text-xs text-text-muted">
+          {snap.actionItems.length} items &middot; {timeAgo(snap.generatedAt)}
+        </span>
+      }
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-5 pb-5">
-        {/* Summary prose */}
-        <p className="text-sm leading-relaxed text-text-secondary">{snap.summary}</p>
-
-        {/* Attention items */}
-        {snap.attentionItems.length > 0 && (
-          <div className="space-y-2">
-            <span className="text-xs font-medium uppercase tracking-wider text-text-muted">Attention</span>
-            <ul className="space-y-1.5">
-              {snap.attentionItems.map((item, i) => {
-                const styles = SEVERITY_STYLES[item.severity] ?? SEVERITY_STYLES.LOW;
-                return (
-                  <li key={i} className="flex items-start gap-2">
-                    <span className={cn('mt-1.5 h-2 w-2 flex-shrink-0 rounded-full', styles.dot)} />
-                    <span className={cn('text-sm leading-relaxed', styles.text)}>{item.label}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-
-        {/* Tickers summarized */}
-        {snap.portfolioTickers.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {snap.portfolioTickers.map((ticker) => (
-              <span key={ticker} className="rounded bg-bg-tertiary px-2 py-0.5 text-xs font-medium text-text-secondary">
-                {ticker}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
+      <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto px-5 pb-5">
+        {snap.actionItems.map((item, i) => (
+          <li key={i} className="flex items-start gap-2">
+            <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-primary" />
+            <div className="min-w-0 flex-1">
+              <span className="text-sm leading-relaxed text-text-secondary">{stripPrefix(item.text)}</span>
+              <SignalChips signalIds={item.signalIds} signalMap={signalMap} navigate={navigate} />
+            </div>
+          </li>
+        ))}
+      </ul>
     </DashboardCard>
   );
 }
 
-const MOCK_ATTENTION = [
-  { severity: 'HIGH' as SnapSeverity, label: 'NVDA earnings beat: +8.2% after hours' },
-  { severity: 'MEDIUM' as SnapSeverity, label: 'AAPL supply chain delays reported' },
-  { severity: 'LOW' as SnapSeverity, label: 'Fed minutes release tomorrow at 2pm ET' },
+const MOCK_ACTIONS = [
+  { text: 'Tech sector concentration is at 42% of portfolio' },
+  { text: 'AAPL earnings on Jan 30th — supply chain risk flagged in recent signals' },
+  { text: 'NVDA up +8.2% after earnings beat, now 15% of portfolio' },
 ];
 
 function MockSnap() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-5 pb-5">
-      <p className="text-sm leading-relaxed text-text-secondary">
-        Your portfolio is showing mixed signals today. NVDA leads with strong momentum after earnings beat, while AAPL
-        faces headwinds from supply chain concerns. Consider reviewing your tech allocation.
-      </p>
-
-      <div className="space-y-2">
-        <span className="text-xs font-medium uppercase tracking-wider text-text-muted">Attention</span>
-        <ul className="space-y-1.5">
-          {MOCK_ATTENTION.map((item, i) => {
-            const styles = SEVERITY_STYLES[item.severity];
-            return (
-              <li key={i} className="flex items-start gap-2">
-                <span className={cn('mt-1.5 h-2 w-2 flex-shrink-0 rounded-full', styles.dot)} />
-                <span className={cn('text-sm leading-relaxed', styles.text)}>{item.label}</span>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        {['AAPL', 'NVDA', 'TSLA', 'BTC', 'MSFT'].map((ticker) => (
-          <span key={ticker} className="rounded bg-bg-tertiary px-2 py-0.5 text-xs font-medium text-text-secondary">
-            {ticker}
-          </span>
-        ))}
-      </div>
-    </div>
+    <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-5 pb-5">
+      {MOCK_ACTIONS.map((item, i) => (
+        <li key={i} className="flex items-start gap-2">
+          <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-primary" />
+          <span className="text-sm leading-relaxed text-text-secondary">{stripPrefix(item.text)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

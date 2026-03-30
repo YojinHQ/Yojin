@@ -1,27 +1,22 @@
 /**
  * Snap types — Zod schemas and inferred types for the Strategist brief.
  *
- * A Snap is a short, periodically-generated summary answering:
- * "What deserves my attention right now?"
+ * A Snap surfaces the action items from the latest InsightReport —
+ * concrete next steps the user should consider.
  */
 
 import { z } from 'zod';
 
-export const SnapSeveritySchema = z.enum(['LOW', 'MEDIUM', 'HIGH']);
-export type SnapSeverity = z.infer<typeof SnapSeveritySchema>;
-
-export const SnapAttentionItemSchema = z.object({
-  label: z.string().min(1),
-  severity: SnapSeveritySchema,
-  ticker: z.string().optional(),
+export const SnapActionItemSchema = z.object({
+  text: z.string().min(1),
+  signalIds: z.array(z.string()),
 });
-export type SnapAttentionItem = z.infer<typeof SnapAttentionItemSchema>;
+export type SnapActionItem = z.infer<typeof SnapActionItemSchema>;
 
 export const SnapSchema = z.object({
   id: z.string().min(1),
   generatedAt: z.string().min(1),
-  summary: z.string().min(1),
-  attentionItems: z.array(SnapAttentionItemSchema),
-  portfolioTickers: z.array(z.string().min(1)),
+  intelSummary: z.string().optional().default(''),
+  actionItems: z.array(SnapActionItemSchema),
 });
 export type Snap = z.infer<typeof SnapSchema>;

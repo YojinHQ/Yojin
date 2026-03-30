@@ -39,6 +39,7 @@ function makeReport(overrides?: Partial<InsightReport>): InsightReport {
     portfolio: {
       overallHealth: 'HEALTHY',
       summary: 'Portfolio is well-positioned with strong equity performance.',
+      intelSummary: '',
       sectorThemes: ['Tech leadership', 'Crypto recovery'],
       macroContext: 'Fed holding rates steady, soft landing expected.',
       topRisks: [{ text: 'Concentration in tech sector', signalIds: [] }],

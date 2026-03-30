@@ -42,6 +42,7 @@ const cache = cacheExchange({
     SignalSummary: () => null, // embedded — nested under PositionInsight
     PortfolioInsight: () => null, // embedded — nested under InsightReport
     PortfolioItem: () => null, // embedded — nested under PortfolioInsight
+    SnapActionItem: () => null, // embedded — nested under Snap
     EmotionState: () => null, // embedded — nested under InsightReport
     RefreshIntelFeedResult: () => null, // embedded — mutation result
     TickerProfileEntry: (data) => data.id as string,

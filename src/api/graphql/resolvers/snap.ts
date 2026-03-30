@@ -5,7 +5,7 @@
  */
 
 import type { SnapStore } from '../../../snap/snap-store.js';
-import type { Snap, SnapSeverity } from '../../../snap/types.js';
+import type { Snap } from '../../../snap/types.js';
 
 // ---------------------------------------------------------------------------
 // State
@@ -21,31 +21,27 @@ export function setSnapStore(s: SnapStore): void {
 // GraphQL shape
 // ---------------------------------------------------------------------------
 
-interface SnapAttentionItemGql {
-  label: string;
-  severity: SnapSeverity;
-  ticker: string | null;
+interface SnapActionItemGql {
+  text: string;
+  signalIds: string[];
 }
 
 interface SnapGql {
   id: string;
   generatedAt: string;
-  summary: string;
-  attentionItems: SnapAttentionItemGql[];
-  portfolioTickers: string[];
+  intelSummary: string;
+  actionItems: SnapActionItemGql[];
 }
 
 function toGql(snap: Snap): SnapGql {
   return {
     id: snap.id,
     generatedAt: snap.generatedAt,
-    summary: snap.summary,
-    attentionItems: snap.attentionItems.map((item) => ({
-      label: item.label,
-      severity: item.severity,
-      ticker: item.ticker ?? null,
+    intelSummary: snap.intelSummary ?? '',
+    actionItems: snap.actionItems.map((item) => ({
+      text: item.text,
+      signalIds: item.signalIds,
     })),
-    portfolioTickers: snap.portfolioTickers,
   };
 }
 

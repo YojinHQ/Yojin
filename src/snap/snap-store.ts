@@ -45,8 +45,7 @@ export class SnapStore {
     await writeFile(this.filePath, JSON.stringify(validated, null, 2) + '\n');
     logger.info('Snap saved', {
       id: validated.id,
-      attentionItems: validated.attentionItems.length,
-      tickers: validated.portfolioTickers.length,
+      actionItems: validated.actionItems.length,
     });
   }
 }

@@ -25,6 +25,12 @@ const log = getLogger().sub('portfolio-resolver');
 let snapshotStore: PortfolioSnapshotStore | undefined;
 let connectionManager: ConnectionManager | undefined;
 let jintelClient: JintelClient | undefined;
+let onPortfolioChangedCb: ((tickers: string[]) => void) | undefined;
+
+/** Register a callback fired after any position mutation (add/edit/remove). */
+export function setPortfolioChangedCallback(cb: (tickers: string[]) => void): void {
+  onPortfolioChangedCb = cb;
+}
 
 export function setPortfolioJintelClient(c: JintelClient | undefined): void {
   jintelClient = c;
@@ -315,6 +321,7 @@ export async function addManualPositionMutation(
   });
   const enriched = await enrichWithLiveQuotes(snapshot);
   pubsub.publish('portfolioUpdate', enriched);
+  onPortfolioChangedCb?.([newPosition.symbol]);
   return enriched;
 }
 
@@ -367,6 +374,7 @@ export async function editPositionMutation(
   });
   const enriched = await enrichWithLiveQuotes(snapshot);
   pubsub.publish('portfolioUpdate', enriched);
+  onPortfolioChangedCb?.([updatedPosition.symbol]);
   return enriched;
 }
 
@@ -398,6 +406,7 @@ export async function removePositionMutation(
   });
   const enriched = await enrichWithLiveQuotes(snapshot);
   pubsub.publish('portfolioUpdate', enriched);
+  onPortfolioChangedCb?.([targetSymbol]);
   return enriched;
 }
 

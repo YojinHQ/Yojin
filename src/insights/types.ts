@@ -91,6 +91,7 @@ function portfolioItemArray() {
 export const PortfolioInsightSchema = z.object({
   overallHealth: PortfolioHealthSchema,
   summary: z.string().min(1),
+  intelSummary: z.string().optional().default(''),
   sectorThemes: z.array(z.string()),
   macroContext: z.string(),
   topRisks: portfolioItemArray(),

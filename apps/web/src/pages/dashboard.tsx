@@ -1,7 +1,7 @@
-import ActivityLog from '../components/activity/activity-log';
 import RightPanel from '../components/layout/right-panel';
 import ConnectedAccountsCard from '../components/overview/connected-accounts-card';
 import IntelFeed from '../components/overview/intel-feed';
+import IntelSummaryCard from '../components/overview/intel-summary-card';
 import PortfolioValueCard from '../components/overview/portfolio-value-card';
 import PositionsPreview from '../components/overview/positions-preview';
 import YojinSnapCard from '../components/overview/yojin-snap-card';
@@ -23,8 +23,8 @@ export default function Dashboard() {
         <ConnectedAccountsCard />
         <PortfolioOverview />
         <PositionsPreview />
+        <IntelSummaryCard />
         <YojinSnapCard />
-        <ActivityLog />
       </div>
 
       {/* Right panel — unified feed */}

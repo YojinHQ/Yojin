@@ -81,11 +81,17 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
         .object({
           overallHealth: PortfolioHealthSchema.describe('Overall: STRONG, HEALTHY, CAUTIOUS, WEAK, or CRITICAL'),
           summary: z.string().min(1).describe('3-5 sentence portfolio overview'),
+          intelSummary: z
+            .string()
+            .optional()
+            .describe('2-3 sentence synthesis of what the latest signals/intel are saying across all positions'),
           sectorThemes: z.array(z.string()).describe('Key sector-level observations'),
           macroContext: z.string().describe('Macro environment summary'),
           topRisks: z.array(z.string()).describe('Portfolio-level risk factors'),
           topOpportunities: z.array(z.string()).describe('Portfolio-level opportunities'),
-          actionItems: z.array(z.string()).describe('Concrete next steps'),
+          actionItems: z
+            .array(z.string())
+            .describe('Observations that surface relevant info — NOT advisory. Frame as facts, never directives.'),
         })
         .describe('Portfolio-level synthesis'),
       emotionState: z
@@ -102,6 +108,7 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
       portfolio: {
         overallHealth: string;
         summary: string;
+        intelSummary?: string;
         sectorThemes: string[];
         macroContext: string;
         topRisks: string[];
@@ -212,6 +219,7 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
       // Convert plain strings → structured PortfolioItems with auto-assigned signalIds
       const portfolio = PortfolioInsightSchema.parse({
         ...params.portfolio,
+        intelSummary: params.portfolio.intelSummary ?? '',
         topRisks: params.portfolio.topRisks.map((text) => ({ text, signalIds: assignSignalIds(text) })),
         topOpportunities: params.portfolio.topOpportunities.map((text) => ({ text, signalIds: assignSignalIds(text) })),
         actionItems: params.portfolio.actionItems.map((text) => ({ text, signalIds: assignSignalIds(text) })),

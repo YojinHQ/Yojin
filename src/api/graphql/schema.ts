@@ -66,12 +66,6 @@ export const typeDefs = /* GraphQL */ `
     ENRICHMENT
   }
 
-  enum SnapSeverity {
-    LOW
-    MEDIUM
-    HIGH
-  }
-
   enum SignalVerdict {
     CRITICAL
     IMPORTANT
@@ -747,18 +741,16 @@ export const typeDefs = /* GraphQL */ `
   # Snap (Strategist brief)
   # ---------------------------------------------------------------------------
 
-  type SnapAttentionItem {
-    label: String!
-    severity: SnapSeverity!
-    ticker: String
+  type SnapActionItem {
+    text: String!
+    signalIds: [String!]!
   }
 
   type Snap {
     id: ID!
     generatedAt: String!
-    summary: String!
-    attentionItems: [SnapAttentionItem!]!
-    portfolioTickers: [String!]!
+    intelSummary: String!
+    actionItems: [SnapActionItem!]!
   }
 
   # ---------------------------------------------------------------------------
