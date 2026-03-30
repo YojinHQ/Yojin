@@ -3,6 +3,8 @@ import { App, type SlackEventMiddlewareArgs } from '@slack/bolt';
 import type { ActionStore } from '../../../src/actions/action-store.js';
 import { isNotificationEnabled } from '../../../src/api/graphql/resolvers/channels.js';
 import type { NotificationBus } from '../../../src/core/notification-bus.js';
+import type { InsightStore } from '../../../src/insights/insight-store.js';
+import type { InsightReport } from '../../../src/insights/types.js';
 import { createSubsystemLogger } from '../../../src/logging/logger.js';
 import type {
   ChannelAuthAdapter,
@@ -24,6 +26,7 @@ export interface SlackChannelDeps {
   notificationBus?: NotificationBus;
   approvalGate?: ApprovalGate;
   snapStore?: SnapStore;
+  insightStore?: InsightStore;
   actionStore?: ActionStore;
 }
 
@@ -49,6 +52,21 @@ function formatSnap(snap: {
 
 function formatAction(action: { what: string; why: string; source: string }): string {
   return [':zap: *New Action*', '', action.what, '', `_Why:_ ${action.why}`, `_Source:_ ${action.source}`].join('\n');
+}
+
+function formatInsight(report: InsightReport): string {
+  const lines = [':bar_chart: *Daily Insights Report*', ''];
+  if (report.portfolio) {
+    lines.push(`*Health:* ${report.portfolio.overallHealth}`);
+    lines.push(report.portfolio.summary, '');
+  }
+  for (const pos of report.positions.slice(0, 5)) {
+    lines.push(`*${pos.symbol}*: ${pos.rating} — ${pos.thesis}`);
+  }
+  if (report.positions.length > 5) {
+    lines.push(`...and ${report.positions.length - 5} more positions`);
+  }
+  return lines.join('\n');
 }
 
 export function buildSlackChannel(deps: SlackChannelDeps = {}): ChannelPlugin {
@@ -189,6 +207,20 @@ export function buildSlackChannel(deps: SlackChannelDeps = {}): ChannelPlugin {
           await app.client.chat.postMessage({ channel: defaultChannelId, text });
         } catch (err) {
           logger.error('Failed to push approval request', { error: err });
+        }
+      }),
+    );
+
+    unsubscribers.push(
+      bus.on('insight.ready', async (event) => {
+        if (!defaultChannelId || !deps.insightStore) return;
+        if (!(await isNotificationEnabled('slack', 'insight.ready'))) return;
+        try {
+          const report = await deps.insightStore.getById(event.insightId);
+          if (!report) return;
+          await app.client.chat.postMessage({ channel: defaultChannelId, text: formatInsight(report) });
+        } catch (err) {
+          logger.error('Failed to push insight', { error: err });
         }
       }),
     );

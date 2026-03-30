@@ -1,4 +1,5 @@
 import type { Action } from '../../../src/actions/types.js';
+import type { InsightReport } from '../../../src/insights/types.js';
 import type { Snap } from '../../../src/snap/types.js';
 
 const MD_V2_SPECIAL = /[_*[\]()~`>#+\-=|{}.!]/g;
@@ -62,4 +63,23 @@ export function formatSnap(snap: Snap): string {
 
 export function formatAction(action: Action): string {
   return ['\u{26A1} New Action', '', action.what, '', `Why: ${action.why}`, `Source: ${action.source}`].join('\n');
+}
+
+export function formatInsight(report: InsightReport): string {
+  const lines: string[] = ['\u{1F4CA} Daily Insights Report', ''];
+
+  if (report.portfolio) {
+    lines.push(`Health: ${report.portfolio.overallHealth}`);
+    lines.push(report.portfolio.summary);
+    lines.push('');
+  }
+
+  for (const pos of report.positions.slice(0, 5)) {
+    lines.push(`${pos.symbol}: ${pos.rating} — ${pos.thesis}`);
+  }
+  if (report.positions.length > 5) {
+    lines.push(`...and ${report.positions.length - 5} more positions`);
+  }
+
+  return lines.join('\n');
 }

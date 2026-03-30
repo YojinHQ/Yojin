@@ -1,15 +1,23 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { createSubsystemLogger } from '../../../logging/logger.js';
+import type { PluginRegistry } from '../../../plugins/registry.js';
 import type { SecretVault } from '../../../trust/vault/types.js';
 
+const logger = createSubsystemLogger('channel-resolver');
+
 let vault: SecretVault | undefined;
+let registry: PluginRegistry | undefined;
+let dataRoot: string | undefined;
 
 export function setChannelVault(v: SecretVault): void {
   vault = v;
 }
 
-let dataRoot: string | undefined;
+export function setChannelRegistry(r: PluginRegistry): void {
+  registry = r;
+}
 
 export function setChannelDataRoot(root: string): void {
   dataRoot = root;
@@ -124,6 +132,27 @@ function toCredMap(credentials: CredentialInput[]): Record<string, string> {
   return map;
 }
 
+async function startChannel(id: string): Promise<string | undefined> {
+  const channel = registry?.getChannel(id);
+  if (!channel) return undefined;
+  try {
+    await channel.initialize?.({});
+    return undefined;
+  } catch (err) {
+    return `Saved but failed to start: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+async function stopChannel(id: string): Promise<void> {
+  const channel = registry?.getChannel(id);
+  if (!channel) return;
+  try {
+    await channel.shutdown?.();
+  } catch (err) {
+    logger.error('Failed to stop channel', { channelId: id, error: err });
+  }
+}
+
 export async function listChannelsQuery(): Promise<
   { id: string; name: string; status: string; description: string | null; requiredCredentials: string[] }[]
 > {
@@ -174,6 +203,9 @@ export async function connectChannelMutation(
 
   for (const c of args.credentials) await vault.set(c.key, c.value);
 
+  const startErr = await startChannel(args.id);
+  if (startErr) return { success: true, error: startErr };
+
   recordSuccess();
   return { success: true };
 }
@@ -184,6 +216,8 @@ export async function disconnectChannelMutation(_parent: unknown, args: { id: st
   const def = findChannel(args.id);
   if (!def) return { success: false, error: `Unknown channel: ${args.id}` };
   if (def.id === 'web') return { success: false, error: 'Cannot disconnect the web channel' };
+
+  await stopChannel(args.id);
 
   for (const key of def.requiredCredentials) {
     if (await vault.has(key)) await vault.delete(key);

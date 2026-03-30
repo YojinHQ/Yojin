@@ -1,10 +1,11 @@
 import type { Bot } from 'grammy';
 
 import { buildActionKeyboard, buildApprovalKeyboard, createBot } from './bot.js';
-import { chunkMessage, formatAction, formatSnap } from './formatting.js';
+import { chunkMessage, formatAction, formatInsight, formatSnap } from './formatting.js';
 import type { ActionStore } from '../../../src/actions/action-store.js';
 import { isNotificationEnabled } from '../../../src/api/graphql/resolvers/channels.js';
 import type { NotificationBus } from '../../../src/core/notification-bus.js';
+import type { InsightStore } from '../../../src/insights/insight-store.js';
 import { createSubsystemLogger } from '../../../src/logging/logger.js';
 import type {
   ChannelAuthAdapter,
@@ -30,6 +31,7 @@ export interface TelegramChannelDeps {
   notificationBus?: NotificationBus;
   approvalGate?: ApprovalGate;
   snapStore?: SnapStore;
+  insightStore?: InsightStore;
   actionStore?: ActionStore;
 }
 
@@ -215,6 +217,24 @@ export function buildTelegramChannel(deps: TelegramChannelDeps = {}): ChannelPlu
           await bot.api.sendMessage(activeChatId, text, { reply_markup: keyboard });
         } catch (err) {
           logger.error('Failed to push approval request', { error: err });
+        }
+      }),
+    );
+
+    unsubscribers.push(
+      bus.on('insight.ready', async (event) => {
+        if (!bot || !activeChatId || !deps.insightStore) return;
+        if (!(await isNotificationEnabled('telegram', 'insight.ready'))) return;
+        try {
+          const report = await deps.insightStore.getById(event.insightId);
+          if (!report) return;
+          const text = formatInsight(report);
+          const chunks = chunkMessage(text);
+          for (const chunk of chunks) {
+            await bot.api.sendMessage(activeChatId, chunk);
+          }
+        } catch (err) {
+          logger.error('Failed to push insight', { error: err });
         }
       }),
     );

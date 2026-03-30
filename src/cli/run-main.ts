@@ -18,6 +18,7 @@ import { ProviderRouter } from '../ai-providers/router.js';
 import { VercelAIProvider } from '../ai-providers/vercel-ai.js';
 import { setEventLog } from '../api/graphql/resolvers/activity-log.js';
 import { setAiConfigProviderRouter } from '../api/graphql/resolvers/ai-config.js';
+import { setChannelRegistry } from '../api/graphql/resolvers/channels.js';
 import { setCurationOrchestrator, setCurationPipelineDeps } from '../api/graphql/resolvers/curated-signals.js';
 import { setInsightsOrchestrator } from '../api/graphql/resolvers/insights.js';
 import { setOnboardingClaudeCodeProvider, setOnboardingProvider } from '../api/graphql/resolvers/onboarding.js';
@@ -267,6 +268,7 @@ async function startGateway(): Promise<void> {
   const channelDeps = {
     notificationBus,
     snapStore: services.snapStore,
+    insightStore: services.insightStore,
     actionStore: services.actionStore,
   };
 
@@ -312,6 +314,7 @@ async function startGateway(): Promise<void> {
   process.on('SIGTERM', shutdown);
 
   await gateway.start();
+  setChannelRegistry(gateway.getRegistry());
 }
 
 function startFrontend(): Promise<void> {
