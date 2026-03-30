@@ -671,14 +671,13 @@ interface BriefingConfigInput {
   time: string;
   timezone: string;
   sections: string[];
-  channel: string;
 }
 
 export async function saveBriefingConfigMutation(
   _parent: unknown,
   args: { input: BriefingConfigInput },
 ): Promise<boolean> {
-  const { time, timezone, sections, channel } = args.input;
+  const { time, timezone, sections } = args.input;
 
   // Write digest config to alerts.json
   const alertsPath = `${dataRoot}/config/alerts.json`;
@@ -710,20 +709,6 @@ export async function saveBriefingConfigMutation(
   alertsConfig.digestSections = sections;
 
   await writeFile(alertsPath, JSON.stringify(alertsConfig, null, 2), 'utf-8');
-
-  // Write channel preference to yojin.json
-  const yojinPath = `${dataRoot}/config/yojin.json`;
-  let yojinConfig: Record<string, unknown> = {};
-  try {
-    if (existsSync(yojinPath)) {
-      yojinConfig = JSON.parse(await readFile(yojinPath, 'utf-8'));
-    }
-  } catch {
-    // Start fresh
-  }
-
-  yojinConfig.briefingChannel = channel;
-  await writeFile(yojinPath, JSON.stringify(yojinConfig, null, 2), 'utf-8');
 
   return true;
 }
@@ -770,18 +755,6 @@ export async function resetOnboardingMutation(): Promise<boolean> {
     await unlink(alertsPath);
   }
 
-  // Remove briefing channel from yojin.json
-  const yojinPath = `${dataRoot}/config/yojin.json`;
-  if (existsSync(yojinPath)) {
-    try {
-      const raw = JSON.parse(await readFile(yojinPath, 'utf-8'));
-      delete raw.briefingChannel;
-      await writeFile(yojinPath, JSON.stringify(raw, null, 2), 'utf-8');
-    } catch {
-      // Config unreadable — skip
-    }
-  }
-
   // Disconnect all platforms
   if (connectionManager) {
     try {
@@ -814,7 +787,6 @@ interface BriefingConfigResult {
   time: string;
   timezone: string;
   sections: string[];
-  channel: string;
   enabled: boolean;
 }
 
@@ -827,25 +799,10 @@ export async function briefingConfigQuery(): Promise<BriefingConfigResult | null
     const schedule = alertsConfig.digestSchedule;
     if (!schedule?.time || !schedule?.timezone) return null;
 
-    // Read channel preference from yojin.json
-    let channel = 'web';
-    const yojinPath = `${dataRoot}/config/yojin.json`;
-    if (existsSync(yojinPath)) {
-      try {
-        const yojinConfig = JSON.parse(await readFile(yojinPath, 'utf-8'));
-        if (yojinConfig.briefingChannel) {
-          channel = yojinConfig.briefingChannel;
-        }
-      } catch {
-        // Ignore read errors
-      }
-    }
-
     return {
       time: schedule.time,
       timezone: schedule.timezone,
       sections: alertsConfig.digestSections ?? [],
-      channel,
       enabled: true,
     };
   } catch {

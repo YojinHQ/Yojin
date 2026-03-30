@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { ApprovalAction, ApprovalGateConfig } from './config.js';
 import { DEFAULT_APPROVAL_CONFIG } from './config.js';
+import type { NotificationBus } from '../../core/notification-bus.js';
 import type { AuditLog } from '../audit/types.js';
 
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired';
@@ -35,16 +36,19 @@ interface PendingRequest {
 export interface ApprovalGateOptions {
   config?: ApprovalGateConfig;
   auditLog: AuditLog;
+  notificationBus?: NotificationBus;
 }
 
 export class ApprovalGate {
   private readonly config: ApprovalGateConfig;
   private readonly auditLog: AuditLog;
+  private notificationBus?: NotificationBus;
   private readonly pending = new Map<string, PendingRequest>();
 
   constructor(options: ApprovalGateOptions) {
     this.config = options.config ?? DEFAULT_APPROVAL_CONFIG;
     this.auditLog = options.auditLog;
+    this.notificationBus = options.notificationBus;
   }
 
   /** Check if an action type requires approval (without requesting it). */
@@ -81,6 +85,13 @@ export class ApprovalGate {
       }, this.config.timeoutMs);
 
       this.pending.set(request.id, { request, resolve, timer });
+
+      this.notificationBus?.publish({
+        type: 'approval.requested',
+        requestId: request.id,
+        action,
+        description,
+      });
     });
   }
 

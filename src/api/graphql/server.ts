@@ -12,6 +12,14 @@ import { activityLogQuery } from './resolvers/activity-log.js';
 import { aiConfigQuery, saveAiConfigMutation } from './resolvers/ai-config.js';
 import { alertsQuery, createAlertMutation, dismissAlertMutation } from './resolvers/alerts.js';
 import {
+  connectChannelMutation,
+  disconnectChannelMutation,
+  listChannelsQuery,
+  notificationPreferencesQuery,
+  saveNotificationPreferencesMutation,
+  validateChannelTokenMutation,
+} from './resolvers/channels.js';
+import {
   activeSessionQuery,
   createSessionMutation,
   deleteSessionMutation,
@@ -146,6 +154,8 @@ const schema = createSchema({
       watchlist: watchlistQuery,
       insightsWorkflowStatus: () => getInsightsWorkflowStatus(),
       briefingConfig: briefingConfigQuery,
+      listChannels: listChannelsQuery,
+      notificationPreferences: notificationPreferencesQuery,
       snap: snapQuery,
       activityLog: activityLogQuery,
       actions: actionsResolver,
@@ -190,6 +200,10 @@ const schema = createSchema({
       parsePortfolioScreenshot: parsePortfolioScreenshotMutation,
       confirmPositions: confirmPositionsMutation,
       saveBriefingConfig: saveBriefingConfigMutation,
+      connectChannel: connectChannelMutation,
+      disconnectChannel: disconnectChannelMutation,
+      validateChannelToken: validateChannelTokenMutation,
+      saveNotificationPreferences: saveNotificationPreferencesMutation,
       completeOnboarding: completeOnboardingMutation,
       resetOnboarding: resetOnboardingMutation,
       validateJintelKey: validateJintelKeyMutation,

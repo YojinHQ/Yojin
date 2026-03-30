@@ -9,6 +9,9 @@ import Button from '../../components/common/button';
 import { cn } from '../../lib/utils';
 import { setTimezone as persistTimezone } from '../../lib/timezone';
 import { SAVE_BRIEFING_CONFIG_MUTATION } from '../../api/documents';
+import { ConnectChannelModal } from '../../components/channels/connect-channel-modal';
+import { getChannelMeta } from '../../components/channels/channel-meta';
+import { useListChannels } from '../../api/hooks/use-channels';
 
 interface DigestSection {
   key: string;
@@ -70,10 +73,12 @@ export function Step5Briefing() {
   const [time, setTime] = useState(state.briefing?.time ?? '08:00');
   const [timezone, setTimezone] = useState(state.briefing?.timezone ?? detectTimezone());
   const [sections, setSections] = useState<string[]>(state.briefing?.sections ?? getDefaultSections());
-  const channel = 'web';
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [, executeSave] = useMutation(SAVE_BRIEFING_CONFIG_MUTATION);
+  const [channelsResult, reexecuteChannels] = useListChannels();
+  const [connectModalChannel, setConnectModalChannel] = useState<string | null>(null);
+  const channels = channelsResult.data?.listChannels ?? [];
 
   // Persist timezone to localStorage so the header clock can use it
   useEffect(() => {
@@ -88,13 +93,13 @@ export function Step5Briefing() {
     setSaving(true);
     setError('');
     try {
-      const result = await executeSave({ input: { time, timezone, sections, channel } });
+      const result = await executeSave({ input: { time, timezone, sections } });
       if (result.error) {
         setError(result.error.message || 'Connection failed.');
         return;
       }
       if (result.data?.saveBriefingConfig) {
-        updateState({ briefing: { time, timezone, sections, channel: 'web' as const } });
+        updateState({ briefing: { time, timezone, sections } });
         nextStep();
       } else {
         setError('Failed to save config. Try again.');
@@ -148,59 +153,70 @@ export function Step5Briefing() {
             </div>
           </div>
 
-          {/* Section 3: Delivery Channel */}
+          {/* Section 3: Notification Channels */}
           <div className="space-y-3">
-            <p className="text-sm font-medium text-text-secondary">Deliver briefing via</p>
+            <p className="text-sm font-medium text-text-secondary">Connect channels for notifications</p>
             <div className="flex gap-3">
-              {/* Web option (currently the only supported channel) */}
-              <div className="flex flex-1 items-center gap-3 rounded-xl border p-4 border-accent-primary/60 bg-accent-glow">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-primary/10">
-                  <svg
-                    className="h-5 w-5 text-accent-primary"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25Z"
-                    />
-                  </svg>
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-medium text-text-primary">Web</p>
-                  <p className="text-xs text-text-muted">In-app dashboard</p>
-                </div>
-              </div>
+              {channels.map((ch) => {
+                const meta = getChannelMeta(ch.id);
+                const connected = ch.status === 'CONNECTED';
 
-              {/* Telegram option (placeholder — disabled until supported) */}
-              <button
-                type="button"
-                disabled
-                className={cn(
-                  'flex flex-1 items-center gap-3 rounded-xl border p-4 cursor-not-allowed opacity-50',
-                  'border-border bg-bg-card',
-                )}
-              >
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-bg-tertiary">
-                  <svg className="h-5 w-5 text-text-muted" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
-                  </svg>
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-medium text-text-primary">
-                    Telegram
-                    <span className="ml-1.5 rounded-full bg-bg-tertiary px-2 py-0.5 text-[10px] font-medium text-text-muted">
-                      Soon
-                    </span>
-                  </p>
-                  <p className="text-xs text-text-muted">Direct message via bot</p>
-                </div>
-              </button>
+                return (
+                  <button
+                    key={ch.id}
+                    type="button"
+                    onClick={() => {
+                      if (!connected && ch.id !== 'web') {
+                        setConnectModalChannel(ch.id);
+                      }
+                    }}
+                    className={cn(
+                      'flex flex-1 items-center gap-3 rounded-xl border p-4 transition-all duration-200',
+                      connected
+                        ? 'border-success/40 bg-success/5'
+                        : 'border-border bg-bg-card hover:border-accent-primary/30 cursor-pointer',
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold',
+                        meta.color,
+                      )}
+                    >
+                      {meta.initials}
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-medium text-text-primary">
+                        {meta.label}
+                        {connected ? (
+                          <span className="ml-1.5 rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-medium text-success">
+                            Connected
+                          </span>
+                        ) : (
+                          ch.id !== 'web' && (
+                            <span className="ml-1.5 rounded-full bg-bg-tertiary px-2 py-0.5 text-[10px] font-medium text-text-muted">
+                              Connect
+                            </span>
+                          )
+                        )}
+                      </p>
+                      <p className="text-xs text-text-muted">{meta.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
+
+          <ConnectChannelModal
+            open={connectModalChannel !== null}
+            channelId={connectModalChannel}
+            onClose={() => setConnectModalChannel(null)}
+            onConnected={() => {
+              setConnectModalChannel(null);
+              reexecuteChannels({ requestPolicy: 'network-only' });
+            }}
+          />
         </div>
 
         {error && <p className="mt-4 text-center text-xs text-error">{error}</p>}

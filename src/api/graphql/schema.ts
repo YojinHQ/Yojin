@@ -641,15 +641,37 @@ export const typeDefs = /* GraphQL */ `
     time: String!
     timezone: String!
     sections: [String!]!
-    channel: String!
   }
 
   type BriefingConfig {
     time: String!
     timezone: String!
     sections: [String!]!
-    channel: String!
     enabled: Boolean!
+  }
+
+  enum ChannelStatus {
+    CONNECTED
+    NOT_CONNECTED
+    ERROR
+  }
+
+  type Channel {
+    id: ID!
+    name: String!
+    status: ChannelStatus!
+    description: String
+    requiredCredentials: [String!]!
+  }
+
+  type ChannelResult {
+    success: Boolean!
+    error: String
+  }
+
+  type NotificationPreferences {
+    channelId: ID!
+    enabledTypes: [String!]!
   }
 
   type OnboardingStatusResult {
@@ -1006,6 +1028,8 @@ export const typeDefs = /* GraphQL */ `
     watchlist: [WatchlistEntry!]!
     insightsWorkflowStatus: WorkflowStatus!
     briefingConfig: BriefingConfig
+    listChannels: [Channel!]!
+    notificationPreferences: [NotificationPreferences!]!
     snap: Snap
     activityLog(types: [ActivityEventType!], since: String, limit: Int): [ActivityEvent!]!
     actions(status: ActionStatus, since: String, limit: Int): [Action!]!
@@ -1059,6 +1083,10 @@ export const typeDefs = /* GraphQL */ `
     parsePortfolioScreenshot(input: ScreenshotInput!): ScreenshotResult!
     confirmPositions(input: ConfirmPositionsInput!): Boolean!
     saveBriefingConfig(input: BriefingConfigInput!): Boolean!
+    connectChannel(id: ID!, credentials: [CredentialInput!]!): ChannelResult!
+    disconnectChannel(id: ID!): ChannelResult!
+    validateChannelToken(id: ID!, credentials: [CredentialInput!]!): ChannelResult!
+    saveNotificationPreferences(channelId: ID!, enabledTypes: [String!]!): Boolean!
     completeOnboarding: Boolean!
     resetOnboarding: Boolean!
     validateJintelKey(apiKey: String!): ValidateJintelKeyResult!

@@ -61,6 +61,30 @@ export type SignalVerdict = 'CRITICAL' | 'IMPORTANT' | 'NOISE';
 export type ThesisAlignment = 'SUPPORTS' | 'CHALLENGES' | 'NEUTRAL';
 
 // ---------------------------------------------------------------------------
+// Channels
+// ---------------------------------------------------------------------------
+
+export type ChannelStatus = 'CONNECTED' | 'NOT_CONNECTED' | 'ERROR';
+
+export interface Channel {
+  id: string;
+  name: string;
+  status: ChannelStatus;
+  description: string | null;
+  requiredCredentials: string[];
+}
+
+export interface ChannelResult {
+  success: boolean;
+  error?: string;
+}
+
+export interface NotificationPreferences {
+  channelId: string;
+  enabledTypes: string[];
+}
+
+// ---------------------------------------------------------------------------
 // Activity Log
 // ---------------------------------------------------------------------------
 

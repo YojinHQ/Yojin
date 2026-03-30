@@ -106,6 +106,8 @@ export interface IncomingMessage {
   text: string;
   timestamp: string;
   raw?: unknown;
+  /** Channel-provided callback for streaming agent events (typing, text deltas, tool use). */
+  onAgentEvent?: (event: { type: string; [key: string]: unknown }) => void;
 }
 
 export interface OutgoingMessage {

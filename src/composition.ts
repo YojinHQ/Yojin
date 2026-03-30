@@ -17,6 +17,7 @@ import { createDefaultProfiles } from './agents/defaults.js';
 import { AgentRegistry } from './agents/registry.js';
 import { pubsub } from './api/graphql/pubsub.js';
 import { setActionStore } from './api/graphql/resolvers/actions.js';
+import { setChannelDataRoot, setChannelVault } from './api/graphql/resolvers/channels.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
 import {
   setCuratedAssessmentStore,
@@ -257,6 +258,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
       vault = new EncryptedVault({ auditLog });
       // Always expose vault to GraphQL so the web UI can manage it
       setVault(vault);
+      setChannelVault(vault);
 
       const passphrase = resolvePassphrase();
       if (passphrase) {
@@ -277,6 +279,9 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
       vault = undefined;
     }
   }
+
+  // 4a. Channel notification preferences (no vault dependency)
+  setChannelDataRoot(dataRoot);
 
   // 4b. Portfolio snapshot store (created early — ConnectionManager needs it)
   const snapshotStore = new PortfolioSnapshotStore(dataRoot);

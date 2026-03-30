@@ -7,6 +7,14 @@ import { GateCard } from '../components/common/feature-gate';
 import { useOnboardingStatus } from '../lib/onboarding-context';
 import { TimePicker } from '../components/onboarding/time-picker';
 import { TimezonePicker } from '../components/onboarding/timezone-picker';
+import { ChannelCard } from '../components/channels/channel-card';
+import { ConnectChannelModal } from '../components/channels/connect-channel-modal';
+import {
+  useListChannels,
+  useDisconnectChannel,
+  useNotificationPreferences,
+  useSaveNotificationPreferences,
+} from '../api/hooks/use-channels';
 import {
   AI_CONFIG_QUERY,
   BRIEFING_CONFIG_QUERY,
@@ -25,7 +33,6 @@ interface BriefingConfig {
   time: string;
   timezone: string;
   sections: string[];
-  channel: string;
   enabled: boolean;
 }
 
@@ -102,6 +109,26 @@ export default function Settings() {
             <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">Daily Insights</h3>
           </div>
           <BriefingEditor disabled={!jintelConfigured} />
+        </div>
+
+        <div className="border-t border-border" />
+
+        {/* Section: Channels */}
+        <div className="p-5 space-y-4">
+          <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">Delivery Channels</h3>
+          <p className="text-sm text-text-muted">
+            Connect messaging channels for notifications, approvals, and daily briefings.
+          </p>
+          <ChannelsSection />
+        </div>
+
+        <div className="border-t border-border" />
+
+        {/* Section: Notification Preferences */}
+        <div className="p-5 space-y-4">
+          <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">Notification Routing</h3>
+          <p className="text-sm text-text-muted">Choose which notifications each channel receives.</p>
+          <NotificationPreferencesEditor />
         </div>
 
         <div className="border-t border-border" />
@@ -376,7 +403,7 @@ function BriefingEditor({ disabled: _disabled = false }: { disabled?: boolean })
     setSaving(true);
     setSaveError(null);
     try {
-      const result = await saveBriefing({ input: { time, timezone, sections, channel: 'web' } });
+      const result = await saveBriefing({ input: { time, timezone, sections } });
       if (result.error) {
         setSaveError(result.error.message || 'Failed to save schedule');
         return;
@@ -438,5 +465,158 @@ function BriefingEditor({ disabled: _disabled = false }: { disabled?: boolean })
         {saveError && <span className="text-xs text-error">{saveError}</span>}
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Notification preferences editor
+// ---------------------------------------------------------------------------
+
+const NOTIFICATION_TYPES = [
+  { key: 'snap.ready', label: 'Snap briefs', description: 'Periodic attention summaries' },
+  { key: 'insight.ready', label: 'Daily insights', description: 'Full portfolio analysis reports' },
+  { key: 'action.created', label: 'Action alerts', description: 'Skill-triggered trade recommendations' },
+  { key: 'approval.requested', label: 'Approval requests', description: 'Actions requiring your approval' },
+];
+
+function NotificationPreferencesEditor() {
+  const [channelsResult] = useListChannels();
+  const [prefsResult] = useNotificationPreferences();
+  const [, savePrefs] = useSaveNotificationPreferences();
+
+  const channels = (channelsResult.data?.listChannels ?? []).filter((ch) => ch.status === 'CONNECTED');
+  const prefs = prefsResult.data?.notificationPreferences ?? [];
+
+  const isEnabled = (channelId: string, notificationType: string): boolean => {
+    const channelPrefs = prefs.find((p) => p.channelId === channelId);
+    if (!channelPrefs) return true; // default: all enabled
+    return channelPrefs.enabledTypes.includes(notificationType);
+  };
+
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleToggle = async (channelId: string, notificationType: string) => {
+    const channelPrefs = prefs.find((p) => p.channelId === channelId);
+    const currentTypes = channelPrefs?.enabledTypes ?? NOTIFICATION_TYPES.map((t) => t.key);
+
+    const newTypes = currentTypes.includes(notificationType)
+      ? currentTypes.filter((t) => t !== notificationType)
+      : [...currentTypes, notificationType];
+
+    setSaveError(null);
+    const res = await savePrefs({ channelId, enabledTypes: newTypes });
+    if (res.error) {
+      setSaveError(res.error.message || 'Failed to save');
+    }
+  };
+
+  if (channelsResult.fetching || prefsResult.fetching) {
+    return <p className="text-sm text-text-muted">Loading...</p>;
+  }
+
+  if (channelsResult.error || prefsResult.error) {
+    return <p className="text-sm text-error">Failed to load notification preferences.</p>;
+  }
+
+  if (channels.length === 0) {
+    return <p className="text-sm text-text-muted">No channels connected.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="text-left py-2 pr-4 text-xs font-medium uppercase tracking-wider text-text-muted">
+                Notification
+              </th>
+              {channels.map((ch) => (
+                <th
+                  key={ch.id}
+                  className="text-center py-2 px-3 text-xs font-medium uppercase tracking-wider text-text-muted"
+                >
+                  {ch.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {NOTIFICATION_TYPES.map((nt) => (
+              <tr key={nt.key} className="border-b border-border last:border-0">
+                <td className="py-3 pr-4">
+                  <p className="text-sm text-text-primary">{nt.label}</p>
+                  <p className="text-xs text-text-muted">{nt.description}</p>
+                </td>
+                {channels.map((ch) => (
+                  <td key={ch.id} className="text-center py-3 px-3">
+                    <Toggle size="sm" checked={isEnabled(ch.id, nt.key)} onChange={() => handleToggle(ch.id, nt.key)} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {saveError && <p className="text-sm text-error">{saveError}</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Connected channels section
+// ---------------------------------------------------------------------------
+
+function ChannelsSection() {
+  const [result, reexecute] = useListChannels();
+  const [, disconnectChannel] = useDisconnectChannel();
+  const [connectModalChannel, setConnectModalChannel] = useState<string | null>(null);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+
+  const channels = result.data?.listChannels ?? [];
+
+  const handleDisconnect = async (channelId: string) => {
+    setDisconnectingId(channelId);
+    const res = await disconnectChannel({ id: channelId });
+    setDisconnectingId(null);
+    if (res.data?.disconnectChannel.success) {
+      reexecute({ requestPolicy: 'network-only' });
+    }
+  };
+
+  const handleConnected = () => {
+    setConnectModalChannel(null);
+    reexecute({ requestPolicy: 'network-only' });
+  };
+
+  if (result.fetching && channels.length === 0) {
+    return <p className="text-sm text-text-muted">Loading channels...</p>;
+  }
+
+  if (result.error) {
+    return <p className="text-sm text-error">Failed to load channels.</p>;
+  }
+
+  return (
+    <>
+      <div className="space-y-3">
+        {channels.map((channel) => (
+          <ChannelCard
+            key={channel.id}
+            channel={channel}
+            onConnect={setConnectModalChannel}
+            onDisconnect={handleDisconnect}
+            disconnecting={disconnectingId === channel.id}
+          />
+        ))}
+      </div>
+
+      <ConnectChannelModal
+        open={connectModalChannel !== null}
+        channelId={connectModalChannel}
+        onClose={() => setConnectModalChannel(null)}
+        onConnected={handleConnected}
+      />
+    </>
   );
 }

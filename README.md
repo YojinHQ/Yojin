@@ -412,7 +412,7 @@ yojin/
 | Web UI    | Working (Hono + GraphQL + SSE)    |
 | MCP / ACP | Working (Claude Desktop / Cursor) |
 | Slack     | Working (@slack/bolt)             |
-| Telegram  | Planned                           |
+| Telegram  | Working (grammy)                  |
 
 ## Tech Stack
 

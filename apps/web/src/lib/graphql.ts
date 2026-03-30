@@ -50,6 +50,9 @@ const cache = cacheExchange({
     SentimentPoint: () => null, // embedded — nested under TickerProfileBrief
     PricePoint: () => null, // embedded — nested under TickerPriceHistory
     TickerPriceHistory: () => null, // embedded — keyed by ticker in array
+    Channel: (data) => data.id as string,
+    NotificationPreferences: (data) => data.channelId as string,
+    ChannelResult: () => null, // embedded — mutation result, no stable identity
     SessionSummary: (data) => data.id as string,
     SessionDetail: (data) => data.id as string,
   },
@@ -100,6 +103,15 @@ const cache = cacheExchange({
       runFullCuration(_result, _args, cache) {
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
+      },
+      connectChannel(_result, _args, cache) {
+        cache.invalidate('Query', 'listChannels');
+      },
+      disconnectChannel(_result, _args, cache) {
+        cache.invalidate('Query', 'listChannels');
+      },
+      saveNotificationPreferences(_result, _args, cache) {
+        cache.invalidate('Query', 'notificationPreferences');
       },
       createAlert(_result, _args, cache) {
         cache.invalidate('Query', 'alerts');

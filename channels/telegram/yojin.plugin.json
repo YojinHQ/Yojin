@@ -1,0 +1,7 @@
+{
+  "id": "telegram",
+  "name": "Telegram",
+  "kind": "channel",
+  "description": "Telegram bot messaging channel with push notifications",
+  "version": "0.1.0"
+}

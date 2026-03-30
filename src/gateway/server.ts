@@ -6,7 +6,6 @@
  * All agent logic (sessions, tools, guards) lives in AgentRuntime.
  */
 
-import { slackPlugin } from '../../channels/slack/index.js';
 import { webPlugin } from '../../channels/web/index.js';
 import { anthropicPlugin } from '../../providers/anthropic/index.js';
 import { setChatAgentRuntime, setSessionStore } from '../api/graphql/resolvers/chat.js';
@@ -15,7 +14,7 @@ import type { YojinConfig } from '../config/config.js';
 import type { AgentRuntime } from '../core/agent-runtime.js';
 import { getLogger } from '../logging/index.js';
 import { PluginRegistry } from '../plugins/registry.js';
-import type { IncomingMessage } from '../plugins/types.js';
+import type { IncomingMessage, YojinPlugin } from '../plugins/types.js';
 import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
 import type { ConnectionManager } from '../scraper/connection-manager.js';
 import type { SessionStore } from '../sessions/types.js';
@@ -24,6 +23,7 @@ export class Gateway {
   private readonly registry: PluginRegistry;
   private readonly config: YojinConfig;
   private readonly agentRuntime: AgentRuntime;
+  private readonly extraPlugins: YojinPlugin[];
   private readonly log = getLogger().sub('gateway');
 
   constructor(
@@ -33,10 +33,12 @@ export class Gateway {
       snapshotStore?: PortfolioSnapshotStore;
       connectionManager?: ConnectionManager;
       sessionStore?: SessionStore;
+      extraPlugins?: YojinPlugin[];
     },
   ) {
     this.config = config;
     this.registry = new PluginRegistry();
+    this.extraPlugins = options?.extraPlugins ?? [];
     this.agentRuntime = agentRuntime;
 
     // Inject AgentRuntime into GraphQL chat resolver
@@ -62,8 +64,10 @@ export class Gateway {
   async loadPlugins(): Promise<void> {
     this.log.info('Loading plugins…');
     this.registry.loadPlugin(anthropicPlugin);
-    this.registry.loadPlugin(slackPlugin);
     this.registry.loadPlugin(webPlugin);
+    for (const plugin of this.extraPlugins) {
+      this.registry.loadPlugin(plugin);
+    }
     this.log.info('Plugins loaded');
   }
 
@@ -104,6 +108,7 @@ export class Gateway {
         channelId,
         userId: msg.userId,
         threadId: msg.threadId,
+        onEvent: msg.onAgentEvent as import('../core/types.js').AgentLoopEventHandler | undefined,
       });
 
       await channel.messagingAdapter.sendMessage({
