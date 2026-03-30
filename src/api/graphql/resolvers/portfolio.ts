@@ -121,6 +121,10 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
       marketValue,
       dayChange: quote.change,
       dayChangePercent: quote.changePercent,
+      preMarketChange: quote.preMarketChange ?? null,
+      preMarketChangePercent: quote.preMarketChangePercent ?? null,
+      postMarketChange: quote.postMarketChange ?? null,
+      postMarketChangePercent: quote.postMarketChangePercent ?? null,
       unrealizedPnl: hasCostBasis ? marketValue - totalCost : 0,
       unrealizedPnlPercent: hasCostBasis ? ((currentPrice - pos.costBasis) / pos.costBasis) * 100 : 0,
       sparkline,
@@ -468,6 +472,11 @@ export const positionFieldResolvers = {
 
   /** Real value from enrichWithLiveQuotes; null when no quote data available. */
   dayChangePercent: (pos: Position) => pos.dayChangePercent ?? null,
+
+  preMarketChange: (pos: Position) => pos.preMarketChange ?? null,
+  preMarketChangePercent: (pos: Position) => pos.preMarketChangePercent ?? null,
+  postMarketChange: (pos: Position) => pos.postMarketChange ?? null,
+  postMarketChangePercent: (pos: Position) => pos.postMarketChangePercent ?? null,
 
   /** Real sparkline from enrichWithLiveQuotes; null when no intraday data available. */
   sparkline: (pos: Position) => pos.sparkline ?? null,

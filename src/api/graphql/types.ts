@@ -59,6 +59,10 @@ export interface Position {
   unrealizedPnlPercent: number;
   dayChange?: number;
   dayChangePercent?: number;
+  preMarketChange?: number | null;
+  preMarketChangePercent?: number | null;
+  postMarketChange?: number | null;
+  postMarketChangePercent?: number | null;
   sparkline?: number[];
   sector?: string;
   assetClass: AssetClass;

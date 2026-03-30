@@ -23,6 +23,10 @@ export const POSITION_FIELDS = gql`
     unrealizedPnlPercent
     dayChange
     dayChangePercent
+    preMarketChange
+    preMarketChangePercent
+    postMarketChange
+    postMarketChangePercent
     sparkline
     sector
     assetClass

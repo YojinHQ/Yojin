@@ -156,3 +156,7 @@ pnpm ci:all           # Full CI check across all packages
 | **snake_case**           | `user_name`, `get_user_data` | Database columns, Python interop                    |
 | **SCREAMING_SNAKE_CASE** | `USER_NAME`, `MAX_RETRIES`   | True constants                                      |
 | **kebab-case**           | `user-name`, `get-user-data` | File names, URLs, CSS classes                       |
+
+## Frontend Design
+
+Always use the `/frontend-design` skill when building or modifying frontend UI components, pages, or views. This ensures high design quality and avoids generic AI aesthetics.
