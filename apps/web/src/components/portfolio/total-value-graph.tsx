@@ -1,5 +1,5 @@
 import { useEffect, useRef, useMemo } from 'react';
-import { createChart, type IChartApi, type ISeriesApi, type Time, ColorType } from 'lightweight-charts';
+import { createChart, AreaSeries, type IChartApi, type ISeriesApi, type Time, ColorType } from 'lightweight-charts';
 import { CardEmptyState } from '../common/card-empty-state';
 import type { PortfolioHistoryPoint } from '../../api/types';
 
@@ -53,7 +53,7 @@ export function TotalValueGraph({ history }: TotalValueGraphProps) {
 
     chartRef.current = chart;
 
-    seriesRef.current = chart.addAreaSeries({
+    seriesRef.current = chart.addSeries(AreaSeries, {
       lineWidth: 2,
       crosshairMarkerRadius: 4,
       priceFormat: {
