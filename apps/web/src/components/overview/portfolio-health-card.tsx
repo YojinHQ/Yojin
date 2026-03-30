@@ -13,7 +13,7 @@ const healthVariant: Record<PortfolioHealth, BadgeVariant> = {
 };
 
 function ConfidenceBar({ label, value }: { label: string; value: number }) {
-  const pct = Math.round(value * 100);
+  const pct = Math.min(100, Math.round(value * 100));
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
