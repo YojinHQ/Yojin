@@ -4,6 +4,7 @@ import { SNAP_QUERY } from '../../api/documents';
 import type { SnapQueryResult, SnapSeverity } from '../../api/types';
 import { cn, timeAgo } from '../../lib/utils';
 import { useFeatureStatus } from '../../lib/feature-status';
+import { usePortfolio } from '../../api';
 import { CardEmptyState } from '../common/card-empty-state';
 import { CardBlurGate } from '../common/card-blur-gate';
 import { FeatureCardGate } from '../common/feature-gate';
@@ -21,8 +22,10 @@ const SEVERITY_STYLES: Record<SnapSeverity, { dot: string; text: string }> = {
 export default function YojinSnapCard() {
   const { aiConfigured, jintelConfigured } = useFeatureStatus();
   const [result] = useQuery<SnapQueryResult>({ query: SNAP_QUERY });
+  const [{ data: portfolioData }] = usePortfolio();
   const { openModal } = useAddPositionModal();
   const snap = result.data?.snap;
+  const hasPositions = (portfolioData?.portfolio?.positions?.length ?? 0) > 0;
 
   if (!jintelConfigured) {
     return (
@@ -69,11 +72,15 @@ export default function YojinSnapCard() {
               </svg>
             }
             title="No snap brief yet"
-            description="Generated once your portfolio is loaded."
+            description={
+              hasPositions ? 'Your brief will be generated shortly.' : 'Generated once your portfolio is loaded.'
+            }
             action={
-              <Button variant="primary" size="sm" onClick={openModal}>
-                Add positions
-              </Button>
+              hasPositions ? undefined : (
+                <Button variant="primary" size="sm" onClick={openModal}>
+                  Add positions
+                </Button>
+              )
             }
           />
         </CardBlurGate>

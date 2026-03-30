@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation } from 'urql';
 
 import {
@@ -21,8 +22,19 @@ import type {
 } from '../types.js';
 
 /** Full portfolio snapshot with positions, history, sector exposure, and P&L. */
-export function usePortfolio(variables?: PortfolioQueryVariables) {
-  return useQuery<PortfolioQueryResult, PortfolioQueryVariables>({ query: PORTFOLIO_QUERY, variables });
+export function usePortfolio(variables?: PortfolioQueryVariables, opts?: { pollInterval?: number }) {
+  const [result, reexecute] = useQuery<PortfolioQueryResult, PortfolioQueryVariables>({
+    query: PORTFOLIO_QUERY,
+    variables,
+  });
+
+  useEffect(() => {
+    if (!opts?.pollInterval) return;
+    const id = setInterval(() => reexecute({ requestPolicy: 'network-only' }), opts.pollInterval);
+    return () => clearInterval(id);
+  }, [opts?.pollInterval, reexecute]);
+
+  return [result, reexecute] as const;
 }
 
 /** Trigger a position refresh from a specific brokerage platform. */

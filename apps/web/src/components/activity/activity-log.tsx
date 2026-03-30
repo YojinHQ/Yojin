@@ -10,6 +10,7 @@ import { CardEmptyState } from '../common/card-empty-state';
 import { CardBlurGate } from '../common/card-blur-gate';
 import { FeatureCardGate } from '../common/feature-gate';
 import { useFeatureStatus } from '../../lib/feature-status';
+import { usePortfolio } from '../../api';
 import { DashboardCard } from '../common/dashboard-card';
 import Spinner from '../common/spinner';
 import Button from '../common/button';
@@ -131,6 +132,8 @@ function InsightIcon({ className }: { className?: string }) {
 export default function ActivityLog() {
   const { jintelConfigured } = useFeatureStatus();
   const { openModal } = useAddPositionModal();
+  const [{ data: portfolioData }] = usePortfolio();
+  const hasPositions = (portfolioData?.portfolio?.positions?.length ?? 0) > 0;
   const [result] = useQuery<ActivityLogQueryResult>({
     query: ACTIVITY_LOG_QUERY,
     variables: { limit: 50 },
@@ -195,9 +198,11 @@ export default function ActivityLog() {
             title="No activity yet"
             description="Events will appear here as you use Yojin."
             action={
-              <Button variant="primary" size="sm" onClick={openModal}>
-                Add position
-              </Button>
+              hasPositions ? undefined : (
+                <Button variant="primary" size="sm" onClick={openModal}>
+                  Add position
+                </Button>
+              )
             }
           />
         </CardBlurGate>

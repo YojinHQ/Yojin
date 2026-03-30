@@ -82,7 +82,7 @@ const TH = 'whitespace-nowrap px-3 py-2 text-2xs font-medium uppercase tracking-
 
 export default function PositionsPreview() {
   const { jintelConfigured } = useFeatureStatus();
-  const [{ data: portfolioData, fetching, error }] = usePortfolio();
+  const [{ data: portfolioData, fetching, error }] = usePortfolio(undefined, { pollInterval: 30_000 });
   const data = portfolioData?.portfolio;
   const navigate = useNavigate();
   const { openModal } = useAddPositionModal();
