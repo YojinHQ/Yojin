@@ -90,7 +90,7 @@
     "eslint": "10.1.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-import-x": "4.16.2",
-    "eslint-plugin-storybook": "10.2.19",
+    "eslint-plugin-storybook": "10.3.1",
     "husky": "9.1.7",
     "lint-staged": "16.4.0",
     "playwright": "1.58.2",
