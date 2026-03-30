@@ -25,7 +25,7 @@ check_command() {
 }
 
 check_command docker
-check_command docker
+check_command curl
 
 if ! docker compose version &>/dev/null && ! docker-compose version &>/dev/null; then
   echo "Error: Docker Compose is required but not installed."
@@ -77,6 +77,7 @@ SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
 # ── Ports ────────────────────────────────────────
 WEB_PORT=${WEB_PORT}
 YOJIN_PORT=3000
+YOJIN_CORS_ORIGIN=http://localhost:${WEB_PORT}
 
 # ── Security ─────────────────────────────────────
 YOJIN_VAULT_PASSPHRASE=${YOJIN_VAULT_PASSPHRASE}

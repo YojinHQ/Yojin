@@ -21,7 +21,7 @@ services:
       # ── Server ──
       - YOJIN_HOST=0.0.0.0
       - YOJIN_PORT=3000
-      - YOJIN_CORS_ORIGIN=${YOJIN_CORS_ORIGIN:-http://localhost:${WEB_PORT:-8080}}
+      - YOJIN_CORS_ORIGIN=${YOJIN_CORS_ORIGIN:-http://localhost:8080}
       - NODE_ENV=production
       - YOJIN_LOG_LEVEL=${YOJIN_LOG_LEVEL:-info}
       # ── Vault ──
@@ -48,6 +48,8 @@ services:
     depends_on:
       yojin:
         condition: service_healthy
+      web-init:
+        condition: service_completed_successfully
 
   # ── Init: Copy built web assets to shared volume ────────────
   web-init:

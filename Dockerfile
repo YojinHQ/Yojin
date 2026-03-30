@@ -30,8 +30,6 @@ RUN pnpm prune --prod
 # ── Stage 2: Runtime ──────────────────────────────────────────
 FROM node:22-slim AS runtime
 
-RUN corepack enable && corepack prepare pnpm@10.17.1 --activate
-
 # System deps for Playwright (optional, for scraper features)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
