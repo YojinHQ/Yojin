@@ -67,8 +67,8 @@
   "dependencies": {
     "@agentclientprotocol/sdk": "0.16.1",
     "@ai-sdk/anthropic": "3.0.63",
-    "@ai-sdk/openai": "3.0.47",
-    "@anthropic-ai/sdk": "0.39.0",
+    "@ai-sdk/openai": "3.0.48",
+    "@anthropic-ai/sdk": "0.80.0",
     "@hono/node-server": "1.19.11",
     "@slack/bolt": "4.6.0",
     "@slack/web-api": "7.15.0",
@@ -90,15 +90,15 @@
     "eslint": "10.1.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-import-x": "4.16.2",
-    "eslint-plugin-storybook": "10.2.19",
+    "eslint-plugin-storybook": "10.3.1",
     "husky": "9.1.7",
     "lint-staged": "16.4.0",
     "playwright": "1.58.2",
     "prettier": "3.8.1",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.57.1",
-    "vitest": "4.1.0"
+    "typescript-eslint": "8.57.2",
+    "vitest": "4.1.2"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

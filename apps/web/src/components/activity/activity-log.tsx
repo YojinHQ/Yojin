@@ -7,8 +7,13 @@ import { cn, timeAgo } from '../../lib/utils';
 import Badge from '../common/badge';
 import type { BadgeVariant } from '../common/badge';
 import { CardEmptyState } from '../common/card-empty-state';
+import { CardBlurGate } from '../common/card-blur-gate';
+import { FeatureCardGate } from '../common/feature-gate';
+import { useFeatureStatus } from '../../lib/feature-status';
 import { DashboardCard } from '../common/dashboard-card';
 import Spinner from '../common/spinner';
+import Button from '../common/button';
+import { useAddPositionModal } from '../../lib/add-position-modal-context';
 
 /* -- Event type config ---------------------------------------------------- */
 
@@ -124,12 +129,24 @@ function InsightIcon({ className }: { className?: string }) {
 /* -- Component ------------------------------------------------------------ */
 
 export default function ActivityLog() {
+  const { jintelConfigured } = useFeatureStatus();
+  const { openModal } = useAddPositionModal();
   const [result] = useQuery<ActivityLogQueryResult>({
     query: ACTIVITY_LOG_QUERY,
     variables: { limit: 50 },
   });
 
   const events = useMemo(() => result.data?.activityLog ?? [], [result.data?.activityLog]);
+
+  if (!jintelConfigured) {
+    return (
+      <DashboardCard title="Activity Log" variant="feature" className="flex-1">
+        <CardBlurGate mockContent={<MockActivityLog />}>
+          <FeatureCardGate requires="jintel" />
+        </CardBlurGate>
+      </DashboardCard>
+    );
+  }
 
   if (result.fetching) {
     return (
@@ -164,15 +181,26 @@ export default function ActivityLog() {
   if (!result.data || events.length === 0) {
     return (
       <DashboardCard title="Activity Log" variant="feature" className="flex-1">
-        <CardEmptyState
-          icon={
-            <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-            </svg>
-          }
-          title="No activity yet"
-          description="Events will appear here as you use Yojin."
-        />
+        <CardBlurGate mockContent={<MockActivityLog />}>
+          <CardEmptyState
+            icon={
+              <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                />
+              </svg>
+            }
+            title="No activity yet"
+            description="Events will appear here as you use Yojin."
+            action={
+              <Button variant="primary" size="sm" onClick={openModal}>
+                Add position
+              </Button>
+            }
+          />
+        </CardBlurGate>
       </DashboardCard>
     );
   }
@@ -218,6 +246,43 @@ function ActivityEventRow({ event }: { event: ActivityEvent }) {
           {event.message}
         </p>
       </div>
+    </div>
+  );
+}
+
+const MOCK_EVENTS: { type: ActivityEventType; ticker?: string; message: string; time: string }[] = [
+  { type: 'TRADE', ticker: 'AAPL', message: 'Executed limit buy at $180.50', time: '2h ago' },
+  { type: 'ALERT', ticker: 'NVDA', message: 'Price target reached ($875)', time: '4h ago' },
+  { type: 'INSIGHT', message: 'Weekly risk report generated', time: '6h ago' },
+  { type: 'SYSTEM', message: 'Daily briefing completed', time: '8h ago' },
+];
+
+function MockActivityLog() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden px-3 pb-3">
+      {MOCK_EVENTS.map((event, i) => {
+        const config = EVENT_TYPE_CONFIG[event.type];
+        const Icon = config.icon;
+        return (
+          <div key={i} className="flex items-start gap-2.5 rounded-lg px-2 py-2">
+            <div
+              className={cn('mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md', config.iconBg)}
+            >
+              <Icon className={cn('h-3.5 w-3.5', config.iconColor)} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <Badge variant={config.badge} size="xs">
+                  {config.label}
+                </Badge>
+                {event.ticker && <span className="text-2xs font-semibold text-text-secondary">{event.ticker}</span>}
+                <span className="ml-auto flex-shrink-0 text-2xs text-text-muted">{event.time}</span>
+              </div>
+              <p className="mt-0.5 text-xs leading-relaxed text-text-secondary">{event.message}</p>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

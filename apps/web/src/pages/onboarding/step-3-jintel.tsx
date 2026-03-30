@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
-import { useMutation } from 'urql';
+import { useMutation, useQuery } from 'urql';
 import { useOnboarding } from '../../lib/onboarding-context';
 import { OnboardingShell } from '../../components/onboarding/onboarding-shell';
-import { VALIDATE_JINTEL_KEY_MUTATION } from '../../api/documents';
-import type { ValidateJintelKeyMutationResult } from '../../api/types';
+import { VALIDATE_JINTEL_KEY_MUTATION, ONBOARDING_STATUS_QUERY } from '../../api/documents';
+import type { ValidateJintelKeyMutationResult, OnboardingStatusQueryResult } from '../../api/types';
 import Button from '../../components/common/button';
 import Input from '../../components/common/input';
 import Badge from '../../components/common/badge';
@@ -27,6 +27,12 @@ type Mode = null | 'enter-key' | 'sign-up';
 
 export function Step3Jintel() {
   const { updateState, nextStep } = useOnboarding();
+
+  const [{ data: statusData }] = useQuery<OnboardingStatusQueryResult>({
+    query: ONBOARDING_STATUS_QUERY,
+    requestPolicy: 'network-only',
+  });
+  const alreadyConfigured = statusData?.onboardingStatus?.jintelConfigured ?? false;
 
   const [mode, setMode] = useState<Mode>(null);
   const [apiKey, setApiKey] = useState('');
@@ -69,7 +75,7 @@ export function Step3Jintel() {
         >
           <h1 className="mb-2 font-headline text-2xl text-text-primary">Connect Jintel Intelligence</h1>
           <p className="text-sm text-text-secondary">
-            Jintel powers real-time market data, news sentiment, and risk screening for your portfolio.
+            Jintel powers real-time market data, news sentiment and more for your portfolio.
           </p>
         </div>
 
@@ -225,6 +231,23 @@ export function Step3Jintel() {
               )}
             </button>
           </div>
+
+          {/* Already configured — show connected state */}
+          {alreadyConfigured && !mode && (
+            <div className="rounded-xl border border-border bg-bg-card p-5 [animation:onboarding-fade-up_0.3s_ease-out_forwards]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Badge variant="success" size="sm">
+                    Connected
+                  </Badge>
+                  <span className="text-sm text-text-secondary">Jintel Intelligence is already configured</span>
+                </div>
+                <Button variant="secondary" size="sm" onClick={() => nextStep()}>
+                  Continue
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Enter key form */}
           {mode === 'enter-key' && (

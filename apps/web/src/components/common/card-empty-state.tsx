@@ -7,15 +7,15 @@ interface CardEmptyStateProps {
 
 /**
  * Lightweight empty state for dashboard cards.
- * Centered layout: icon → title → description → optional action.
+ * When used inside CardBlurGate, the blur gate provides the card container.
  */
 export function CardEmptyState({ icon, title, description, action }: CardEmptyStateProps) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-1.5 px-5 pb-5 text-center">
-      <div className="mb-1 text-text-muted/30">{icon}</div>
-      <p className="text-xs font-medium text-text-muted">{title}</p>
-      {description && <p className="max-w-[240px] text-2xs leading-relaxed text-text-muted/60">{description}</p>}
-      {action && <div className="mt-2">{action}</div>}
+    <div className="flex flex-col items-center gap-2.5 text-center">
+      <div className="mb-0.5 text-text-muted/40">{icon}</div>
+      <p className="text-sm font-medium text-text-primary">{title}</p>
+      {description && <p className="text-xs leading-relaxed text-text-muted">{description}</p>}
+      {action && <div className="mt-1">{action}</div>}
     </div>
   );
 }

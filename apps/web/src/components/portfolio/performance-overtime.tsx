@@ -1,5 +1,12 @@
 import { useEffect, useRef, useMemo } from 'react';
-import { createChart, type IChartApi, type ISeriesApi, type Time, ColorType } from 'lightweight-charts';
+import {
+  createChart,
+  HistogramSeries,
+  type IChartApi,
+  type ISeriesApi,
+  type Time,
+  ColorType,
+} from 'lightweight-charts';
 import type { PortfolioHistoryPoint } from '../../api/types';
 
 interface PerformanceOvertimeProps {
@@ -58,7 +65,7 @@ export function PerformanceOvertime({ history }: PerformanceOvertimeProps) {
 
     chartRef.current = chart;
 
-    seriesRef.current = chart.addHistogramSeries({
+    seriesRef.current = chart.addSeries(HistogramSeries, {
       priceFormat: {
         type: 'custom',
         formatter: (p: number) => {

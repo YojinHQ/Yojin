@@ -87,7 +87,7 @@ export default function Sidebar() {
   const logoSrc = resolved === 'dark' ? '/brand/yojin_logo_white.png' : '/brand/yojin_logo.png';
 
   return (
-    <aside className="flex w-[220px] flex-shrink-0 flex-col border-r border-border bg-bg-secondary">
+    <aside className="relative z-50 flex w-[220px] flex-shrink-0 flex-col border-r border-border bg-bg-secondary">
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-4">
         <img
@@ -147,8 +147,9 @@ function OnboardingCta() {
   const status = result.data?.onboardingStatus;
   const completedCount = status
     ? [
-        status.personaExists,
         status.aiCredentialConfigured,
+        status.personaExists,
+        status.jintelConfigured,
         status.connectedPlatforms.length > 0,
         status.briefingConfigured,
       ].filter(Boolean).length
@@ -186,7 +187,7 @@ function OnboardingCta() {
 
         {/* Progress dots */}
         <div className="flex gap-1">
-          {[0, 1, 2, 3].map((i) => (
+          {[0, 1, 2, 3, 4].map((i) => (
             <div
               key={i}
               className={`h-1 flex-1 rounded-full ${i < completedCount ? 'bg-accent-primary' : 'bg-border'}`}

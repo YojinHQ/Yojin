@@ -758,6 +758,12 @@ export async function resetOnboardingMutation(): Promise<boolean> {
     }
   }
 
+  // Remove AI provider config (reverts to schema defaults)
+  const aiProviderPath = `${dataRoot}/config/ai-provider.json`;
+  if (existsSync(aiProviderPath)) {
+    await unlink(aiProviderPath);
+  }
+
   // Remove briefing config
   const alertsPath = `${dataRoot}/config/alerts.json`;
   if (existsSync(alertsPath)) {
