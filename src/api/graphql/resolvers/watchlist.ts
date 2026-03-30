@@ -10,6 +10,7 @@ import type { AssetClass } from '../types.js';
 
 let store: WatchlistStore | undefined;
 let enrichment: WatchlistEnrichment | undefined;
+let watchlistChangedCallback: ((tickers: string[]) => void) | undefined;
 
 export function setWatchlistStore(s: WatchlistStore): void {
   store = s;
@@ -17,6 +18,10 @@ export function setWatchlistStore(s: WatchlistStore): void {
 
 export function setWatchlistEnrichment(e: WatchlistEnrichment): void {
   enrichment = e;
+}
+
+export function setWatchlistChangedCallback(cb: (tickers: string[]) => void): void {
+  watchlistChangedCallback = cb;
 }
 
 // ---------------------------------------------------------------------------
@@ -66,6 +71,8 @@ export async function addToWatchlistMutation(
   if (!result.success) {
     return { success: false, error: result.error };
   }
+
+  watchlistChangedCallback?.([args.symbol.toUpperCase()]);
   return { success: true, error: null };
 }
 

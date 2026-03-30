@@ -26,11 +26,19 @@ interface SnapActionItemGql {
   signalIds: string[];
 }
 
+interface AssetSnapGql {
+  symbol: string;
+  snap: string;
+  rating: string;
+  generatedAt: string;
+}
+
 interface SnapGql {
   id: string;
   generatedAt: string;
   intelSummary: string;
   actionItems: SnapActionItemGql[];
+  assetSnaps: AssetSnapGql[];
 }
 
 function toGql(snap: Snap): SnapGql {
@@ -41,6 +49,12 @@ function toGql(snap: Snap): SnapGql {
     actionItems: snap.actionItems.map((item) => ({
       text: item.text,
       signalIds: item.signalIds,
+    })),
+    assetSnaps: (snap.assetSnaps ?? []).map((as) => ({
+      symbol: as.symbol,
+      snap: as.snap,
+      rating: as.rating,
+      generatedAt: as.generatedAt,
     })),
   };
 }

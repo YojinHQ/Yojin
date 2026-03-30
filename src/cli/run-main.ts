@@ -21,13 +21,16 @@ import { setAiConfigProviderRouter } from '../api/graphql/resolvers/ai-config.js
 import { setChannelRegistry } from '../api/graphql/resolvers/channels.js';
 import { setCurationOrchestrator, setCurationPipelineDeps } from '../api/graphql/resolvers/curated-signals.js';
 import { setInsightsOrchestrator } from '../api/graphql/resolvers/insights.js';
+import { setMicroInsightStore } from '../api/graphql/resolvers/micro-insights.js';
 import { setOnboardingClaudeCodeProvider, setOnboardingProvider } from '../api/graphql/resolvers/onboarding.js';
 import { setPortfolioChangedCallback } from '../api/graphql/resolvers/portfolio.js';
+import { setWatchlistChangedCallback } from '../api/graphql/resolvers/watchlist.js';
 import { buildContext } from '../composition.js';
 import { AgentRuntime } from '../core/agent-runtime.js';
 import { EventLog } from '../core/event-log.js';
 import { NotificationBus } from '../core/notification-bus.js';
 import { Gateway } from '../gateway/server.js';
+import { MicroInsightStore } from '../insights/micro-insight-store.js';
 import { createJintelPriceProvider } from '../jintel/price-provider.js';
 import { createReflectionEngine } from '../memory/adapter.js';
 import { resolveDataRoot } from '../paths.js';
@@ -96,6 +99,7 @@ async function buildFullRuntime(): Promise<{
   eventLog: EventLog;
   services: Awaited<ReturnType<typeof buildContext>>;
   sessionStore: JsonlSessionStore;
+  providerRouter: ProviderRouter;
 }> {
   const dataRoot = resolveDataRoot();
   const services = await buildContext({ dataRoot });
@@ -192,11 +196,15 @@ Answer:`;
     dataRoot,
   });
 
-  return { agentRuntime, dataRoot, eventLog, services, sessionStore };
+  return { agentRuntime, dataRoot, eventLog, services, sessionStore, providerRouter };
 }
 
 async function startGateway(): Promise<void> {
-  const { agentRuntime, dataRoot, eventLog, services, sessionStore } = await buildFullRuntime();
+  const { agentRuntime, dataRoot, eventLog, services, sessionStore, providerRouter } = await buildFullRuntime();
+
+  // Micro insight store — per-ticker JSONL for micro research outputs
+  const microInsightStore = new MicroInsightStore(dataRoot);
+  setMicroInsightStore(microInsightStore);
 
   // Wire the orchestrator for ProcessInsights mutation
   const orchestrator = new Orchestrator(agentRuntime);
@@ -213,6 +221,18 @@ async function startGateway(): Promise<void> {
       getJintelClient: () => services.jintelToolOptions.client,
       memoryStores: services.memoryStores,
       profileStore: services.profileStore,
+    },
+    macroGathererOptions: {
+      microInsightStore,
+      snapshotStore: services.snapshotStore,
+      fallbackGathererOptions: {
+        snapshotStore: services.snapshotStore,
+        curatedSignalStore: services.curatedSignalStore,
+        insightStore: services.insightStore,
+        getJintelClient: () => services.jintelToolOptions.client,
+        memoryStores: services.memoryStores,
+        profileStore: services.profileStore,
+      },
     },
   });
   setInsightsOrchestrator(orchestrator);
@@ -297,11 +317,20 @@ async function startGateway(): Promise<void> {
     getJintelClient: () => services.jintelToolOptions.client,
     signalIngestor: services.signalIngestor,
     notificationBus,
+    // Micro research deps
+    providerRouter,
+    microInsightStore,
+    watchlistStore: services.watchlistStore,
+    memoryStores: services.memoryStores,
+    profileStore: services.profileStore,
+    curatedSignalStore: services.curatedSignalStore,
   });
   scheduler.start();
 
   // Trigger micro flow when portfolio changes — fetches intel for the changed tickers only
   setPortfolioChangedCallback((tickers) => scheduler.triggerMicroFlow(tickers));
+  // Trigger micro flow when watchlist changes
+  setWatchlistChangedCallback((tickers) => scheduler.triggerMicroFlow(tickers, 'watchlist'));
 
   const gateway = new Gateway(services.config, agentRuntime, {
     snapshotStore: services.snapshotStore,

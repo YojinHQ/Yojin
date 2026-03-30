@@ -744,15 +744,54 @@ export interface SnapActionItem {
   signalIds: string[];
 }
 
+export interface AssetSnap {
+  symbol: string;
+  snap: string;
+  rating: string;
+  generatedAt: string;
+}
+
 export interface Snap {
   id: string;
   generatedAt: string;
   intelSummary: string;
   actionItems: SnapActionItem[];
+  assetSnaps: AssetSnap[];
 }
 
 export interface SnapQueryResult {
   snap: Snap | null;
+}
+
+// ---------------------------------------------------------------------------
+// Micro Insights (per-asset AI research)
+// ---------------------------------------------------------------------------
+
+export interface MicroInsight {
+  id: string;
+  symbol: string;
+  name: string;
+  source: string;
+  rating: InsightRating;
+  conviction: number;
+  thesis: string;
+  keyDevelopments: string[];
+  risks: string[];
+  opportunities: string[];
+  sentiment: string;
+  signalCount: number;
+  assetSnap: string;
+  assetActions: string[];
+  generatedAt: string;
+  durationMs: number;
+}
+
+export interface MicroInsightQueryResult {
+  microInsight: MicroInsight | null;
+}
+
+export interface MicroInsightsQueryResult {
+  microInsights: MicroInsight[];
 }
 
 // ---------------------------------------------------------------------------

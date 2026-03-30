@@ -37,6 +37,7 @@ export const DATA_SUBDIRS = [
   'signals',
   'memory',
   'insights',
+  'insights/micro',
   'identity',
   'logs',
   'watchlist',

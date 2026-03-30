@@ -1,9 +1,11 @@
 /**
  * Lightweight job scheduler — runs a unified intelligence pipeline:
  *
- * 1. Every 15 minutes: fetch data sources → Tier 1 curation → skill evaluation
- * 2. After curation: if meaningful new signals exist AND enough time has passed,
- *    automatically trigger the process-insights workflow (multi-agent analysis).
+ * 1. Micro research: per-asset AI analysis every 5 minutes (Haiku LLM call).
+ *    Triggered immediately on position/watchlist add, then on a 5-min cadence.
+ * 2. Every 15 minutes: fetch data sources → Tier 1 curation → skill evaluation.
+ * 3. Macro research: portfolio-wide multi-agent analysis triggered when enough
+ *    micro research cycles complete OR on a daily cron schedule.
  *
  * State is persisted to data/cron/state.json so restarts don't re-run
  * a job that already fired within its cooldown window.
@@ -20,15 +22,22 @@ import { z } from 'zod';
 import type { ActionStore } from './actions/action-store.js';
 import type { Orchestrator } from './agents/orchestrator.js';
 import { emitProgress } from './agents/orchestrator.js';
+import type { ProviderRouter } from './ai-providers/router.js';
 import { fetchAllEnabledSources } from './api/graphql/resolvers/fetch-data-source.js';
 import { AlertsConfigSchema } from './config/config.js';
 import type { EventLog } from './core/event-log.js';
 import type { NotificationBus } from './core/notification-bus.js';
 import type { InsightStore } from './insights/insight-store.js';
+import type { MicroInsightStore } from './insights/micro-insight-store.js';
+import { runMicroResearch } from './insights/micro-runner.js';
+import type { MicroInsightSource } from './insights/micro-types.js';
 import { fetchJintelSignals } from './jintel/signal-fetcher.js';
 import { createSubsystemLogger } from './logging/logger.js';
+import type { SignalMemoryStore } from './memory/memory-store.js';
 import type { ReflectionEngine } from './memory/reflection.js';
+import type { MemoryAgentRole } from './memory/types.js';
 import type { PortfolioSnapshotStore } from './portfolio/snapshot-store.js';
+import type { TickerProfileStore } from './profiles/profile-store.js';
 import type { SignalArchive } from './signals/archive.js';
 import type { CuratedSignalStore } from './signals/curation/curated-signal-store.js';
 import { runCurationPipeline } from './signals/curation/pipeline.js';
@@ -37,6 +46,7 @@ import type { SignalIngestor } from './signals/ingestor.js';
 import type { SkillEvaluator } from './skills/skill-evaluator.js';
 import { snapFromInsight } from './snap/snap-from-insight.js';
 import type { SnapStore } from './snap/snap-store.js';
+import type { WatchlistStore } from './watchlist/watchlist-store.js';
 
 const logger = createSubsystemLogger('scheduler');
 
@@ -134,6 +144,22 @@ export interface SchedulerOptions {
   signalIngestor?: SignalIngestor;
   /** Notification bus — publishes domain events for channel delivery. */
   notificationBus?: NotificationBus;
+
+  // --- Micro research dependencies ---
+  /** Provider router — for micro research Haiku LLM calls. */
+  providerRouter?: ProviderRouter;
+  /** Micro insight store — per-ticker JSONL storage for micro research outputs. */
+  microInsightStore?: MicroInsightStore;
+  /** Watchlist store — to register watchlist assets for micro research. */
+  watchlistStore?: WatchlistStore;
+  /** Memory stores — per-role signal memory for building DataBriefs. */
+  memoryStores?: Map<MemoryAgentRole, SignalMemoryStore>;
+  /** Ticker profile store — per-asset knowledge for DataBriefs. */
+  profileStore?: TickerProfileStore;
+  /** Curated signal store — for building single-ticker DataBriefs. */
+  curatedSignalStore?: CuratedSignalStore;
+  /** Micro research interval in ms (default: 5 * 60_000 = 5 minutes). */
+  microIntervalMs?: number;
 }
 
 /** Minimum interval between curation runs (15 minutes). */
@@ -147,6 +173,24 @@ const MIN_SIGNALS_FOR_INSIGHTS = 3;
 
 /** Default expiry window for actions created from skill triggers. */
 const ACTION_EXPIRY_HOURS = 24;
+
+/** Default micro research interval (5 minutes). */
+const DEFAULT_MICRO_INTERVAL_MS = 5 * 60 * 1000;
+
+/** Micro tick interval — how often we check for due micro research (30 seconds). */
+const MICRO_TICK_INTERVAL_MS = 30_000;
+
+/** Max concurrent micro research runs per tick. */
+const MAX_MICRO_CONCURRENCY = 3;
+
+/** How many micro completions before triggering a macro run. */
+const MICRO_THRESHOLD_FOR_MACRO = 5;
+
+interface MicroAssetState {
+  symbol: string;
+  source: MicroInsightSource;
+  lastMicroAt: string | null;
+}
 
 export class Scheduler {
   private readonly orchestrator: Orchestrator;
@@ -163,8 +207,25 @@ export class Scheduler {
   private readonly getJintelClient?: () => JintelClient | undefined;
   private readonly signalIngestor?: SignalIngestor;
   private readonly notificationBus?: NotificationBus;
+
+  // Micro research dependencies
+  private readonly providerRouter?: ProviderRouter;
+  private readonly microInsightStore?: MicroInsightStore;
+  private readonly watchlistStore?: WatchlistStore;
+  private readonly memoryStores?: Map<MemoryAgentRole, SignalMemoryStore>;
+  private readonly profileStore?: TickerProfileStore;
+  private readonly curatedSignalStore?: CuratedSignalStore;
+  private readonly microIntervalMs: number;
+
+  // Timers
   private timer: ReturnType<typeof setInterval> | null = null;
+  private microTimer: ReturnType<typeof setInterval> | null = null;
   private running = false;
+  private microRunning = false;
+
+  // Micro research state
+  private readonly microRegistry = new Map<string, MicroAssetState>();
+  private microCompletionCount = 0;
 
   constructor(options: SchedulerOptions) {
     this.orchestrator = options.orchestrator;
@@ -181,16 +242,33 @@ export class Scheduler {
     this.getJintelClient = options.getJintelClient;
     this.signalIngestor = options.signalIngestor;
     this.notificationBus = options.notificationBus;
+
+    // Micro research
+    this.providerRouter = options.providerRouter;
+    this.microInsightStore = options.microInsightStore;
+    this.watchlistStore = options.watchlistStore;
+    this.memoryStores = options.memoryStores;
+    this.profileStore = options.profileStore;
+    this.curatedSignalStore = options.curatedSignalStore;
+    this.microIntervalMs = options.microIntervalMs ?? DEFAULT_MICRO_INTERVAL_MS;
   }
 
-  /** Start the scheduler. Checks once per minute. */
+  /** Start the scheduler. Checks once per minute + micro tick every 30s. */
   start(): void {
     if (this.timer) return;
-    logger.info('Scheduler started', { checkIntervalMs: this.checkIntervalMs });
+    logger.info('Scheduler started', { checkIntervalMs: this.checkIntervalMs, microIntervalMs: this.microIntervalMs });
+
+    // Populate micro registry from current portfolio + watchlist
+    void this.populateMicroRegistry();
 
     // Check immediately on start, then at interval
     void this.tick();
     this.timer = setInterval(() => void this.tick(), this.checkIntervalMs);
+
+    // Micro research tick — checks for due assets every 30s
+    if (this.providerRouter && this.microInsightStore) {
+      this.microTimer = setInterval(() => void this.microTick(), MICRO_TICK_INTERVAL_MS);
+    }
   }
 
   /** Stop the scheduler. */
@@ -198,99 +276,204 @@ export class Scheduler {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
-      logger.info('Scheduler stopped');
     }
+    if (this.microTimer) {
+      clearInterval(this.microTimer);
+      this.microTimer = null;
+    }
+    logger.info('Scheduler stopped');
   }
 
   // ---------------------------------------------------------------------------
-  // Micro flow — per-asset reactive signal fetch + curation
+  // Micro research — per-asset AI analysis (Haiku LLM call)
   // ---------------------------------------------------------------------------
 
-  /** Accumulated signals from micro flows since last macro run. */
-  private microFlowCount = 0;
-  /** Set when micro flow wants to trigger a macro flow after completing. */
-  private macroFlowPending = false;
-
   /**
-   * Trigger a micro flow for specific tickers (e.g. after position add/edit).
-   * Debounced 3s to batch rapid position changes, then fetches signals for
-   * ONLY the specified tickers and curates.
+   * Trigger micro research for specific tickers (e.g. after position add/edit).
+   * Registers assets in the micro registry and runs research immediately.
+   * Debounced 3s to batch rapid position changes.
    */
-  private pendingMicroTickers: Set<string> = new Set();
+  private pendingMicroTickers: Map<string, MicroInsightSource> = new Map();
   private pendingMicroTimer: ReturnType<typeof setTimeout> | null = null;
-  triggerMicroFlow(tickers: string[]): void {
-    for (const t of tickers) this.pendingMicroTickers.add(t);
+
+  triggerMicroFlow(tickers: string[], source: MicroInsightSource = 'portfolio'): void {
+    for (const t of tickers) {
+      const symbol = t.toUpperCase();
+      this.pendingMicroTickers.set(symbol, source);
+      // Register/update in micro registry
+      this.microRegistry.set(symbol, {
+        symbol,
+        source,
+        lastMicroAt: null, // force immediate run
+      });
+    }
     if (this.pendingMicroTimer) return; // already debounced
     this.pendingMicroTimer = setTimeout(() => {
-      const batch = [...this.pendingMicroTickers];
+      const batch = [...this.pendingMicroTickers.entries()];
       this.pendingMicroTickers.clear();
       this.pendingMicroTimer = null;
-      void this.runMicroFlow(batch);
+      void this.runMicroResearchBatch(batch.map(([symbol, src]) => ({ symbol, source: src })));
     }, 3_000);
   }
 
-  /** Backward-compat alias — triggers micro flow for all portfolio tickers. */
+  /** Backward-compat alias — triggers macro flow for full portfolio analysis. */
   triggerCuration(): void {
     void this.runMacroFlow();
   }
 
-  private async runMicroFlow(tickers: string[]): Promise<void> {
-    if (!this.curationPipeline || tickers.length === 0) return;
-    if (this.running) {
-      logger.info('Skipping micro flow — scheduler already running', { tickers });
+  /**
+   * Populate the micro registry from current portfolio + watchlist.
+   * Called once on scheduler start.
+   */
+  private async populateMicroRegistry(): Promise<void> {
+    const store = this.snapshotStore ?? this.curationPipeline?.snapshotStore;
+    if (store) {
+      const snapshot = await store.getLatest();
+      if (snapshot) {
+        for (const pos of snapshot.positions) {
+          const symbol = pos.symbol.toUpperCase();
+          if (!this.microRegistry.has(symbol)) {
+            this.microRegistry.set(symbol, { symbol, source: 'portfolio', lastMicroAt: null });
+          }
+        }
+      }
+    }
+
+    if (this.watchlistStore) {
+      for (const entry of this.watchlistStore.list()) {
+        const symbol = entry.symbol.toUpperCase();
+        if (!this.microRegistry.has(symbol)) {
+          this.microRegistry.set(symbol, { symbol, source: 'watchlist', lastMicroAt: null });
+        }
+      }
+    }
+
+    if (this.microRegistry.size > 0) {
+      logger.info('Micro registry populated', { assetCount: this.microRegistry.size });
+    }
+  }
+
+  /**
+   * Micro tick — scans the micro registry for assets due for research.
+   * Runs up to MAX_MICRO_CONCURRENCY in parallel.
+   */
+  private async microTick(): Promise<void> {
+    if (this.microRunning) return;
+    if (!this.providerRouter || !this.microInsightStore) return;
+
+    const now = Date.now();
+    const due: MicroAssetState[] = [];
+
+    for (const state of this.microRegistry.values()) {
+      if (!state.lastMicroAt) {
+        due.push(state);
+      } else {
+        const elapsed = now - new Date(state.lastMicroAt).getTime();
+        if (elapsed >= this.microIntervalMs) {
+          due.push(state);
+        }
+      }
+    }
+
+    if (due.length === 0) return;
+
+    // Take at most MAX_MICRO_CONCURRENCY assets
+    const batch = due.slice(0, MAX_MICRO_CONCURRENCY);
+    await this.runMicroResearchBatch(batch);
+  }
+
+  /**
+   * Run micro research for a batch of assets in parallel.
+   */
+  private async runMicroResearchBatch(assets: Array<{ symbol: string; source: MicroInsightSource }>): Promise<void> {
+    const { providerRouter, microInsightStore } = this;
+    if (!providerRouter || !microInsightStore || assets.length === 0) return;
+    if (this.microRunning) {
+      logger.info('Skipping micro research — already running', { assets: assets.map((a) => a.symbol) });
       return;
     }
 
-    logger.info('Micro flow started', { tickers });
-    this.running = true;
+    this.microRunning = true;
+    const symbols = assets.map((a) => a.symbol);
+    logger.info('Micro research batch started', { symbols });
+
     try {
-      // Fetch Jintel signals for ONLY the specified tickers
-      let ingested = 0;
+      // First, fetch Jintel signals for these tickers
       const jintelClient = this.getJintelClient?.();
       if (jintelClient && this.signalIngestor) {
         const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        const result = await fetchJintelSignals(jintelClient, this.signalIngestor, tickers, { since });
-        ingested = result.ingested;
-        logger.info('Micro flow Jintel fetch complete', {
-          tickers,
-          ingested: result.ingested,
-          duplicates: result.duplicates,
-        });
+        const result = await fetchJintelSignals(jintelClient, this.signalIngestor, symbols, { since });
+        if (result.ingested > 0) {
+          logger.info('Micro research Jintel fetch', { ingested: result.ingested, duplicates: result.duplicates });
+        }
       }
 
-      // Run curation to process newly ingested signals
-      const result = await runCurationPipeline(this.curationPipeline);
-      logger.info('Micro flow curation complete', {
-        tickers,
-        signalsProcessed: result.signalsProcessed,
-        signalsCurated: result.signalsCurated,
-      });
-
-      if (this.eventLog && ingested > 0) {
-        await this.eventLog.append({
-          type: 'system',
-          data: {
-            message: `Intel fetched for ${tickers.join(', ')} — ${ingested} new signal${ingested !== 1 ? 's' : ''}`,
-          },
-        });
+      // Curate signals so DataBriefs have fresh curated data
+      if (this.curationPipeline) {
+        await runCurationPipeline(this.curationPipeline);
       }
 
-      // Track accumulated micro flows — trigger macro when threshold is reached
-      this.microFlowCount += ingested;
-      if (this.microFlowCount >= MIN_SIGNALS_FOR_INSIGHTS) {
-        logger.info('Micro flow threshold reached — queueing macro flow', { accumulated: this.microFlowCount });
-        this.microFlowCount = 0;
-        this.macroFlowPending = true;
+      // Resolve the curated signal store
+      const curatedStore = this.curatedSignalStore ?? this.curationPipeline?.curatedStore;
+      const snapshotStore = this.snapshotStore ?? this.curationPipeline?.snapshotStore;
+      if (!curatedStore || !snapshotStore) {
+        logger.warn('Micro research skipped — missing curatedSignalStore or snapshotStore');
+        return;
       }
-    } catch (err) {
-      logger.error('Micro flow failed', { error: err, tickers });
-    } finally {
-      this.running = false;
-      // Run macro flow after micro completes (running flag is now false)
-      if (this.macroFlowPending) {
-        this.macroFlowPending = false;
+
+      // Run micro research in parallel (up to MAX_MICRO_CONCURRENCY)
+      const results = await Promise.allSettled(
+        assets.map((asset) =>
+          runMicroResearch(asset.symbol, asset.source, {
+            providerRouter,
+            microInsightStore,
+            briefOptions: {
+              snapshotStore,
+              curatedSignalStore: curatedStore,
+              getJintelClient: this.getJintelClient,
+              memoryStores: this.memoryStores ?? new Map(),
+              profileStore: this.profileStore,
+            },
+            getJintelClient: this.getJintelClient,
+            signalIngestor: this.signalIngestor,
+            actionStore: this.actionStore,
+            eventLog: this.eventLog,
+          }),
+        ),
+      );
+
+      // Update registry timestamps and count completions
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        const asset = assets[i];
+        if (!result || !asset) continue;
+        const symbol = asset.symbol;
+
+        if (result.status === 'fulfilled' && result.value.insight) {
+          const state = this.microRegistry.get(symbol);
+          if (state) state.lastMicroAt = new Date().toISOString();
+          this.microCompletionCount++;
+
+          logger.info('Micro research complete', {
+            symbol,
+            rating: result.value.insight.rating,
+            durationMs: result.value.durationMs,
+          });
+        } else if (result.status === 'rejected') {
+          logger.error('Micro research failed', { symbol, error: String(result.reason) });
+        }
+      }
+
+      // Check if we should trigger macro
+      if (this.microCompletionCount >= MICRO_THRESHOLD_FOR_MACRO) {
+        logger.info('Micro threshold reached — triggering macro flow', { completions: this.microCompletionCount });
+        this.microCompletionCount = 0;
         void this.runMacroFlow();
       }
+    } catch (err) {
+      logger.error('Micro research batch failed', { error: err, symbols });
+    } finally {
+      this.microRunning = false;
     }
   }
 
@@ -479,7 +662,8 @@ export class Scheduler {
       const report = await this.insightStore.getLatest();
       if (!report) return;
 
-      const snap = snapFromInsight(report);
+      const microInsights = this.microInsightStore ? await this.microInsightStore.getAllLatest() : undefined;
+      const snap = snapFromInsight(report, microInsights ? { microInsights } : undefined);
       await this.snapStore.save(snap);
       logger.info('Snap brief regenerated', { snapId: snap.id });
       this.notificationBus?.publish({ type: 'snap.ready', snapId: snap.id });

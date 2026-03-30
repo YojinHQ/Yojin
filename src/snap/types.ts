@@ -13,10 +13,19 @@ export const SnapActionItemSchema = z.object({
 });
 export type SnapActionItem = z.infer<typeof SnapActionItemSchema>;
 
+export const AssetSnapSchema = z.object({
+  symbol: z.string().min(1),
+  snap: z.string().min(1),
+  rating: z.string().min(1),
+  generatedAt: z.string().min(1),
+});
+export type AssetSnap = z.infer<typeof AssetSnapSchema>;
+
 export const SnapSchema = z.object({
   id: z.string().min(1),
   generatedAt: z.string().min(1),
   intelSummary: z.string().optional().default(''),
   actionItems: z.array(SnapActionItemSchema),
+  assetSnaps: z.array(AssetSnapSchema).default([]),
 });
 export type Snap = z.infer<typeof SnapSchema>;

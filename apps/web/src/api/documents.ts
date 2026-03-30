@@ -954,6 +954,62 @@ export const SNAP_QUERY = gql`
         text
         signalIds
       }
+      assetSnaps {
+        symbol
+        snap
+        rating
+        generatedAt
+      }
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Micro Insights
+// ---------------------------------------------------------------------------
+
+export const MICRO_INSIGHT_QUERY = gql`
+  query MicroInsight($symbol: String!) {
+    microInsight(symbol: $symbol) {
+      id
+      symbol
+      name
+      source
+      rating
+      conviction
+      thesis
+      keyDevelopments
+      risks
+      opportunities
+      sentiment
+      signalCount
+      assetSnap
+      assetActions
+      generatedAt
+      durationMs
+    }
+  }
+`;
+
+export const MICRO_INSIGHTS_QUERY = gql`
+  query MicroInsights {
+    microInsights {
+      id
+      symbol
+      name
+      source
+      rating
+      conviction
+      thesis
+      keyDevelopments
+      risks
+      opportunities
+      sentiment
+      signalCount
+      assetSnap
+      assetActions
+      generatedAt
+      durationMs
     }
   }
 `;

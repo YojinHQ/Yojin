@@ -14,7 +14,7 @@ import { buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
 import type { InsightStore } from './insight-store.js';
 import type { InsightReport } from './types.js';
-import type { Position } from '../api/graphql/types.js';
+import type { AssetClass, Platform, Position } from '../api/graphql/types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { SignalMemoryStore } from '../memory/memory-store.js';
 import type { MemoryEntry } from '../memory/types.js';
@@ -572,7 +572,7 @@ function indexMemories(
   return map;
 }
 
-function buildBrief(
+export function buildBrief(
   pos: Position,
   signals: Signal[],
   quote: MarketQuote | undefined,
@@ -703,6 +703,77 @@ function buildAllProfileBriefs(
     }
   }
   return map;
+}
+
+// ---------------------------------------------------------------------------
+// Single-ticker brief builder — used by micro research pipeline
+// ---------------------------------------------------------------------------
+
+export interface SingleBriefOptions {
+  snapshotStore: PortfolioSnapshotStore;
+  curatedSignalStore: CuratedSignalStore;
+  getJintelClient?: () => JintelClient | undefined;
+  memoryStores: Map<string, SignalMemoryStore>;
+  profileStore?: TickerProfileStore;
+}
+
+/**
+ * Build a DataBrief for a single ticker. Used by the micro research pipeline
+ * to avoid the overhead of gathering briefs for all positions.
+ */
+export async function buildSingleBrief(symbol: string, options: SingleBriefOptions): Promise<DataBrief | null> {
+  const { snapshotStore, curatedSignalStore, getJintelClient, memoryStores, profileStore } = options;
+  const jintelClient = getJintelClient?.();
+
+  // Find the position in the current snapshot
+  const snapshot = await snapshotStore.getLatest();
+  if (!snapshot) return null;
+
+  const ticker = symbol.toUpperCase();
+  const position = snapshot.positions.find((p) => p.symbol.toUpperCase() === ticker);
+
+  // For watchlist items that aren't in the portfolio, create a synthetic position
+  const pos: Position = position ?? {
+    symbol: ticker,
+    name: ticker,
+    quantity: 0,
+    costBasis: 0,
+    currentPrice: 0,
+    marketValue: 0,
+    dayChange: 0,
+    dayChangePercent: 0,
+    unrealizedPnl: 0,
+    unrealizedPnlPercent: 0,
+    assetClass: 'EQUITY' as AssetClass,
+    platform: 'WATCHLIST' as Platform,
+  };
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  // Parallel lookups for this single ticker
+  const [quotes, enrichmentMap, curatedSignals, memories] = await Promise.all([
+    jintelClient
+      ? jintelClient.quotes([ticker]).catch(() => ({ success: false as const, error: 'quotes failed' }))
+      : Promise.resolve(null),
+    jintelClient ? batchEnrichAllChunked(jintelClient, [ticker]) : Promise.resolve(new Map<string, Entity>()),
+    curatedSignalStore.queryByTickers([ticker], { since: sevenDaysAgo, limit: 100 }),
+    recallAllMemories(memoryStores, [ticker]),
+  ]);
+
+  const signals = curatedSignals.map((cs) => cs.signal);
+  const quoteMap = indexQuotes(quotes);
+  const memMap = indexMemories(memories, [ticker]);
+  const profile = profileStore ? profileStore.buildBrief(ticker) : null;
+  const profileBrief = profile && profile.entryCount > 0 ? profile : null;
+
+  // Update position price from live quote if available
+  const quote = quoteMap.get(ticker);
+  if (quote && pos.currentPrice === 0) {
+    pos.currentPrice = quote.price;
+    pos.marketValue = pos.quantity * quote.price;
+  }
+
+  return buildBrief(pos, signals, quote, enrichmentMap.get(ticker), memMap.get(ticker) ?? [], profileBrief);
 }
 
 function formatLargeNumber(n: number): string {

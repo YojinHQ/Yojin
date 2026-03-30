@@ -110,6 +110,7 @@ import { DefaultPiiRedactor } from './trust/pii/redactor.js';
 import { createSecretTools } from './trust/vault/secure-input.js';
 import { EncryptedVault } from './trust/vault/vault.js';
 import { wireWatchlist } from './watchlist/adapter.js';
+import type { WatchlistStore } from './watchlist/watchlist-store.js';
 
 const log = getLogger().sub('composition');
 
@@ -156,6 +157,7 @@ export interface YojinServices {
   actionStore: ActionStore;
   skillStore: SkillStore;
   skillEvaluator: SkillEvaluator;
+  watchlistStore: WatchlistStore;
   brain: {
     persona: PersonaManager;
     frontalLobe: FrontalLobe;
@@ -708,6 +710,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     actionStore,
     skillStore,
     skillEvaluator,
+    watchlistStore,
     brain: {
       persona,
       frontalLobe,

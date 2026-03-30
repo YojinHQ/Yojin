@@ -2,6 +2,7 @@ import type { AgentStepResult, Workflow, WorkflowStep } from './types.js';
 import type { AgentRuntime } from '../core/agent-runtime.js';
 import type { DataGathererOptions } from '../insights/data-gatherer.js';
 import type { InsightStore } from '../insights/insight-store.js';
+import type { MacroGathererOptions } from '../insights/macro-data-gatherer.js';
 import { registerProcessInsightsWorkflow } from '../insights/workflow.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { SignalMemoryStore } from '../memory/memory-store.js';
@@ -238,6 +239,7 @@ export function registerBuiltinWorkflows(
     reflectionEngine?: ReflectionEngine;
     insightStore?: InsightStore;
     gathererOptions?: DataGathererOptions;
+    macroGathererOptions?: MacroGathererOptions;
     memoryStore?: SignalMemoryStore;
     snapStore?: SnapStore;
     profileStore?: TickerProfileStore;
@@ -336,6 +338,7 @@ export function registerBuiltinWorkflows(
     registerProcessInsightsWorkflow(orchestrator, {
       insightStore: options.insightStore,
       gathererOptions: options.gathererOptions,
+      macroGathererOptions: options.macroGathererOptions,
       memoryStore: options.memoryStore,
       snapStore: options.snapStore,
       profileStore: options.profileStore,

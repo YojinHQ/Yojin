@@ -66,6 +66,7 @@ import {
   onWorkflowProgressSubscription,
 } from './resolvers/live.js';
 import { newsQuery, priceHistoryQuery, quoteQuery } from './resolvers/market.js';
+import { microInsightQuery, microInsightsQuery } from './resolvers/micro-insights.js';
 import {
   briefingConfigQuery,
   completeMagicLinkMutation,
@@ -164,6 +165,8 @@ const schema = createSchema({
       skill: resolveSkill,
       tickerProfile: tickerProfileQuery,
       tickerProfiles: tickerProfilesQuery,
+      microInsight: microInsightQuery,
+      microInsights: microInsightsQuery,
       aiConfig: aiConfigQuery,
     },
     PortfolioSnapshot: portfolioSnapshotFieldResolvers,
