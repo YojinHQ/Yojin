@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 
 import { startChat } from './chat.js';
 import { setupToken } from './setup-token.js';
+import { createTelegramPlugin } from '../../channels/telegram/index.js';
 import { LocalRuntimeBridge } from '../acp/runtime-bridge.js';
 import { startAcpServer } from '../acp/server.js';
 import { AcpSessionStore } from '../acp/session-store.js';
@@ -22,6 +23,7 @@ import { setOnboardingClaudeCodeProvider, setOnboardingProvider } from '../api/g
 import { buildContext } from '../composition.js';
 import { AgentRuntime } from '../core/agent-runtime.js';
 import { EventLog } from '../core/event-log.js';
+import { NotificationBus } from '../core/notification-bus.js';
 import { Gateway } from '../gateway/server.js';
 import { createJintelPriceProvider } from '../jintel/price-provider.js';
 import { createReflectionEngine } from '../memory/adapter.js';
@@ -259,6 +261,15 @@ async function startGateway(): Promise<void> {
     writeQueue = writeQueue.then(() => workflowLog.write(event));
   });
 
+  const notificationBus = new NotificationBus();
+
+  const telegramPlugin = createTelegramPlugin({
+    vault: services.vault,
+    notificationBus,
+    snapStore: services.snapStore,
+    actionStore: services.actionStore,
+  });
+
   // Daily insights scheduler — reads digestSchedule from alerts.json
   const scheduler = new Scheduler({
     orchestrator,
@@ -277,6 +288,7 @@ async function startGateway(): Promise<void> {
     snapStore: services.snapStore,
     insightStore: services.insightStore,
     eventLog,
+    notificationBus,
   });
   scheduler.start();
 
@@ -284,6 +296,7 @@ async function startGateway(): Promise<void> {
     snapshotStore: services.snapshotStore,
     connectionManager: services.connectionManager,
     sessionStore,
+    extraPlugins: [telegramPlugin],
   });
 
   // Graceful shutdown

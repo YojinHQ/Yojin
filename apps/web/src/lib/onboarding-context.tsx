@@ -30,7 +30,7 @@ export interface BriefingState {
   time: string;
   timezone: string;
   sections: string[];
-  channel: 'web';
+  channel: string;
 }
 
 export interface JintelState {

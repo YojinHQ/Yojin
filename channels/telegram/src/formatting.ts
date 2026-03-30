@@ -1,0 +1,65 @@
+import type { Action } from '../../../src/actions/types.js';
+import type { Snap } from '../../../src/snap/types.js';
+
+const MD_V2_SPECIAL = /[_*[\]()~`>#+\-=|{}.!]/g;
+
+export function escapeMarkdownV2(text: string): string {
+  return text.replace(MD_V2_SPECIAL, '\\$&');
+}
+
+export function chunkMessage(text: string, limit = 4096): string[] {
+  if (text.length <= limit) return [text];
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > limit) {
+    let splitIdx = remaining.lastIndexOf('\n\n', limit);
+    if (splitIdx > 0) {
+      chunks.push(remaining.slice(0, splitIdx));
+      remaining = remaining.slice(splitIdx + 2);
+      continue;
+    }
+
+    splitIdx = remaining.lastIndexOf('\n', limit);
+    if (splitIdx > 0) {
+      chunks.push(remaining.slice(0, splitIdx));
+      remaining = remaining.slice(splitIdx + 1);
+      continue;
+    }
+
+    chunks.push(remaining.slice(0, limit));
+    remaining = remaining.slice(limit);
+  }
+
+  if (remaining.length > 0) {
+    chunks.push(remaining);
+  }
+
+  return chunks;
+}
+
+const SEVERITY_ICON: Record<string, string> = {
+  HIGH: '\u{1F534}',
+  MEDIUM: '\u{1F7E0}',
+  LOW: '\u{1F7E2}',
+};
+
+export function formatSnap(snap: Snap): string {
+  const lines: string[] = ['\u{1F4CB} Snap Brief', '', snap.summary, ''];
+
+  if (snap.attentionItems.length > 0) {
+    lines.push('Attention Items:');
+    for (const item of snap.attentionItems) {
+      const icon = SEVERITY_ICON[item.severity] ?? '\u{2022}';
+      const ticker = item.ticker ? ` [${item.ticker}]` : '';
+      lines.push(`${icon} ${item.label}${ticker}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+export function formatAction(action: Action): string {
+  return ['\u{26A1} New Action', '', action.what, '', `Why: ${action.why}`, `Source: ${action.source}`].join('\n');
+}

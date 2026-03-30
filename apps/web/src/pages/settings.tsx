@@ -7,6 +7,9 @@ import { GateCard } from '../components/common/feature-gate';
 import { useOnboardingStatus } from '../lib/onboarding-context';
 import { TimePicker } from '../components/onboarding/time-picker';
 import { TimezonePicker } from '../components/onboarding/timezone-picker';
+import { ChannelCard } from '../components/channels/channel-card';
+import { ConnectChannelModal } from '../components/channels/connect-channel-modal';
+import { useListChannels, useDisconnectChannel } from '../api/hooks/use-channels';
 import {
   AI_CONFIG_QUERY,
   BRIEFING_CONFIG_QUERY,
@@ -102,6 +105,17 @@ export default function Settings() {
             <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">Daily Insights</h3>
           </div>
           <BriefingEditor disabled={!jintelConfigured} />
+        </div>
+
+        <div className="border-t border-border" />
+
+        {/* Section: Channels */}
+        <div className="p-5 space-y-4">
+          <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">Delivery Channels</h3>
+          <p className="text-sm text-text-muted">
+            Connect messaging channels for notifications, approvals, and daily briefings.
+          </p>
+          <ChannelsSection />
         </div>
 
         <div className="border-t border-border" />
@@ -339,6 +353,7 @@ function BriefingEditor({ disabled: _disabled = false }: { disabled?: boolean })
   const [time, setTime] = useState('08:00');
   const [timezone, setTimezone] = useState(detectTimezone);
   const [sections, setSections] = useState<string[]>([]);
+  const [channel, setChannel] = useState('web');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -350,6 +365,7 @@ function BriefingEditor({ disabled: _disabled = false }: { disabled?: boolean })
       setTime(config.time);
       setTimezone(config.timezone);
       setSections(config.sections);
+      setChannel(config.channel || 'web');
       setDirty(false);
     }
   }, [config]);
@@ -371,12 +387,16 @@ function BriefingEditor({ disabled: _disabled = false }: { disabled?: boolean })
     setSections((prev) => (prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]));
     markDirty();
   };
+  const handleChannelChange = (ch: string) => {
+    setChannel(ch);
+    markDirty();
+  };
 
   const handleSave = useCallback(async () => {
     setSaving(true);
     setSaveError(null);
     try {
-      const result = await saveBriefing({ input: { time, timezone, sections, channel: 'web' } });
+      const result = await saveBriefing({ input: { time, timezone, sections, channel } });
       if (result.error) {
         setSaveError(result.error.message || 'Failed to save schedule');
         return;
@@ -386,7 +406,7 @@ function BriefingEditor({ disabled: _disabled = false }: { disabled?: boolean })
     } finally {
       setSaving(false);
     }
-  }, [saveBriefing, time, timezone, sections]);
+  }, [saveBriefing, time, timezone, sections, channel]);
 
   if (loading) {
     return <p className="text-sm text-text-muted">Loading schedule...</p>;
@@ -429,6 +449,20 @@ function BriefingEditor({ disabled: _disabled = false }: { disabled?: boolean })
         </div>
       </div>
 
+      {/* Delivery channel */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-text-secondary">Deliver via</p>
+        <select
+          value={channel}
+          onChange={(e) => handleChannelChange(e.target.value)}
+          className="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary focus:border-accent-primary focus:outline-none"
+        >
+          <option value="web">Web Dashboard</option>
+          <option value="telegram">Telegram</option>
+          <option value="slack">Slack</option>
+        </select>
+      </div>
+
       {/* Save */}
       <div className="flex items-center gap-3">
         <Button variant="primary" size="sm" loading={saving} disabled={!dirty} onClick={handleSave}>
@@ -438,5 +472,59 @@ function BriefingEditor({ disabled: _disabled = false }: { disabled?: boolean })
         {saveError && <span className="text-xs text-error">{saveError}</span>}
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Connected channels section
+// ---------------------------------------------------------------------------
+
+function ChannelsSection() {
+  const [result, reexecute] = useListChannels();
+  const [, disconnectChannel] = useDisconnectChannel();
+  const [connectModalChannel, setConnectModalChannel] = useState<string | null>(null);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+
+  const channels = result.data?.listChannels ?? [];
+
+  const handleDisconnect = async (channelId: string) => {
+    setDisconnectingId(channelId);
+    const res = await disconnectChannel({ id: channelId });
+    setDisconnectingId(null);
+    if (res.data?.disconnectChannel.success) {
+      reexecute({ requestPolicy: 'network-only' });
+    }
+  };
+
+  const handleConnected = () => {
+    setConnectModalChannel(null);
+    reexecute({ requestPolicy: 'network-only' });
+  };
+
+  if (result.fetching && channels.length === 0) {
+    return <p className="text-sm text-text-muted">Loading channels...</p>;
+  }
+
+  return (
+    <>
+      <div className="space-y-3">
+        {channels.map((channel) => (
+          <ChannelCard
+            key={channel.id}
+            channel={channel}
+            onConnect={setConnectModalChannel}
+            onDisconnect={handleDisconnect}
+            disconnecting={disconnectingId === channel.id}
+          />
+        ))}
+      </div>
+
+      <ConnectChannelModal
+        open={connectModalChannel !== null}
+        channelId={connectModalChannel}
+        onClose={() => setConnectModalChannel(null)}
+        onConnected={handleConnected}
+      />
+    </>
   );
 }

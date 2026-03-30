@@ -351,6 +351,49 @@ export const SAVE_BRIEFING_CONFIG_MUTATION = gql`
   }
 `;
 
+// ---------------------------------------------------------------------------
+// Channels
+// ---------------------------------------------------------------------------
+
+export const LIST_CHANNELS_QUERY = gql`
+  query ListChannels {
+    listChannels {
+      id
+      name
+      status
+      description
+      requiredCredentials
+    }
+  }
+`;
+
+export const CONNECT_CHANNEL_MUTATION = gql`
+  mutation ConnectChannel($id: String!, $credentials: [CredentialInput!]!) {
+    connectChannel(id: $id, credentials: $credentials) {
+      success
+      error
+    }
+  }
+`;
+
+export const DISCONNECT_CHANNEL_MUTATION = gql`
+  mutation DisconnectChannel($id: String!) {
+    disconnectChannel(id: $id) {
+      success
+      error
+    }
+  }
+`;
+
+export const VALIDATE_CHANNEL_TOKEN_MUTATION = gql`
+  mutation ValidateChannelToken($id: String!, $credentials: [CredentialInput!]!) {
+    validateChannelToken(id: $id, credentials: $credentials) {
+      success
+      error
+    }
+  }
+`;
+
 export const AI_CONFIG_QUERY = gql`
   query AiConfig {
     aiConfig {

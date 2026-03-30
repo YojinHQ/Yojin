@@ -15,7 +15,7 @@ import type { YojinConfig } from '../config/config.js';
 import type { AgentRuntime } from '../core/agent-runtime.js';
 import { getLogger } from '../logging/index.js';
 import { PluginRegistry } from '../plugins/registry.js';
-import type { IncomingMessage } from '../plugins/types.js';
+import type { IncomingMessage, YojinPlugin } from '../plugins/types.js';
 import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
 import type { ConnectionManager } from '../scraper/connection-manager.js';
 import type { SessionStore } from '../sessions/types.js';
@@ -24,6 +24,7 @@ export class Gateway {
   private readonly registry: PluginRegistry;
   private readonly config: YojinConfig;
   private readonly agentRuntime: AgentRuntime;
+  private readonly extraPlugins: YojinPlugin[];
   private readonly log = getLogger().sub('gateway');
 
   constructor(
@@ -33,10 +34,12 @@ export class Gateway {
       snapshotStore?: PortfolioSnapshotStore;
       connectionManager?: ConnectionManager;
       sessionStore?: SessionStore;
+      extraPlugins?: YojinPlugin[];
     },
   ) {
     this.config = config;
     this.registry = new PluginRegistry();
+    this.extraPlugins = options?.extraPlugins ?? [];
     this.agentRuntime = agentRuntime;
 
     // Inject AgentRuntime into GraphQL chat resolver
@@ -64,6 +67,9 @@ export class Gateway {
     this.registry.loadPlugin(anthropicPlugin);
     this.registry.loadPlugin(slackPlugin);
     this.registry.loadPlugin(webPlugin);
+    for (const plugin of this.extraPlugins) {
+      this.registry.loadPlugin(plugin);
+    }
     this.log.info('Plugins loaded');
   }
 
