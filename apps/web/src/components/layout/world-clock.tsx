@@ -447,11 +447,10 @@ export default function WorldClock({ open, onClose }: WorldClockProps) {
             <div
               key={market.exchange}
               className={cn(
-                'flex flex-col gap-1 rounded-lg border-t-2 px-3 py-2.5 transition-all duration-300',
+                'flex flex-col gap-1 rounded-lg border border-border px-3 py-2.5 transition-all duration-300',
                 active ? 'bg-bg-card/50' : 'bg-transparent opacity-45',
               )}
               style={{
-                borderTopColor: active ? market.color : 'var(--color-border)',
                 animation: 'waterfall-in 0.3s ease-out both',
                 animationDelay: `${500 + i * 60}ms`,
               }}

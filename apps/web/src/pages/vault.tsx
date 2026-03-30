@@ -52,7 +52,7 @@ export function VaultSection() {
           </div>
         </div>
         <Button variant="ghost" size="sm" onClick={refresh} disabled={loading}>
-          <RefreshIcon />
+          <RefreshIcon className={loading ? 'animate-spin' : ''} />
         </Button>
       </div>
 
@@ -137,7 +137,7 @@ function SecretsPanel({ secrets, onMutated }: { secrets: VaultSecret[]; onMutate
       <div className="border-t border-border px-5 py-4 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">Stored Secrets</h3>
-          <Button size="sm" onClick={() => setAddOpen(true)}>
+          <Button variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
             <PlusIcon /> Add Secret
           </Button>
         </div>
@@ -776,9 +776,9 @@ function TrashIcon() {
   );
 }
 
-function RefreshIcon() {
+function RefreshIcon({ className }: { className?: string }) {
   return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <svg className={cn('h-4 w-4', className)} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"

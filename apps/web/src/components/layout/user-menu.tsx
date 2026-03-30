@@ -105,7 +105,7 @@ export default function UserMenu() {
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute bottom-full left-0 mb-2 w-52 rounded-xl border border-border bg-bg-secondary shadow-lg shadow-black/30">
+        <div className="absolute bottom-full left-0 z-50 mb-2 w-52 rounded-xl border border-border bg-bg-secondary shadow-lg shadow-black/30">
           {/* Menu items */}
           <div className="p-1.5">
             <button
@@ -181,7 +181,7 @@ export default function UserMenu() {
               </button>
 
               {themeOpen && (
-                <div className="absolute left-full top-0 pl-2">
+                <div className="absolute left-full top-0 z-50 pl-2">
                   <div className="w-36 rounded-xl border border-border bg-bg-secondary p-1.5 shadow-lg shadow-black/30">
                     {themeOptions.map((opt) => (
                       <button

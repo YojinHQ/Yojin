@@ -4,9 +4,12 @@ import { useFeatureStatus } from '../../lib/feature-status';
 import { SymbolLogo } from '../common/symbol-logo';
 import { usePortfolio } from '../../api';
 import { CardEmptyState } from '../common/card-empty-state';
+import { CardBlurGate } from '../common/card-blur-gate';
 import { FeatureCardGate } from '../common/feature-gate';
 import Spinner from '../common/spinner';
+import Button from '../common/button';
 import { DashboardCard } from '../common/dashboard-card';
+import { useAddPositionModal } from '../../lib/add-position-modal-context';
 
 function formatCurrency(n: number): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -60,11 +63,14 @@ export default function PositionsPreview() {
   const [{ data: portfolioData, fetching, error }] = usePortfolio();
   const data = portfolioData?.portfolio;
   const navigate = useNavigate();
+  const { openModal } = useAddPositionModal();
 
   if (!jintelConfigured) {
     return (
       <DashboardCard title="Portfolio">
-        <FeatureCardGate requires="jintel" />
+        <CardBlurGate mockContent={<MockPositions />}>
+          <FeatureCardGate requires="jintel" />
+        </CardBlurGate>
       </DashboardCard>
     );
   }
@@ -88,19 +94,26 @@ export default function PositionsPreview() {
   if (error || !data || data.positions.length === 0) {
     return (
       <DashboardCard title="Portfolio">
-        <CardEmptyState
-          icon={
-            <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z"
-              />
-            </svg>
-          }
-          title="No position data"
-          description="Connect a platform to see your holdings."
-        />
+        <CardBlurGate mockContent={<MockPositions />}>
+          <CardEmptyState
+            icon={
+              <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z"
+                />
+              </svg>
+            }
+            title="No position data"
+            description="Connect a platform to see your holdings."
+            action={
+              <Button variant="primary" size="sm" onClick={openModal}>
+                Add position
+              </Button>
+            }
+          />
+        </CardBlurGate>
       </DashboardCard>
     );
   }
@@ -197,5 +210,64 @@ export default function PositionsPreview() {
         </table>
       </div>
     </DashboardCard>
+  );
+}
+
+const MOCK_POSITIONS = [
+  { symbol: 'AAPL', name: 'Apple Inc', price: '$182.52', change: '$2.15', pct: '1.19%', up: true },
+  { symbol: 'NVDA', name: 'NVIDIA Corp', price: '$875.28', change: '$12.45', pct: '1.40%', up: false },
+  { symbol: 'BTC', name: 'Bitcoin', price: '$67,234.50', change: '$892.30', pct: '1.35%', up: true },
+  { symbol: 'TSLA', name: 'Tesla Inc', price: '$248.42', change: '$5.67', pct: '2.33%', up: true },
+  { symbol: 'MSFT', name: 'Microsoft', price: '$415.60', change: '$3.22', pct: '0.77%', up: false },
+];
+
+function MockPositions() {
+  return (
+    <div className="min-h-0 flex-1 overflow-hidden">
+      <table className="w-full text-left">
+        <thead className="bg-bg-card">
+          <tr className="border-b border-border">
+            <th className={TH}>Asset</th>
+            <th className={cn(TH, 'w-[80px]')} />
+            <th className={cn(TH, 'text-right')}>Price Today</th>
+            <th className={cn(TH, 'text-right')}>Change $</th>
+            <th className={cn(TH, 'text-right')}>Change %</th>
+          </tr>
+        </thead>
+        <tbody>
+          {MOCK_POSITIONS.map((pos) => {
+            const colorClass = pos.up ? 'text-success' : 'text-error';
+            const arrow = pos.up ? '▲' : '▼';
+            return (
+              <tr key={pos.symbol} className="border-b border-border last:border-b-0">
+                <td className="px-3 py-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="h-6 w-6 flex-shrink-0 rounded-full bg-bg-tertiary" />
+                    <div className="flex min-w-0 flex-col">
+                      <span className="text-xs font-semibold leading-tight text-text-primary">{pos.symbol}</span>
+                      <span className="truncate text-2xs leading-tight text-text-muted">{pos.name}</span>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-3 py-2">
+                  <div className="h-7 w-[80px]" />
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-right text-xs font-medium tabular-nums text-text-primary">
+                  {pos.price}
+                </td>
+                <td className={cn('whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums', colorClass)}>
+                  <span className="mr-0.5 text-2xs">{arrow}</span>
+                  {pos.change}
+                </td>
+                <td className={cn('whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums', colorClass)}>
+                  <span className="mr-0.5 text-2xs">{arrow}</span>
+                  {pos.pct}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

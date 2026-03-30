@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { usePortfolio } from '../../api';
 import Spinner from '../common/spinner';
 import { CardEmptyState } from '../common/card-empty-state';
+import { CardBlurGate } from '../common/card-blur-gate';
 import { DashboardCard } from '../common/dashboard-card';
 import AddAccountModal from './add-account-modal';
 import { PlatformLogo } from '../platforms/platform-logos';
@@ -99,19 +100,21 @@ export default function ConnectedAccountsCard() {
   if (error || accounts.length === 0) {
     return (
       <DashboardCard title="Connected Accounts" headerAction={addButton}>
-        <CardEmptyState
-          icon={
-            <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"
-              />
-            </svg>
-          }
-          title="No accounts connected"
-          description="Link your investment platforms to track positions."
-        />
+        <CardBlurGate mockContent={<MockConnectedAccounts />}>
+          <CardEmptyState
+            icon={
+              <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"
+                />
+              </svg>
+            }
+            title="No accounts connected"
+            description="Link your investment platforms to track positions."
+          />
+        </CardBlurGate>
         {modal}
       </DashboardCard>
     );
@@ -154,5 +157,37 @@ export default function ConnectedAccountsCard() {
 
       {modal}
     </DashboardCard>
+  );
+}
+
+const MOCK_ACCOUNTS = [
+  { platform: 'INTERACTIVE_BROKERS', name: 'IBKR', positions: 12, value: '$85,200', change: '+$432', up: true },
+  { platform: 'COINBASE', name: 'Coinbase', positions: 5, value: '$42,250', change: '-$127', up: false },
+];
+
+function MockConnectedAccounts() {
+  return (
+    <div className="min-h-0 flex-1 px-3 pb-3 pt-1">
+      <div className="grid grid-cols-2 gap-2">
+        {MOCK_ACCOUNTS.map((a) => (
+          <div
+            key={a.platform}
+            className="flex items-center gap-2.5 rounded-lg border border-border-light bg-bg-secondary/50 px-3 py-2.5"
+          >
+            <PlatformLogo platform={a.platform} size="xs" className="flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1">
+                <span className="truncate text-xs font-medium text-text-primary">{a.name}</span>
+                <span className="flex-shrink-0 text-3xs text-text-muted">{a.positions} positions</span>
+              </div>
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <span className="text-xs font-semibold tabular-nums text-text-primary">{a.value}</span>
+                <span className={`text-3xs tabular-nums ${a.up ? 'text-success' : 'text-error'}`}>{a.change}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

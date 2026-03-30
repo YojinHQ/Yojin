@@ -11,15 +11,57 @@ import CardSkeleton from '../components/chat/tool-cards/card-skeleton';
 import { SessionSidebar } from '../components/chat/session-sidebar';
 import { useChatContext } from '../lib/chat-context';
 import { useAddPositionModal } from '../lib/add-position-modal-context';
-import { PageFeatureGate } from '../components/common/feature-gate';
+import { usePortfolio } from '../api';
+import { PageBlurGate } from '../components/common/page-blur-gate';
+import Button from '../components/common/button';
 
 /* ─── Page ─── */
 
 export default function Chat() {
   return (
-    <PageFeatureGate requires="ai">
+    <PageBlurGate requires="both" mockContent={<MockChatPage />}>
       <ChatContent />
-    </PageFeatureGate>
+    </PageBlurGate>
+  );
+}
+
+/* ─── CTA banner for missing portfolio setup ─── */
+
+/** Banner shown inside chat when AI+Jintel are configured but no positions exist. */
+function ChatSetupBanner() {
+  const [{ data, fetching }] = usePortfolio();
+  const { openModal: openAddPosition } = useAddPositionModal();
+
+  if (fetching) return null;
+
+  const positions = data?.portfolio?.positions ?? [];
+  if (positions.length > 0) return null;
+
+  return (
+    <div className="mx-auto mb-4 max-w-3xl">
+      <div className="flex items-center gap-4 rounded-xl border border-border bg-bg-card px-5 py-4">
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-accent-primary/10">
+          <svg
+            className="h-4 w-4 text-accent-primary"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-text-primary">Add your first position</p>
+          <p className="mt-0.5 text-xs text-text-muted">
+            Import positions so Yojin can provide personalized portfolio intelligence.
+          </p>
+        </div>
+        <Button variant="primary" size="sm" onClick={openAddPosition}>
+          Add Position
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -112,6 +154,9 @@ function ChatContent() {
         {/* Messages area */}
         <div ref={scrollRef} className="flex-1 overflow-auto px-6 py-6">
           <div className="mx-auto max-w-3xl space-y-6">
+            {/* Setup banner — shown when jintel or positions are missing */}
+            {messages.length === 0 && <ChatSetupBanner />}
+
             {/* Morning briefing — shown only for sessions with no messages */}
             {messages.length === 0 && (
               <ChatMessage role="assistant">
@@ -198,6 +243,85 @@ function ChatContent() {
         <div className="px-6 pb-6">
           <div className="mx-auto max-w-3xl">
             <ChatInput onSend={handleSend} disableAttachment={isLoading} initialValue={presetMessage} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Mock chat page shown behind blur gate ─── */
+
+function MockChatPage() {
+  return (
+    <div className="flex flex-1 overflow-hidden">
+      {/* Mock sidebar */}
+      <div className="flex w-56 flex-col border-r border-border bg-bg-secondary/30 p-3">
+        <div className="mb-4 rounded-lg bg-bg-tertiary px-3 py-2 text-xs text-text-muted">New Chat</div>
+        <div className="space-y-1">
+          {['Portfolio Analysis', 'NVDA Deep Dive', 'Risk Assessment'].map((s) => (
+            <div key={s} className="rounded-lg px-3 py-2 text-xs text-text-secondary">
+              {s}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Mock chat area */}
+      <div className="flex flex-1 flex-col">
+        <div className="flex-1 overflow-hidden px-6 py-6">
+          <div className="mx-auto max-w-3xl space-y-6">
+            {/* Mock briefing card */}
+            <div className="flex items-start gap-3">
+              <div className="h-8 w-8 flex-shrink-0 rounded-full bg-accent-primary/20" />
+              <div className="flex-1 overflow-hidden rounded-xl bg-gradient-to-br from-accent-primary/60 to-accent-primary/30 p-5">
+                <div className="mb-2 flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-full bg-white/15" />
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-white/90">
+                    Morning Briefing
+                  </span>
+                </div>
+                <p className="font-headline text-lg text-white">Saturday, March 29</p>
+                <div className="mt-4 grid grid-cols-4 gap-3">
+                  {[
+                    { v: '3', l: 'Actions' },
+                    { v: '2', l: 'Alerts' },
+                    { v: '4', l: 'Insights' },
+                    { v: '58.2%', l: 'Margin' },
+                  ].map((s) => (
+                    <div key={s.l} className="rounded-lg bg-white/10 px-3 py-2 text-center">
+                      <p className="text-sm font-bold text-white">{s.v}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-white/60">{s.l}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Mock user message */}
+            <div className="flex justify-end">
+              <div className="rounded-2xl rounded-tr-sm bg-accent-primary/20 px-4 py-2.5 text-sm text-text-primary">
+                How is my portfolio performing today?
+              </div>
+            </div>
+
+            {/* Mock assistant response */}
+            <div className="flex items-start gap-3">
+              <div className="h-8 w-8 flex-shrink-0 rounded-full bg-accent-primary/20" />
+              <div className="rounded-2xl rounded-tl-sm border border-border bg-bg-card px-4 py-3 text-sm leading-relaxed text-text-secondary">
+                Your portfolio is up +1.2% today ($1,534). NVDA leads with +3.4% while AAPL is down slightly at -0.8%.
+                Your overall allocation is well-balanced with 62% equities, 38% crypto.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Mock input */}
+        <div className="px-6 pb-6">
+          <div className="mx-auto max-w-3xl">
+            <div className="rounded-xl border border-border bg-bg-card px-4 py-3 text-sm text-text-muted">
+              Ask Yojin anything about your portfolio...
+            </div>
           </div>
         </div>
       </div>

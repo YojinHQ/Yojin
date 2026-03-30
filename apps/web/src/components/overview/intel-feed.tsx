@@ -5,6 +5,7 @@ import { DISMISS_SIGNAL_MUTATION, INTEL_FEED_QUERY } from '../../api/documents';
 import type { IntelFeedQueryResult, IntelFeedQueryVariables } from '../../api/types';
 import { cn, timeAgo } from '../../lib/utils';
 import { useFeatureStatus } from '../../lib/feature-status';
+import { CardBlurGate } from '../common/card-blur-gate';
 import { FeatureCardGate } from '../common/feature-gate';
 import Spinner from '../common/spinner';
 
@@ -511,12 +512,15 @@ export default function IntelFeed() {
   const { jintelConfigured, aiConfigured } = useFeatureStatus();
 
   if (!jintelConfigured || !aiConfigured) {
+    const requirement = !jintelConfigured ? (!aiConfigured ? 'both' : 'jintel') : 'ai';
     return (
       <div className="flex h-full flex-col">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-xs font-medium uppercase tracking-wider text-text-primary">Intel Feed</h2>
         </div>
-        <FeatureCardGate requires={!jintelConfigured ? (!aiConfigured ? 'both' : 'jintel') : 'ai'} />
+        <CardBlurGate mockContent={<MockIntelFeed />}>
+          <FeatureCardGate requires={requirement} />
+        </CardBlurGate>
       </div>
     );
   }
@@ -741,6 +745,99 @@ function IntelFeedContent() {
             );
           })
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Mock Intel Feed ────────────────────────────────────────
+
+const MOCK_INTEL = [
+  {
+    ticker: 'NVDA',
+    sentiment: 'BULLISH',
+    items: [
+      { type: 'alert' as const, signal: 'News', title: 'NVDA beats Q4 earnings estimates by 12%', time: '2h ago' },
+      {
+        type: 'insight' as const,
+        signal: 'Technical',
+        title: 'RSI breakout above 70, momentum strong',
+        time: '4h ago',
+      },
+    ],
+  },
+  {
+    ticker: 'AAPL',
+    sentiment: 'BEARISH',
+    items: [
+      { type: 'alert' as const, signal: 'News', title: 'Supply chain delays in China operations', time: '3h ago' },
+      { type: 'insight' as const, signal: 'Fundamental', title: 'Revenue growth slowing vs consensus', time: '6h ago' },
+    ],
+  },
+  {
+    ticker: 'BTC',
+    sentiment: 'BULLISH',
+    items: [
+      { type: 'insight' as const, signal: 'Sentiment', title: 'Social volume spike: +340% in 24h', time: '1h ago' },
+    ],
+  },
+];
+
+function MockIntelFeed() {
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Filter tabs */}
+      <div className="flex gap-0.5 border-b border-border px-4 pt-2">
+        {['All', 'Alerts', 'Insights'].map((tab, i) => (
+          <div
+            key={tab}
+            className={cn('relative px-2 pb-2 text-2xs font-medium', i === 0 ? 'text-text-primary' : 'text-text-muted')}
+          >
+            {tab}
+            {i === 0 && <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-text-primary" />}
+          </div>
+        ))}
+      </div>
+
+      {/* Mock items */}
+      <div className="flex-1 overflow-hidden px-3 pb-4">
+        {MOCK_INTEL.map((section) => (
+          <div key={section.ticker}>
+            <div className="flex items-center gap-2.5 px-1 pt-4 pb-2">
+              <span
+                className={cn(
+                  'text-2xs font-semibold tracking-[0.1em] uppercase',
+                  section.sentiment === 'BULLISH' ? 'text-success' : 'text-error',
+                )}
+              >
+                {section.ticker}
+              </span>
+              <span className="text-[10px] tabular-nums text-text-muted">{section.items.length}</span>
+              <div className={cn('h-px flex-1', section.sentiment === 'BULLISH' ? 'bg-success/20' : 'bg-error/20')} />
+            </div>
+            <div className="space-y-1.5">
+              {section.items.map((item, i) => (
+                <div key={i} className="rounded-xl bg-bg-tertiary/60 px-3 py-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={cn(
+                        'text-2xs font-semibold tracking-wide uppercase',
+                        item.type === 'alert' ? 'text-warning' : 'text-success',
+                      )}
+                    >
+                      {item.type === 'alert' ? 'ALERT' : 'INSIGHT'}
+                    </span>
+                    <span className="rounded-full bg-text-muted/10 px-1.5 py-0.5 text-[9px] font-medium text-text-muted">
+                      {item.signal}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs font-medium leading-tight text-text-primary">{item.title}</p>
+                  <span className="text-2xs text-text-muted">{item.time}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

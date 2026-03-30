@@ -135,6 +135,31 @@
   }
 }
 
+@keyframes chevron-flow {
+  0%,
+  20% {
+    opacity: 0;
+  }
+  35%,
+  55% {
+    opacity: 1;
+  }
+  70%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes glow-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(255, 90, 94, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(255, 90, 94, 0.4);
+  }
+}
+
 @keyframes pipeline-pulse {
   0%,
   100% {

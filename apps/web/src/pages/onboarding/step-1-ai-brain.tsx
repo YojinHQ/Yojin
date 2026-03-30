@@ -82,8 +82,18 @@ export function Step1AiBrain() {
 
   const [selected, setSelected] = useState<Provider>(state.aiProvider?.method === 'codex' ? 'codex' : 'claude');
 
-  // Fall back to Claude if Codex is selected but not available
-  const effectiveSelected: Provider = !detecting && !codexDetected && selected === 'codex' ? 'claude' : selected;
+  const noneDetected = !detecting && !claudeDetected && !codexDetected;
+
+  // Fall back to whichever provider is actually available
+  const effectiveSelected: Provider =
+    !detecting && !codexDetected && selected === 'codex'
+      ? 'claude'
+      : !detecting && !claudeDetected && selected === 'claude'
+        ? 'codex'
+        : selected;
+
+  // Can only continue if the selected provider is actually detected
+  const canContinue = !detecting && (effectiveSelected === 'claude' ? claudeDetected : codexDetected);
 
   const handleContinue = () => {
     const provider = PROVIDERS.find((p) => p.id === effectiveSelected);
@@ -136,7 +146,7 @@ export function Step1AiBrain() {
           {PROVIDERS.map((p) => {
             const isSelected = effectiveSelected === p.id;
             const status = getDetectionStatus(p.id);
-            const isDisabled = !status.loading && !status.detected && p.id === 'codex';
+            const isDisabled = !status.loading && !status.detected;
 
             return (
               <button
@@ -219,20 +229,53 @@ export function Step1AiBrain() {
           })}
         </div>
 
-        {/* Detection explainer */}
-        <div
-          className="mb-8 rounded-xl border border-border/60 bg-bg-secondary/50 px-4 py-3 opacity-0 [animation:onboarding-fade-up_0.5s_ease-out_forwards]"
-          style={{ animationDelay: '200ms' }}
-        >
-          <p className="text-2xs leading-relaxed text-text-muted">
-            Yojin checks for existing credentials on your machine. <span className="text-text-secondary">Claude</span>{' '}
-            is detected via macOS Keychain (from{' '}
-            <code className="rounded bg-bg-tertiary px-1 py-px text-3xs text-text-secondary">claude auth login</code>).{' '}
-            <span className="text-text-secondary">Codex</span> is detected via{' '}
-            <code className="rounded bg-bg-tertiary px-1 py-px text-3xs text-text-secondary">~/.codex/auth.json</code>{' '}
-            or environment variables. No credentials are sent externally.
-          </p>
-        </div>
+        {/* No providers detected — setup instructions */}
+        {noneDetected && (
+          <div
+            className="mb-8 rounded-xl border border-warning/30 bg-warning/5 px-5 py-4 opacity-0 [animation:onboarding-fade-up_0.5s_ease-out_forwards]"
+            style={{ animationDelay: '200ms' }}
+          >
+            <p className="mb-3 text-xs font-medium text-warning">No AI provider detected</p>
+            <p className="mb-3 text-2xs leading-relaxed text-text-secondary">
+              Yojin needs at least one AI provider to function. Set up one of the following:
+            </p>
+            <div className="space-y-2">
+              <div className="rounded-lg bg-bg-tertiary/50 px-3 py-2">
+                <p className="text-2xs font-medium text-text-primary">Claude Code</p>
+                <p className="mt-0.5 text-3xs text-text-muted">
+                  Install Claude Code, then run{' '}
+                  <code className="rounded bg-bg-primary/60 px-1 py-px text-text-secondary">claude auth login</code>
+                </p>
+              </div>
+              <div className="rounded-lg bg-bg-tertiary/50 px-3 py-2">
+                <p className="text-2xs font-medium text-text-primary">Codex</p>
+                <p className="mt-0.5 text-3xs text-text-muted">
+                  Install Codex, then run{' '}
+                  <code className="rounded bg-bg-primary/60 px-1 py-px text-text-secondary">codex login</code> or set{' '}
+                  <code className="rounded bg-bg-primary/60 px-1 py-px text-text-secondary">OPENAI_API_KEY</code>
+                </p>
+              </div>
+            </div>
+            <p className="mt-3 text-3xs text-text-muted">Refresh this page after setting up credentials.</p>
+          </div>
+        )}
+
+        {/* Detection explainer — shown when at least one provider is detected */}
+        {!noneDetected && (
+          <div
+            className="mb-8 rounded-xl border border-border/60 bg-bg-secondary/50 px-4 py-3 opacity-0 [animation:onboarding-fade-up_0.5s_ease-out_forwards]"
+            style={{ animationDelay: '200ms' }}
+          >
+            <p className="text-2xs leading-relaxed text-text-muted">
+              Yojin checks for existing credentials on your machine. <span className="text-text-secondary">Claude</span>{' '}
+              is detected via macOS Keychain (from{' '}
+              <code className="rounded bg-bg-tertiary px-1 py-px text-3xs text-text-secondary">claude auth login</code>
+              ). <span className="text-text-secondary">Codex</span> is detected via{' '}
+              <code className="rounded bg-bg-tertiary px-1 py-px text-3xs text-text-secondary">~/.codex/auth.json</code>{' '}
+              or environment variables. No credentials are sent externally.
+            </p>
+          </div>
+        )}
 
         {/* Navigation */}
         <div
@@ -245,7 +288,7 @@ export function Step1AiBrain() {
             </svg>
             Back
           </Button>
-          <Button variant="primary" size="md" onClick={handleContinue}>
+          <Button variant="primary" size="md" onClick={handleContinue} disabled={!canContinue}>
             Continue
             <svg className="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />

@@ -118,105 +118,96 @@ export default function Profile() {
   }, [resetOnboarding, resetOnboardingStatus, openOnboarding]);
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-8">
-      {/* ── Section 1: Intelligence Sources (Jintel hero + custom sources) ── */}
+    <div className="flex-1 overflow-auto p-6 space-y-8 max-w-4xl mx-auto w-full">
+      {/* ── Section 1: Intelligence Sources ── */}
       <section>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-headline text-lg text-text-primary">Intelligence Sources</h2>
-          <Button size="sm" onClick={openAddDsModal}>
-            + Add Source
-          </Button>
-        </div>
+        <Card className="overflow-hidden p-0">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4">
+            <div className="flex items-center gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-primary/10">
+                <SignalIcon />
+              </div>
+              <div>
+                <h2 className="font-headline text-lg text-text-primary">Intelligence Sources</h2>
+                <p className="text-sm text-text-muted">Connect data feeds for portfolio intelligence and signals.</p>
+              </div>
+            </div>
+            <Button variant="secondary" size="sm" onClick={openAddDsModal}>
+              + Add Source
+            </Button>
+          </div>
 
-        {/* Jintel — Primary Intelligence Source */}
-        <Card className="border border-accent-primary/20">
-          {jintelConfigured ? (
-            <div className="flex items-center justify-between p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-primary/10">
-                  <svg
-                    className="h-5 w-5 text-accent-primary"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-text-primary">Jintel Intelligence</span>
-                    <Badge variant="success" size="xs">
-                      Connected
-                    </Badge>
+          {/* Jintel — Primary Source */}
+          <div className="border-t border-border px-5 py-4 space-y-3">
+            <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">Primary Source</h3>
+            {jintelConfigured ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-primary/10 flex-shrink-0">
+                    <BoltIcon />
                   </div>
-                  <p className="text-xs text-text-muted mt-0.5">
-                    Real-time quotes, fundamentals, news sentiment, risk screening
-                  </p>
+                  <div>
+                    <span className="text-sm font-medium text-text-primary">Jintel Intelligence</span>
+                    <p className="text-xs text-text-muted mt-0.5">
+                      Real-time quotes, fundamentals, news sentiment, risk screening
+                    </p>
+                  </div>
                 </div>
+                <Badge variant="success" size="sm">
+                  Connected
+                </Badge>
               </div>
-              <a href="#vault" className="text-xs text-text-muted hover:text-text-secondary transition-colors">
-                Manage in Vault
-              </a>
-            </div>
-          ) : (
-            <div className="space-y-4 p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-primary/10 shrink-0">
-                  <svg
-                    className="h-5 w-5 text-accent-primary"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z"
-                    />
-                  </svg>
+            ) : (
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-primary/10 flex-shrink-0">
+                    <BoltIcon />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-medium text-text-primary">Connect Jintel for full intelligence</h4>
+                    <p className="text-xs text-text-secondary mt-0.5">
+                      Real-time quotes, enriched fundamentals, news sentiment and more.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-medium text-text-primary">Connect Jintel for full intelligence</h3>
-                  <p className="mt-1 text-xs text-text-secondary">
-                    Real-time quotes, enriched fundamentals, news sentiment, and risk screening.
-                  </p>
-                </div>
+                <JintelKeyForm
+                  className="flex-shrink-0"
+                  onSuccess={() => reexecuteStatus({ requestPolicy: 'network-only' })}
+                />
               </div>
-              <JintelKeyForm onSuccess={() => reexecuteStatus({ requestPolicy: 'network-only' })} />
-            </div>
-          )}
-        </Card>
+            )}
+          </div>
 
-        {/* Custom Data Sources (below Jintel) */}
-        {dsFetching ? (
-          <div className="flex justify-center py-6">
-            <Spinner />
-          </div>
-        ) : dsQueryError ? (
-          <p className="py-4 text-center text-sm text-error">Failed to load data sources.</p>
-        ) : dataSources.length > 0 ? (
-          <div className="mt-3 space-y-2">
-            {dsError && <p className="text-sm text-error bg-error/10 rounded-lg px-3 py-2">{dsError}</p>}
-            {dataSources.map((source) => (
-              <DataSourceCard
-                key={source.id}
-                source={source}
-                onToggle={handleToggleDs}
-                onRemove={handleRemoveDs}
-                onFetch={handleFetchDs}
-                toggling={togglingDs === source.id}
-                removing={removingDs === source.id}
-              />
-            ))}
-          </div>
-        ) : null}
+          {/* Custom Data Sources */}
+          {dsFetching ? (
+            <div className="border-t border-border px-5 py-6 flex justify-center">
+              <Spinner />
+            </div>
+          ) : dsQueryError ? (
+            <div className="border-t border-border px-5 py-4">
+              <p className="text-sm text-error">Failed to load data sources.</p>
+            </div>
+          ) : dataSources.length > 0 ? (
+            <div className="border-t border-border px-5 py-4 space-y-3">
+              <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">Custom Sources</h3>
+              {dsError && <p className="text-sm text-error bg-error/10 rounded-lg px-3 py-2">{dsError}</p>}
+              <div className="space-y-2">
+                {dataSources.map((source) => (
+                  <DataSourceCard
+                    key={source.id}
+                    source={source}
+                    onToggle={handleToggleDs}
+                    onRemove={handleRemoveDs}
+                    onFetch={handleFetchDs}
+                    toggling={togglingDs === source.id}
+                    removing={removingDs === source.id}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </Card>
       </section>
 
       <AddDataSourceModal
@@ -228,29 +219,24 @@ export default function Profile() {
         }}
       />
 
-      {/* ── Section 2: Connected Platforms (coming soon) ── */}
-      <Card title="Connected Platforms" section className="relative opacity-60 pointer-events-none select-none">
-        <div className="absolute right-5 top-5">
-          <Badge variant="neutral" size="xs">
-            Coming Soon
-          </Badge>
-        </div>
-
-        <div className="flex flex-col items-center py-8 text-center">
-          <p className="text-sm text-text-muted">Direct platform connections are coming soon.</p>
-        </div>
-      </Card>
-
-      {/* ── Section 3: Credential Vault ── */}
+      {/* ── Section 2: Credential Vault ── */}
       <section id="vault">
         <VaultSection />
       </section>
 
-      {/* ── Section 4: Danger Zone ── */}
+      {/* ── Section 3: Danger Zone ── */}
       <section>
-        <div>
-          <h3 className="text-xs font-medium uppercase tracking-wider text-error/70 mb-3">Danger Zone</h3>
-          <Card className="border border-error/20 overflow-hidden">
+        <Card className="border-error/20 overflow-hidden p-0">
+          <div className="flex items-center gap-4 px-5 py-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-error/10">
+              <AlertIcon />
+            </div>
+            <div>
+              <h2 className="font-headline text-lg text-text-primary">Danger Zone</h2>
+              <p className="text-sm text-text-muted">Irreversible actions that reset or clear your data.</p>
+            </div>
+          </div>
+          <div className="border-t border-error/10">
             <DangerRow
               title="Reset onboarding"
               description="Clear server-side state and restart the onboarding flow"
@@ -282,8 +268,8 @@ export default function Profile() {
                 }
               }}
             />
-          </Card>
-        </div>
+          </div>
+        </Card>
       </section>
     </div>
   );
@@ -354,5 +340,57 @@ function DangerRow({
         )}
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Section Header Icons
+// ---------------------------------------------------------------------------
+
+function SignalIcon() {
+  return (
+    <svg
+      className="h-5 w-5 text-accent-primary"
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth={1.5}
+      stroke="currentColor"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
+      />
+    </svg>
+  );
+}
+
+function BoltIcon() {
+  return (
+    <svg
+      className="h-4 w-4 text-accent-primary"
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth={1.5}
+      stroke="currentColor"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z"
+      />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg className="h-5 w-5 text-error" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"
+      />
+    </svg>
   );
 }

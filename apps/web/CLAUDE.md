@@ -118,6 +118,60 @@ const variantStyles: Record<Variant, string> = {
 - **No global state library** — component state + GraphQL covers current needs
 - **Stories**: co-locate as `*.stories.tsx` next to the component in any directory
 
+## Empty State Pattern — Blur Gate
+
+All feature-gated and empty states must show **mock data behind a frosted blur overlay** with a branded gate card on top. This gives users a preview of what the feature looks like when populated.
+
+### Components
+
+| Component | Level | Purpose |
+|-----------|-------|---------|
+| `CardBlurGate` | Card | Wraps mock content + overlay inside a `DashboardCard` |
+| `PageBlurGate` | Page | Wraps a full mock page + overlay, replaces `PageFeatureGate` |
+| `FeatureCardGate` | Card | Branded gate card (logo + title + CTA) for card overlays |
+| `GateCard` | Any | Standalone branded gate card with customizable text |
+
+### Branding
+
+- **Jintel gates**: Show Yojin logo (`/brand/yojin_icon_color.png`)
+- **AI gates**: Show Claude + OpenAI logos (`/ai-providers/claude.png`, `/ai-providers/openai.png`) stacked with overlap
+
+### Card-level pattern (dashboard cards)
+
+```tsx
+<DashboardCard title="Portfolio Value">
+  <CardBlurGate mockContent={<MockPortfolioValue />}>
+    <FeatureCardGate requires="jintel" />
+  </CardBlurGate>
+</DashboardCard>
+```
+
+### Page-level pattern (full pages)
+
+```tsx
+export default function Positions() {
+  return (
+    <PageBlurGate requires="jintel" mockContent={<MockPortfolioPage />}>
+      <PositionsContent />
+    </PageBlurGate>
+  );
+}
+```
+
+### Mock content rules
+
+- Mock data is **static** — no API calls, no hooks, no `useQuery`
+- Use `pointer-events-none select-none aria-hidden` (handled by blur gate components)
+- Use placeholder circles (`bg-bg-tertiary rounded-full`) instead of `SymbolLogo` to avoid API calls
+- Match the populated state's layout exactly (same table structure, same grid, same spacing)
+- Use realistic but obviously fake values ($127,450.32, AAPL, NVDA, BTC, etc.)
+
+### When to use
+
+- Every `PageFeatureGate` should be replaced with `PageBlurGate` + mock content
+- Every `FeatureCardGate` inside a dashboard card should be wrapped in `CardBlurGate`
+- Every `CardEmptyState` (no data yet) should also be wrapped in `CardBlurGate` with mock content
+
 ## GraphQL
 
 - Client configured in `src/lib/graphql.ts` with `cacheExchange` + `fetchExchange`

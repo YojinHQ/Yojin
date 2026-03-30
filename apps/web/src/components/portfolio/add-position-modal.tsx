@@ -4,13 +4,25 @@ import Button from '../common/button';
 import Input from '../common/input';
 import { cn } from '../../lib/utils';
 import { useAddPositionModal } from '../../lib/add-position-modal-context';
-import { useAddManualPosition } from '../../api';
+import { useAddManualPosition, useQuote } from '../../api';
 import type { AssetClass, Platform } from '../../api';
 import { lookupSymbolName } from '../../lib/symbol-names';
+import { PlatformLogo } from '../platforms/platform-logos';
 
 type Screen = 'form' | 'confirm' | 'success';
 
-const ACCOUNT_PRESETS = ['IBKR', 'Robinhood', 'Coinbase', 'Schwab', 'Binance', 'Fidelity'];
+const ACCOUNT_PRESETS = [
+  'IBKR',
+  'Robinhood',
+  'Coinbase',
+  'Schwab',
+  'Binance',
+  'Fidelity',
+  'Webull',
+  'SoFi',
+  'Moomoo',
+  'MetaMask',
+];
 
 const CRYPTO_SYMBOLS = new Set([
   'BTC',
@@ -42,6 +54,10 @@ const ACCOUNT_TO_PLATFORM: Record<string, Platform> = {
   Schwab: 'SCHWAB',
   Binance: 'BINANCE',
   Fidelity: 'FIDELITY',
+  Webull: 'WEBULL',
+  SoFi: 'SOFI',
+  Moomoo: 'MOOMOO',
+  MetaMask: 'METAMASK',
 };
 
 function lookupName(symbol: string): string {
@@ -61,9 +77,10 @@ interface FormData {
   account: string;
   quantity: string;
   costBasis: string;
+  entryDate: string;
 }
 
-const EMPTY_FORM: FormData = { symbol: '', account: '', quantity: '', costBasis: '' };
+const EMPTY_FORM: FormData = { symbol: '', account: '', quantity: '', costBasis: '', entryDate: '' };
 
 interface AddPositionModalProps {
   onOpenAddAccount?: () => void;
@@ -76,10 +93,16 @@ export default function AddPositionModal({ onOpenAddAccount }: AddPositionModalP
   const [error, setError] = useState('');
   const [{ fetching }, addManualPosition] = useAddManualPosition();
 
+  const symbol = formData.symbol.trim().toUpperCase();
+  const [quoteResult] = useQuote(symbol || undefined);
+  const marketPrice = quoteResult.data?.quote?.price;
+
   const resolvedName = lookupName(formData.symbol);
   const qty = parseFloat(formData.quantity);
   const price = parseFloat(formData.costBasis);
-  const totalValue = !isNaN(qty) && !isNaN(price) ? qty * price : 0;
+  const hasMarketPrice = !isNaN(qty) && marketPrice != null;
+  const hasCostBasis = !isNaN(qty) && !isNaN(price);
+  const totalValue = hasMarketPrice ? qty * marketPrice : hasCostBasis ? qty * price : 0;
 
   const resetState = useCallback(() => {
     setScreen('form');
@@ -130,6 +153,7 @@ export default function AddPositionModal({ onOpenAddAccount }: AddPositionModalP
         costBasis: parseFloat(formData.costBasis),
         assetClass: inferAssetClass(symbol),
         platform: inferPlatform(formData.account),
+        ...(formData.entryDate ? { entryDate: formData.entryDate } : {}),
       },
     });
 
@@ -191,12 +215,13 @@ export default function AddPositionModal({ onOpenAddAccount }: AddPositionModalP
                   type="button"
                   onClick={() => updateField('account', preset)}
                   className={cn(
-                    'cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
+                    'flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
                     formData.account === preset
                       ? 'border-accent-primary/60 bg-accent-primary/15 text-text-primary'
                       : 'border-border/60 bg-bg-tertiary text-text-secondary hover:border-border-light hover:bg-bg-hover',
                   )}
                 >
+                  <PlatformLogo platform={inferPlatform(preset)} size="xs" className="!h-4 !w-4" />
                   {preset}
                 </button>
               ))}
@@ -234,9 +259,22 @@ export default function AddPositionModal({ onOpenAddAccount }: AddPositionModalP
             <div className="flex-1">
               <label className="mb-1.5 block text-xs font-medium text-text-secondary">Total Value</label>
               <div className="flex h-[34px] items-center rounded-lg border border-border/60 bg-bg-card px-3 text-sm text-text-muted">
-                {totalValue > 0 ? `$${totalValue.toFixed(2)}` : '—'}
+                {totalValue > 0
+                  ? `$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : '—'}
               </div>
             </div>
+          </div>
+
+          {/* Entry Date (optional) */}
+          <div className="mb-4 w-44">
+            <Input
+              label="Entry Date (optional)"
+              type="date"
+              value={formData.entryDate}
+              onChange={(e) => updateField('entryDate', e.target.value)}
+              size="sm"
+            />
           </div>
 
           {error && <p className="mb-3 text-xs font-medium text-error">{error}</p>}
@@ -271,8 +309,19 @@ export default function AddPositionModal({ onOpenAddAccount }: AddPositionModalP
               <SummaryRow label="Account" value={formData.account} />
               <SummaryRow label="Quantity" value={qty.toString()} />
               <SummaryRow label="Avg Cost" value={`$${price.toFixed(2)}`} />
+              {marketPrice != null && (
+                <SummaryRow
+                  label="Market Price"
+                  value={`$${marketPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                />
+              )}
+              {formData.entryDate && <SummaryRow label="Entry Date" value={formData.entryDate} />}
               <div className="border-t border-border/40 pt-3">
-                <SummaryRow label="Total Value" value={`$${totalValue.toFixed(2)}`} bold />
+                <SummaryRow
+                  label={hasMarketPrice ? 'Market Value' : 'Market Value (est.)'}
+                  value={`$${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  bold
+                />
               </div>
             </div>
           </div>

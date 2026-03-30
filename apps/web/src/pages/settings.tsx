@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useMutation, useQuery } from 'urql';
 import { cn } from '../lib/utils';
-import Card from '../components/common/card';
 import Button from '../components/common/button';
 import Toggle from '../components/common/toggle';
+import { GateCard } from '../components/common/feature-gate';
+import { useOnboardingStatus } from '../lib/onboarding-context';
 import { TimePicker } from '../components/onboarding/time-picker';
 import { TimezonePicker } from '../components/onboarding/timezone-picker';
 import {
@@ -56,7 +57,9 @@ export default function Settings() {
   const [{ data: statusData }] = useQuery<OnboardingStatusQueryResult>({
     query: ONBOARDING_STATUS_QUERY,
   });
+  const onboardingCompleted = statusData?.onboardingStatus?.completed ?? true;
   const jintelConfigured = statusData?.onboardingStatus?.jintelConfigured ?? false;
+  const { openOnboarding } = useOnboardingStatus();
 
   const [privacy, setPrivacy] = useState({
     piiRedaction: true,
@@ -68,10 +71,28 @@ export default function Settings() {
   };
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6">
-      <Card title="AI Provider" section>
-        <ModelPicker />
-      </Card>
+    <div className="flex-1 overflow-auto p-6 space-y-6 max-w-4xl mx-auto w-full">
+      <div className="relative rounded-xl border border-border bg-bg-card">
+        <div className="p-5 space-y-4">
+          <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">AI Provider</h3>
+          <ModelPicker />
+        </div>
+
+        {!onboardingCompleted && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-bg-primary/70 backdrop-blur-[3px]">
+            <GateCard
+              requires="ai"
+              title="AI provider not configured"
+              subtitle="Complete onboarding to select your AI provider and model."
+              action={
+                <Button size="sm" variant="secondary" onClick={openOnboarding}>
+                  Go to Onboarding
+                </Button>
+              }
+            />
+          </div>
+        )}
+      </div>
 
       {/* Unified Intelligence Features — gated on Jintel API key */}
       <div className="relative rounded-xl border border-border bg-bg-card">
@@ -108,32 +129,11 @@ export default function Settings() {
 
         {/* Locked overlay when Jintel is not configured */}
         {!jintelConfigured && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-bg-primary/70 backdrop-blur-[2px]">
-            <div className="flex flex-col items-center gap-2 text-center px-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-bg-tertiary border border-border">
-                <svg
-                  className="h-5 w-5 text-text-muted"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"
-                  />
-                </svg>
-              </div>
-              <p className="text-sm font-medium text-text-primary">Jintel API key required</p>
-              <p className="text-xs text-text-muted max-w-xs">
-                Connect your Jintel API key in{' '}
-                <a href="/profile" className="text-accent-primary hover:underline">
-                  Profile
-                </a>{' '}
-                to enable insights, notifications, and privacy controls.
-              </p>
-            </div>
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-bg-primary/70 backdrop-blur-[3px]">
+            <GateCard
+              requires="jintel"
+              subtitle="Jintel is free to use. Connect it to unlock live market data and analytics."
+            />
           </div>
         )}
       </div>
@@ -187,7 +187,6 @@ function ModelPicker() {
   const [provider, setProvider] = useState<AiProviderId>('claude-code');
   const [selected, setSelected] = useState('claude-opus-4-6');
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
@@ -209,14 +208,12 @@ function ModelPicker() {
     // Auto-select the first model of the new provider
     setSelected(PROVIDER_MODELS[p][0].id);
     setDirty(true);
-    setSaved(false);
     setSaveError(null);
   };
 
   const handleSelectModel = (modelId: string) => {
     setSelected(modelId);
     setDirty(true);
-    setSaved(false);
     setSaveError(null);
   };
 
@@ -229,7 +226,6 @@ function ModelPicker() {
         setSaveError(res.error.message || 'Failed to save');
         return;
       }
-      setSaved(true);
       setDirty(false);
     } finally {
       setSaving(false);
@@ -323,7 +319,6 @@ function ModelPicker() {
         <Button variant="primary" size="sm" loading={saving} disabled={!dirty} onClick={handleSave}>
           Save
         </Button>
-        {saved && <span className="text-xs text-success">Saved</span>}
         {saveError && <span className="text-xs text-error">{saveError}</span>}
       </div>
     </div>
