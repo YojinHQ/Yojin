@@ -111,9 +111,22 @@ describe('isTautologicalTier2', () => {
     expect(isTautologicalTier2('TSLA up 3.1%, pointing to further upside potential.')).toBe(true);
   });
 
-  it('flags standalone "bearish momentum" or "bullish momentum"', () => {
-    expect(isTautologicalTier2('The stock shows bearish momentum after the earnings miss.')).toBe(true);
-    expect(isTautologicalTier2('Strong bullish momentum continues into the close.')).toBe(true);
+  it('flags "bearish/bullish momentum" followed by obvious restatement', () => {
+    expect(isTautologicalTier2('The stock shows bearish momentum, suggesting further decline in the session.')).toBe(
+      true,
+    );
+    expect(isTautologicalTier2('Strong bullish momentum indicating buying interest from retail traders.')).toBe(true);
+  });
+
+  it('does not flag standalone "bearish/bullish momentum" without restatement', () => {
+    expect(isTautologicalTier2('The stock shows bearish momentum after the earnings miss.')).toBe(false);
+    expect(isTautologicalTier2('Strong bullish momentum continues into the close.')).toBe(false);
+  });
+
+  it('does not flag "bearish/bullish momentum" with supporting evidence', () => {
+    expect(isTautologicalTier2('bearish momentum confirmed by 4x average volume and 18 analyst downgrades')).toBe(
+      false,
+    );
   });
 
   it('does not flag when conclusion cites evidence', () => {

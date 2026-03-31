@@ -43,8 +43,8 @@ export const BANNED_SIGNAL_WORDS: readonly string[] = [
   'remarkable',
 ] as const;
 
-// Pre-compiled regex for O(1) matching — alternation of all banned entries,
-// surrounded by word boundaries so "fell" doesn't match "fellow".
+// Pre-compiled regex — compiled once at module load so matching runs in a single pass.
+// Word boundaries around the group prevent "fell" from matching "fellow".
 const BANNED_RE = new RegExp(
   `\\b(?:${BANNED_SIGNAL_WORDS.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`,
   'i',
@@ -74,8 +74,8 @@ const TAUTOLOGICAL_PATTERNS: readonly RegExp[] = [
   /(?:down|dropped|declined|lost|decrease)\b.*?\b(?:suggest(?:s|ing)?|indicat(?:e|es|ing)|signal(?:s|ling)?|point(?:s|ing)? to|impl(?:y|ies|ying))\s+(?:selling pressure|bearish (?:momentum|sentiment|trend)|further (?:decline|downside|weakness)|negative (?:momentum|sentiment))/i,
   // "up/gained/rose X% ... suggesting/indicating buying interest"
   /(?:up|gained|rose|increased|advance)\b.*?\b(?:suggest(?:s|ing)?|indicat(?:e|es|ing)|signal(?:s|ling)?|point(?:s|ing)? to|impl(?:y|ies|ying))\s+(?:buying (?:interest|pressure)|bullish (?:momentum|sentiment|trend)|further (?:upside|gains|strength)|positive (?:momentum|sentiment))/i,
-  // "bearish momentum" or "bullish momentum" without supporting evidence
-  /\b(?:bearish|bullish)\s+momentum\b/i,
+  // "bearish/bullish momentum" followed by an obvious restatement conclusion
+  /\b(?:bearish|bullish)\s+momentum\b.*?\b(?:suggest(?:s|ing)?|indicat(?:e|es|ing)|signal(?:s|ling)?|confirm(?:s|ing)?|point(?:s|ing)? to|impl(?:y|ies|ying))\s+(?:selling pressure|buying (?:interest|pressure)|further (?:decline|downside|upside|gains|weakness|strength)|negative (?:momentum|sentiment)|positive (?:momentum|sentiment))/i,
 ] as const;
 
 /**
