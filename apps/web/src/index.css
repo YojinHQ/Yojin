@@ -25,6 +25,7 @@
   --text-2xs: 11px;
   --text-3xs: 9px;
   --text-badge: 10px;
+  --spacing-sidebar-width: 220px;
   --animate-waterfall-in: waterfall-in 0.25s ease-out;
   --animate-shimmer: shimmer 2s ease-in-out infinite;
   --animate-card-in: card-in 0.4s ease-out both;
