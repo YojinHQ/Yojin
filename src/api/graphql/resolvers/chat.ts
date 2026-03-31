@@ -154,12 +154,6 @@ export function sendMessageMutation(
               messageId,
               content: event.text,
             } satisfies ChatEvent);
-          } else if (event.type === 'error') {
-            pubsub.publish(`chat:${threadId}`, {
-              type: 'ERROR',
-              threadId,
-              error: event.error,
-            } satisfies ChatEvent);
           } else if (event.type === 'max_iterations') {
             pubsub.publish(`chat:${threadId}`, {
               type: 'ERROR',
