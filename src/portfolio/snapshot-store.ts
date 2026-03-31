@@ -68,6 +68,8 @@ export class PortfolioSnapshotStore {
       totalCost,
       totalPnl,
       totalPnlPercent: totalCost > 0 ? (totalPnl / totalCost) * 100 : 0,
+      totalDayChange: 0,
+      totalDayChangePercent: 0,
       timestamp: new Date().toISOString(),
       platform: null,
     };

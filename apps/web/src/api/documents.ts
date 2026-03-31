@@ -67,6 +67,8 @@ export const PORTFOLIO_QUERY = gql`
       totalCost
       totalPnl
       totalPnlPercent
+      totalDayChange
+      totalDayChangePercent
       timestamp
       platform
       warnings
@@ -76,6 +78,8 @@ export const PORTFOLIO_QUERY = gql`
         totalCost
         totalPnl
         totalPnlPercent
+        periodPnl
+        periodPnlPercent
       }
       sectorExposure {
         sector
@@ -1186,6 +1190,8 @@ export const ON_PORTFOLIO_UPDATE_SUBSCRIPTION = gql`
       totalCost
       totalPnl
       totalPnlPercent
+      totalDayChange
+      totalDayChangePercent
       timestamp
       platform
       warnings

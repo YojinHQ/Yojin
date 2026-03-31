@@ -50,7 +50,7 @@ export function PortfolioOverview() {
     </div>
   );
 
-  if (fetching) {
+  if (fetching && !portfolioData) {
     return (
       <DashboardCard title="Total Value" className="min-h-[120px] flex-1">
         <div className="flex flex-1 items-center justify-center px-5 pb-5">

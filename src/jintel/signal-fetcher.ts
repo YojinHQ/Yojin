@@ -17,6 +17,9 @@ import { GDP, INFLATION, INTEREST_RATES, SP500_MULTIPLES, buildBatchEnrichQuery 
 import { riskSignalsToRaw } from './tools.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
+import { SignalTypeSchema } from '../signals/types.js';
+
+const SignalType = SignalTypeSchema.enum;
 
 const logger = createSubsystemLogger('jintel-signal-fetcher');
 
@@ -154,7 +157,7 @@ function isEntityNameTitle(title: string, entityName: string | undefined): boole
   return cleaned.toLowerCase() === entityName.toLowerCase();
 }
 
-function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[] {
+export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[] {
   // Day-precision timestamp — stable hash prevents duplicate signals across re-runs
   const now = new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z';
   const signals: RawSignalInput[] = [];
@@ -214,7 +217,7 @@ function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[
       title: `${name}: ${titleParts.join(' | ')}`,
       content: contentLines.join('\n'),
       publishedAt: now,
-      type: 'FUNDAMENTAL',
+      type: SignalType.FUNDAMENTAL,
       tickers,
       confidence: 0.95,
     });
@@ -231,7 +234,7 @@ function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[
       content: filing.description ?? undefined,
       link: filing.url,
       publishedAt: filing.date.includes('T') ? filing.date : `${filing.date}T00:00:00Z`,
-      type: 'FUNDAMENTAL',
+      type: SignalType.FILINGS,
       tickers,
       confidence: 0.95,
     });
@@ -247,7 +250,7 @@ function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[
       reliability: 0.95,
       title: `${quote.ticker} ${direction} ${Math.abs(quote.changePercent).toFixed(1)}% to $${quote.price.toFixed(2)}`,
       publishedAt: now,
-      type: 'TECHNICAL',
+      type: SignalType.TECHNICAL,
       tickers,
       confidence: 0.95,
     });
@@ -271,6 +274,7 @@ function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[
       content: article.snippet ?? undefined,
       link: article.link,
       publishedAt: article.date ?? now,
+      type: SignalType.NEWS,
       tickers,
       confidence: 0.8,
       metadata: { source: article.source, link: article.link },
@@ -294,6 +298,7 @@ function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[
       content: article.text ?? undefined,
       link: article.url,
       publishedAt: article.publishedDate ?? now,
+      type: SignalType.NEWS,
       tickers,
       confidence: Math.min(0.95, article.score ?? 0.7),
       metadata: { author: article.author, score: article.score },
@@ -322,7 +327,7 @@ function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[
         title: `${entity.name ?? tickers[0]} Technicals: ${parts[0]}`,
         content: parts.join('\n'),
         publishedAt: now,
-        type: 'TECHNICAL',
+        type: SignalType.TECHNICAL,
         tickers,
         confidence: 0.9,
       });
@@ -344,7 +349,7 @@ function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[
       title: `${entity.name ?? tickers[0]} Social: Rank #${s.rank} (${rankDir}) | ${s.mentions} mentions (${mentionDir})`,
       content: `Social sentiment for ${s.name}: Rank #${s.rank}, ${s.mentions} mentions, ${s.upvotes} upvotes (24h ago: rank #${s.rank24hAgo}, ${s.mentions24hAgo} mentions)`,
       publishedAt: now,
-      type: 'SENTIMENT',
+      type: SignalType.SENTIMENT,
       tickers,
       confidence: 0.7,
     });
@@ -391,7 +396,7 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
         title: `US Real GDP: ${latest.value.toFixed(1)}% (${latest.date})`,
         content: `US Real GDP growth rate: ${latest.value.toFixed(2)}% as of ${latest.date}`,
         publishedAt: toPublishedAt(latest.date),
-        type: 'MACRO',
+        type: SignalType.MACRO,
         confidence: 0.95,
       });
     }
@@ -411,7 +416,7 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
         title: `US Inflation (CPI): ${latest.value.toFixed(1)}% (${latest.date})`,
         content: `US Consumer Price Index: ${latest.value.toFixed(2)}% year-over-year as of ${latest.date}`,
         publishedAt: toPublishedAt(latest.date),
-        type: 'MACRO',
+        type: SignalType.MACRO,
         confidence: 0.95,
       });
     }
@@ -431,7 +436,7 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
         title: `US Interest Rate: ${latest.value.toFixed(2)}% (${latest.date})`,
         content: `US Federal Funds Rate: ${latest.value.toFixed(2)}% as of ${latest.date}`,
         publishedAt: toPublishedAt(latest.date),
-        type: 'MACRO',
+        type: SignalType.MACRO,
         confidence: 0.95,
       });
     }
@@ -451,7 +456,7 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
         title: `S&P 500 P/E Ratio: ${latest.value.toFixed(1)} (${latest.date})`,
         content: `S&P 500 trailing P/E ratio: ${latest.value.toFixed(2)} as of ${latest.date}`,
         publishedAt: toPublishedAt(latest.date),
-        type: 'MACRO',
+        type: SignalType.MACRO,
         confidence: 0.95,
       });
     }
@@ -471,7 +476,7 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
         title: `S&P 500 Shiller P/E (CAPE): ${latest.value.toFixed(1)} (${latest.date})`,
         content: `S&P 500 cyclically-adjusted P/E ratio (Shiller CAPE): ${latest.value.toFixed(2)} as of ${latest.date}`,
         publishedAt: toPublishedAt(latest.date),
-        type: 'MACRO',
+        type: SignalType.MACRO,
         confidence: 0.95,
       });
     }

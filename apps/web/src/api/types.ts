@@ -156,6 +156,8 @@ export interface PortfolioSnapshot {
   totalCost: number;
   totalPnl: number;
   totalPnlPercent: number;
+  totalDayChange: number;
+  totalDayChangePercent: number;
   timestamp: string;
   platform: Platform | null;
   warnings: string[];
@@ -169,6 +171,8 @@ export interface PortfolioHistoryPoint {
   totalCost: number;
   totalPnl: number;
   totalPnlPercent: number;
+  periodPnl: number;
+  periodPnlPercent: number;
 }
 
 // ---------------------------------------------------------------------------
