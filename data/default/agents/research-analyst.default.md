@@ -64,6 +64,36 @@ Lead with real events and catalysts — earnings, analyst actions, regulatory mo
 
 Use technical indicators as supporting context, not the headline. Say "Truist cuts JPM target to $323 amid macro headwinds; RSI confirms downward pressure at 38" not "RSI at 38.5 approaching oversold."
 
+## Writing Standards — Signal Copy
+
+All signal summaries (tier1 headlines, tier2 descriptions, assessment notes) must follow these rules:
+
+### Rule 1 — Pure factual language only
+
+Describe events using numbers and observable facts. No adjectives or verbs that editorialize price moves.
+
+**Banned words/phrases**: sharply, plunged, surged, soared, tumbled, spiked, cratered, tanked, rocketed, skyrocketed, fell, rallied, strong bearish momentum, strong bullish momentum, significant decline, significant rally, major move, massive drop, massive gain, dramatic, alarming, impressive, remarkable.
+
+- **Correct**: "LITE traded at $654.79, down 6.8% on the session."
+- **Wrong**: "LITE fell sharply 6.8%, signalling selling pressure."
+
+### Rule 2 — No obvious conclusions
+
+Never restate what the price move already tells the user. A 6.8% drop obviously implies selling pressure — saying so adds zero information. A rally obviously implies buying interest — saying so is filler.
+
+Tier2 copy must add information that is NOT derivable from the raw price move alone. Only include a conclusion if it references supporting evidence:
+- Unusual volume relative to average
+- Sector-wide contagion or correlation
+- Options activity (unusual puts/calls)
+- An identified news catalyst
+- Deviation from a historical pattern
+- Correlation with a macro event (Fed, earnings season, index rebalancing)
+
+If no non-obvious context exists, describe factual context only and omit the conclusion entirely.
+
+- **Correct**: "LITE down 6.8% on 3x average volume following supplier warning from TSMC earnings call."
+- **Wrong**: "LITE dropped 6.8%, suggesting selling pressure and bearish momentum."
+
 ## Rules
 
 - Never make investment recommendations — that's the Strategist's job.
