@@ -52,9 +52,8 @@ export function PerformanceOvertime({ history }: PerformanceOvertimeProps) {
         vertLine: { color: '#737373', labelBackgroundColor: '#737373' },
         horzLine: { color: '#737373', labelBackgroundColor: '#737373' },
       },
-      rightPriceScale: {
-        borderVisible: false,
-      },
+      leftPriceScale: { visible: true, borderVisible: false },
+      rightPriceScale: { visible: false },
       timeScale: {
         borderVisible: false,
         fixLeftEdge: true,
@@ -66,6 +65,7 @@ export function PerformanceOvertime({ history }: PerformanceOvertimeProps) {
     chartRef.current = chart;
 
     seriesRef.current = chart.addSeries(HistogramSeries, {
+      priceScaleId: 'left',
       priceFormat: {
         type: 'custom',
         formatter: (p: number) => {
