@@ -17,6 +17,9 @@ import type { GuardRunner } from '../guards/guard-runner.js';
 import type { ProposedAction } from '../guards/types.js';
 import type { ApprovalGate } from './approval/approval-gate.js';
 import type { OutputDlpGuard } from '../guards/security/output-dlp.js';
+import { createSubsystemLogger } from '../logging/logger.js';
+
+const logger = createSubsystemLogger('guarded-tool-registry');
 
 export interface GuardedToolRegistryOptions {
   registry: ToolRegistry;
@@ -50,6 +53,7 @@ export class GuardedToolRegistry implements ToolExecutor {
     // 2. Run pre-execution guards
     const guardResult = this.guardRunner.check(action);
     if (!guardResult.pass) {
+      logger.warn('Tool blocked by guard', { tool: name, agentId: context?.agentId, reason: guardResult.reason });
       return {
         content: `Blocked by guard: ${guardResult.reason}`,
         isError: true,
@@ -58,17 +62,20 @@ export class GuardedToolRegistry implements ToolExecutor {
 
     // 3. Check if approval is needed
     if (this.approvalGate?.needsApproval(name)) {
+      logger.info('Approval required for tool', { tool: name, agentId: context?.agentId });
       const approval = await this.approvalGate.requestApproval(
         name,
         `Tool call: ${name} with input: ${JSON.stringify(input)}`,
         context?.agentId,
       );
       if (!approval.approved) {
+        logger.warn('Tool denied by approval gate', { tool: name, agentId: context?.agentId, reason: approval.reason });
         return {
           content: `Action denied: ${approval.reason}`,
           isError: true,
         };
       }
+      logger.info('Tool approved', { tool: name, agentId: context?.agentId });
     }
 
     // 4. Execute tool
@@ -85,6 +92,7 @@ export class GuardedToolRegistry implements ToolExecutor {
 
       const dlpResult = this.outputDlp.check(dlpAction);
       if (!dlpResult.pass) {
+        logger.warn('Tool output blocked by DLP', { tool: name, agentId: context?.agentId, reason: dlpResult.reason });
         return {
           content: `Output blocked by DLP: ${dlpResult.reason}. The tool executed but its output was suppressed.`,
           isError: true,

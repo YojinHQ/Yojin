@@ -12,7 +12,16 @@ import { copyFile, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import type { PersonaManager as PersonaManagerInterface } from './types.js';
+import { type SubsystemLogger, createSubsystemLogger } from '../logging/logger.js';
 import { resolveDefaultsRoot } from '../paths.js';
+
+let logger: SubsystemLogger;
+try {
+  logger = createSubsystemLogger('brain/persona');
+} catch {
+  const noop = () => {};
+  logger = { trace: noop, debug: noop, info: noop, warn: noop, error: noop, fatal: noop, child: () => logger };
+}
 
 const OVERRIDE_PERSONA_PATH = 'brain/persona.md';
 
@@ -38,6 +47,7 @@ export class PersonaManager implements PersonaManagerInterface {
 
       // Auto-copy default to override on first run
       if (existsSync(this.defaultPath)) {
+        logger.info('First run — copying default persona to override');
         const content = await readFile(this.defaultPath, 'utf-8');
         await this.ensureOverrideDir();
         await copyFile(this.defaultPath, this.overridePath).catch(() => undefined);
@@ -53,11 +63,13 @@ export class PersonaManager implements PersonaManagerInterface {
   async setPersona(content: string): Promise<void> {
     await this.ensureOverrideDir();
     await writeFile(this.overridePath, content, 'utf-8');
+    logger.info('Persona updated', { chars: content.length });
   }
 
   async resetPersona(): Promise<void> {
     if (existsSync(this.overridePath)) {
       await unlink(this.overridePath);
+      logger.info('Persona reset to default');
     }
   }
 

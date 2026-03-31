@@ -39,6 +39,7 @@ export class JsonlSessionStore implements SessionStore {
       this.threadIndex.set(`${meta.channelId}:${meta.threadId}`, meta.id);
     }
 
+    logger.info('Session created', { sessionId: meta.id, channelId: meta.channelId, userId: meta.userId });
     return meta;
   }
 
@@ -114,6 +115,7 @@ export class JsonlSessionStore implements SessionStore {
     };
 
     await appendFile(filePath, JSON.stringify(entry) + '\n');
+    logger.debug('Message appended to session', { sessionId, sequence, role: message.role });
     return entry;
   }
 
@@ -150,6 +152,7 @@ export class JsonlSessionStore implements SessionStore {
   }
 
   async delete(id: string): Promise<void> {
+    logger.info('Session deleted', { sessionId: id });
     await rm(this.filePath(id), { force: true });
     this.sequenceCounters.delete(id);
 
