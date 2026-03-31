@@ -392,11 +392,7 @@ export class SignalIngestor {
     let falseMatchDropped = 0;
     let lowQualityDropped = 0;
     for (const signal of signals) {
-      // Skip if already has LLM-generated summaries
-      if (signal.tier1 && signal.tier2) {
-        results.push(signal);
-        continue;
-      }
+      const hasSummary = Boolean(signal.tier1 && signal.tier2);
       try {
         const summary = await this.summaryGenerator.generate(signal);
         // Drop signals the LLM identified as non-financial content
@@ -427,13 +423,19 @@ export class SignalIngestor {
           });
           continue;
         }
-        results.push({
-          ...signal,
-          tier1: summary.tier1,
-          tier2: summary.tier2,
-          sentiment: summary.sentiment,
-          outputType: summary.outputType,
-        });
+        // If the signal already had summaries (e.g. from Jintel Research), keep them —
+        // the LLM call was only for quality gating, not to overwrite upstream copy.
+        if (hasSummary) {
+          results.push(signal);
+        } else {
+          results.push({
+            ...signal,
+            tier1: summary.tier1,
+            tier2: summary.tier2,
+            sentiment: summary.sentiment,
+            outputType: summary.outputType,
+          });
+        }
       } catch (err) {
         logger.warn('Summary generation failed for signal, using raw', {
           signalId: signal.id,
