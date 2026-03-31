@@ -187,7 +187,7 @@ const SNAP_NOTIFY_COOLDOWN_MS = 60 * 60 * 1000;
 /** Hash snap content for dedup — only notify channels when content actually changes. */
 function snapContentHash(snap: { intelSummary?: string; actionItems: { text: string }[] }): string {
   return createHash('sha256')
-    .update(JSON.stringify({ intelSummary: snap.intelSummary ?? '', actionItems: snap.actionItems }))
+    .update(JSON.stringify({ intelSummary: snap.intelSummary ?? '', actionItems: snap.actionItems.map((a) => a.text) }))
     .digest('hex');
 }
 

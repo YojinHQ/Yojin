@@ -106,7 +106,11 @@ export interface IncomingMessage {
   text: string;
   timestamp: string;
   raw?: unknown;
-  /** Channel-provided callback for streaming agent events (typing, text deltas, tool use). */
+  /**
+   * Channel-provided callback for streaming agent events (typing, text deltas, tool use).
+   * When set, the Gateway skips the post-completion `sendMessage` call — the channel
+   * is expected to deliver the full response itself (e.g. via progressive message edits).
+   */
   onAgentEvent?: (event: { type: string; [key: string]: unknown }) => void;
 }
 
