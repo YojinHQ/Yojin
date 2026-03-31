@@ -78,7 +78,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="flex-1 overflow-auto p-6 space-y-6 max-w-4xl mx-auto w-full">
+    <div className="flex-1 overflow-auto p-6 max-w-4xl mx-auto w-full flex flex-col gap-6">
       <div className="relative rounded-xl border border-border bg-bg-card">
         <div className="p-5 space-y-4">
           <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">AI Provider</h3>
@@ -101,19 +101,26 @@ export default function Settings() {
         )}
       </div>
 
-      {/* Unified Intelligence Features — gated on Jintel API key */}
+      {/* Daily Insights */}
       <div className="relative rounded-xl border border-border bg-bg-card">
-        {/* Section: Daily Insights */}
         <div className="p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">Daily Insights</h3>
           </div>
-          <BriefingEditor disabled={!jintelConfigured} />
+          <BriefingEditor />
         </div>
+        {!jintelConfigured && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-bg-primary/70 backdrop-blur-[3px]">
+            <GateCard
+              requires="jintel"
+              subtitle="Jintel is free to use. Connect it to unlock live market data and analytics."
+            />
+          </div>
+        )}
+      </div>
 
-        <div className="border-t border-border" />
-
-        {/* Section: Channels */}
+      {/* Delivery Channels */}
+      <div className="relative rounded-xl border border-border bg-bg-card">
         <div className="p-5 space-y-4">
           <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">Delivery Channels</h3>
           <p className="text-sm text-text-muted">
@@ -121,19 +128,35 @@ export default function Settings() {
           </p>
           <ChannelsSection />
         </div>
+        {!jintelConfigured && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-bg-primary/70 backdrop-blur-[3px]">
+            <GateCard
+              requires="jintel"
+              subtitle="Jintel is free to use. Connect it to unlock live market data and analytics."
+            />
+          </div>
+        )}
+      </div>
 
-        <div className="border-t border-border" />
-
-        {/* Section: Notification Preferences */}
+      {/* Notification Routing */}
+      <div className="relative rounded-xl border border-border bg-bg-card">
         <div className="p-5 space-y-4">
           <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">Notification Routing</h3>
           <p className="text-sm text-text-muted">Choose which notifications each channel receives.</p>
           <NotificationPreferencesEditor />
         </div>
+        {!jintelConfigured && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-bg-primary/70 backdrop-blur-[3px]">
+            <GateCard
+              requires="jintel"
+              subtitle="Jintel is free to use. Connect it to unlock live market data and analytics."
+            />
+          </div>
+        )}
+      </div>
 
-        <div className="border-t border-border" />
-
-        {/* Section: Data & Privacy */}
+      {/* Data & Privacy */}
+      <div className="relative rounded-xl border border-border bg-bg-card">
         <div className="p-5 space-y-4">
           <h3 className="text-xs font-medium uppercase tracking-wider text-text-secondary">Data & Privacy</h3>
           <div className="space-y-4">
@@ -153,8 +176,6 @@ export default function Settings() {
             />
           </div>
         </div>
-
-        {/* Locked overlay when Jintel is not configured */}
         {!jintelConfigured && (
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-bg-primary/70 backdrop-blur-[3px]">
             <GateCard
@@ -356,7 +377,7 @@ function ModelPicker() {
 // Briefing schedule editor
 // ---------------------------------------------------------------------------
 
-function BriefingEditor({ disabled: _disabled = false }: { disabled?: boolean }) {
+function BriefingEditor() {
   const [result] = useQuery<{ briefingConfig: BriefingConfig | null }>({ query: BRIEFING_CONFIG_QUERY });
   const [, saveBriefing] = useMutation(SAVE_BRIEFING_CONFIG_MUTATION);
 
