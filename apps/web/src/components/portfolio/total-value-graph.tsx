@@ -46,7 +46,8 @@ export function TotalValueGraph({ history }: TotalValueGraphProps) {
         vertLine: { color: '#737373', labelBackgroundColor: '#737373' },
         horzLine: { color: '#737373', labelBackgroundColor: '#737373' },
       },
-      rightPriceScale: { borderVisible: false },
+      leftPriceScale: { visible: true, borderVisible: false },
+      rightPriceScale: { visible: false },
       timeScale: { borderVisible: false, fixLeftEdge: true, fixRightEdge: true },
       handleScroll: { vertTouchDrag: false },
     });
@@ -54,6 +55,7 @@ export function TotalValueGraph({ history }: TotalValueGraphProps) {
     chartRef.current = chart;
 
     seriesRef.current = chart.addSeries(AreaSeries, {
+      priceScaleId: 'left',
       lineWidth: 2,
       crosshairMarkerRadius: 4,
       priceFormat: {
