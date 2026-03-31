@@ -84,6 +84,20 @@ export interface NotificationPreferences {
   enabledTypes: string[];
 }
 
+export type PairingStatusCode = 'WAITING_FOR_SCAN' | 'CONNECTED' | 'FAILED' | 'EXPIRED';
+
+export interface PairingResult {
+  success: boolean;
+  error?: string;
+  qrData?: string;
+}
+
+export interface PairingEvent {
+  status: PairingStatusCode;
+  qrData?: string;
+  error?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Activity Log
 // ---------------------------------------------------------------------------

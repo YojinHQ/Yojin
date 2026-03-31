@@ -12,6 +12,7 @@ export interface ChannelMeta {
   description: string;
   setupInstructions: string;
   credentialFields: ChannelCredentialField[];
+  connectionType?: 'token' | 'qr';
 }
 
 const CHANNEL_META: Record<string, ChannelMeta> = {
@@ -59,6 +60,16 @@ const CHANNEL_META: Record<string, ChannelMeta> = {
         helpText: 'App-Level Token for Socket Mode (starts with xapp-)',
       },
     ],
+  },
+  whatsapp: {
+    label: 'WhatsApp',
+    initials: 'WA',
+    color: 'bg-success/20 text-success',
+    description: 'Direct-to-phone alerts for critical portfolio events',
+    setupInstructions:
+      'Scan the QR code below with your WhatsApp app. Go to Settings \u2192 Linked Devices \u2192 Link a Device.',
+    credentialFields: [],
+    connectionType: 'qr',
   },
 };
 

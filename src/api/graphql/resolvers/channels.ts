@@ -1,9 +1,11 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { createWhatsAppSession } from '../../../../channels/whatsapp/src/session.js';
 import { createSubsystemLogger } from '../../../logging/logger.js';
 import type { PluginRegistry } from '../../../plugins/registry.js';
 import type { SecretVault } from '../../../trust/vault/types.js';
+import { pubsub } from '../pubsub.js';
 
 const logger = createSubsystemLogger('channel-resolver');
 
@@ -21,6 +23,12 @@ export function setChannelRegistry(r: PluginRegistry): void {
 
 export function setChannelDataRoot(root: string): void {
   dataRoot = root;
+}
+
+let oauthDir: string | undefined;
+
+export function setChannelOAuthDir(dir: string): void {
+  oauthDir = dir;
 }
 
 const ALL_NOTIFICATION_TYPES = ['snap.ready', 'insight.ready', 'action.created', 'approval.requested'];
@@ -75,6 +83,21 @@ const CHANNEL_DEFS: ChannelDef[] = [
         return data.ok ? { valid: true } : { valid: false, error: data.error ?? 'Invalid token' };
       } catch (err) {
         return { valid: false, error: err instanceof Error ? err.message : 'Connection failed' };
+      }
+    },
+  },
+  {
+    id: 'whatsapp',
+    name: 'WhatsApp',
+    description: 'Direct-to-phone alerts via WhatsApp',
+    requiredCredentials: [],
+    validate: async () => {
+      if (!oauthDir) return { valid: false, error: 'OAuth directory not configured' };
+      try {
+        await access(join(oauthDir, 'whatsapp', 'creds.json'));
+        return { valid: true };
+      } catch {
+        return { valid: false, error: 'Not paired — scan QR code to connect' };
       }
     },
   },
@@ -159,7 +182,14 @@ export async function listChannelsQuery(): Promise<
   return Promise.all(
     CHANNEL_DEFS.map(async (def) => {
       let status = 'NOT_CONNECTED';
-      if (def.requiredCredentials.length === 0) {
+      if (def.id === 'whatsapp') {
+        if (oauthDir) {
+          const connected = await access(join(oauthDir, 'whatsapp', 'creds.json'))
+            .then(() => true)
+            .catch(() => false);
+          if (connected) status = 'CONNECTED';
+        }
+      } else if (def.requiredCredentials.length === 0) {
         status = 'CONNECTED';
       } else if (vault) {
         const v = vault;
@@ -216,6 +246,15 @@ export async function disconnectChannelMutation(_parent: unknown, args: { id: st
   const def = findChannel(args.id);
   if (!def) return { success: false, error: `Unknown channel: ${args.id}` };
   if (def.id === 'web') return { success: false, error: 'Cannot disconnect the web channel' };
+
+  if (def.id === 'whatsapp') {
+    await cleanupPairingSession();
+    await stopChannel('whatsapp');
+    if (oauthDir) {
+      await rm(join(oauthDir, 'whatsapp'), { recursive: true, force: true });
+    }
+    return { success: true };
+  }
 
   await stopChannel(args.id);
 
@@ -286,6 +325,109 @@ export async function notificationPreferencesQuery(): Promise<{ channelId: strin
 
   return results;
 }
+
+let activePairingSession: import('../../../../channels/whatsapp/src/session.js').WhatsAppSession | undefined;
+const PAIRING_TIMEOUT_MS = 120_000;
+let pairingTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function cleanupPairingSession(): Promise<void> {
+  if (pairingTimer) {
+    clearTimeout(pairingTimer);
+    pairingTimer = undefined;
+  }
+  if (activePairingSession) {
+    const session = activePairingSession;
+    activePairingSession = undefined;
+    try {
+      await session.disconnect();
+    } catch (err) {
+      logger.error('Failed to cleanup pairing session', { error: err });
+    }
+  }
+}
+
+export async function initiateChannelPairingMutation(
+  _parent: unknown,
+  args: { id: string },
+): Promise<{ success: boolean; error?: string; qrData?: string }> {
+  if (args.id !== 'whatsapp') {
+    return { success: false, error: `Channel ${args.id} does not support QR pairing` };
+  }
+
+  if (!oauthDir) return { success: false, error: 'OAuth directory not configured' };
+
+  await cleanupPairingSession();
+
+  const authDir = join(oauthDir, 'whatsapp');
+
+  try {
+    const session = createWhatsAppSession({
+      authDir,
+      onQr: (qrData) => {
+        pubsub.publish(`channelPairing:${args.id}`, {
+          status: 'WAITING_FOR_SCAN',
+          qrData,
+        });
+      },
+      onConnected: () => {
+        pubsub.publish(`channelPairing:${args.id}`, { status: 'CONNECTED' });
+        cleanupPairingSession().then(() => {
+          startChannel('whatsapp').catch((err) => {
+            logger.error('Failed to start WhatsApp after pairing', { error: err });
+          });
+        });
+      },
+      onDisconnected: (reason) => {
+        pubsub.publish(`channelPairing:${args.id}`, { status: 'FAILED', error: reason });
+        cleanupPairingSession().catch(() => {});
+      },
+      onLoggedOut: () => {
+        pubsub.publish(`channelPairing:${args.id}`, { status: 'FAILED', error: 'Logged out' });
+        cleanupPairingSession().catch(() => {});
+      },
+    });
+
+    activePairingSession = session;
+
+    pairingTimer = setTimeout(() => {
+      if (activePairingSession === session) {
+        logger.warn('Pairing timed out after 2 minutes');
+        pubsub.publish(`channelPairing:${args.id}`, { status: 'EXPIRED', error: 'Pairing timed out' });
+        cleanupPairingSession().catch(() => {});
+      }
+    }, PAIRING_TIMEOUT_MS);
+
+    await session.connect();
+    return { success: true };
+  } catch (e) {
+    logger.error('Failed to initiate WhatsApp pairing', { error: e });
+    await cleanupPairingSession();
+    return { success: false, error: 'Failed to initiate pairing — check server logs' };
+  }
+}
+
+export async function cancelChannelPairingMutation(
+  _parent: unknown,
+  args: { id: string },
+): Promise<{ success: boolean }> {
+  if (args.id !== 'whatsapp') {
+    return { success: false };
+  }
+  await cleanupPairingSession();
+  return { success: true };
+}
+
+const QR_PAIRING_CHANNELS = new Set(['whatsapp']);
+
+export const onChannelPairingSubscription = {
+  subscribe: (_parent: unknown, args: { id: string }) => {
+    if (!QR_PAIRING_CHANNELS.has(args.id)) {
+      throw new Error(`Channel ${args.id} does not support QR pairing`);
+    }
+    return pubsub.subscribe(`channelPairing:${args.id}`);
+  },
+  resolve: (payload: unknown) => payload,
+};
 
 export async function saveNotificationPreferencesMutation(
   _parent: unknown,

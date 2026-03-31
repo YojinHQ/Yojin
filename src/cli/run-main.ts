@@ -4,11 +4,13 @@
 
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { join } from 'node:path';
 
 import { startChat } from './chat.js';
 import { setupToken } from './setup-token.js';
 import { createSlackPlugin } from '../../channels/slack/index.js';
 import { createTelegramPlugin } from '../../channels/telegram/index.js';
+import { createWhatsAppPlugin } from '../../channels/whatsapp/index.js';
 import { LocalRuntimeBridge } from '../acp/runtime-bridge.js';
 import { startAcpServer } from '../acp/server.js';
 import { AcpSessionStore } from '../acp/session-store.js';
@@ -295,6 +297,11 @@ async function startGateway(): Promise<void> {
 
   const slackPlugin = createSlackPlugin(channelDeps);
   const telegramPlugin = createTelegramPlugin({ vault: services.vault, ...channelDeps });
+  const whatsAppPlugin = createWhatsAppPlugin({
+    oauthDir: join(dataRoot, 'oauth'),
+    piiRedactor: services.piiRedactor,
+    ...channelDeps,
+  });
 
   // Daily insights scheduler — reads digestSchedule from alerts.json
   const scheduler = new Scheduler({
@@ -336,7 +343,7 @@ async function startGateway(): Promise<void> {
     snapshotStore: services.snapshotStore,
     connectionManager: services.connectionManager,
     sessionStore,
-    extraPlugins: [slackPlugin, telegramPlugin],
+    extraPlugins: [slackPlugin, telegramPlugin, whatsAppPlugin],
   });
 
   // Graceful shutdown

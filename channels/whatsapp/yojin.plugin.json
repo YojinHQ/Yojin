@@ -1,0 +1,7 @@
+{
+  "id": "whatsapp",
+  "name": "WhatsApp",
+  "kind": "channel",
+  "description": "WhatsApp messaging channel via Baileys (WhatsApp Web protocol)",
+  "version": "0.1.0"
+}

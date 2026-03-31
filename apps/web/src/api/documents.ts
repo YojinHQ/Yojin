@@ -416,6 +416,34 @@ export const SAVE_NOTIFICATION_PREFERENCES_MUTATION = gql`
   }
 `;
 
+export const INITIATE_CHANNEL_PAIRING_MUTATION = gql`
+  mutation InitiateChannelPairing($id: ID!) {
+    initiateChannelPairing(id: $id) {
+      success
+      error
+      qrData
+    }
+  }
+`;
+
+export const CANCEL_CHANNEL_PAIRING_MUTATION = gql`
+  mutation CancelChannelPairing($id: ID!) {
+    cancelChannelPairing(id: $id) {
+      success
+    }
+  }
+`;
+
+export const ON_CHANNEL_PAIRING_SUBSCRIPTION = gql`
+  subscription OnChannelPairing($id: ID!) {
+    onChannelPairing(id: $id) {
+      status
+      qrData
+      error
+    }
+  }
+`;
+
 export const AI_CONFIG_QUERY = gql`
   query AiConfig {
     aiConfig {

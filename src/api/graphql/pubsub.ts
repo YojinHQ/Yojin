@@ -18,6 +18,7 @@ export type PubSubEvents = {
   workflowProgress: [WorkflowProgressEvent];
   [key: `chat:${string}`]: [ChatEvent];
   [key: `connectionStatus:${string}`]: [ConnectionEvent];
+  [key: `channelPairing:${string}`]: [{ status: string; qrData?: string; error?: string }];
 };
 
 export const pubsub = createPubSub<PubSubEvents>();

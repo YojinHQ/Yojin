@@ -8,6 +8,7 @@
 
 import { existsSync } from 'node:fs';
 import { copyFile, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import { JintelClient } from '@yojinhq/jintel-client';
 import { z } from 'zod';
@@ -17,7 +18,7 @@ import { createDefaultProfiles } from './agents/defaults.js';
 import { AgentRegistry } from './agents/registry.js';
 import { pubsub } from './api/graphql/pubsub.js';
 import { setActionStore } from './api/graphql/resolvers/actions.js';
-import { setChannelDataRoot, setChannelVault } from './api/graphql/resolvers/channels.js';
+import { setChannelDataRoot, setChannelOAuthDir, setChannelVault } from './api/graphql/resolvers/channels.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
 import {
   setCuratedAssessmentStore,
@@ -290,6 +291,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
 
   // 4a. Channel notification preferences (no vault dependency)
   setChannelDataRoot(dataRoot);
+  setChannelOAuthDir(join(dataRoot, 'oauth'));
 
   // 4b. Portfolio snapshot store (created early — ConnectionManager needs it)
   const snapshotStore = new PortfolioSnapshotStore(dataRoot);

@@ -46,15 +46,20 @@ export const DATA_SUBDIRS = [
   'snap',
   'profiles', // Per-ticker persistent knowledge profiles
   'data', // General-purpose data storage for data source outputs and imports
+  'oauth', // OAuth / pairing state (e.g. WhatsApp Baileys auth)
+  'oauth/whatsapp',
 ] as const;
 
 /**
  * Subdirectories that are wiped by "Clear App Data".
  * Preserved: config, audit (append-only security log), logs (active logger),
- * identity (device keypair — changing it breaks signed payloads).
+ * identity (device keypair — changing it breaks signed payloads),
+ * oauth (channel auth state — WhatsApp Signal Protocol keys are device-linked credentials).
  */
-const PRESERVED_SUBDIRS = new Set(['config', 'audit', 'logs', 'identity']);
-export const CLEARABLE_SUBDIRS = DATA_SUBDIRS.filter((d) => !PRESERVED_SUBDIRS.has(d));
+const PRESERVED_SUBDIRS = new Set(['config', 'audit', 'logs', 'identity', 'oauth']);
+export const CLEARABLE_SUBDIRS = DATA_SUBDIRS.filter(
+  (d) => !PRESERVED_SUBDIRS.has(d) && ![...PRESERVED_SUBDIRS].some((p) => d.startsWith(p + '/')),
+);
 
 /**
  * Resolve the runtime data root directory.

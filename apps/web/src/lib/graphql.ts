@@ -56,6 +56,8 @@ const cache = cacheExchange({
     Channel: (data) => data.id as string,
     NotificationPreferences: (data) => data.channelId as string,
     ChannelResult: () => null, // embedded — mutation result, no stable identity
+    PairingResult: () => null,
+    PairingEvent: () => null,
     SessionSummary: (data) => data.id as string,
     SessionDetail: (data) => data.id as string,
   },
@@ -108,6 +110,9 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'curatedSignals');
       },
       connectChannel(_result, _args, cache) {
+        cache.invalidate('Query', 'listChannels');
+      },
+      initiateChannelPairing(_result, _args, cache) {
         cache.invalidate('Query', 'listChannels');
       },
       disconnectChannel(_result, _args, cache) {

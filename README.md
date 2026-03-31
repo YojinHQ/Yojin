@@ -29,7 +29,7 @@ A **deterministic security layer** — vault, guard pipeline, PII redactor, and 
 |------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Analyst**      | Ingests signals from Jintel, runs technical analysis (SMA, RSI, BBANDS), extracts tickers from news. Maintains a self-evolving working memory — past analyses, recommendations, and their actual outcomes are stored and retrieved via BM25 to inform every future decision. |
 | **Strategist**   | Owns the Brain (persona, working memory, emotions). Runs bull/bear debate analysis. Defines strategy — asset allocation, rebalancing rules, entry/exit logic tailored to your goals.                                                                                         |
-| **Risk Manager** | Analyzes exposure, concentration, correlation, drawdown. Monitors markets 24/7. Delivers alerts via Telegram and daily portfolio digests.                                                                                                                                    |
+| **Risk Manager** | Analyzes exposure, concentration, correlation, drawdown. Monitors markets 24/7. Delivers alerts via Telegram, WhatsApp, and daily portfolio digests.                                                                                                                         |
 | **Trader**       | Executes trades on target platforms (Robinhood, Coinbase, IBKR, Schwab, Binance, and more).                                                                                                                                                                                  |
 
 ```text
@@ -40,6 +40,7 @@ A **deterministic security layer** — vault, guard pipeline, PII redactor, and 
 │  │  Robinhood    │   │  AgentRuntime   │   │   Channels    │           │
 │  │  Coinbase     │──▶│  Orchestrator   │──▶│  Web / MCP    │           │
 │  │  IBKR/Schwab  │   │  (staged)      │   │  ACP / Slack  │           │
+│  │               │   │               │   │  TG / WA      │           │
 │  │  Binance/...  │   └───────┬────────┘   └───────────────┘           │
 │  └───────────────┘           │                                          │
 │                              ▼                                          │
@@ -99,12 +100,12 @@ After an evaluation window closes (configurable: 1d, 7d, 30d), the reflection en
 
 Each agent role maintains an independent store:
 
-| Role             | Memory Contains                   |
-|------------------|-----------------------------------|
-| Bull             | Past bullish arguments + outcomes |
-| Bear             | Past bearish arguments + outcomes |
-| Research         | Past judge decisions + outcomes   |
-| Risk             | Past risk assessments + outcomes  |
+| Role     | Memory Contains                   |
+|----------|-----------------------------------|
+| Bull     | Past bullish arguments + outcomes |
+| Bear     | Past bearish arguments + outcomes |
+| Research | Past judge decisions + outcomes   |
+| Risk     | Past risk assessments + outcomes  |
 
 Fully offline — BM25 only, no vector database. Configurable capacity (default 1,000 entries per role) with pruning when exceeded. Persisted as local JSON in `data/memory/`.
 
@@ -291,7 +292,7 @@ Raw Snapshot                    Redacted Snapshot
 
 **The agent can think. It cannot act without you.**
 
-Approval requests are routed to the user's active channel (Web, Telegram, MCP) and carry a configurable timeout — unanswered requests auto-deny.
+Approval requests are routed to the user's active channel (Web, Telegram, WhatsApp, MCP) and carry a configurable timeout — unanswered requests auto-deny.
 
 Agents have read access to observe and analyze. They have no write access until you explicitly approve an action. Irreversible operations — executing a trade, adding a new connection — require a confirmation step through your active channel.
 
@@ -340,11 +341,11 @@ Run Yojin in Docker — one command gives you the web UI, API, and channel integ
 
 The setup script prompts for your API keys, builds the image, and starts everything. Once running:
 
-| Service | URL |
-|---------|-----|
-| Web UI | `http://localhost:8080` |
-| API | `http://localhost:3000` |
-| Health | `http://localhost:3000/health` |
+| Service | URL                            |
+|---------|--------------------------------|
+| Web UI  | `http://localhost:8080`        |
+| API     | `http://localhost:3000`        |
+| Health  | `http://localhost:3000/health` |
 
 Or run manually:
 
@@ -400,7 +401,7 @@ yojin/
 ├── apps/
 │   └── web/            # React 19 + Vite 8 + Tailwind CSS 4 dashboard
 ├── providers/          # LLM provider plugins (anthropic/)
-├── channels/           # Messaging channels (slack/, web/)
+├── channels/           # Messaging channels (slack/, telegram/, whatsapp/, web/)
 ├── data/               # Runtime state — JSONL, configs, snapshots (gitignored)
 └── test/               # Test suites (vitest)
 ```
@@ -413,6 +414,7 @@ yojin/
 | MCP / ACP | Working (Claude Desktop / Cursor) |
 | Slack     | Working (@slack/bolt)             |
 | Telegram  | Working (grammy)                  |
+| WhatsApp  | Working (Baileys)                 |
 
 ## Tech Stack
 
