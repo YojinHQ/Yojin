@@ -26,7 +26,6 @@ interface AccountSummary {
   platform: string;
   name: string;
   totalValue: number;
-  change: number;
   positionCount: number;
 }
 
@@ -42,12 +41,11 @@ export default function ConnectedAccountsCard() {
     const positions = portfolioData?.portfolio?.positions ?? [];
     if (positions.length === 0) return [];
 
-    const grouped: Record<string, { totalValue: number; change: number; count: number }> = {};
+    const grouped: Record<string, { totalValue: number; count: number }> = {};
     for (const pos of positions) {
       const key = pos.platform;
-      if (!grouped[key]) grouped[key] = { totalValue: 0, change: 0, count: 0 };
+      if (!grouped[key]) grouped[key] = { totalValue: 0, count: 0 };
       grouped[key].totalValue += pos.marketValue;
-      grouped[key].change += pos.dayChange ?? 0;
       grouped[key].count += 1;
     }
 
@@ -56,7 +54,6 @@ export default function ConnectedAccountsCard() {
         platform,
         name: PLATFORM_DISPLAY[platform] ?? platform,
         totalValue: agg.totalValue,
-        change: agg.change,
         positionCount: agg.count,
       }))
       .sort((a, b) => b.totalValue - a.totalValue);
@@ -124,34 +121,28 @@ export default function ConnectedAccountsCard() {
     <DashboardCard title="Connected Accounts" headerAction={addButton}>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-1">
         <div className="grid grid-cols-2 gap-2">
-          {accounts.map((account) => {
-            const isPositive = account.change >= 0;
-            return (
-              <div
-                key={account.platform}
-                className="flex items-center gap-2.5 rounded-lg border border-border-light bg-bg-secondary/50 px-3 py-2.5"
-              >
-                <PlatformLogo platform={account.platform} size="xs" className="flex-shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="truncate text-xs font-medium text-text-primary">{account.name}</span>
-                    <span className="flex-shrink-0 text-3xs text-text-muted">
-                      {account.positionCount} {account.positionCount === 1 ? 'position' : 'positions'}
-                    </span>
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    <span className="text-xs font-semibold tabular-nums text-text-primary">
-                      {formatCurrency(account.totalValue)}
-                    </span>
-                    <span className={`text-3xs tabular-nums ${isPositive ? 'text-success' : 'text-error'}`}>
-                      {isPositive ? '+' : ''}
-                      {formatCurrency(account.change)}
-                    </span>
-                  </div>
+          {accounts.map((account) => (
+            <div
+              key={account.platform}
+              className="flex items-center gap-2 rounded-md border border-border-light bg-bg-secondary/50 px-2 py-1.5"
+            >
+              <PlatformLogo platform={account.platform} size="xs" className="flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="truncate text-2xs font-medium text-text-primary">{account.name}</span>
+                  <span
+                    className="flex-shrink-0 rounded-full bg-bg-tertiary px-1.5 py-px text-3xs font-medium tabular-nums text-text-muted"
+                    aria-label={`${account.positionCount} ${account.positionCount === 1 ? 'position' : 'positions'}`}
+                  >
+                    {account.positionCount}
+                  </span>
                 </div>
+                <span className="text-2xs font-semibold tabular-nums text-text-primary">
+                  {formatCurrency(account.totalValue)}
+                </span>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -161,8 +152,8 @@ export default function ConnectedAccountsCard() {
 }
 
 const MOCK_ACCOUNTS = [
-  { platform: 'INTERACTIVE_BROKERS', name: 'IBKR', positions: 12, value: '$85,200', change: '+$432', up: true },
-  { platform: 'COINBASE', name: 'Coinbase', positions: 5, value: '$42,250', change: '-$127', up: false },
+  { platform: 'INTERACTIVE_BROKERS', name: 'IBKR', positions: 12, value: '$85,200' },
+  { platform: 'COINBASE', name: 'Coinbase', positions: 5, value: '$42,250' },
 ];
 
 function MockConnectedAccounts() {
@@ -172,18 +163,20 @@ function MockConnectedAccounts() {
         {MOCK_ACCOUNTS.map((a) => (
           <div
             key={a.platform}
-            className="flex items-center gap-2.5 rounded-lg border border-border-light bg-bg-secondary/50 px-3 py-2.5"
+            className="flex items-center gap-2 rounded-md border border-border-light bg-bg-secondary/50 px-2 py-1.5"
           >
             <PlatformLogo platform={a.platform} size="xs" className="flex-shrink-0" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-1">
-                <span className="truncate text-xs font-medium text-text-primary">{a.name}</span>
-                <span className="flex-shrink-0 text-3xs text-text-muted">{a.positions} positions</span>
+                <span className="truncate text-2xs font-medium text-text-primary">{a.name}</span>
+                <span
+                  className="flex-shrink-0 rounded-full bg-bg-tertiary px-1.5 py-px text-3xs font-medium tabular-nums text-text-muted"
+                  aria-label={`${a.positions} positions`}
+                >
+                  {a.positions}
+                </span>
               </div>
-              <div className="mt-0.5 flex items-center gap-1.5">
-                <span className="text-xs font-semibold tabular-nums text-text-primary">{a.value}</span>
-                <span className={`text-3xs tabular-nums ${a.up ? 'text-success' : 'text-error'}`}>{a.change}</span>
-              </div>
+              <span className="text-2xs font-semibold tabular-nums text-text-primary">{a.value}</span>
             </div>
           </div>
         ))}
