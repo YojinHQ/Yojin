@@ -114,6 +114,10 @@ export const typeDefs = /* GraphQL */ `
     timestamp: String!
     platform: String
     """
+    Warnings from live quote enrichment (e.g. rate limit exceeded).
+    """
+    warnings: [String!]!
+    """
     Nested: historical portfolio values (delegates to PortfolioSnapshotStore).
     Optional days param limits the lookback window (e.g. 7, 30, 90).
     """

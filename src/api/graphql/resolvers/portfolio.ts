@@ -106,11 +106,20 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
   ]);
 
   if (!result?.success) {
+    const errorMsg = result && 'error' in result ? (result as { error: string }).error : 'no result';
     log.warn('Jintel quotes returned non-success', {
       success: result?.success,
-      error: result && 'error' in result ? (result as { error: string }).error : 'no result',
+      error: errorMsg,
     });
-    return snapshot;
+
+    const warnings: string[] = [];
+    if (typeof errorMsg === 'string' && /request limit/i.test(errorMsg)) {
+      warnings.push(
+        'Jintel API daily request limit exceeded. Upgrade your plan at https://api.jintel.ai/billing for higher limits.',
+      );
+    }
+
+    return { ...snapshot, warnings };
   }
 
   const validQuotes = result.data.filter((q): q is MarketQuote => q != null);
@@ -475,6 +484,9 @@ export async function refreshPositionsMutation(
 // ---------------------------------------------------------------------------
 
 export const portfolioSnapshotFieldResolvers = {
+  /** Warnings from live quote enrichment; empty array when no issues. */
+  warnings: (parent: PortfolioSnapshot): string[] => parent.warnings ?? [],
+
   /** Nested: historical portfolio values (deduplicated by day, latest live-priced). */
   history: (_parent: PortfolioSnapshot, args: { days?: number | null }): Promise<PortfolioHistoryPoint[]> =>
     portfolioHistoryQuery(args.days),

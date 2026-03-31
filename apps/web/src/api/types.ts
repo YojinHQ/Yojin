@@ -158,6 +158,7 @@ export interface PortfolioSnapshot {
   totalPnlPercent: number;
   timestamp: string;
   platform: Platform | null;
+  warnings: string[];
   history: PortfolioHistoryPoint[];
   sectorExposure: SectorWeight[];
 }

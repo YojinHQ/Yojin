@@ -69,6 +69,7 @@ export const PORTFOLIO_QUERY = gql`
       totalPnlPercent
       timestamp
       platform
+      warnings
       history(days: $historyDays) {
         timestamp
         totalValue
@@ -507,6 +508,7 @@ export const REFRESH_POSITIONS_MUTATION = gql`
       totalPnlPercent
       timestamp
       platform
+      warnings
     }
   }
   ${POSITION_FIELDS}
@@ -543,6 +545,7 @@ export const ADD_MANUAL_POSITION_MUTATION = gql`
       totalPnlPercent
       timestamp
       platform
+      warnings
     }
   }
   ${POSITION_FIELDS}
@@ -561,6 +564,7 @@ export const EDIT_POSITION_MUTATION = gql`
       totalPnlPercent
       timestamp
       platform
+      warnings
     }
   }
   ${POSITION_FIELDS}
@@ -579,6 +583,7 @@ export const REMOVE_POSITION_MUTATION = gql`
       totalPnlPercent
       timestamp
       platform
+      warnings
     }
   }
   ${POSITION_FIELDS}
@@ -1183,6 +1188,7 @@ export const ON_PORTFOLIO_UPDATE_SUBSCRIPTION = gql`
       totalPnlPercent
       timestamp
       platform
+      warnings
     }
   }
   ${POSITION_FIELDS}

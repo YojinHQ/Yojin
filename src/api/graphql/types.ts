@@ -79,6 +79,7 @@ export interface PortfolioSnapshot {
   totalPnlPercent: number;
   timestamp: string;
   platform: Platform | null;
+  warnings?: string[];
 }
 
 export interface PortfolioHistoryPoint {
