@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery } from 'urql';
 
@@ -16,7 +16,6 @@ import { cn } from '../../lib/utils';
 import { useAddPositionModal } from '../../lib/add-position-modal-context';
 import { SignalChips } from './signal-chips';
 
-const POLL_INTERVAL_MS = 30_000;
 const UPDATED_GLOW_MS = 3_000;
 
 function stripPrefix(text: string): string {
@@ -25,32 +24,30 @@ function stripPrefix(text: string): string {
 
 export default function YojinSnapCard({ hasPositions = false }: { hasPositions?: boolean }) {
   const { aiConfigured, jintelConfigured } = useFeatureStatus();
-  const [result, reexecute] = useQuery<SnapQueryResult>({ query: SNAP_QUERY, requestPolicy: 'network-only' });
+  // Use cache-and-network so IntelSummaryCard's poll updates this component via cache (no duplicate requests)
+  const [result] = useQuery<SnapQueryResult>({ query: SNAP_QUERY, requestPolicy: 'cache-and-network' });
   const [insightResult] = useQuery<LatestInsightReportQueryResult>({ query: LATEST_INSIGHT_REPORT_QUERY });
   const { openModal } = useAddPositionModal();
   const navigate = useNavigate();
   const snap = result.data?.snap;
   const report = insightResult.data?.latestInsightReport;
 
-  // Poll for snap updates
-  useEffect(() => {
-    const id = setInterval(() => reexecute({ requestPolicy: 'network-only' }), POLL_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [reexecute]);
-
   // Detect snap regeneration — pulse when generatedAt changes
-  const [prevGeneratedAt, setPrevGeneratedAt] = useState<string | null>(null);
   const [justUpdated, setJustUpdated] = useState(false);
-  const currentGeneratedAt = snap?.generatedAt ?? null;
-  if (currentGeneratedAt !== null && currentGeneratedAt !== prevGeneratedAt) {
-    if (prevGeneratedAt !== null) setJustUpdated(true);
-    setPrevGeneratedAt(currentGeneratedAt);
-  }
+  const prevGeneratedAtRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!justUpdated) return;
-    const timer = setTimeout(() => setJustUpdated(false), UPDATED_GLOW_MS);
-    return () => clearTimeout(timer);
-  }, [justUpdated]);
+    const generatedAt = snap?.generatedAt ?? null;
+    if (generatedAt === null) return;
+    const isUpdate = prevGeneratedAtRef.current !== null && prevGeneratedAtRef.current !== generatedAt;
+    prevGeneratedAtRef.current = generatedAt;
+    if (!isUpdate) return;
+    const start = setTimeout(() => setJustUpdated(true), 0);
+    const end = setTimeout(() => setJustUpdated(false), UPDATED_GLOW_MS);
+    return () => {
+      clearTimeout(start);
+      clearTimeout(end);
+    };
+  }, [snap?.generatedAt]);
 
   const signalMap = useMemo(() => {
     const map = new Map<string, { title: string; url: string | null; sourceCount?: number }>();

@@ -129,13 +129,16 @@ export async function snapFromMicro(
       return null;
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as { intelSummary: string; actionItems: string[] };
+    const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+    const actionItems = Array.isArray(parsed.actionItems)
+      ? (parsed.actionItems as unknown[]).filter((x): x is string => typeof x === 'string')
+      : [];
 
     return {
       id: `snap-${randomUUID().slice(0, 8)}`,
       generatedAt: new Date().toISOString(),
-      intelSummary: parsed.intelSummary ?? '',
-      actionItems: (parsed.actionItems ?? []).map((text) => ({ text, signalIds: [] })),
+      intelSummary: typeof parsed.intelSummary === 'string' ? parsed.intelSummary : '',
+      actionItems: actionItems.map((text) => ({ text, signalIds: [] })),
       assetSnaps,
     };
   } catch (err) {

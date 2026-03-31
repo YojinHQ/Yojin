@@ -548,6 +548,7 @@ function IntelFeedContent() {
   const [, dismissSignal] = useMutation(DISMISS_SIGNAL_MUTATION);
   const [newItemIds, setNewItemIds] = useState<Set<string>>(new Set());
   const knownIdsRef = useRef<Set<string>>(new Set());
+  const glowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [{ data, fetching, error }, reexecute] = useQuery<IntelFeedQueryResult, IntelFeedQueryVariables>({
     query: INTEL_FEED_QUERY,
@@ -575,8 +576,9 @@ function IntelFeedContent() {
     knownIdsRef.current = new Set(currentIds);
     setNewItemIds(new Set(fresh));
 
-    // Clear glow after animation
-    setTimeout(() => setNewItemIds(new Set()), NEW_ITEM_GLOW_MS);
+    // Clear glow after animation — cancel previous timer to avoid race condition
+    if (glowTimerRef.current) clearTimeout(glowTimerRef.current);
+    glowTimerRef.current = setTimeout(() => setNewItemIds(new Set()), NEW_ITEM_GLOW_MS);
   }, []);
 
   // Map API data into IntelFeedItem[]

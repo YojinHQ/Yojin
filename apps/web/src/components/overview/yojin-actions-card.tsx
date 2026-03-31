@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery } from 'urql';
 
@@ -39,18 +39,21 @@ export default function YojinActionsCard() {
   }, [reexecute]);
 
   // Detect when report regenerates — pulse the card
-  const [prevCreatedAt, setPrevCreatedAt] = useState<string | null>(null);
   const [justUpdated, setJustUpdated] = useState(false);
-  const currentCreatedAt = report?.createdAt ?? null;
-  if (currentCreatedAt !== null && currentCreatedAt !== prevCreatedAt) {
-    if (prevCreatedAt !== null) setJustUpdated(true);
-    setPrevCreatedAt(currentCreatedAt);
-  }
+  const prevCreatedAtRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!justUpdated) return;
-    const timer = setTimeout(() => setJustUpdated(false), UPDATED_GLOW_MS);
-    return () => clearTimeout(timer);
-  }, [justUpdated]);
+    const createdAt = report?.createdAt ?? null;
+    if (createdAt === null) return;
+    const isUpdate = prevCreatedAtRef.current !== null && prevCreatedAtRef.current !== createdAt;
+    prevCreatedAtRef.current = createdAt;
+    if (!isUpdate) return;
+    const start = setTimeout(() => setJustUpdated(true), 0);
+    const end = setTimeout(() => setJustUpdated(false), UPDATED_GLOW_MS);
+    return () => {
+      clearTimeout(start);
+      clearTimeout(end);
+    };
+  }, [report?.createdAt]);
 
   // Build signalId → { title, url, sourceCount } lookup from all position keySignals
   const signalMap = useMemo(() => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from 'urql';
 
 import { SNAP_QUERY } from '../../api/documents';
@@ -19,7 +19,8 @@ const UPDATED_GLOW_MS = 3_000;
 
 export default function IntelSummaryCard() {
   const { aiConfigured, jintelConfigured } = useFeatureStatus();
-  const [result, reexecute] = useQuery<SnapQueryResult>({ query: SNAP_QUERY, requestPolicy: 'network-only' });
+  // cache-and-network: urql deduplicates with YojinSnapCard which reads the same query from cache
+  const [result, reexecute] = useQuery<SnapQueryResult>({ query: SNAP_QUERY, requestPolicy: 'cache-and-network' });
   const [portfolioResult] = usePortfolio();
   const { openModal } = useAddPositionModal();
   const snap = result.data?.snap;
@@ -32,18 +33,21 @@ export default function IntelSummaryCard() {
   }, [reexecute]);
 
   // Detect snap regeneration — pulse when generatedAt changes
-  const [prevGeneratedAt, setPrevGeneratedAt] = useState<string | null>(null);
   const [justUpdated, setJustUpdated] = useState(false);
-  const currentGeneratedAt = snap?.generatedAt ?? null;
-  if (currentGeneratedAt !== null && currentGeneratedAt !== prevGeneratedAt) {
-    if (prevGeneratedAt !== null) setJustUpdated(true);
-    setPrevGeneratedAt(currentGeneratedAt);
-  }
+  const prevGeneratedAtRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!justUpdated) return;
-    const timer = setTimeout(() => setJustUpdated(false), UPDATED_GLOW_MS);
-    return () => clearTimeout(timer);
-  }, [justUpdated]);
+    const generatedAt = snap?.generatedAt ?? null;
+    if (generatedAt === null) return;
+    const isUpdate = prevGeneratedAtRef.current !== null && prevGeneratedAtRef.current !== generatedAt;
+    prevGeneratedAtRef.current = generatedAt;
+    if (!isUpdate) return;
+    const start = setTimeout(() => setJustUpdated(true), 0);
+    const end = setTimeout(() => setJustUpdated(false), UPDATED_GLOW_MS);
+    return () => {
+      clearTimeout(start);
+      clearTimeout(end);
+    };
+  }, [snap?.generatedAt]);
 
   if (!jintelConfigured) {
     return (

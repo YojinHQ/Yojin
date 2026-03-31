@@ -93,6 +93,7 @@ export default function PositionsPreview() {
   // Detect new positions and trigger glow animation
   const [newPositionKeys, setNewPositionKeys] = useState<Set<string>>(new Set());
   const knownKeysRef = useRef<Set<string>>(new Set());
+  const glowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const detectNewPositions = useCallback((currentKeys: string[]) => {
     if (knownKeysRef.current.size === 0) {
       knownKeysRef.current = new Set(currentKeys);
@@ -102,7 +103,8 @@ export default function PositionsPreview() {
     if (fresh.length === 0) return;
     knownKeysRef.current = new Set(currentKeys);
     setNewPositionKeys(new Set(fresh));
-    setTimeout(() => setNewPositionKeys(new Set()), 3_000);
+    if (glowTimerRef.current) clearTimeout(glowTimerRef.current);
+    glowTimerRef.current = setTimeout(() => setNewPositionKeys(new Set()), 3_000);
   }, []);
 
   useEffect(() => {
