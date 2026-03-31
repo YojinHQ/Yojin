@@ -334,8 +334,12 @@ export async function portfolioHistoryQuery(days?: number | null): Promise<Portf
   if (final.length > 0) {
     const latest = final[final.length - 1];
     const liveSnapshot = await enrichWithLiveQuotes(latest);
-    const prevValue = latest.totalValue;
-    const liveDailyPnl = liveSnapshot.totalValue - prevValue;
+    // Use previous day's snapshot as baseline (consistent with historical bars).
+    // If only one day exists, fall back to today's stored snapshot.
+    const prevSnap = final.length >= 2 ? final[final.length - 2] : null;
+    const prevValue = prevSnap ? prevSnap.totalValue : latest.totalValue;
+    const liveCostChange = prevSnap ? liveSnapshot.totalCost - prevSnap.totalCost : 0;
+    const liveDailyPnl = liveSnapshot.totalValue - prevValue - liveCostChange;
     const livePoint: PortfolioHistoryPoint = {
       timestamp: new Date().toISOString(),
       totalValue: liveSnapshot.totalValue,
