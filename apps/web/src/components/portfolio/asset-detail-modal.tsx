@@ -357,12 +357,12 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
           </div>
         }
       >
-        {priceHistory.length > 0 ? (
-          <PriceChart data={priceHistory} />
-        ) : historyResult.fetching ? (
+        {historyResult.fetching && priceHistory.length === 0 ? (
           <div className="flex items-center justify-center py-16">
             <Spinner size="sm" label="Loading price history..." />
           </div>
+        ) : priceHistory.length > 0 ? (
+          <PriceChart data={priceHistory} />
         ) : (
           <p className="text-sm text-text-muted py-8 text-center">No price history available</p>
         )}

@@ -48,7 +48,7 @@ describe('portfolioHistoryQuery — period returns', () => {
     setPortfolioJintelClient(undefined);
   });
 
-  it('computes periodPnl as delta from first snapshot in window', async () => {
+  it('computes periodPnl as daily change excluding deposits', async () => {
     const snapshots = [
       makeSnapshotAt('2026-03-25', 1000, 900),
       makeSnapshotAt('2026-03-26', 1050, 900),
@@ -58,10 +58,12 @@ describe('portfolioHistoryQuery — period returns', () => {
     const history = await portfolioHistoryQuery(7);
     expect(history[0].periodPnl).toBe(0);
     expect(history[0].periodPnlPercent).toBe(0);
+    // Day-over-day: 1050 - 1000 = +50
     expect(history[1].periodPnl).toBe(50);
     expect(history[1].periodPnlPercent).toBeCloseTo(5, 2);
-    expect(history[2].periodPnl).toBe(-20);
-    expect(history[2].periodPnlPercent).toBeCloseTo(-2, 2);
+    // Day-over-day: 980 - 1050 = -70
+    expect(history[2].periodPnl).toBe(-70);
+    expect(history[2].periodPnlPercent).toBeCloseTo(-6.67, 1);
   });
 
   it('handles single-day history with zero period return', async () => {
@@ -79,7 +81,8 @@ describe('portfolioHistoryQuery — period returns', () => {
     const history = await portfolioHistoryQuery(7);
     expect(history[0].periodPnl).toBe(0);
     expect(history[0].periodPnlPercent).toBe(0);
-    expect(history[1].periodPnl).toBe(500);
-    expect(history[1].periodPnlPercent).toBe(0);
+    // Daily PnL = valueChange (500) - costChange (400) = 100 (pure market gain)
+    expect(history[1].periodPnl).toBe(100);
+    expect(history[1].periodPnlPercent).toBe(0); // prevValue was 0 → no percent
   });
 });

@@ -74,7 +74,11 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
       hasClient: !!jintelClient,
       positionCount: snapshot.positions.length,
     });
-    return { ...snapshot, totalDayChange: snapshot.totalDayChange ?? 0, totalDayChangePercent: snapshot.totalDayChangePercent ?? 0 };
+    return {
+      ...snapshot,
+      totalDayChange: snapshot.totalDayChange ?? 0,
+      totalDayChangePercent: snapshot.totalDayChangePercent ?? 0,
+    };
   }
 
   const client = jintelClient;
@@ -110,7 +114,11 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
       success: result?.success,
       error: result && 'error' in result ? (result as { error: string }).error : 'no result',
     });
-    return { ...snapshot, totalDayChange: snapshot.totalDayChange ?? 0, totalDayChangePercent: snapshot.totalDayChangePercent ?? 0 };
+    return {
+      ...snapshot,
+      totalDayChange: snapshot.totalDayChange ?? 0,
+      totalDayChangePercent: snapshot.totalDayChangePercent ?? 0,
+    };
   }
 
   const validQuotes = result.data.filter((q): q is MarketQuote => q != null);
@@ -281,30 +289,51 @@ export async function portfolioHistoryQuery(days?: number | null): Promise<Portf
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
   );
 
-  const baseValue = final[0].totalValue;
-  const history: PortfolioHistoryPoint[] = final.map((s) => ({
-    timestamp: s.timestamp,
-    totalValue: s.totalValue,
-    totalCost: s.totalCost,
-    totalPnl: s.totalPnl,
-    totalPnlPercent: s.totalPnlPercent,
-    periodPnl: s.totalValue - baseValue,
-    periodPnlPercent: baseValue > 0 ? ((s.totalValue - baseValue) / baseValue) * 100 : 0,
-  }));
+  const history: PortfolioHistoryPoint[] = final.map((s, i) => {
+    if (i === 0) {
+      return {
+        timestamp: s.timestamp,
+        totalValue: s.totalValue,
+        totalCost: s.totalCost,
+        totalPnl: s.totalPnl,
+        totalPnlPercent: s.totalPnlPercent,
+        periodPnl: 0,
+        periodPnlPercent: 0,
+      };
+    }
+    const prev = final[i - 1];
+    // Subtract cost-basis changes to exclude deposits/withdrawals from daily PnL.
+    // dailyPnl = (value change) - (cost change) = pure market movement.
+    const valueChange = s.totalValue - prev.totalValue;
+    const costChange = s.totalCost - prev.totalCost;
+    const dailyPnl = valueChange - costChange;
+    const prevMarketValue = prev.totalValue;
+    return {
+      timestamp: s.timestamp,
+      totalValue: s.totalValue,
+      totalCost: s.totalCost,
+      totalPnl: s.totalPnl,
+      totalPnlPercent: s.totalPnlPercent,
+      periodPnl: dailyPnl,
+      periodPnlPercent: prevMarketValue > 0 ? (dailyPnl / prevMarketValue) * 100 : 0,
+    };
+  });
 
   // Replace the trailing point with live-priced data so the chart's edge
   // matches the Portfolio Value card (which uses enrichWithLiveQuotes).
   if (final.length > 0) {
     const latest = final[final.length - 1];
     const liveSnapshot = await enrichWithLiveQuotes(latest);
+    const prevValue = latest.totalValue;
+    const liveDailyPnl = liveSnapshot.totalValue - prevValue;
     const livePoint: PortfolioHistoryPoint = {
       timestamp: new Date().toISOString(),
       totalValue: liveSnapshot.totalValue,
       totalCost: liveSnapshot.totalCost,
       totalPnl: liveSnapshot.totalPnl,
       totalPnlPercent: liveSnapshot.totalPnlPercent,
-      periodPnl: liveSnapshot.totalValue - baseValue,
-      periodPnlPercent: baseValue > 0 ? ((liveSnapshot.totalValue - baseValue) / baseValue) * 100 : 0,
+      periodPnl: liveDailyPnl,
+      periodPnlPercent: prevValue > 0 ? (liveDailyPnl / prevValue) * 100 : 0,
     };
     // Replace last entry if same day, otherwise append
     const liveDay = livePoint.timestamp.slice(0, 10);
