@@ -173,7 +173,20 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
   const totalPnl = totalValue - totalCost;
   const totalPnlPercent = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
 
-  return { ...snapshot, positions, totalValue, totalCost, totalPnl, totalPnlPercent };
+  const totalDayChange = positions.reduce((sum, p) => sum + (p.dayChange ?? 0) * p.quantity, 0);
+  const prevValue = totalValue - totalDayChange;
+  const totalDayChangePercent = prevValue > 0 ? (totalDayChange / prevValue) * 100 : 0;
+
+  return {
+    ...snapshot,
+    positions,
+    totalValue,
+    totalCost,
+    totalPnl,
+    totalPnlPercent,
+    totalDayChange,
+    totalDayChangePercent,
+  };
 }
 
 /** Called once during server startup to inject the store. */
@@ -197,6 +210,8 @@ const EMPTY_SNAPSHOT: PortfolioSnapshot = {
   totalCost: 0,
   totalPnl: 0,
   totalPnlPercent: 0,
+  totalDayChange: 0,
+  totalDayChangePercent: 0,
   timestamp: new Date().toISOString(),
   platform: null,
 };
@@ -266,12 +281,15 @@ export async function portfolioHistoryQuery(days?: number | null): Promise<Portf
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
   );
 
+  const baseValue = final[0].totalValue;
   const history: PortfolioHistoryPoint[] = final.map((s) => ({
     timestamp: s.timestamp,
     totalValue: s.totalValue,
     totalCost: s.totalCost,
     totalPnl: s.totalPnl,
     totalPnlPercent: s.totalPnlPercent,
+    periodPnl: s.totalValue - baseValue,
+    periodPnlPercent: baseValue > 0 ? ((s.totalValue - baseValue) / baseValue) * 100 : 0,
   }));
 
   // Replace the trailing point with live-priced data so the chart's edge
@@ -285,6 +303,8 @@ export async function portfolioHistoryQuery(days?: number | null): Promise<Portf
       totalCost: liveSnapshot.totalCost,
       totalPnl: liveSnapshot.totalPnl,
       totalPnlPercent: liveSnapshot.totalPnlPercent,
+      periodPnl: liveSnapshot.totalValue - baseValue,
+      periodPnlPercent: baseValue > 0 ? ((liveSnapshot.totalValue - baseValue) / baseValue) * 100 : 0,
     };
     // Replace last entry if same day, otherwise append
     const liveDay = livePoint.timestamp.slice(0, 10);
