@@ -255,6 +255,9 @@ export function buildTelegramChannel(deps: TelegramChannelDeps = {}): ChannelPlu
 
         case 'done':
           stopTyping();
+          if (streamBuffer.length === 0 && typeof event.text === 'string' && event.text.length > 0) {
+            streamBuffer = event.text;
+          }
           if (streamBuffer.length > 0) {
             flushStream().catch((err) => logger.debug('Final flush error', { error: err }));
           }

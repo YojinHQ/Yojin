@@ -671,27 +671,14 @@ export class Scheduler {
     }
   }
 
-  /**
-   * Publish snap.ready only if the content actually changed and the cooldown has elapsed.
-   * The snap is always saved to the store (web UI reads it directly), but channel
-   * notifications are gated to prevent spam.
-   */
   private maybePublishSnap(snap: import('./snap/types.js').Snap): void {
     if (!this.notificationBus) return;
 
     const hash = snap.contentHash;
-    if (hash && hash === this.lastSnapContentHash) {
-      logger.debug('Snap content unchanged — skipping notification');
-      return;
-    }
+    if (hash && hash === this.lastSnapContentHash) return;
 
     const elapsed = Date.now() - this.lastSnapNotifiedAt;
-    if (elapsed < SNAP_NOTIFY_COOLDOWN_MS) {
-      logger.debug('Snap notification cooldown active', {
-        remainingMs: SNAP_NOTIFY_COOLDOWN_MS - elapsed,
-      });
-      return;
-    }
+    if (elapsed < SNAP_NOTIFY_COOLDOWN_MS) return;
 
     this.lastSnapContentHash = hash;
     this.lastSnapNotifiedAt = Date.now();

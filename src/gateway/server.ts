@@ -113,8 +113,6 @@ export class Gateway {
         onEvent: msg.onAgentEvent as import('../core/types.js').AgentLoopEventHandler | undefined,
       });
 
-      // Skip sendMessage when the channel already streamed the response via onAgentEvent
-      // (e.g. Telegram edits a single message progressively and flushes on done)
       if (!hasStreamingHandler) {
         await channel.messagingAdapter.sendMessage({
           channelId: msg.channelId,
@@ -125,19 +123,11 @@ export class Gateway {
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       this.log.error(`Error processing message: ${errMsg}`);
-
-      const isTimeout = errMsg.includes('timed out');
-      const isAuth = errMsg.includes('authentication_error') || errMsg.includes('401');
-      const userMessage = isTimeout
-        ? 'The AI provider did not respond in time. Please try again.'
-        : isAuth
-          ? 'Authentication expired. Please re-authenticate and try again.'
-          : `Something went wrong: ${errMsg}`;
-
+      if (msg.onAgentEvent) return;
       await channel.messagingAdapter.sendMessage({
         channelId: msg.channelId,
         threadId: msg.threadId,
-        text: userMessage,
+        text: `Something went wrong: ${errMsg}`,
       });
     }
   }

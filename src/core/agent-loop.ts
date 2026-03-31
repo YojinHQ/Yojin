@@ -31,6 +31,7 @@ import { createSubsystemLogger } from '../logging/logger.js';
 const logger = createSubsystemLogger('agent-loop');
 
 const DEFAULT_MAX_ITERATIONS = 20;
+const LLM_TIMEOUT_MS = 120_000;
 
 export interface AgentLoopResult {
   /** Final text response from the agent. */
@@ -153,12 +154,15 @@ export async function runAgentLoop(
             ...(maxTokens ? { maxTokens } : {}),
           });
 
-      const LLM_TIMEOUT_MS = 120_000;
+      let timer: ReturnType<typeof setTimeout> | undefined;
       response = await Promise.race([
-        llmCall,
-        new Promise<never>((_resolve, reject) =>
-          setTimeout(() => reject(new Error('LLM request timed out after 2 minutes')), LLM_TIMEOUT_MS),
-        ),
+        llmCall.then((r) => {
+          clearTimeout(timer);
+          return r;
+        }),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('LLM request timed out')), LLM_TIMEOUT_MS);
+        }),
       ]);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
