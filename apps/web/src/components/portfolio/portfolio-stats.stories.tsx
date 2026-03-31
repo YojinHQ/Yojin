@@ -68,6 +68,8 @@ const mockPortfolio: PortfolioSnapshot = {
   totalCost: 37500.0,
   totalPnl: 9652.5,
   totalPnlPercent: 25.74,
+  totalDayChange: 481.5,
+  totalDayChangePercent: 1.03,
   timestamp: '2026-03-19T12:00:00Z',
   platform: 'MANUAL',
   warnings: [],
@@ -89,6 +91,8 @@ export const NegativePnl: Story = {
       ...mockPortfolio,
       totalPnl: -2500.0,
       totalPnlPercent: -6.67,
+      totalDayChange: -350.0,
+      totalDayChangePercent: -0.74,
     },
   },
 };

@@ -96,7 +96,13 @@ function OnboardingGuard() {
     pause: completed || skipped,
   });
 
-  const openOnboarding = useCallback(() => setModalOpen(true), []);
+  const openOnboarding = useCallback(() => {
+    if (completed) {
+      localStorage.removeItem(ONBOARDING_KEYS.COMPLETE_KEY);
+      setCompleted(false);
+    }
+    setModalOpen(true);
+  }, [completed]);
 
   const markSkipped = useCallback(() => {
     localStorage.setItem(ONBOARDING_KEYS.SKIPPED_KEY, 'true');

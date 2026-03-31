@@ -14,6 +14,7 @@ export interface ChatMessageProps {
   piiProtected?: boolean;
   piiTypes?: string[];
   toolCards?: ToolCardRef[];
+  streaming?: boolean;
 }
 
 const PII_LABELS: Record<string, string> = {
@@ -65,6 +66,7 @@ export default function ChatMessage({
   piiProtected,
   piiTypes,
   toolCards,
+  streaming,
 }: ChatMessageProps) {
   const isAuthExpired = content === AUTH_EXPIRED_TAG;
 
@@ -92,9 +94,16 @@ export default function ChatMessage({
             {isAuthExpired && <AuthExpiredCard />}
             {content && !isAuthExpired && (!toolCards || toolCards.length === 0) && (
               <div className="rounded-xl rounded-tl-sm border border-border bg-bg-card px-4 py-3">
-                <div className="prose prose-invert prose-sm max-w-none text-sm leading-relaxed text-text-primary">
-                  <Markdown>{content}</Markdown>
-                </div>
+                {streaming ? (
+                  <span className="whitespace-pre-wrap text-sm leading-relaxed text-text-primary">
+                    {content}
+                    <span className="inline-block w-1.5 animate-pulse text-text-muted">▍</span>
+                  </span>
+                ) : (
+                  <div className="prose prose-invert prose-sm max-w-none text-sm leading-relaxed text-text-primary">
+                    <Markdown>{content}</Markdown>
+                  </div>
+                )}
               </div>
             )}
             {piiProtected && piiTypes && piiTypes.length > 0 && (

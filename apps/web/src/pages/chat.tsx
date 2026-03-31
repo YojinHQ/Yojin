@@ -199,7 +199,7 @@ function ChatContent() {
 
             {/* Streaming text — only for text-only responses (no pending tool cards) */}
             {streamingContent && pendingToolCards.length === 0 && (
-              <ChatMessage id="streaming" role="assistant" content={streamingContent} />
+              <ChatMessage id="streaming" role="assistant" content={streamingContent} streaming />
             )}
 
             {/* Pending queued messages — rendered after streaming so conversation order is preserved */}

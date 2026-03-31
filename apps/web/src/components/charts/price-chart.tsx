@@ -4,7 +4,6 @@ import {
   CandlestickSeries,
   HistogramSeries,
   type IChartApi,
-  type ISeriesApi,
   type CandlestickData,
   type Time,
   ColorType,
@@ -23,7 +22,6 @@ interface PriceChartProps {
   data: PriceChartDatum[];
 }
 
-/** Color palette — matches Yojin theme tokens. */
 const COLORS = {
   bg: 'transparent',
   text: '#737373',
@@ -36,6 +34,16 @@ const COLORS = {
   volumeUp: 'rgba(91, 185, 140, 0.25)',
   volumeDown: 'rgba(255, 90, 94, 0.25)',
 } as const;
+
+/** Deduplicate by date (keep last occurrence), normalize to yyyy-mm-dd, sort chronologically. */
+function dedup(data: PriceChartDatum[]): PriceChartDatum[] {
+  const map = new Map<string, PriceChartDatum>();
+  for (const d of data) {
+    const day = d.date.slice(0, 10);
+    map.set(day, { ...d, date: day });
+  }
+  return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
 
 function toChartData(data: PriceChartDatum[]): CandlestickData<Time>[] {
   return data.map((d) => ({
@@ -58,93 +66,88 @@ function toVolumeData(data: PriceChartDatum[]) {
 export function PriceChart({ data }: PriceChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const observerRef = useRef<ResizeObserver | null>(null);
 
-  // Create chart once on mount
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container || data.length === 0) return;
 
-    const { width, height } = container.getBoundingClientRect();
-    if (width === 0 || height === 0) return;
+    // Wait one frame so the container has layout dimensions (inside modal transitions).
+    const raf = requestAnimationFrame(() => {
+      const { width, height } = container.getBoundingClientRect();
+      if (width === 0 || height === 0) return;
 
-    const chart = createChart(container, {
-      width,
-      height,
-      layout: {
-        background: { type: ColorType.Solid, color: COLORS.bg },
-        textColor: COLORS.text,
-        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
-        fontSize: 11,
-      },
-      grid: {
-        vertLines: { color: COLORS.border, style: 4 },
-        horzLines: { color: COLORS.border, style: 4 },
-      },
-      crosshair: {
-        vertLine: { color: COLORS.crosshair, labelBackgroundColor: COLORS.crosshair },
-        horzLine: { color: COLORS.crosshair, labelBackgroundColor: COLORS.crosshair },
-      },
-      rightPriceScale: {
-        borderColor: COLORS.border,
-      },
-      timeScale: {
-        borderColor: COLORS.border,
-        timeVisible: false,
-        fixLeftEdge: true,
-        fixRightEdge: true,
-      },
-      handleScroll: { vertTouchDrag: false },
-    });
+      try {
+        const chart = createChart(container, {
+          width,
+          height,
+          layout: {
+            background: { type: ColorType.Solid, color: COLORS.bg },
+            textColor: COLORS.text,
+            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+            fontSize: 11,
+          },
+          grid: {
+            vertLines: { color: COLORS.border, style: 4 },
+            horzLines: { color: COLORS.border, style: 4 },
+          },
+          crosshair: {
+            vertLine: { color: COLORS.crosshair, labelBackgroundColor: COLORS.crosshair },
+            horzLine: { color: COLORS.crosshair, labelBackgroundColor: COLORS.crosshair },
+          },
+          rightPriceScale: { borderColor: COLORS.border },
+          timeScale: {
+            borderColor: COLORS.border,
+            timeVisible: false,
+            fixLeftEdge: true,
+            fixRightEdge: true,
+          },
+          handleScroll: { vertTouchDrag: false },
+        });
 
-    chartRef.current = chart;
+        chartRef.current = chart;
 
-    candleSeriesRef.current = chart.addSeries(CandlestickSeries, {
-      upColor: COLORS.up,
-      downColor: COLORS.down,
-      borderDownColor: COLORS.down,
-      borderUpColor: COLORS.up,
-      wickDownColor: COLORS.downWick,
-      wickUpColor: COLORS.upWick,
-    });
+        const clean = dedup(data);
 
-    volumeSeriesRef.current = chart.addSeries(HistogramSeries, {
-      priceFormat: { type: 'volume' },
-      priceScaleId: 'volume',
-    });
+        const candleSeries = chart.addSeries(CandlestickSeries, {
+          upColor: COLORS.up,
+          downColor: COLORS.down,
+          borderDownColor: COLORS.down,
+          borderUpColor: COLORS.up,
+          wickDownColor: COLORS.downWick,
+          wickUpColor: COLORS.upWick,
+        });
+        candleSeries.setData(toChartData(clean));
 
-    chart.priceScale('volume').applyOptions({
-      scaleMargins: { top: 0.8, bottom: 0 },
-    });
+        const volumeSeries = chart.addSeries(HistogramSeries, {
+          priceFormat: { type: 'volume' },
+          priceScaleId: 'volume',
+        });
+        chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+        volumeSeries.setData(toVolumeData(clean));
 
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width: w, height: h } = entry.contentRect;
-        if (w > 0 && h > 0) chart.applyOptions({ width: w, height: h });
+        chart.timeScale().fitContent();
+
+        const observer = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            const { width: w, height: h } = entry.contentRect;
+            if (w > 0 && h > 0) chart.applyOptions({ width: w, height: h });
+          }
+        });
+        observer.observe(container);
+        observerRef.current = observer;
+      } catch (err) {
+        console.warn('[PriceChart] Failed to create chart', err);
       }
     });
-    observer.observe(container);
 
     return () => {
-      observer.disconnect();
-      chart.remove();
+      cancelAnimationFrame(raf);
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      chartRef.current?.remove();
       chartRef.current = null;
-      candleSeriesRef.current = null;
-      volumeSeriesRef.current = null;
     };
-  }, []);
-
-  // Update series data when data changes
-  useEffect(() => {
-    const chart = chartRef.current;
-    const candleSeries = candleSeriesRef.current;
-    const volumeSeries = volumeSeriesRef.current;
-    if (!chart || !candleSeries || !volumeSeries || data.length === 0) return;
-
-    candleSeries.setData(toChartData(data));
-    volumeSeries.setData(toVolumeData(data));
-    chart.timeScale().fitContent();
   }, [data]);
 
   return <div ref={containerRef} className="w-full h-[360px]" />;

@@ -17,7 +17,7 @@ interface PerformanceOvertimeProps {
 function toChartData(history: PortfolioHistoryPoint[]): { date: string; pnl: number }[] {
   return history.map((h) => ({
     date: new Date(h.timestamp).toISOString().slice(0, 10),
-    pnl: h.totalPnl,
+    pnl: h.periodPnl,
   }));
 }
 

@@ -31,6 +31,7 @@ import { createSubsystemLogger } from '../logging/logger.js';
 const logger = createSubsystemLogger('agent-loop');
 
 const DEFAULT_MAX_ITERATIONS = 20;
+const LLM_TIMEOUT_MS = 120_000;
 
 export interface AgentLoopResult {
   /** Final text response from the agent. */
@@ -134,22 +135,41 @@ export async function runAgentLoop(
 
     // ── Thought: ask the LLM (streaming when available) ───────────────
     const maxTokens = options.maxTokens;
-    const response = provider.streamWithTools
-      ? await provider.streamWithTools({
-          model,
-          system: systemPrompt,
-          messages,
-          tools: toolSchemas.length > 0 ? toolSchemas : undefined,
-          ...(maxTokens ? { maxTokens } : {}),
-          onTextDelta: (text) => emit(onEvent, { type: 'text_delta', text }),
-        })
-      : await provider.completeWithTools({
-          model,
-          system: systemPrompt,
-          messages,
-          tools: toolSchemas.length > 0 ? toolSchemas : undefined,
-          ...(maxTokens ? { maxTokens } : {}),
-        });
+    let response;
+    try {
+      const llmCall = provider.streamWithTools
+        ? provider.streamWithTools({
+            model,
+            system: systemPrompt,
+            messages,
+            tools: toolSchemas.length > 0 ? toolSchemas : undefined,
+            ...(maxTokens ? { maxTokens } : {}),
+            onTextDelta: (text) => emit(onEvent, { type: 'text_delta', text }),
+          })
+        : provider.completeWithTools({
+            model,
+            system: systemPrompt,
+            messages,
+            tools: toolSchemas.length > 0 ? toolSchemas : undefined,
+            ...(maxTokens ? { maxTokens } : {}),
+          });
+
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      response = await Promise.race([
+        llmCall.then((r) => {
+          clearTimeout(timer);
+          return r;
+        }),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('LLM request timed out')), LLM_TIMEOUT_MS);
+        }),
+      ]);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error('LLM call failed', { agentId, iteration: iterations, error: errMsg });
+      emit(onEvent, { type: 'error', error: errMsg, iterations });
+      throw err;
+    }
 
     if (response.usage) {
       totalUsage.inputTokens += response.usage.inputTokens;

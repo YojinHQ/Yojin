@@ -47,6 +47,8 @@ function makeSnapshot() {
     totalCost: 2000,
     totalPnl: 450,
     totalPnlPercent: 22.5,
+    totalDayChange: 0,
+    totalDayChangePercent: 0,
     timestamp: '2026-03-24T00:00:00Z',
     platform: 'MANUAL' as const,
   };
@@ -259,6 +261,24 @@ describe('live quote enrichment', () => {
     const goog = positions.find((p) => p.symbol === 'GOOG')!;
     expect(goog.currentPrice).toBe(140);
     expect(goog.marketValue).toBe(700);
+  });
+
+  it('computes totalDayChange and totalDayChangePercent from position dayChanges', async () => {
+    setPortfolioJintelClient(createQuoteMockClient());
+    const portfolio = await portfolioQuery();
+    // AAPL dayChange=2.5, qty=10 → 25; GOOG dayChange=-1.2, qty=5 → -6
+    const expectedDayChange = 10 * 2.5 + 5 * -1.2; // 19
+    const expectedDayChangePct = (expectedDayChange / (portfolio.totalValue - expectedDayChange)) * 100;
+    expect(portfolio.totalDayChange).toBe(expectedDayChange);
+    expect(portfolio.totalDayChangePercent).toBeCloseTo(expectedDayChangePct, 2);
+  });
+
+  it('sets totalDayChange to 0 when no quotes available', async () => {
+    const failingQuotes = vi.fn().mockResolvedValue({ success: false, error: 'API down' });
+    setPortfolioJintelClient(createQuoteMockClient(failingQuotes));
+    const portfolio = await portfolioQuery();
+    expect(portfolio.totalDayChange).toBe(0);
+    expect(portfolio.totalDayChangePercent).toBe(0);
   });
 
   it('makes one batch call with deduplicated symbols', async () => {

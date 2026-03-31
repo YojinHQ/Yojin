@@ -11,7 +11,7 @@
  * a job that already fired within its cooldown window.
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -181,6 +181,16 @@ const DEFAULT_MICRO_INTERVAL_MS = 5 * 60 * 1000;
 /** Micro tick interval — how often we check for due micro research (30 seconds). */
 const MICRO_TICK_INTERVAL_MS = 30_000;
 
+/** Minimum interval between snap.ready notifications to channels (1 hour). */
+const SNAP_NOTIFY_COOLDOWN_MS = 60 * 60 * 1000;
+
+/** Hash snap content for dedup — only notify channels when content actually changes. */
+function snapContentHash(snap: { intelSummary?: string; actionItems: { text: string }[] }): string {
+  return createHash('sha256')
+    .update(JSON.stringify({ intelSummary: snap.intelSummary ?? '', actionItems: snap.actionItems.map((a) => a.text) }))
+    .digest('hex');
+}
+
 /** Max concurrent micro research runs per tick. */
 const MAX_MICRO_CONCURRENCY = 3;
 
@@ -227,6 +237,10 @@ export class Scheduler {
   // Micro research state
   private readonly microRegistry = new Map<string, MicroAssetState>();
   private microCompletionCount = 0;
+
+  // Snap notification dedup — prevent channel spam
+  private lastSnapContentHash: string | undefined;
+  private lastSnapNotifiedAt = 0;
 
   constructor(options: SchedulerOptions) {
     this.orchestrator = options.orchestrator;
@@ -657,6 +671,20 @@ export class Scheduler {
     }
   }
 
+  private maybePublishSnap(snap: import('./snap/types.js').Snap): void {
+    if (!this.notificationBus) return;
+
+    const hash = snap.contentHash;
+    if (hash && hash === this.lastSnapContentHash) return;
+
+    const elapsed = Date.now() - this.lastSnapNotifiedAt;
+    if (elapsed < SNAP_NOTIFY_COOLDOWN_MS) return;
+
+    this.lastSnapContentHash = hash;
+    this.lastSnapNotifiedAt = Date.now();
+    this.notificationBus.publish({ type: 'snap.ready', snapId: snap.id });
+  }
+
   /**
    * Regenerate snap from micro insights — provides immediate feedback
    * after each micro batch without waiting for the full macro flow.
@@ -695,9 +723,10 @@ export class Scheduler {
       const snap = await snapFromMicro(microInsights, this.providerRouter, exposure, previousSnap);
       if (!snap) return;
 
+      snap.contentHash = snapContentHash(snap);
       await this.snapStore.save(snap);
       logger.info('Snap brief generated from micro insights', { snapId: snap.id, assets: microInsights.size });
-      this.notificationBus?.publish({ type: 'snap.ready', snapId: snap.id });
+      this.maybePublishSnap(snap);
     } catch (err) {
       logger.warn('Failed to generate snap from micro insights', { error: err });
     }
@@ -716,9 +745,10 @@ export class Scheduler {
 
       const microInsights = this.microInsightStore ? await this.microInsightStore.getAllLatest() : undefined;
       const snap = snapFromInsight(report, microInsights ? { microInsights } : undefined);
+      snap.contentHash = snapContentHash(snap);
       await this.snapStore.save(snap);
       logger.info('Snap brief regenerated', { snapId: snap.id });
-      this.notificationBus?.publish({ type: 'snap.ready', snapId: snap.id });
+      this.maybePublishSnap(snap);
 
       if (this.eventLog) {
         await this.eventLog.append({

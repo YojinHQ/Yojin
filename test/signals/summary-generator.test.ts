@@ -31,6 +31,8 @@ function makeLlmResponse(
     sentiment: string;
     isUrgent: boolean;
     isIrrelevant: boolean;
+    isFalseMatch: boolean;
+    qualityScore: number;
   }> = {},
 ): string {
   return JSON.stringify({
@@ -40,6 +42,8 @@ function makeLlmResponse(
     sentiment: 'BULLISH',
     isUrgent: false,
     isIrrelevant: false,
+    isFalseMatch: false,
+    qualityScore: 85,
     ...overrides,
   });
 }
@@ -154,6 +158,71 @@ describe('SummaryGenerator', () => {
     const result = await generator.generate(signal);
 
     expect(result.isIrrelevant).toBe(true);
+  });
+
+  it('flags false-match content when LLM returns isFalseMatch=true', async () => {
+    const complete = vi.fn().mockResolvedValue(
+      makeLlmResponse({
+        tier1: 'Apple Music page, not AXTI stock',
+        tier2: 'This is an Apple Music page for a song, unrelated to AXTI ticker.',
+        sentiment: 'NEUTRAL',
+        isFalseMatch: true,
+        qualityScore: 10,
+      }),
+    );
+    const generator = new SummaryGenerator({ complete });
+
+    const signal = makeSignal({
+      title: 'Unh Unh - song and lyrics by GloRilla on Apple Music',
+      assets: [{ ticker: 'AXTI', relevance: 0.5, linkType: 'DIRECT' }],
+    });
+    const result = await generator.generate(signal);
+
+    expect(result.isFalseMatch).toBe(true);
+    expect(result.qualityScore).toBe(10);
+  });
+
+  it('returns qualityScore from LLM response', async () => {
+    const complete = vi.fn().mockResolvedValue(makeLlmResponse({ qualityScore: 92 }));
+    const generator = new SummaryGenerator({ complete });
+
+    const result = await generator.generate(makeSignal());
+    expect(result.qualityScore).toBe(92);
+  });
+
+  it('clamps qualityScore to 0-100 range', async () => {
+    const complete = vi.fn().mockResolvedValue(makeLlmResponse({ qualityScore: 150 }));
+    const generator = new SummaryGenerator({ complete });
+
+    const result = await generator.generate(makeSignal());
+    expect(result.qualityScore).toBe(100);
+  });
+
+  it('defaults qualityScore to 50 when missing from LLM response', async () => {
+    const complete = vi.fn().mockResolvedValue(
+      JSON.stringify({
+        tier1: 'Test headline',
+        tier2: 'Test summary sentence.',
+        sentiment: 'NEUTRAL',
+        isUrgent: false,
+        isIrrelevant: false,
+        // isFalseMatch and qualityScore intentionally omitted
+      }),
+    );
+    const generator = new SummaryGenerator({ complete });
+
+    const result = await generator.generate(makeSignal());
+    expect(result.isFalseMatch).toBe(false);
+    expect(result.qualityScore).toBe(50);
+  });
+
+  it('defaults isFalseMatch to false and qualityScore to 50 in fallback', async () => {
+    const complete = vi.fn().mockRejectedValue(new Error('fail'));
+    const generator = new SummaryGenerator({ complete });
+
+    const result = await generator.generate(makeSignal());
+    expect(result.isFalseMatch).toBe(false);
+    expect(result.qualityScore).toBe(50);
   });
 
   it('defaults isIrrelevant to false in fallback', async () => {

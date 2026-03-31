@@ -103,6 +103,8 @@ export class Gateway {
     });
 
     try {
+      const hasStreamingHandler = !!msg.onAgentEvent;
+
       const responseText = await this.agentRuntime.handleMessage({
         message: msg.text,
         channelId,
@@ -111,18 +113,21 @@ export class Gateway {
         onEvent: msg.onAgentEvent as import('../core/types.js').AgentLoopEventHandler | undefined,
       });
 
-      await channel.messagingAdapter.sendMessage({
-        channelId: msg.channelId,
-        threadId: msg.threadId,
-        text: responseText,
-      });
+      if (!hasStreamingHandler) {
+        await channel.messagingAdapter.sendMessage({
+          channelId: msg.channelId,
+          threadId: msg.threadId,
+          text: responseText,
+        });
+      }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       this.log.error(`Error processing message: ${errMsg}`);
+      if (msg.onAgentEvent) return;
       await channel.messagingAdapter.sendMessage({
         channelId: msg.channelId,
         threadId: msg.threadId,
-        text: 'Sorry, something went wrong processing your message.',
+        text: `Something went wrong: ${errMsg}`,
       });
     }
   }

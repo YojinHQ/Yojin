@@ -111,6 +111,8 @@ export const typeDefs = /* GraphQL */ `
     totalCost: Float!
     totalPnl: Float!
     totalPnlPercent: Float!
+    totalDayChange: Float!
+    totalDayChangePercent: Float!
     timestamp: String!
     platform: String
     """
@@ -884,6 +886,8 @@ export const typeDefs = /* GraphQL */ `
     totalCost: Float!
     totalPnl: Float!
     totalPnlPercent: Float!
+    periodPnl: Float!
+    periodPnlPercent: Float!
   }
 
   type DeviceInfo {

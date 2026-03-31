@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SignalArchive } from '../../src/signals/archive.js';
 import { SignalIngestor } from '../../src/signals/ingestor.js';
 import type { RawSignalInput } from '../../src/signals/ingestor.js';
+import { SummaryGenerator } from '../../src/signals/summary-generator.js';
 
 function makeInput(overrides: Partial<RawSignalInput> = {}): RawSignalInput {
   return {
@@ -179,5 +180,82 @@ describe('SignalIngestor', () => {
     const result = await ingestor2.ingest([makeInput()]);
     expect(result.duplicates).toBe(1);
     expect(result.ingested).toBe(0);
+  });
+
+  describe('false-match and quality filtering', () => {
+    function makeSummaryGenerator(
+      overrides: Partial<{
+        isFalseMatch: boolean;
+        isIrrelevant: boolean;
+        qualityScore: number;
+      }> = {},
+    ): SummaryGenerator {
+      const response = JSON.stringify({
+        tier1: 'Test headline',
+        tier2: 'Test summary for the signal.',
+        sentiment: 'NEUTRAL',
+        isUrgent: false,
+        isIrrelevant: false,
+        isFalseMatch: false,
+        qualityScore: 75,
+        ...overrides,
+      });
+      return new SummaryGenerator({ complete: async () => response });
+    }
+
+    it('drops signals flagged as false matches', async () => {
+      ingestor.setSummaryGenerator(makeSummaryGenerator({ isFalseMatch: true, qualityScore: 10 }));
+
+      const result = await ingestor.ingest([
+        makeInput({ title: 'Apple Music page for song lyrics', tickers: ['AXTI'] }),
+      ]);
+
+      // Signal is counted as ingested by the ingestor (it passed dedup),
+      // but filtered out by enrichWithSummaries before archive write
+      expect(result.ingested).toBe(1);
+      const signals = await archive.query({});
+      expect(signals).toHaveLength(0);
+    });
+
+    it('drops signals with quality score below threshold', async () => {
+      ingestor.setSummaryGenerator(makeSummaryGenerator({ qualityScore: 20 }));
+
+      const result = await ingestor.ingest([makeInput({ title: 'Generic market chatter with no impact' })]);
+
+      expect(result.ingested).toBe(1);
+      const signals = await archive.query({});
+      expect(signals).toHaveLength(0);
+    });
+
+    it('keeps signals with quality score at threshold', async () => {
+      ingestor.setSummaryGenerator(makeSummaryGenerator({ qualityScore: 40 }));
+
+      const result = await ingestor.ingest([makeInput({ title: 'Moderate relevance market signal' })]);
+
+      expect(result.ingested).toBe(1);
+      const signals = await archive.query({});
+      expect(signals).toHaveLength(1);
+    });
+
+    it('keeps high-quality signals that are not false matches', async () => {
+      ingestor.setSummaryGenerator(makeSummaryGenerator({ qualityScore: 85, isFalseMatch: false }));
+
+      const result = await ingestor.ingest([makeInput({ title: 'AAPL earnings beat by 15%', tickers: ['AAPL'] })]);
+
+      expect(result.ingested).toBe(1);
+      const signals = await archive.query({});
+      expect(signals).toHaveLength(1);
+      expect(signals[0].tier1).toBe('Test headline');
+    });
+
+    it('does not filter signals without a summary generator', async () => {
+      // No summary generator wired — signals pass through raw
+      const result = await ingestor.ingest([makeInput({ title: 'Signal without LLM enrichment' })]);
+
+      expect(result.ingested).toBe(1);
+      const signals = await archive.query({});
+      expect(signals).toHaveLength(1);
+      expect(signals[0].tier1).toBeUndefined();
+    });
   });
 });

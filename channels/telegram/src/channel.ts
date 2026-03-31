@@ -254,13 +254,30 @@ export function buildTelegramChannel(deps: TelegramChannelDeps = {}): ChannelPlu
         }
 
         case 'done':
-        case 'error':
-        case 'max_iterations':
           stopTyping();
+          if (streamBuffer.length === 0 && typeof event.text === 'string' && event.text.length > 0) {
+            streamBuffer = event.text;
+          }
           if (streamBuffer.length > 0) {
             flushStream().catch((err) => logger.debug('Final flush error', { error: err }));
           }
           break;
+
+        case 'error':
+        case 'max_iterations': {
+          stopTyping();
+          const errorText =
+            event.type === 'error'
+              ? `Something went wrong: ${event.error as string}`
+              : 'Agent reached maximum iterations without completing.';
+          if (streamBuffer.length > 0) {
+            streamBuffer += `\n\n${errorText}`;
+            flushStream().catch((err) => logger.debug('Final flush error', { error: err }));
+          } else {
+            bot?.api.sendMessage(chatId, errorText).catch((err) => logger.debug('Error send failed', { error: err }));
+          }
+          break;
+        }
       }
     };
   }
