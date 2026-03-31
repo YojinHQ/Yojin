@@ -41,9 +41,9 @@ function buildStats(
     },
     {
       label: 'Total Return',
-      value: formatCurrency(totalValue - totalCost),
-      change: totalCost > 0 ? formatPercent(((totalValue - totalCost) / totalCost) * 100) : null,
-      positive: totalValue >= totalCost,
+      value: formatCurrency(totalPnl),
+      change: totalCost > 0 ? formatPercent(totalPnlPercent) : null,
+      positive: totalPnl >= 0,
     },
     { label: 'Positions', value: String(positionCount), change: null },
   ];

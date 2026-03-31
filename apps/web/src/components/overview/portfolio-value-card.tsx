@@ -56,7 +56,7 @@ export default function PortfolioValueCard() {
     );
   }
 
-  const { totalValue, positions } = data.portfolio;
+  const { totalValue, totalDayChange, totalDayChangePercent, positions } = data.portfolio;
   const positionList = positions ?? [];
 
   if (positionList.length === 0) {
@@ -86,9 +86,8 @@ export default function PortfolioValueCard() {
     );
   }
 
-  // Sum per-position dayChange for actual daily change (not all-time unrealized PnL)
-  const change = positionList.reduce((sum, p) => sum + (p.dayChange ?? 0), 0 as number);
-  const dayChangePercent = totalValue > 0 ? Math.round((change / (totalValue - change)) * 10000) / 100 : 0;
+  const change = totalDayChange;
+  const dayChangePercent = totalDayChangePercent;
 
   const isPositive = change > 0;
   const isNeutral = change === 0;

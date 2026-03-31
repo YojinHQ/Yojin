@@ -67,6 +67,8 @@ export const PORTFOLIO_QUERY = gql`
       totalCost
       totalPnl
       totalPnlPercent
+      totalDayChange
+      totalDayChangePercent
       timestamp
       platform
       history(days: $historyDays) {
@@ -75,6 +77,8 @@ export const PORTFOLIO_QUERY = gql`
         totalCost
         totalPnl
         totalPnlPercent
+        periodPnl
+        periodPnlPercent
       }
       sectorExposure {
         sector
@@ -1127,6 +1131,8 @@ export const ON_PORTFOLIO_UPDATE_SUBSCRIPTION = gql`
       totalCost
       totalPnl
       totalPnlPercent
+      totalDayChange
+      totalDayChangePercent
       timestamp
       platform
     }
