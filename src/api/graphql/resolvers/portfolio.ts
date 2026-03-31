@@ -50,6 +50,14 @@ export function isUSMarketOpen(): boolean {
   return minutes >= 570 && minutes < 960; // 9:30 (570) to 16:00 (960)
 }
 
+/** Check if today is a US weekday (Mon–Fri). Used to decide intraday vs multi-day sparkline range. */
+function isUSWeekday(): boolean {
+  const now = new Date();
+  const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day = et.getDay();
+  return day !== 0 && day !== 6;
+}
+
 // ---------------------------------------------------------------------------
 // Live quote enrichment — batch-fetch from Jintel and merge onto positions
 // ---------------------------------------------------------------------------
@@ -108,8 +116,11 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
       return undefined;
     });
 
-  const equityRange = marketOpen ? '1d' : '5d';
-  const equityInterval = marketOpen ? '5m' : undefined;
+  // Weekdays: always fetch intraday so sparklines show today's movement (even after-hours).
+  // Weekends: fetch 5-day daily candles to show the last trading week.
+  const weekday = isUSWeekday();
+  const equityRange = weekday ? '1d' : '5d';
+  const equityInterval = weekday ? '5m' : undefined;
 
   const [result, equityHistory, cryptoHistory] = await Promise.all([
     client.quotes(symbols).catch((err: unknown) => {
@@ -180,7 +191,7 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
     const isEquity = !cryptoSet.has(pos.symbol);
     const sparkline =
       priceHist && priceHist.history.length > 0
-        ? buildSparkline(priceHist, currentPrice, marketOpen && isEquity)
+        ? buildSparkline(priceHist, currentPrice, weekday && isEquity)
         : undefined;
 
     return {
