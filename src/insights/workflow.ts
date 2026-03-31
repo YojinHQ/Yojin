@@ -132,6 +132,12 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
               let prompt =
                 `All portfolio data has been pre-aggregated below — no data-gathering tools are available. ` +
                 `Analyze ONLY using the data provided.\n\n` +
+                `## Data Quality Guidance\n` +
+                `The data includes news articles and research reports from various sources. Evaluate quality critically:\n` +
+                `- Lead with real EVENTS and CATALYSTS (earnings, analyst actions, regulatory filings, corporate developments, macro shifts) — not technicals.\n` +
+                `- Promotional/clickbait content (listicles, "Is X a buy?", hype pieces) is low-quality. Weight it accordingly.\n` +
+                `- Weigh event materiality against asset size (market cap is provided). Immaterial events are noise, not developments.\n` +
+                `- Corroborated signals (multiple sources) rank higher than single-source articles.\n\n` +
                 `## Positions Requiring Deep Analysis\n\n${dataBriefs}\n\n` +
                 `## Instructions — complete in 1 iteration\n` +
                 `Analyze ALL positions and output a structured brief per position:\n` +

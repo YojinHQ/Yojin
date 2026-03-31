@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery } from 'urql';
 
@@ -21,10 +21,39 @@ function stripPrefix(text: string): string {
   return text.replace(/^(CRITICAL|HIGH|MEDIUM|LOW):\s*/i, '');
 }
 
+const POLL_INTERVAL_MS = 30_000;
+const UPDATED_GLOW_MS = 3_000;
+
 export default function YojinActionsCard() {
-  const [result] = useQuery<LatestInsightReportQueryResult>({ query: LATEST_INSIGHT_REPORT_QUERY });
+  const [result, reexecute] = useQuery<LatestInsightReportQueryResult>({
+    query: LATEST_INSIGHT_REPORT_QUERY,
+    requestPolicy: 'network-only',
+  });
   const report = result.data?.latestInsightReport;
   const navigate = useNavigate();
+
+  // Poll for report updates
+  useEffect(() => {
+    const id = setInterval(() => reexecute({ requestPolicy: 'network-only' }), POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [reexecute]);
+
+  // Detect when report regenerates — pulse the card
+  const [justUpdated, setJustUpdated] = useState(false);
+  const prevCreatedAtRef = useRef<string | null>(null);
+  useEffect(() => {
+    const createdAt = report?.createdAt ?? null;
+    if (createdAt === null) return;
+    const isUpdate = prevCreatedAtRef.current !== null && prevCreatedAtRef.current !== createdAt;
+    prevCreatedAtRef.current = createdAt;
+    if (!isUpdate) return;
+    const start = setTimeout(() => setJustUpdated(true), 0);
+    const end = setTimeout(() => setJustUpdated(false), UPDATED_GLOW_MS);
+    return () => {
+      clearTimeout(start);
+      clearTimeout(end);
+    };
+  }, [report?.createdAt]);
 
   // Build signalId → { title, url, sourceCount } lookup from all position keySignals
   const signalMap = useMemo(() => {
@@ -74,7 +103,7 @@ export default function YojinActionsCard() {
     <DashboardCard
       title="Action Items"
       variant="feature"
-      className="flex-1"
+      className={cn('flex-1', justUpdated && 'animate-new-item')}
       headerAction={<span className="text-xs text-text-muted">{actions.length} items</span>}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-5 pb-5">

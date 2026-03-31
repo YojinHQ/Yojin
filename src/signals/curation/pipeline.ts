@@ -39,6 +39,19 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 // These are valuable for insight generation but not actionable as standalone Intel Feed cards.
 const DATA_SNAPSHOT_SOURCES = new Set(['jintel-snapshot', 'jintel-technicals', 'jintel-sentiment']);
 
+// Promotional / low-quality content patterns — paid articles, clickbait listicles,
+// question-as-headline filler, and stock-picker spam. Applied as a quality penalty
+// rather than an outright block, so multi-source corroborated signals can still
+// survive if the underlying event is real.
+const PROMOTIONAL_CONTENT_RE =
+  /(?:is .+ (?:a buy|a sell|undervalued|overvalued)\??|(?:top|best) \d+ stocks? to (?:buy|sell|watch)|should you (?:buy|sell)|stocks? everyone is (?:buying|talking)|wall street.s (?:top pick|best kept secret)|(?:millionaire|retire|rich) (?:maker|pick|stock)|next (?:big thing|amazon|tesla)|could (?:soar|crash|skyrocket|plummet) \d+%|don.t miss (?:this|these)|hidden gem|under.?the.?radar)/i;
+
+// Content patterns that indicate a signal is junk — tracking pixels, ad images, empty scrapes.
+// Applied to signal body + LLM summaries so self-described junk is caught even when
+// the title looks plausible.
+const JUNK_CONTENT_RE =
+  /(?:tracking pixel|ad[- ]?related image|no substantive (?:financial )?(?:news|content)|only (?:contains?|includes?) (?:tracking|ad|pixel|image))/i;
+
 // ---------------------------------------------------------------------------
 // Pipeline options
 // ---------------------------------------------------------------------------
@@ -95,7 +108,13 @@ export function computeContentQuality(signal: Signal): number {
   // Multi-source corroboration
   if (signal.sources.length >= 2) score += 0.1;
 
-  return Math.min(1, score);
+  // Penalize promotional / low-quality content patterns.
+  // Many financial news providers mix real journalism with paid articles,
+  // listicles, and question-as-headline clickbait. These add noise, not signal.
+  const text = [signal.title, signal.content ?? ''].join(' ');
+  if (PROMOTIONAL_CONTENT_RE.test(text)) score -= 0.25;
+
+  return Math.max(0, Math.min(1, score));
 }
 
 /**
@@ -217,6 +236,12 @@ export async function runCurationPipeline(options: CurationPipelineOptions): Pro
 
     // Spam title patterns
     if (spamRegexes.some((rx) => rx.test(signal.title))) return false;
+
+    // Content-based junk filter — drop signals whose body reveals non-substantive content
+    // (tracking pixels, ad images, empty scrapes). Check tier1/tier2 summaries too since
+    // the LLM may have described the junk content in its summary.
+    const bodyText = [signal.content, signal.tier1, signal.tier2].filter(Boolean).join(' ');
+    if (JUNK_CONTENT_RE.test(bodyText)) return false;
 
     // Must have at least one portfolio ticker
     return signal.assets.some((a) => portfolioTickers.has(a.ticker));

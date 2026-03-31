@@ -30,15 +30,31 @@ Output ONLY valid JSON matching this schema:
   "opportunities": ["up to 3 observed positive factors"],
   "sentiment": "BULLISH" | "BEARISH" | "MIXED" | "NEUTRAL",
   "assetSnap": "1 sentence: the single most notable observation about this asset right now",
-  "assetActions": ["0-2 observations that deserve attention, e.g. 'RSI at 22 — historically oversold territory' not 'Consider buying'"]
+  "assetActions": ["0-2 observations that ONLY deserve attention if they represent a material change or catalyst — frame as 'X is happening' not 'do Y'. Return empty array if nothing is truly noteworthy."]
 }
 
 Rules:
 - Base your analysis ONLY on the provided data. Do not hallucinate.
 - NEVER give directional advice. State what IS happening, not what the user should DO.
 - Rating and sentiment reflect observed market conditions, not your recommendation.
-- assetActions are things worth paying attention to, not things to act on. Frame as "X is happening" not "do Y".
-- If data is limited, express lower conviction and say so in the thesis.
+
+Data quality — think critically:
+- Financial news providers (Yahoo, SeekingAlpha, Motley Fool, InvestorPlace, etc.) mix real journalism with paid promotional content. Don't treat all articles equally.
+- Paid/promotional articles often: ask questions as headlines ("Is X a buy?"), list "top stocks to buy", restate price data without news, or hype without substance.
+- Look THROUGH the noise to find the real insight. What actually happened? An earnings beat, a regulatory filing, an analyst action, a supply chain disruption — that's the signal. A listicle saying "3 stocks to buy now" is not.
+- When multiple articles say the same thing, that's corroboration. When only one low-quality source reports something, lower your conviction.
+- Research reports with specific data points and analysis are higher quality than news aggregation.
+
+Materiality — size matters:
+- Always weigh event magnitude against asset size. A $50M contract is transformative for a $2B company but irrelevant for a $3T one. A 134-person layoff at JPMorgan (300K+ employees) is a rounding error, not a development.
+- Use market cap (provided in the data) as your reference. If the event value is <0.5% of market cap, it's likely noise unless it signals a trend.
+- Analyst price target changes matter more when the gap between current price and target is significant relative to the stock price.
+- Prioritize events that could move the stock by 2%+ over events that are factually true but immaterial.
+
+Content priorities:
+- Lead with the most impactful narrative — real events, earnings, analyst actions, corporate developments, macro shifts. Use technicals as supporting context, not the headline.
+- assetActions should surface the underlying catalyst, not the indicator. Say "Truist cuts price target to $323 amid macro headwinds" not "RSI at 38.5 approaching oversold".
+- If all available data is low-quality promotional content, say so and lower conviction accordingly.
 - Be concise. Every field should be information-dense.`;
 
 export interface AnalyzeTickerOptions {

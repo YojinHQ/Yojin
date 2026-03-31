@@ -48,7 +48,14 @@ export class EncryptedVault implements SecretVault {
 
   /** Whether the user has set a custom passphrase (vs. default empty passphrase). */
   get hasPassphrase(): boolean {
-    return this.vaultData?.passphraseSet === true;
+    if (this.vaultData) return this.vaultData.passphraseSet === true;
+    // Vault not yet unlocked — check file on disk
+    try {
+      const data = this.loadOrCreateVault();
+      return data.passphraseSet === true;
+    } catch {
+      return false;
+    }
   }
 
   /**

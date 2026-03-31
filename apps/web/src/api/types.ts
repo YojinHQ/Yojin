@@ -1039,6 +1039,7 @@ export interface IntelFeedSignal {
   outputType: string | null;
   tickers: string[];
   publishedAt: string;
+  ingestedAt: string;
   confidence: number;
   sources: { name: string; reliability: number }[];
   tier1: string | null;

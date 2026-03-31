@@ -29,6 +29,7 @@
   --animate-shimmer: shimmer 2s ease-in-out infinite;
   --animate-card-in: card-in 0.4s ease-out both;
   --animate-wave: wave 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  --animate-new-item: new-item-glow 2s ease-out forwards;
 }
 
 /* Yojin hand-wave: damped oscillation with organic breathing pause */
@@ -157,6 +158,24 @@
   }
   50% {
     box-shadow: 0 0 16px rgba(255, 90, 94, 0.4);
+  }
+}
+
+@keyframes new-item-glow {
+  0% {
+    box-shadow:
+      0 0 0 0 rgba(255, 90, 94, 0.5),
+      inset 0 0 0 1px rgba(255, 90, 94, 0.3);
+  }
+  30% {
+    box-shadow:
+      0 0 12px 2px rgba(255, 90, 94, 0.25),
+      inset 0 0 0 1px rgba(255, 90, 94, 0.2);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(255, 90, 94, 0),
+      inset 0 0 0 1px rgba(255, 90, 94, 0);
   }
 }
 

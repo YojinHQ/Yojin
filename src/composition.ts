@@ -262,18 +262,24 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
       setVault(vault);
       setChannelVault(vault);
 
+      // Try to unlock — env var passphrase first, then auto-unlock with empty passphrase.
+      // On failure, vault stays wired to GraphQL so the user can unlock via the web UI.
       const passphrase = resolvePassphrase();
-      if (passphrase) {
-        await vault.unlock(passphrase);
-        log.info('Vault unlocked with passphrase');
-      } else {
-        // Try auto-unlock with empty passphrase (default for new vaults)
-        const autoUnlocked = await vault.tryAutoUnlock();
-        if (autoUnlocked) {
-          log.info('Vault auto-unlocked (no passphrase set)');
+      try {
+        if (passphrase) {
+          await vault.unlock(passphrase);
+          log.info('Vault unlocked with passphrase');
         } else {
-          log.info('Vault has a passphrase — unlock via web UI or YOJIN_VAULT_PASSPHRASE env var');
+          const autoUnlocked = await vault.tryAutoUnlock();
+          if (autoUnlocked) {
+            log.info('Vault auto-unlocked (no passphrase set)');
+          } else {
+            log.info('Vault has a passphrase — unlock via web UI or YOJIN_VAULT_PASSPHRASE env var');
+          }
         }
+      } catch (unlockErr) {
+        const msg = unlockErr instanceof Error ? unlockErr.message : String(unlockErr);
+        log.warn(`Vault unlock failed: ${msg} — unlock via web UI or fix YOJIN_VAULT_PASSPHRASE`);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

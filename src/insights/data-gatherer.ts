@@ -72,6 +72,10 @@ export interface DataBrief {
   sentimentDirection: SignalSentiment;
   // Memory
   memories: MemoryBrief[];
+  // News articles (from Jintel)
+  newsArticles: NewsArticleBrief[];
+  // Research reports (from Jintel)
+  researchReports: ResearchBrief[];
   // Ticker profile (per-asset institutional knowledge)
   profile: TickerProfileBrief | null;
 }
@@ -125,6 +129,21 @@ export interface MemoryBrief {
   grade: string | null;
   lesson: string | null;
   actualReturn: number | null;
+}
+
+export interface NewsArticleBrief {
+  title: string;
+  source: string;
+  snippet: string;
+  date: string | null;
+}
+
+export interface ResearchBrief {
+  title: string;
+  author: string | null;
+  text: string;
+  date: string | null;
+  score: number;
 }
 
 export interface GatherResult {
@@ -310,6 +329,27 @@ export function formatBriefsForContext(briefs: DataBrief[]): string {
       lines.push(`  - [${sig.outputType}] ${sig.title}${sources} (id:${sig.id})`);
     }
 
+    // News articles (recent headlines with context)
+    if (b.newsArticles.length > 0) {
+      lines.push(`Recent news:`);
+      for (const n of b.newsArticles.slice(0, 5)) {
+        const date = n.date ? ` (${n.date})` : '';
+        lines.push(`  - ${n.title}${date} via ${n.source}`);
+        if (n.snippet) lines.push(`    ${n.snippet.slice(0, 150)}`);
+      }
+    }
+
+    // Research reports (analyst/web research)
+    if (b.researchReports.length > 0) {
+      lines.push(`Research:`);
+      for (const r of b.researchReports.slice(0, 3)) {
+        const author = r.author ? ` by ${r.author}` : '';
+        const date = r.date ? ` (${r.date})` : '';
+        lines.push(`  - ${r.title}${author}${date}`);
+        if (r.text) lines.push(`    ${r.text.slice(0, 200)}`);
+      }
+    }
+
     // Memories (prioritize reflected memories with lessons)
     if (b.memories.length > 0) {
       lines.push(`Past analysis:`);
@@ -440,7 +480,15 @@ export function formatRiskMetrics(briefs: DataBrief[]): string {
 // ---------------------------------------------------------------------------
 
 /** Batch enrich query: market + risk + regulatory + technicals + sentiment. */
-const BATCH_ENRICH_QUERY = buildBatchEnrichQuery(['market', 'risk', 'regulatory', 'technicals', 'sentiment']);
+const BATCH_ENRICH_QUERY = buildBatchEnrichQuery([
+  'market',
+  'risk',
+  'regulatory',
+  'technicals',
+  'sentiment',
+  'news',
+  'research',
+]);
 
 /**
  * Batch enrich tickers with ALL fields (market, risk, regulatory, news)
@@ -481,6 +529,7 @@ async function batchEnrichAllChunked(client: JintelClient, tickers: string[]): P
       const hasMarket = data.filter((e) => e.market?.quote).length;
       const hasFundamentals = data.filter((e) => e.market?.fundamentals).length;
       const newsCount = data.reduce((n, e) => n + (e.news?.length ?? 0), 0);
+      const researchCount = data.reduce((n, e) => n + (e.research?.length ?? 0), 0);
       logger.info('Batch enrich succeeded', {
         tickers: chunk,
         entities: data.length,
@@ -490,6 +539,7 @@ async function batchEnrichAllChunked(client: JintelClient, tickers: string[]): P
         riskSignals: riskCount,
         filings: filingCount,
         newsArticles: newsCount,
+        researchReports: researchCount,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -685,6 +735,19 @@ export function buildBrief(
       groupId: s.groupId ?? null,
     })),
     sentimentDirection,
+    newsArticles: (entity?.news ?? []).slice(0, 5).map((n) => ({
+      title: n.title,
+      source: n.source,
+      snippet: n.snippet,
+      date: n.date ?? null,
+    })),
+    researchReports: (entity?.research ?? []).slice(0, 3).map((r) => ({
+      title: r.title,
+      author: r.author ?? null,
+      text: r.text.slice(0, 300),
+      date: r.publishedDate ?? null,
+      score: r.score,
+    })),
     memories,
     profile,
   };

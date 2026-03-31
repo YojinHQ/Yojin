@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { cn } from '../../lib/utils';
 import { useFeatureStatus } from '../../lib/feature-status';
@@ -89,6 +90,30 @@ export default function PositionsPreview() {
   const { openAssetDetail } = useAssetDetailModal();
   const { status: marketStatus } = useMarketStatus();
 
+  // Detect new positions and trigger glow animation
+  const [newPositionKeys, setNewPositionKeys] = useState<Set<string>>(new Set());
+  const knownKeysRef = useRef<Set<string>>(new Set());
+  const glowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const detectNewPositions = useCallback((currentKeys: string[]) => {
+    if (knownKeysRef.current.size === 0) {
+      knownKeysRef.current = new Set(currentKeys);
+      return;
+    }
+    const fresh = currentKeys.filter((k) => !knownKeysRef.current.has(k));
+    if (fresh.length === 0) return;
+    knownKeysRef.current = new Set(currentKeys);
+    setNewPositionKeys(new Set(fresh));
+    if (glowTimerRef.current) clearTimeout(glowTimerRef.current);
+    glowTimerRef.current = setTimeout(() => setNewPositionKeys(new Set()), 3_000);
+  }, []);
+
+  useEffect(() => {
+    const positions = data?.positions ?? [];
+    if (positions.length > 0) {
+      detectNewPositions(positions.map((p) => `${p.symbol}:${p.platform}`));
+    }
+  }, [data?.positions, detectNewPositions]);
+
   if (!jintelConfigured) {
     return (
       <DashboardCard title="Portfolio">
@@ -167,10 +192,14 @@ export default function PositionsPreview() {
               const arrow = isUp ? '\u25B2' : isDown ? '\u25BC' : '';
               const ext = getExtendedHoursLabel(marketStatus, pos);
 
+              const posKey = `${pos.symbol}:${pos.platform}`;
               return (
                 <tr
-                  key={`${pos.symbol}:${pos.platform}`}
-                  className="border-b border-border last:border-b-0 cursor-pointer transition-colors hover:bg-bg-hover"
+                  key={posKey}
+                  className={cn(
+                    'border-b border-border last:border-b-0 cursor-pointer transition-colors hover:bg-bg-hover',
+                    newPositionKeys.has(posKey) && 'animate-new-item',
+                  )}
                   onClick={() => openAssetDetail(pos.symbol)}
                 >
                   {/* Asset: logo + symbol + name */}

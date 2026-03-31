@@ -62,6 +62,8 @@ function makeBrief(overrides?: Partial<DataBrief>): DataBrief {
       },
     ],
     sentimentDirection: 'BULLISH',
+    newsArticles: [],
+    researchReports: [],
     memories: [
       {
         situation: 'Previous analysis showed bullish momentum',
@@ -73,6 +75,7 @@ function makeBrief(overrides?: Partial<DataBrief>): DataBrief {
         actualReturn: null,
       },
     ],
+    profile: null,
     ...overrides,
   };
 }

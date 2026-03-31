@@ -78,6 +78,11 @@ export const CurationConfigSchema = z.object({
       'stock (?:price|chart) .+ tradingview',
       'stock chart .+ tradingview',
       'in real time$',
+      'no actionable.+(?:signal|market|data)',
+      'no (?:substantive|meaningful) .+(?:news|content|data)',
+      '^\\d+ (?:best|top) stocks? to (?:buy|sell|watch)',
+      'stocks? everyone is (?:buying|talking)',
+      '^is .+ (?:a buy|a sell|still a buy)\\??$',
     ]),
   /** Scoring weights (must sum to ~1.0). */
   weights: CurationWeightsSchema.default({}),

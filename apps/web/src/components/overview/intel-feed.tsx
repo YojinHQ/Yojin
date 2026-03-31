@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery } from 'urql';
 import { DISMISS_SIGNAL_MUTATION, INTEL_FEED_QUERY } from '../../api/documents';
@@ -28,6 +28,8 @@ interface IntelFeedItem {
   title: string;
   time: string;
   publishedAt: string;
+  ingestedAt: string;
+  publishedTime: string;
   icon: IconName;
   description: string;
   source: string | null;
@@ -401,12 +403,14 @@ function TickerSectionHeader({
 function IntelFeedCard({
   item,
   expanded,
+  isNew,
   onToggle,
   onDismiss,
   onExplore,
 }: {
   item: IntelFeedItem;
   expanded: boolean;
+  isNew?: boolean;
   onToggle: () => void;
   onDismiss: () => void;
   onExplore: () => void;
@@ -416,6 +420,7 @@ function IntelFeedCard({
       className={cn(
         'rounded-xl bg-bg-tertiary/60 transition-colors cursor-pointer',
         expanded ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary',
+        isNew && 'animate-new-item',
       )}
     >
       {/* Collapsed header — always visible */}
@@ -452,7 +457,7 @@ function IntelFeedCard({
         <span className="flex-shrink-0 text-2xs text-text-muted">{item.time}</span>
       </div>
 
-      {/* Expanded content */}
+      {/* Expanded content — show both dates */}
       <div
         className={cn(
           'grid transition-[grid-template-rows] duration-200 ease-out',
@@ -464,6 +469,9 @@ function IntelFeedCard({
             {/* Description */}
             {item.description && <p className="text-xs leading-relaxed text-text-secondary">{item.description}</p>}
             {item.source && <p className="mt-1 text-[10px] text-text-muted">via {item.source}</p>}
+            <p className="mt-1 text-[10px] text-text-muted">
+              Published {item.publishedTime} · Updated {item.time}
+            </p>
 
             {/* Data table */}
             {item.data && (
@@ -529,18 +537,49 @@ export default function IntelFeed() {
   return <IntelFeedContent />;
 }
 
+const POLL_INTERVAL_MS = 30_000;
+const NEW_ITEM_GLOW_MS = 3_000;
+
 function IntelFeedContent() {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [collapsedTickers, setCollapsedTickers] = useState<Set<string>>(new Set());
   const [, dismissSignal] = useMutation(DISMISS_SIGNAL_MUTATION);
+  const [newItemIds, setNewItemIds] = useState<Set<string>>(new Set());
+  const knownIdsRef = useRef<Set<string>>(new Set());
+  const glowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [{ data, fetching, error }, reexecute] = useQuery<IntelFeedQueryResult, IntelFeedQueryVariables>({
     query: INTEL_FEED_QUERY,
     variables: { limit: 10 },
     requestPolicy: 'network-only',
   });
+
+  // Poll for new data
+  useEffect(() => {
+    const id = setInterval(() => reexecute({ requestPolicy: 'network-only' }), POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [reexecute]);
+
+  // Detect new items and trigger glow animation
+  const detectNewItems = useCallback((currentIds: string[]) => {
+    if (knownIdsRef.current.size === 0) {
+      // First load — seed known IDs without animation
+      knownIdsRef.current = new Set(currentIds);
+      return;
+    }
+
+    const fresh = currentIds.filter((id) => !knownIdsRef.current.has(id));
+    if (fresh.length === 0) return;
+
+    knownIdsRef.current = new Set(currentIds);
+    setNewItemIds(new Set(fresh));
+
+    // Clear glow after animation — cancel previous timer to avoid race condition
+    if (glowTimerRef.current) clearTimeout(glowTimerRef.current);
+    glowTimerRef.current = setTimeout(() => setNewItemIds(new Set()), NEW_ITEM_GLOW_MS);
+  }, []);
 
   // Map API data into IntelFeedItem[]
   const items: IntelFeedItem[] = useMemo(() => {
@@ -565,8 +604,10 @@ function IntelFeedContent() {
         ticker,
         sentiment: s.sentiment ?? null,
         title: headline,
-        time: timeAgo(s.publishedAt),
+        time: timeAgo(s.ingestedAt),
         publishedAt: s.publishedAt,
+        ingestedAt: s.ingestedAt,
+        publishedTime: timeAgo(s.publishedAt),
         icon: signalTypeIcon[s.type] ?? 'trending',
         description: detail !== headline ? detail : '',
         source: sourceName ?? null,
@@ -591,10 +632,15 @@ function IntelFeedContent() {
       };
     });
 
-    // Sort newest first
-    signalItems.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+    // Sort by newest ingested date first
+    signalItems.sort((a, b) => new Date(b.ingestedAt).getTime() - new Date(a.ingestedAt).getTime());
     return signalItems;
   }, [data]);
+
+  // Detect new items for glow animation
+  useEffect(() => {
+    if (items.length > 0) detectNewItems(items.map((i) => i.id));
+  }, [items, detectNewItems]);
 
   const filteredItems = filterMap[activeFilter] ? items.filter((item) => item.type === filterMap[activeFilter]) : items;
 
@@ -733,6 +779,7 @@ function IntelFeedContent() {
                         key={item.id}
                         item={item}
                         expanded={expandedId === item.id}
+                        isNew={newItemIds.has(item.id)}
                         onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
                         onDismiss={() => {
                           if (expandedId === item.id) setExpandedId(null);

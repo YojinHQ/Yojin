@@ -45,6 +45,7 @@ import type { CurationConfig } from './signals/curation/types.js';
 import type { SignalIngestor } from './signals/ingestor.js';
 import type { SkillEvaluator } from './skills/skill-evaluator.js';
 import { snapFromInsight } from './snap/snap-from-insight.js';
+import { snapFromMicro } from './snap/snap-from-micro.js';
 import type { SnapStore } from './snap/snap-store.js';
 import type { WatchlistStore } from './watchlist/watchlist-store.js';
 
@@ -468,6 +469,9 @@ export class Scheduler {
         }
       }
 
+      // Regenerate snap from micro insights (immediate feedback before macro)
+      await this.regenerateSnapFromMicro();
+
       // Check if we should trigger macro
       if (this.microCompletionCount >= MICRO_THRESHOLD_FOR_MACRO) {
         logger.info('Micro threshold reached — triggering macro flow', { completions: this.microCompletionCount });
@@ -650,6 +654,52 @@ export class Scheduler {
       }
     } catch (err) {
       logger.error('Scheduled curation failed', { error: err });
+    }
+  }
+
+  /**
+   * Regenerate snap from micro insights — provides immediate feedback
+   * after each micro batch without waiting for the full macro flow.
+   * Once a macro InsightReport exists, `regenerateSnap` takes over.
+   */
+  private async regenerateSnapFromMicro(): Promise<void> {
+    if (!this.snapStore || !this.microInsightStore || !this.providerRouter) return;
+
+    try {
+      // If a macro insight report already exists, skip — regenerateSnap handles it
+      if (this.insightStore) {
+        const report = await this.insightStore.getLatest();
+        if (report) return;
+      }
+
+      const microInsights = await this.microInsightStore.getAllLatest();
+      if (microInsights.size === 0) return;
+
+      // Build portfolio exposure context so the snap prioritizes high-weight positions
+      const store = this.snapshotStore ?? this.curationPipeline?.snapshotStore;
+      let exposure: import('./snap/snap-from-micro.js').PortfolioExposure[] | undefined;
+      if (store) {
+        const snapshot = await store.getLatest();
+        if (snapshot && snapshot.totalValue > 0) {
+          exposure = snapshot.positions.map((p) => ({
+            symbol: p.symbol,
+            weight: p.marketValue / snapshot.totalValue,
+            marketValue: p.marketValue,
+          }));
+        }
+      }
+
+      // Load previous snap so the synthesizer can make deliberate update decisions
+      const previousSnap = await this.snapStore.getLatest();
+
+      const snap = await snapFromMicro(microInsights, this.providerRouter, exposure, previousSnap);
+      if (!snap) return;
+
+      await this.snapStore.save(snap);
+      logger.info('Snap brief generated from micro insights', { snapId: snap.id, assets: microInsights.size });
+      this.notificationBus?.publish({ type: 'snap.ready', snapId: snap.id });
+    } catch (err) {
+      logger.warn('Failed to generate snap from micro insights', { error: err });
     }
   }
 
