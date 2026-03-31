@@ -137,7 +137,14 @@ function mentionsEntity(text: string, tickers: string[], entityName: string | un
 }
 
 const JUNK_TITLE_PATTERN =
-  /stock price|in real time$|tradingview|quote & history|commission-free|buy and sell|spy vs\.? spy/i;
+  /stock price|in real time$|tradingview|quote & history|commission-free|buy and sell|spy vs\.? spy|song and lyrics|official music video|official video|official audio|full album/i;
+
+/**
+ * Domains that produce entertainment/non-financial content.
+ * These frequently match short tickers as substrings (e.g. "Unh Unh" → UNH).
+ */
+const JUNK_DOMAIN_PATTERN =
+  /\b(spotify\.com|soundcloud\.com|genius\.com|bandcamp\.com|deezer\.com|tidal\.com|shazam\.com)\b/i;
 
 /** Titles that are just entity names with optional ticker suffix (e.g. "Invesco QQQ ETF | ICVT") */
 function isEntityNameTitle(title: string, entityName: string | undefined): boolean {
@@ -251,6 +258,7 @@ function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[
   for (const article of entity.news ?? []) {
     if (!article.title) continue;
     if (JUNK_TITLE_PATTERN.test(article.title)) continue;
+    if (article.link && JUNK_DOMAIN_PATTERN.test(article.link)) continue;
     if (isEntityNameTitle(article.title, entityName)) continue;
     const text = `${article.title} ${article.snippet ?? ''}`;
     if (!mentionsEntity(text, tickers, entityName)) continue;
@@ -273,6 +281,7 @@ function enrichmentToSignals(entity: Entity, tickers: string[]): RawSignalInput[
   for (const article of entity.research ?? []) {
     if (!article.title) continue;
     if (JUNK_TITLE_PATTERN.test(article.title)) continue;
+    if (article.url && JUNK_DOMAIN_PATTERN.test(article.url)) continue;
     if (isEntityNameTitle(article.title, entityName)) continue;
     const researchText = `${article.title} ${article.text ?? ''}`;
     if (!mentionsEntity(researchText, tickers, entityName)) continue;

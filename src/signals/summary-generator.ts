@@ -24,6 +24,8 @@ export interface SummaryResult {
   tier2: string;
   sentiment: SignalSentiment;
   outputType: SignalOutputType;
+  /** LLM determined this content is not financially relevant (e.g. music, entertainment). */
+  isIrrelevant: boolean;
 }
 
 export interface SummaryGeneratorOptions {
@@ -40,6 +42,7 @@ interface LlmResponse {
   tier2: string;
   sentiment: SignalSentiment;
   isUrgent: boolean;
+  isIrrelevant: boolean;
 }
 
 const VALID_SENTIMENTS = new Set(['BULLISH', 'BEARISH', 'MIXED', 'NEUTRAL']);
@@ -66,6 +69,7 @@ export class SummaryGenerator {
         tier2: llmResult.tier2,
         sentiment: llmResult.sentiment,
         outputType: this.deriveOutputType(llmResult, signal),
+        isIrrelevant: llmResult.isIrrelevant,
       };
     } catch (error) {
       logger.error('SummaryGenerator: LLM call failed, using fallback', {
@@ -103,8 +107,11 @@ Respond with a JSON object only — no markdown, no extra text:
   "tier1": "3-8 words, headline style",
   "tier2": "2-3 sentences. What happened, the market impact, and cite the sources by name.",
   "sentiment": "BULLISH | BEARISH | MIXED | NEUTRAL",
-  "isUrgent": true or false
-}`;
+  "isUrgent": true or false,
+  "isIrrelevant": true or false
+}
+
+Set "isIrrelevant" to true if the content is NOT about finance, markets, or the company/asset the ticker represents. Examples: music, entertainment, sports, recipes, games, or scraped website boilerplate (navigation menus, login pages, cookie notices).`;
   }
 
   private parseResponse(raw: string): LlmResponse {
@@ -126,6 +133,7 @@ Respond with a JSON object only — no markdown, no extra text:
     const tier2 = typeof obj['tier2'] === 'string' ? obj['tier2'].trim() : '';
     const sentimentRaw = typeof obj['sentiment'] === 'string' ? obj['sentiment'].toUpperCase() : '';
     const isUrgent = obj['isUrgent'] === true;
+    const isIrrelevant = obj['isIrrelevant'] === true;
 
     if (!tier1) throw new Error('Missing tier1 in LLM response');
     if (!tier2) throw new Error('Missing tier2 in LLM response');
@@ -138,6 +146,7 @@ Respond with a JSON object only — no markdown, no extra text:
       tier2,
       sentiment: sentimentRaw as LlmResponse['sentiment'],
       isUrgent,
+      isIrrelevant,
     };
   }
 
@@ -154,6 +163,7 @@ Respond with a JSON object only — no markdown, no extra text:
       tier2: signal.title,
       sentiment: 'NEUTRAL',
       outputType: 'INSIGHT',
+      isIrrelevant: false,
     };
   }
 }

@@ -30,6 +30,7 @@ function makeLlmResponse(
     tier2: string;
     sentiment: string;
     isUrgent: boolean;
+    isIrrelevant: boolean;
   }> = {},
 ): string {
   return JSON.stringify({
@@ -38,6 +39,7 @@ function makeLlmResponse(
       'Apple Inc. reported record quarterly revenue beating analyst expectations. The results signal strong consumer demand for premium devices. Source: Financial Modeling Prep.',
     sentiment: 'BULLISH',
     isUrgent: false,
+    isIrrelevant: false,
     ...overrides,
   });
 }
@@ -132,6 +134,34 @@ describe('SummaryGenerator', () => {
     expect(prompt).toContain('Financial Modeling Prep');
     expect(prompt).toContain('Reuters');
     expect(prompt).toContain('Keelson');
+  });
+
+  it('flags irrelevant content when LLM returns isIrrelevant=true', async () => {
+    const complete = vi.fn().mockResolvedValue(
+      makeLlmResponse({
+        tier1: 'False UNH Signal: Irrelevant Spotify Content',
+        tier2: 'This is a Spotify music page for a song, not financial content.',
+        sentiment: 'NEUTRAL',
+        isIrrelevant: true,
+      }),
+    );
+    const generator = new SummaryGenerator({ complete });
+
+    const signal = makeSignal({
+      title: 'Unh Unh - song and lyrics by GloRilla',
+      assets: [{ ticker: 'UNH', relevance: 0.5, linkType: 'DIRECT' }],
+    });
+    const result = await generator.generate(signal);
+
+    expect(result.isIrrelevant).toBe(true);
+  });
+
+  it('defaults isIrrelevant to false in fallback', async () => {
+    const complete = vi.fn().mockRejectedValue(new Error('fail'));
+    const generator = new SummaryGenerator({ complete });
+
+    const result = await generator.generate(makeSignal());
+    expect(result.isIrrelevant).toBe(false);
   });
 
   it('truncates title to 60 chars in tier1 fallback', async () => {

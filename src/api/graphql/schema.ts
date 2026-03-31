@@ -1029,6 +1029,7 @@ export const typeDefs = /* GraphQL */ `
       outputType: SignalOutputType
       limit: Int
     ): [Signal!]!
+    signalsByIds(ids: [ID!]!): [Signal!]!
     signalGroups(ticker: String, since: String, limit: Int): [SignalGroup!]!
     curatedSignals(ticker: String, since: String, limit: Int, offset: Int): [CuratedSignal!]!
     curationStatus: CurationStatus!

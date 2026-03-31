@@ -737,6 +737,32 @@ export const SIGNALS_QUERY = gql`
   }
 `;
 
+export const SIGNALS_BY_IDS_QUERY = gql`
+  query SignalsByIds($ids: [ID!]!) {
+    signalsByIds(ids: $ids) {
+      id
+      type
+      title
+      content
+      publishedAt
+      confidence
+      tickers
+      sources {
+        id
+        name
+        type
+        reliability
+      }
+      sourceCount
+      link
+      tier1
+      tier2
+      sentiment
+      outputType
+    }
+  }
+`;
+
 export const CURATED_SIGNALS_QUERY = gql`
   query CuratedSignals($ticker: String, $since: String, $limit: Int) {
     curatedSignals(ticker: $ticker, since: $since, limit: $limit) {

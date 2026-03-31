@@ -613,6 +613,10 @@ export interface SignalsQueryResult {
   signals: Signal[];
 }
 
+export interface SignalsByIdsQueryResult {
+  signalsByIds: Signal[];
+}
+
 // ---------------------------------------------------------------------------
 // Signal Groups
 // ---------------------------------------------------------------------------

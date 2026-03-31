@@ -13,8 +13,10 @@ import {
 import { ThemeProvider } from './lib/theme';
 import { AddPositionModalProvider } from './lib/add-position-modal-context';
 import { AssetDetailModalProvider } from './lib/asset-detail-modal-context';
+import { SignalModalProvider } from './lib/signal-modal-context';
 import AddPositionModal from './components/portfolio/add-position-modal';
 import AssetDetailModal from './components/portfolio/asset-detail-modal';
+import { SignalsModal } from './components/common/signals-modal';
 import AppShell from './components/layout/app-shell';
 import Chat from './pages/chat';
 import Profile from './pages/profile';
@@ -193,29 +195,32 @@ export default function App() {
           <ChatPanelProvider>
             <AddPositionModalProvider>
               <AssetDetailModalProvider>
-                <Routes>
-                  {/* Main app — guarded by onboarding check */}
-                  <Route element={<OnboardingGuard />}>
-                    <Route index element={<Dashboard />} />
-                    <Route path="portfolio" element={<Positions />} />
-                    <Route path="chat" element={<Chat />} />
-                    <Route path="insights" element={<Insights />} />
-                    <Route path="signals" element={<SignalsRedirect />} />
-                    <Route path="watchlist" element={<Watchlist />} />
-                    <Route path="profile" element={<Profile />} />
-                    <Route path="settings" element={<Settings />} />
+                <SignalModalProvider>
+                  <Routes>
+                    {/* Main app — guarded by onboarding check */}
+                    <Route element={<OnboardingGuard />}>
+                      <Route index element={<Dashboard />} />
+                      <Route path="portfolio" element={<Positions />} />
+                      <Route path="chat" element={<Chat />} />
+                      <Route path="insights" element={<Insights />} />
+                      <Route path="signals" element={<SignalsRedirect />} />
+                      <Route path="watchlist" element={<Watchlist />} />
+                      <Route path="profile" element={<Profile />} />
+                      <Route path="settings" element={<Settings />} />
 
-                    {/* Redirects for old paths */}
-                    <Route path="positions" element={<Navigate to="/portfolio" replace />} />
-                    <Route path="positions/:symbol" element={<RedirectPositionSymbol />} />
-                    <Route path="portfolio/:symbol" element={<Navigate to="/portfolio" replace />} />
-                    <Route path="skills" element={<Navigate to="/" replace />} />
-                    <Route path="alerts" element={<Navigate to="/" replace />} />
-                  </Route>
-                </Routes>
-                <AddPositionModal />
-                <AssetDetailModal />
-                {import.meta.env.VITE_AGENTATION_ENABLED === 'true' && <DevFeedbackTool />}
+                      {/* Redirects for old paths */}
+                      <Route path="positions" element={<Navigate to="/portfolio" replace />} />
+                      <Route path="positions/:symbol" element={<RedirectPositionSymbol />} />
+                      <Route path="portfolio/:symbol" element={<Navigate to="/portfolio" replace />} />
+                      <Route path="skills" element={<Navigate to="/" replace />} />
+                      <Route path="alerts" element={<Navigate to="/" replace />} />
+                    </Route>
+                  </Routes>
+                  <AddPositionModal />
+                  <AssetDetailModal />
+                  <SignalsModal />
+                  {import.meta.env.VITE_AGENTATION_ENABLED === 'true' && <DevFeedbackTool />}
+                </SignalModalProvider>
               </AssetDetailModalProvider>
             </AddPositionModalProvider>
           </ChatPanelProvider>

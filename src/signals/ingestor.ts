@@ -385,6 +385,7 @@ export class SignalIngestor {
     if (!this.summaryGenerator) return signals;
 
     const results: Signal[] = [];
+    let irrelevantDropped = 0;
     for (const signal of signals) {
       // Skip if already has LLM-generated summaries
       if (signal.tier1 && signal.tier2) {
@@ -393,6 +394,13 @@ export class SignalIngestor {
       }
       try {
         const summary = await this.summaryGenerator.generate(signal);
+        // Drop signals the LLM identified as non-financial content
+        // (e.g. music, entertainment, scraped boilerplate matching a ticker)
+        if (summary.isIrrelevant) {
+          irrelevantDropped++;
+          logger.info('Dropped irrelevant signal', { signalId: signal.id, title: signal.title, tier1: summary.tier1 });
+          continue;
+        }
         results.push({
           ...signal,
           tier1: summary.tier1,
@@ -407,6 +415,9 @@ export class SignalIngestor {
         });
         results.push(signal);
       }
+    }
+    if (irrelevantDropped > 0) {
+      logger.info(`Dropped ${irrelevantDropped} irrelevant signals during summary enrichment`);
     }
     return results;
   }
