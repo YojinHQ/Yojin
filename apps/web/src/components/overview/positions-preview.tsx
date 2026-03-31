@@ -12,7 +12,7 @@ import Button from '../common/button';
 import { DashboardCard } from '../common/dashboard-card';
 import { useAddPositionModal } from '../../lib/add-position-modal-context';
 import { useAssetDetailModal } from '../../lib/asset-detail-modal-context';
-import { useMarketStatus } from '../../hooks/use-market-status';
+import { useMarketStatus, getMarketElapsedMinutes } from '../../hooks/use-market-status';
 import type { Position } from '../../api/types';
 
 function formatCurrency(n: number): string {
@@ -29,30 +29,83 @@ function formatPercent(n: number): string {
 }
 
 /** Inline sparkline — sharp linear segments like real trading platforms. */
-function Sparkline({ data, dayChangePercent }: { symbol: string; data: number[]; dayChangePercent: number }) {
+function Sparkline({
+  symbol,
+  data,
+  dayChangePercent,
+  isMarketOpen,
+}: {
+  symbol: string;
+  data: number[];
+  dayChangePercent: number;
+  isMarketOpen: boolean;
+}) {
+  if (data.length < 2) return null;
+
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;
 
-  const points = data
-    .map((v, i) => {
-      const x = (i / (data.length - 1)) * 120;
-      const y = 32 - ((v - min) / range) * 24 - 4; // 4px padding for labels
-      return `${x},${y}`;
-    })
-    .join(' ');
+  // Progressive reveal: during market hours, width proportional to elapsed trading day
+  const MARKET_DURATION = 390; // 6.5hr = 390 minutes
+  const elapsed = getMarketElapsedMinutes();
+  const progressWidth = isMarketOpen ? Math.min(elapsed / MARKET_DURATION, 1) * 120 : 120;
+
+  const coords = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * progressWidth;
+    const y = 32 - ((v - min) / range) * 24 - 4; // 4px padding for labels
+    return { x, y };
+  });
+
+  const points = coords.map((c) => `${c.x},${c.y}`).join(' ');
+
+  const isNegative = dayChangePercent < 0;
 
   const color =
-    dayChangePercent > 0
-      ? 'var(--color-success)'
-      : dayChangePercent < 0
-        ? 'var(--color-error)'
-        : 'var(--color-text-muted)';
+    dayChangePercent > 0 ? 'var(--color-success)' : isNegative ? 'var(--color-error)' : 'var(--color-text-muted)';
+
+  const gradId = `sparkline-grad-${symbol}`;
+
+  // Derive previous close baseline from last data point (live price) and day change %
+  const showBaseline = dayChangePercent !== 0;
+  let baselineY: number | undefined;
+  if (showBaseline) {
+    const currentPrice = data[data.length - 1];
+    const prevClose = currentPrice / (1 + dayChangePercent / 100);
+    baselineY = 32 - ((prevClose - min) / range) * 24 - 4;
+  }
+
+  // Positive: fill below line to bottom; Negative: fill above line to baseline
+  const fillCloseY = isNegative && baselineY != null ? baselineY : 32;
+  const fillPoints = `0,${fillCloseY} ${points} ${progressWidth},${fillCloseY}`;
+
+  // Gradient: always most opaque near the line, fading toward the reference edge
+  const gradTopOpacity = isNegative ? 0 : 0.2;
+  const gradBottomOpacity = isNegative ? 0.2 : 0;
 
   return (
     <div className="pointer-events-none flex items-center gap-1">
       <div className="h-7 w-[80px]">
         <svg viewBox="0 0 120 32" className="h-full w-full" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={gradTopOpacity} />
+              <stop offset="100%" stopColor={color} stopOpacity={gradBottomOpacity} />
+            </linearGradient>
+          </defs>
+          <polygon points={fillPoints} fill={`url(#${gradId})`} />
+          {baselineY != null && (
+            <line
+              x1="0"
+              x2="120"
+              y1={baselineY}
+              y2={baselineY}
+              stroke="var(--color-text-muted)"
+              strokeWidth="0.5"
+              strokeDasharray="3 2"
+              opacity="0.35"
+            />
+          )}
           <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
         </svg>
       </div>
@@ -220,7 +273,12 @@ export default function PositionsPreview() {
                   {/* Sparkline */}
                   <td className="px-3 py-2">
                     {pos.sparkline ? (
-                      <Sparkline symbol={pos.symbol} data={pos.sparkline} dayChangePercent={dcp ?? 0} />
+                      <Sparkline
+                        symbol={pos.symbol}
+                        data={pos.sparkline}
+                        dayChangePercent={dcp ?? 0}
+                        isMarketOpen={marketStatus === 'open' && pos.assetClass !== 'CRYPTO'}
+                      />
                     ) : (
                       <div className="flex h-8 w-[100px] items-center justify-center">
                         <span className="text-2xs text-text-muted/40">—</span>

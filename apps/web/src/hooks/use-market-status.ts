@@ -7,6 +7,28 @@ interface MarketState {
   label: string;
 }
 
+const MARKET_OPEN_MINUTE = 570; // 9:30 AM ET
+const MARKET_DURATION = 390; // 6.5 hours in minutes
+
+/** Returns minutes elapsed since market open (0–390). Only meaningful when status is 'open'. */
+export function getMarketElapsedMinutes(): number {
+  const now = new Date();
+  const et = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  })
+    .formatToParts(now)
+    .reduce<Record<string, string>>((acc, p) => {
+      acc[p.type] = p.value;
+      return acc;
+    }, {});
+
+  const time = parseInt(et.hour, 10) * 60 + parseInt(et.minute, 10);
+  return Math.max(0, Math.min(time - MARKET_OPEN_MINUTE, MARKET_DURATION));
+}
+
 /** Returns current US equity market status based on NYSE hours (Eastern Time). */
 export function useMarketStatus(): MarketState {
   const [state, setState] = useState<MarketState>(() => compute());

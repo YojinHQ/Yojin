@@ -50,13 +50,31 @@ export function isUSMarketOpen(): boolean {
   return minutes >= 570 && minutes < 960; // 9:30 (570) to 16:00 (960)
 }
 
+/** Check if today is a US weekday (Mon–Fri). Used to decide intraday vs multi-day sparkline range. */
+function isUSWeekday(): boolean {
+  const now = new Date();
+  const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day = et.getDay();
+  return day !== 0 && day !== 6;
+}
+
 // ---------------------------------------------------------------------------
 // Live quote enrichment — batch-fetch from Jintel and merge onto positions
 // ---------------------------------------------------------------------------
 
-/** Build a sparkline from price history closing prices, appending the live price. */
-function buildSparkline(history: TickerPriceHistory, livePrice: number): number[] {
-  const points = history.history.map((p) => p.close);
+/** Build a sparkline from price history closing prices, appending the live price.
+ *  When `regularHoursOnly` is true, strips pre-market (<9:30 AM ET) and after-hours (>=4:00 PM ET) candles. */
+function buildSparkline(history: TickerPriceHistory, livePrice: number, regularHoursOnly = false): number[] {
+  let candles = history.history;
+  if (regularHoursOnly) {
+    candles = candles.filter((p) => {
+      const d = new Date(p.date);
+      const et = new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const minutes = et.getHours() * 60 + et.getMinutes();
+      return minutes >= 570 && minutes < 960; // 9:30 AM – 4:00 PM ET
+    });
+  }
+  const points = candles.map((p) => p.close);
   // Append live price so the sparkline extends to "now"
   points.push(livePrice);
   return points;
@@ -89,23 +107,26 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
   const cryptoSet = new Set(snapshot.positions.filter((p) => p.assetClass === 'CRYPTO').map((p) => p.symbol));
   const equitySymbols = symbols.filter((s) => !cryptoSet.has(s));
   const cryptoSymbols = symbols.filter((s) => cryptoSet.has(s));
-  const marketOpen = isUSMarketOpen();
 
   // Parallel fetches: quotes + sparkline history per asset group
-  const fetchHistory = (tickers: string[], range: string) =>
-    client.priceHistory(tickers, range).catch((err: unknown) => {
+  const fetchHistory = (tickers: string[], range: string, interval?: string) =>
+    client.priceHistory(tickers, range, interval).catch((err: unknown) => {
       log.warn('Jintel priceHistory failed', { tickers, error: String(err) });
       return undefined;
     });
 
-  const equityRange = marketOpen ? '1d' : '5d';
+  // Weekdays: always fetch intraday so sparklines show today's movement (even after-hours).
+  // Weekends: fetch 5-day daily candles to show the last trading week.
+  const weekday = isUSWeekday();
+  const equityRange = weekday ? '1d' : '5d';
+  const equityInterval = weekday ? '5m' : undefined;
 
   const [result, equityHistory, cryptoHistory] = await Promise.all([
     client.quotes(symbols).catch((err: unknown) => {
       log.warn('Jintel quotes call failed', { error: String(err) });
       return undefined;
     }),
-    equitySymbols.length > 0 ? fetchHistory(equitySymbols, equityRange) : undefined,
+    equitySymbols.length > 0 ? fetchHistory(equitySymbols, equityRange, equityInterval) : undefined,
     cryptoSymbols.length > 0 ? fetchHistory(cryptoSymbols, '1d') : undefined,
   ]);
 
@@ -166,7 +187,11 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
 
     // Real sparkline from price history; undefined if no history available
     const priceHist = historyMap.get(pos.symbol);
-    const sparkline = priceHist && priceHist.history.length > 0 ? buildSparkline(priceHist, currentPrice) : undefined;
+    const isEquity = !cryptoSet.has(pos.symbol);
+    const sparkline =
+      priceHist && priceHist.history.length > 0
+        ? buildSparkline(priceHist, currentPrice, weekday && isEquity)
+        : undefined;
 
     return {
       ...pos,
