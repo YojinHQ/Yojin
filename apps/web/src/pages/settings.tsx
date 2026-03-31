@@ -5,7 +5,7 @@ import Button from '../components/common/button';
 import Toggle from '../components/common/toggle';
 import { GateCard } from '../components/common/feature-gate';
 import { useOnboardingStatus } from '../lib/onboarding-context';
-import SecurityModal from '../components/settings/security-modal';
+import { SecurityModal } from '../components/settings/security-modal';
 import { TimePicker } from '../components/onboarding/time-picker';
 import { TimezonePicker } from '../components/onboarding/timezone-picker';
 import { ChannelCard } from '../components/channels/channel-card';
@@ -75,6 +75,7 @@ export default function Settings() {
   });
 
   const [securityOpen, setSecurityOpen] = useState(false);
+  const closeSecurityModal = useCallback(() => setSecurityOpen(false), []);
 
   const updatePrivacy = (key: keyof typeof privacy) => (value: boolean) => {
     setPrivacy((prev) => ({ ...prev, [key]: value }));
@@ -201,7 +202,7 @@ export default function Settings() {
           </div>
         )}
       </div>
-      <SecurityModal open={securityOpen} onClose={() => setSecurityOpen(false)} />
+      <SecurityModal open={securityOpen} onClose={closeSecurityModal} />
     </div>
   );
 }

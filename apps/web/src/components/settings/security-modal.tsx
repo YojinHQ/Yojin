@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { cn } from '../../lib/utils';
+import Modal from '../common/modal';
 
 const layers = [
   {
@@ -65,75 +64,53 @@ interface SecurityModalProps {
   onClose: () => void;
 }
 
-export default function SecurityModal({ open, onClose }: SecurityModalProps) {
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
+export function SecurityModal({ open, onClose }: SecurityModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center pl-[220px]">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="How Yojin protects your data"
-        className={cn(
-          'relative w-full max-w-2xl max-h-[80vh] overflow-auto rounded-2xl border border-border bg-bg-secondary p-6',
-        )}
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 cursor-pointer text-text-muted transition-colors hover:text-text-primary"
-          aria-label="Close"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-          </svg>
-        </button>
-        <div className="space-y-6">
-          {/* Intro */}
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 mt-0.5 text-accent-primary">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"
-                />
-              </svg>
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-base font-semibold text-text-primary">Your data never leaves your machine.</h2>
-              <p className="text-sm text-text-secondary leading-relaxed">
-                Your credentials, positions, and account details are stored and processed on your computer &mdash; not
-                on our servers, not in the cloud. The architecture below enforces this at four independent layers, so no
-                single point of failure can expose your data.
-              </p>
-            </div>
+    <Modal
+      open={open}
+      onClose={onClose}
+      maxWidth="max-w-2xl"
+      wrapperClassName="pl-(--spacing-sidebar-width)"
+      aria-labelledby="security-modal-title"
+    >
+      <div className="space-y-6">
+        {/* Intro */}
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 mt-0.5 text-accent-primary">
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"
+              />
+            </svg>
           </div>
+          <div className="space-y-2">
+            <h2 id="security-modal-title" className="text-base font-semibold text-text-primary">
+              Your data never leaves your machine.
+            </h2>
+            <p className="text-sm text-text-secondary leading-relaxed">
+              Your credentials, positions, and account details are stored and processed on your computer &mdash; not on
+              our servers, not in the cloud. The architecture below enforces this at four independent layers, so no
+              single point of failure can expose your data.
+            </p>
+          </div>
+        </div>
 
-          {/* Security layers */}
-          {layers.map((layer, i) => (
-            <div key={i} className="border-t border-border pt-5">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 mt-0.5 text-text-muted">{layer.icon}</div>
-                <div className="space-y-1.5">
-                  <h3 className="text-sm font-semibold text-text-primary">{layer.title}</h3>
-                  <p className="text-xs font-medium italic text-text-muted">{layer.subtitle}</p>
-                  <p className="text-sm text-text-secondary leading-relaxed">{layer.body}</p>
-                </div>
+        {/* Security layers */}
+        {layers.map((layer, i) => (
+          <div key={i} className="border-t border-border pt-5">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 mt-0.5 text-text-muted">{layer.icon}</div>
+              <div className="space-y-1.5">
+                <h3 className="text-sm font-semibold text-text-primary">{layer.title}</h3>
+                <p className="text-xs font-medium italic text-text-muted">{layer.subtitle}</p>
+                <p className="text-sm text-text-secondary leading-relaxed">{layer.body}</p>
               </div>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
-    </div>
+    </Modal>
   );
 }

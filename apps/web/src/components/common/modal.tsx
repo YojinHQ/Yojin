@@ -9,6 +9,8 @@ interface ModalProps {
   maxWidth?: string;
   /** Override the dialog container classes (merged via cn) */
   className?: string;
+  /** Override the fixed outer wrapper classes (e.g. centering offset) */
+  wrapperClassName?: string;
   /** ID of an element that labels the dialog (alternative to title for accessible name) */
   'aria-labelledby'?: string;
 }
@@ -20,6 +22,7 @@ export default function Modal({
   children,
   maxWidth = 'max-w-lg',
   className,
+  wrapperClassName,
   'aria-labelledby': ariaLabelledBy,
 }: ModalProps) {
   useEffect(() => {
@@ -34,7 +37,7 @@ export default function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className={cn('fixed inset-0 z-50 flex items-center justify-center', wrapperClassName)}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
         role="dialog"
