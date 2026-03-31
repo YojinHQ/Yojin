@@ -159,7 +159,7 @@ function WatchlistContent() {
   // Empty state
   if (entries.length === 0) {
     return (
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-6 max-w-5xl mx-auto">
         <PageHeader onAdd={openModal} />
         <div className="mt-6">
           <EmptyState
@@ -175,11 +175,6 @@ function WatchlistContent() {
             }
             title="No symbols yet"
             description="Track stocks and crypto beyond your portfolio"
-            action={
-              <Button variant="primary" size="sm" onClick={openModal}>
-                + Add your first symbol
-              </Button>
-            }
           />
         </div>
         <AddSymbolModal open={modalOpen} onClose={closeModal} existingSymbols={existingSymbols} onAdded={handleAdded} />
