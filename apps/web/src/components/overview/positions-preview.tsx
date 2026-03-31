@@ -142,8 +142,8 @@ export default function PositionsPreview() {
     );
   }
 
-  // Sort by market value descending, show top 5
-  const top = [...data.positions].sort((a, b) => b.marketValue - a.marketValue).slice(0, 5);
+  // Sort by market value descending, show top 10
+  const top = [...data.positions].sort((a, b) => b.marketValue - a.marketValue).slice(0, 10);
 
   return (
     <DashboardCard title="Portfolio" headerAction={viewAllLink}>
