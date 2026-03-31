@@ -107,7 +107,6 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
   const cryptoSet = new Set(snapshot.positions.filter((p) => p.assetClass === 'CRYPTO').map((p) => p.symbol));
   const equitySymbols = symbols.filter((s) => !cryptoSet.has(s));
   const cryptoSymbols = symbols.filter((s) => cryptoSet.has(s));
-  const marketOpen = isUSMarketOpen();
 
   // Parallel fetches: quotes + sparkline history per asset group
   const fetchHistory = (tickers: string[], range: string, interval?: string) =>
