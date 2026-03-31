@@ -13,6 +13,15 @@ import { dirname } from 'node:path';
 
 import { BrainStore } from './brain.js';
 import type { BrainCommit, FrontalLobe as FrontalLobeInterface } from './types.js';
+import { type SubsystemLogger, createSubsystemLogger } from '../logging/logger.js';
+
+let logger: SubsystemLogger;
+try {
+  logger = createSubsystemLogger('brain/frontal-lobe');
+} catch {
+  const noop = () => {};
+  logger = { trace: noop, debug: noop, info: noop, warn: noop, error: noop, fatal: noop, child: () => logger };
+}
 
 const FRONTAL_LOBE_FILE = 'brain/frontal-lobe.md';
 
@@ -55,6 +64,7 @@ export class FrontalLobe implements FrontalLobeInterface {
     const dir = dirname(this.filePath);
     if (!existsSync(dir)) await mkdir(dir, { recursive: true });
     await writeFile(this.filePath, content, 'utf-8');
+    logger.info('Working memory updated', { chars: content.length });
 
     return commitResult;
   }

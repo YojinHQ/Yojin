@@ -8,7 +8,10 @@
 import { POSTURE_CONFIGS } from './posture.js';
 import type { RateBudgetGuard } from './security/rate-budget.js';
 import type { Guard, GuardResult, PostureName, ProposedAction } from './types.js';
+import { createSubsystemLogger } from '../logging/logger.js';
 import type { AuditLog } from '../trust/audit/types.js';
+
+const logger = createSubsystemLogger('guard-runner');
 
 export interface GuardRunnerOptions {
   auditLog: AuditLog;
@@ -25,6 +28,11 @@ export class GuardRunner {
     this.guards = [...guards];
     this.auditLog = options.auditLog;
     this.posture = options.posture ?? 'local';
+    logger.info('Guard runner initialized', {
+      guardCount: guards.length,
+      posture: this.posture,
+      guards: guards.map((g) => g.name),
+    });
   }
 
   /**
@@ -34,6 +42,7 @@ export class GuardRunner {
    */
   freeze(): void {
     this.frozen = true;
+    logger.info('Guard pipeline frozen');
   }
 
   isFrozen(): boolean {
@@ -53,6 +62,13 @@ export class GuardRunner {
       const result = guard.check(action);
 
       if (!result.pass) {
+        logger.warn('Guard blocked action', {
+          guard: guard.name,
+          tool: action.toolName,
+          agentId: action.agentId,
+          reason: result.reason,
+          mode: config.mode,
+        });
         this.auditLog.append({
           type: 'guard.block',
           agentId: action.agentId,
@@ -99,6 +115,7 @@ export class GuardRunner {
     }
     const from = this.posture;
     this.posture = posture;
+    logger.info('Posture changed', { from, to: posture });
 
     // Propagate new rate limit to RateBudgetGuard
     const newConfig = POSTURE_CONFIGS[posture];

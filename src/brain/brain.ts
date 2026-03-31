@@ -11,6 +11,15 @@ import { appendFile, mkdir, readFile } from 'node:fs/promises';
 
 import type { BrainCommit, Brain as BrainInterface } from './types.js';
 import { BrainCommitSchema } from './types.js';
+import { type SubsystemLogger, createSubsystemLogger } from '../logging/logger.js';
+
+let logger: SubsystemLogger;
+try {
+  logger = createSubsystemLogger('brain');
+} catch {
+  const noop = () => {};
+  logger = { trace: noop, debug: noop, info: noop, warn: noop, error: noop, fatal: noop, child: () => logger };
+}
 
 const BRAIN_DIR = 'brain';
 const COMMITS_FILE = `${BRAIN_DIR}/commits.jsonl`;
@@ -44,6 +53,7 @@ export class BrainStore implements BrainInterface {
     BrainCommitSchema.parse(entry);
 
     await appendFile(this.commitsFile, JSON.stringify(entry) + '\n', 'utf-8');
+    logger.info('Brain commit', { hash, type, message });
     return entry;
   }
 
@@ -69,8 +79,13 @@ export class BrainStore implements BrainInterface {
   async rollback(hash: string): Promise<BrainCommit | null> {
     const log = await this.getLog(Number.MAX_SAFE_INTEGER);
     const target = log.find((c) => c.hash === hash);
-    if (!target) return null;
+    if (!target) {
+      logger.warn('Rollback target not found', { hash });
+      return null;
+    }
 
-    return this.commit(`rollback to ${hash}: ${target.message}`, target.type, target.snapshot);
+    const result = await this.commit(`rollback to ${hash}: ${target.message}`, target.type, target.snapshot);
+    logger.info('Rolling back brain state', { targetHash: hash, targetMessage: target.message });
+    return result;
   }
 }

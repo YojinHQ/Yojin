@@ -13,6 +13,15 @@ import { dirname } from 'node:path';
 import { BrainStore } from './brain.js';
 import type { BrainCommit, EmotionState, EmotionTracker as EmotionTrackerInterface } from './types.js';
 import { EmotionStateSchema, createDefaultEmotion } from './types.js';
+import { type SubsystemLogger, createSubsystemLogger } from '../logging/logger.js';
+
+let logger: SubsystemLogger;
+try {
+  logger = createSubsystemLogger('brain/emotion');
+} catch {
+  const noop = () => {};
+  logger = { trace: noop, debug: noop, info: noop, warn: noop, error: noop, fatal: noop, child: () => logger };
+}
 
 const EMOTION_FILE = 'brain/emotion.json';
 
@@ -68,6 +77,11 @@ export class EmotionTracker implements EmotionTrackerInterface {
     const dir = dirname(this.filePath);
     if (!existsSync(dir)) await mkdir(dir, { recursive: true });
     await writeFile(this.filePath, JSON.stringify(updated, null, 2), 'utf-8');
+    logger.info('Emotion updated', {
+      confidence: updated.confidence,
+      riskAppetite: updated.riskAppetite,
+      reason: updated.reason,
+    });
 
     return commitResult;
   }

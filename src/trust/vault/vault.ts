@@ -13,8 +13,11 @@ import { promisify } from 'node:util';
 
 import type { SecretMeta, SecretVault, VaultFile } from './types.js';
 import { VaultFileSchema } from './types.js';
+import { createSubsystemLogger } from '../../logging/logger.js';
 import { resolveVaultDir } from '../../paths.js';
 import type { AuditLog } from '../audit/types.js';
+
+const logger = createSubsystemLogger('vault');
 
 const pbkdf2Async = promisify(pbkdf2);
 
@@ -67,14 +70,19 @@ export class EncryptedVault implements SecretVault {
     const data = this.loadOrCreateVault();
 
     // If user has set a passphrase, don't auto-unlock
-    if (data.passphraseSet) return false;
+    if (data.passphraseSet) {
+      logger.debug('Auto-unlock skipped — vault has custom passphrase');
+      return false;
+    }
 
     // Try empty passphrase
     try {
       await this.unlock('');
+      logger.info('Vault auto-unlocked with default passphrase');
       return true;
     } catch {
       // Vault exists with a non-empty passphrase (legacy vault without passphraseSet flag)
+      logger.debug('Auto-unlock failed — legacy vault with passphrase');
       return false;
     }
   }
@@ -107,6 +115,7 @@ export class EncryptedVault implements SecretVault {
 
     this.derivedKey = key;
     this.vaultData = data;
+    logger.info('Vault unlocked', { entryCount: Object.keys(data.entries).length });
 
     // Write canary if vault doesn't have one yet (first unlock of legacy vault)
     if (!data.canary) {
@@ -137,6 +146,7 @@ export class EncryptedVault implements SecretVault {
 
     this.save();
     this.logAccess(key, 'set');
+    logger.info('Secret stored', { key });
   }
 
   async get(key: string): Promise<string> {
@@ -189,6 +199,7 @@ export class EncryptedVault implements SecretVault {
     delete data.entries[key];
     this.save();
     this.logAccess(key, 'delete');
+    logger.info('Secret deleted', { key });
   }
 
   /**
@@ -202,6 +213,7 @@ export class EncryptedVault implements SecretVault {
 
     await this.reEncrypt(newPassphrase);
     this.auditLog.append({ type: 'secret.access', details: { key: '*', operation: 'set-passphrase' as 'set' } });
+    logger.info('Vault passphrase set');
   }
 
   /**
@@ -233,6 +245,7 @@ export class EncryptedVault implements SecretVault {
 
     await this.reEncrypt(newPassphrase);
     this.auditLog.append({ type: 'secret.access', details: { key: '*', operation: 'change-passphrase' as 'set' } });
+    logger.info('Vault passphrase changed');
   }
 
   /**
@@ -314,6 +327,7 @@ export class EncryptedVault implements SecretVault {
     }
 
     // Create new vault
+    logger.info('Creating new vault');
     const salt = randomBytes(SALT_LENGTH);
     const data: VaultFile = {
       version: 1,

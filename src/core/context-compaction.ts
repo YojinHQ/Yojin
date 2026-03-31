@@ -5,6 +5,9 @@
 
 import type { TokenBudget } from './token-budget.js';
 import type { AgentLoopProvider, AgentMessage, TextBlock } from './types.js';
+import { createSubsystemLogger } from '../logging/logger.js';
+
+const logger = createSubsystemLogger('context-compaction');
 
 export interface CompactionConfig {
   /** Number of recent user/assistant turn pairs to preserve verbatim (default 3). */
@@ -70,6 +73,7 @@ export async function compactMessages(
 
   // If there's nothing to compact (conversation is too short), return as-is
   if (splitIndex <= 0) {
+    logger.debug('Skipping compaction — conversation too short', { messageCount: messagesBefore });
     return {
       messages,
       messagesBefore,
@@ -80,6 +84,11 @@ export async function compactMessages(
 
   const oldMessages = messages.slice(0, splitIndex);
   const recentMessages = messages.slice(splitIndex);
+  logger.info('Compacting context', {
+    messagesBefore,
+    oldMessages: oldMessages.length,
+    recentPreserved: recentMessages.length,
+  });
 
   // Try LLM-based summarization
   try {
@@ -100,6 +109,7 @@ export async function compactMessages(
 
     // Verify compaction actually reduced size
     if (budget.estimateTotal(compactedMessages) < budget.estimateTotal(messages)) {
+      logger.info('LLM compaction succeeded', { messagesBefore, messagesAfter: compactedMessages.length });
       return {
         messages: compactedMessages,
         messagesBefore,
@@ -107,11 +117,13 @@ export async function compactMessages(
         usedLlmSummary: true,
       };
     }
-  } catch {
-    // Fall through to hard trim
+    logger.warn('LLM compaction did not reduce size, falling back to hard trim');
+  } catch (err) {
+    logger.warn('LLM compaction failed, falling back to hard trim', { error: String(err) });
   }
 
   // Fallback: hard trim — just keep recent messages
+  logger.info('Hard trim compaction applied', { messagesBefore, messagesAfter: recentMessages.length });
   return {
     messages: recentMessages,
     messagesBefore,

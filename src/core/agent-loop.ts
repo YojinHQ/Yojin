@@ -26,6 +26,9 @@ import type {
   ToolResultBlock,
   ToolUseBlock,
 } from './types.js';
+import { createSubsystemLogger } from '../logging/logger.js';
+
+const logger = createSubsystemLogger('agent-loop');
 
 const DEFAULT_MAX_ITERATIONS = 20;
 
@@ -59,6 +62,13 @@ export async function runAgentLoop(
     abortSignal,
     piiScanner,
   } = options;
+
+  logger.info('Agent loop started', {
+    agentId,
+    model,
+    maxIterations,
+    toolCount: tools.length,
+  });
 
   const registry = new ToolRegistry();
   for (const tool of tools) {
@@ -94,8 +104,11 @@ export async function runAgentLoop(
   while (iterations < maxIterations) {
     iterations++;
 
+    logger.debug('TAO iteration', { agentId, iteration: iterations, messageCount: messages.length });
+
     // Check abort signal between iterations
     if (abortSignal?.aborted) {
+      logger.warn('Agent loop aborted', { agentId, iteration: iterations });
       const lastAssistant = messages.filter((m) => m.role === 'assistant').pop();
       const fallbackText = extractText(lastAssistant);
       emit(onEvent, { type: 'done', text: fallbackText, iterations });
@@ -141,6 +154,12 @@ export async function runAgentLoop(
     if (response.usage) {
       totalUsage.inputTokens += response.usage.inputTokens;
       totalUsage.outputTokens += response.usage.outputTokens;
+      logger.debug('LLM response received', {
+        agentId,
+        iteration: iterations,
+        inputTokens: response.usage.inputTokens,
+        outputTokens: response.usage.outputTokens,
+      });
     }
 
     // Extract text and tool_use blocks from the response
@@ -154,6 +173,13 @@ export async function runAgentLoop(
 
     // No tool calls → done
     if (toolUseBlocks.length === 0) {
+      logger.info('Agent loop completed', {
+        agentId,
+        iterations,
+        totalInputTokens: totalUsage.inputTokens,
+        totalOutputTokens: totalUsage.outputTokens,
+        compactions,
+      });
       // Rehydrate PII tags in the final response so the user sees original values
       const finalText = piiScanner && piiMap ? await piiScanner.restore(thoughtText, piiMap) : thoughtText;
       emit(onEvent, { type: 'done', text: finalText, iterations });
@@ -171,6 +197,11 @@ export async function runAgentLoop(
       name: b.name,
       input: b.input,
     }));
+    logger.debug('Executing tool calls', {
+      agentId,
+      iteration: iterations,
+      tools: toolCalls.map((c) => c.name),
+    });
     emit(onEvent, { type: 'action', toolCalls });
 
     // Append assistant message with tool_use blocks
@@ -184,6 +215,7 @@ export async function runAgentLoop(
           return { toolCallId: call.id, name: call.name, result };
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
+          logger.error('Tool execution failed', { agentId, tool: call.name, error: msg });
           return {
             toolCallId: call.id,
             name: call.name,
@@ -224,6 +256,12 @@ export async function runAgentLoop(
   }
 
   // Max iterations reached
+  logger.warn('Agent loop hit max iterations', {
+    agentId,
+    maxIterations,
+    totalInputTokens: totalUsage.inputTokens,
+    totalOutputTokens: totalUsage.outputTokens,
+  });
   emit(onEvent, { type: 'max_iterations', iterations });
   if (piiMap) {
     messages[originalUserIdx] = { role: 'user', content: userMessage };

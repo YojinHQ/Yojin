@@ -17,6 +17,9 @@ import type {
   JobHandle,
   JobStatus,
 } from './types.js';
+import { createSubsystemLogger } from '../logging/logger.js';
+
+const logger = createSubsystemLogger('data-source-registry');
 
 export class DataSourceRegistry {
   private sources = new Map<string, DataSourcePlugin>();
@@ -27,6 +30,11 @@ export class DataSourceRegistry {
       throw new Error(`Data source "${plugin.id}" is already registered`);
     }
     this.sources.set(plugin.id, plugin);
+    logger.info('Data source registered', {
+      id: plugin.id,
+      type: plugin.type,
+      capabilities: plugin.capabilities.map((c) => c.id),
+    });
   }
 
   /** Unregister a data source plugin by id. */
@@ -61,20 +69,26 @@ export class DataSourceRegistry {
     const candidates = this.getByCapability(request.capability);
 
     if (candidates.length === 0) {
+      logger.warn('No data source for capability', { capability: request.capability });
       throw new Error(`No data source provides capability "${request.capability}"`);
     }
 
     const errors: Array<{ sourceId: string; error: string }> = [];
 
+    logger.debug('Querying data sources', { capability: request.capability, candidates: candidates.map((c) => c.id) });
     for (const source of candidates) {
       try {
-        return await source.query(request);
+        const result = await source.query(request);
+        logger.debug('Data source query succeeded', { sourceId: source.id, capability: request.capability });
+        return result;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         errors.push({ sourceId: source.id, error: message });
+        logger.warn('Data source query failed, trying next', { sourceId: source.id, error: message });
       }
     }
 
+    logger.error('All data sources failed', { capability: request.capability, errors });
     throw new Error(
       `All data sources failed for capability "${request.capability}": ${errors
         .map((e) => `${e.sourceId}: ${e.error}`)
@@ -173,9 +187,14 @@ export class DataSourceRegistry {
           );
         }
         await source.initialize(config);
+        logger.info('Data source initialized', { id: source.id, type: source.type });
       } else {
         skipped.push(source.id);
       }
+    }
+
+    if (skipped.length > 0) {
+      logger.debug('Data sources skipped (no config)', { skipped });
     }
 
     return skipped;
@@ -183,12 +202,14 @@ export class DataSourceRegistry {
 
   /** Shut down all registered sources. */
   async shutdownAll(): Promise<void> {
+    logger.info('Shutting down all data sources', { count: this.sources.size });
     await Promise.all(
       Array.from(this.sources.values()).map(async (source) => {
         try {
           await source.shutdown();
-        } catch {
-          // Best-effort shutdown — don't let one failure block others
+          logger.debug('Data source shut down', { id: source.id });
+        } catch (err) {
+          logger.warn('Data source shutdown failed', { id: source.id, error: String(err) });
         }
       }),
     );
