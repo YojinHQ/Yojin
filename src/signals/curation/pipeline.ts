@@ -50,7 +50,7 @@ const PROMOTIONAL_CONTENT_RE =
 // Applied to signal body + LLM summaries so self-described junk is caught even when
 // the title looks plausible.
 const JUNK_CONTENT_RE =
-  /(?:tracking pixel|ad[- ]?related image|no substantive (?:financial )?(?:news|content)|only (?:contains?|includes?) (?:tracking|ad|pixel|image))/i;
+  /(?:tracking pixel|ad[- ]?related image|no substantive (?:financial )?(?:news|content)|only (?:contains?|includes?) (?:tracking|ad|pixel|image)|no (?:usable|actionable|meaningful) (?:data|information|content|signal)|(?:lacks|lacking) substance|content is inaccessible|website boilerplate|navigation elements with no actual)/i;
 
 // ---------------------------------------------------------------------------
 // Pipeline options
