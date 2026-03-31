@@ -74,7 +74,7 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
       hasClient: !!jintelClient,
       positionCount: snapshot.positions.length,
     });
-    return snapshot;
+    return { ...snapshot, totalDayChange: snapshot.totalDayChange ?? 0, totalDayChangePercent: snapshot.totalDayChangePercent ?? 0 };
   }
 
   const client = jintelClient;
@@ -110,7 +110,7 @@ async function enrichWithLiveQuotes(snapshot: PortfolioSnapshot): Promise<Portfo
       success: result?.success,
       error: result && 'error' in result ? (result as { error: string }).error : 'no result',
     });
-    return snapshot;
+    return { ...snapshot, totalDayChange: snapshot.totalDayChange ?? 0, totalDayChangePercent: snapshot.totalDayChangePercent ?? 0 };
   }
 
   const validQuotes = result.data.filter((q): q is MarketQuote => q != null);
