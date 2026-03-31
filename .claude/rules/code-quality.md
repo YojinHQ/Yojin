@@ -36,6 +36,8 @@ Extend via interfaces, not modification:
 - Use Result-style returns (`{ success: true, data } | { success: false, error }`) for expected failures.
 - Thrown errors are for unexpected/programmer errors only.
 - Log errors with context before propagating: `logger.error('Failed to enrich', { symbol, error })`.
+- **Log success after the operation, not before.** A log like `logger.info('Session deleted')` must come after `await rm(...)`, not before. If the operation fails, a pre-operation log creates a misleading entry. Exception: log errors before propagating (see above).
+- **Reserve `warn` for unexpected or actionable conditions.** Expected paths (e.g. a data source intentionally left unconfigured) should use `debug` or `info`. `warn` implies something needs attention — if it fires on every normal startup, it's noise.
 - Never swallow errors silently.
 - In `finally` blocks, wrap cleanup in its own try/catch to avoid suppressing the original exception.
 - When a function has setup + action + cleanup, decide explicitly whether setup failure should abort or be best-effort. Match the error strategy symmetrically.
