@@ -68,17 +68,39 @@ function isUSWeekday(): boolean {
 // Live quote enrichment — batch-fetch from Jintel and merge onto positions
 // ---------------------------------------------------------------------------
 
-/** Build a sparkline from price history closing prices, appending the live price.
- *  When `regularHoursOnly` is true, strips pre-market (<9:30 AM ET) and after-hours (>=4:00 PM ET) candles. */
+/** Parse a candle timestamp as UTC. The Jintel API returns UTC timestamps
+ *  without a timezone suffix (e.g. '2026-03-31 16:30:00'). Bare `new Date()`
+ *  treats these as local time, shifting the regular-hours filter by the host's
+ *  UTC offset and selecting the wrong session's candles. */
+function parseUTC(dateStr: string): Date {
+  if (dateStr.includes('Z') || /[+-]\d{2}:?\d{2}$/.test(dateStr)) return new Date(dateStr);
+  return new Date(dateStr.replace(' ', 'T') + 'Z');
+}
+
+/** Return the ET calendar date key (YYYY-MM-DD) for a UTC timestamp string. */
+function toETDate(dateStr: string): string {
+  const d = parseUTC(dateStr);
+  const et = new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  return `${et.getFullYear()}-${String(et.getMonth() + 1).padStart(2, '0')}-${String(et.getDate()).padStart(2, '0')}`;
+}
+
+/** Build a sparkline from price history closing prices.
+ *  When `regularHoursOnly` is true, strips pre-market (<9:30 AM ET) and after-hours (>=4:00 PM ET) candles
+ *  and keeps only the latest trading date so a multi-session 1d range doesn't produce an overnight cliff. */
 function buildSparkline(history: TickerPriceHistory, livePrice: number, regularHoursOnly = false): number[] {
   let candles = history.history;
   if (regularHoursOnly) {
     candles = candles.filter((p) => {
-      const d = new Date(p.date);
+      const d = parseUTC(p.date);
       const et = new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }));
       const minutes = et.getHours() * 60 + et.getMinutes();
       return minutes >= 570 && minutes < 960; // 9:30 AM – 4:00 PM ET
     });
+    // The '1d/5m' range can span two trading sessions. Keep only the latest date.
+    if (candles.length > 1) {
+      const latest = toETDate(candles[candles.length - 1].date);
+      candles = candles.filter((p) => toETDate(p.date) === latest);
+    }
   }
   const points = candles.map((p) => p.close);
   // Append live price so the sparkline extends to "now"

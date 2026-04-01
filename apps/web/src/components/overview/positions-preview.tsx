@@ -72,7 +72,10 @@ function Sparkline({
   if (showBaseline) {
     const currentPrice = data[data.length - 1];
     const prevClose = currentPrice / (1 + dayChangePercent / 100);
-    baselineY = 32 - ((prevClose - min) / range) * 24 - 4;
+    const rawY = 32 - ((prevClose - min) / range) * 24 - 4;
+    // Clamp to SVG viewBox so the baseline is visible even when prevClose is
+    // outside the candle data range (e.g. pre-market gap).
+    baselineY = Math.max(0, Math.min(32, rawY));
   }
 
   // Positive: fill below line to bottom; Negative: fill above line to baseline
@@ -101,9 +104,9 @@ function Sparkline({
               y1={baselineY}
               y2={baselineY}
               stroke="var(--color-text-muted)"
-              strokeWidth="0.5"
+              strokeWidth="1"
               strokeDasharray="3 2"
-              opacity="0.35"
+              opacity="0.5"
             />
           )}
           <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
