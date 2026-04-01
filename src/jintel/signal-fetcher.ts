@@ -147,7 +147,7 @@ const JUNK_TITLE_PATTERN =
  * These frequently match short tickers as substrings (e.g. "Unh Unh" → UNH).
  */
 const JUNK_DOMAIN_PATTERN =
-  /\b(spotify\.com|soundcloud\.com|genius\.com|bandcamp\.com|deezer\.com|tidal\.com|shazam\.com|collinsdictionary\.com|merriam-webster\.com|dictionary\.com|wiktionary\.org|urbandictionary\.com|cambridge\.org\/dictionary|oxforddictionaries\.com)\b/i;
+  /\b(spotify\.com|soundcloud\.com|genius\.com|bandcamp\.com|deezer\.com|tidal\.com|shazam\.com|collinsdictionary\.com|merriam-webster\.com|dictionary\.com|wiktionary\.org|wikipedia\.org|urbandictionary\.com|cambridge\.org\/dictionary|oxforddictionaries\.com)\b/i;
 
 /** Titles that are just entity names with optional ticker suffix (e.g. "Invesco QQQ ETF | ICVT", "Apple Inc (AAPL)") */
 function isEntityNameTitle(title: string, entityName: string | undefined): boolean {
