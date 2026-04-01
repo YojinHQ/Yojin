@@ -56,9 +56,11 @@ export default function SignalGroupCard({ group }: SignalGroupCardProps) {
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            <Badge variant={group.outputType === 'ALERT' ? 'warning' : 'accent'} size="sm">
-              {group.outputType}
-            </Badge>
+            {group.outputType === 'ALERT' && (
+              <Badge variant="warning" size="sm">
+                ALERT
+              </Badge>
+            )}
             {group.tickers.map((t) => (
               <Link
                 key={t}

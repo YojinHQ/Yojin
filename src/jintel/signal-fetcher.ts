@@ -140,20 +140,23 @@ function mentionsEntity(text: string, tickers: string[], entityName: string | un
 }
 
 const JUNK_TITLE_PATTERN =
-  /stock price|in real time$|tradingview|quote & history|commission-free|buy and sell|spy vs\.? spy|song and lyrics|official music video|official video|official audio|full album|definition and meaning|definition of\b|meaning of\b|\bdefinition\b.*\bdictionary\b/i;
+  /__\w+__|stock quote price|stock quotes? from|stock price|in real time$|tradingview|quote & history|price and forecast|price chart|commission-free|buy and sell|closed at \$|what you need to know$|spy vs\.? spy|song and lyrics|official music video|official video|official audio|full album|definition and meaning|definition of\b|meaning of\b|\bdefinition\b.*\bdictionary\b/i;
 
 /**
  * Domains that produce entertainment/non-financial or reference content.
  * These frequently match short tickers as substrings (e.g. "Unh Unh" → UNH).
  */
 const JUNK_DOMAIN_PATTERN =
-  /\b(spotify\.com|soundcloud\.com|genius\.com|bandcamp\.com|deezer\.com|tidal\.com|shazam\.com|collinsdictionary\.com|merriam-webster\.com|dictionary\.com|wiktionary\.org|urbandictionary\.com|cambridge\.org\/dictionary|oxforddictionaries\.com)\b/i;
+  /\b(spotify\.com|soundcloud\.com|genius\.com|bandcamp\.com|deezer\.com|tidal\.com|shazam\.com|collinsdictionary\.com|merriam-webster\.com|dictionary\.com|wiktionary\.org|wikipedia\.org|urbandictionary\.com|cambridge\.org\/dictionary|oxforddictionaries\.com)\b/i;
 
-/** Titles that are just entity names with optional ticker suffix (e.g. "Invesco QQQ ETF | ICVT") */
+/** Titles that are just entity names with optional ticker suffix (e.g. "Invesco QQQ ETF | ICVT", "Apple Inc (AAPL)") */
 function isEntityNameTitle(title: string, entityName: string | undefined): boolean {
   if (!entityName) return false;
-  // Strip trailing " | TICKER" and compare to entity name
-  const cleaned = title.replace(/\s*\|\s*[A-Z0-9.]+$/, '').trim();
+  // Strip trailing " | TICKER" or " (TICKER)" and compare to entity name
+  const cleaned = title
+    .replace(/\s*\|\s*[A-Z0-9.]+$/, '')
+    .replace(/\s*\([A-Z0-9.]+\)$/, '')
+    .trim();
   return cleaned.toLowerCase() === entityName.toLowerCase();
 }
 
@@ -214,8 +217,9 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       sourceName: 'Jintel',
       sourceType: 'ENRICHMENT',
       reliability: 0.95,
-      title: `${name}: ${titleParts.join(' | ')}`,
-      content: contentLines.join('\n'),
+      // Stable title for content-hash dedup — live values go in content only
+      title: `${name} Market Snapshot`,
+      content: `${titleParts.join(' | ')}\n${contentLines.join('\n')}`,
       publishedAt: now,
       type: SignalType.FUNDAMENTAL,
       tickers,
@@ -240,15 +244,16 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     });
   }
 
-  // 4. Significant price moves (>=2%)
-  if (quote && Math.abs(quote.changePercent) >= 2) {
+  // 4. Significant price moves (>=8%) — only flag outliers worth investigating
+  if (quote && Math.abs(quote.changePercent) >= 8) {
     const direction = quote.changePercent > 0 ? 'up' : 'down';
     signals.push({
       sourceId: 'jintel-market',
       sourceName: 'Jintel Market',
       sourceType: 'ENRICHMENT',
       reliability: 0.95,
-      title: `${quote.ticker} ${direction} ${Math.abs(quote.changePercent).toFixed(1)}% to $${quote.price.toFixed(2)}`,
+      title: `${entity.name ?? tickers[0]} Significant Price Move`,
+      content: `${quote.ticker} ${direction} ${Math.abs(quote.changePercent).toFixed(1)}% to $${quote.price.toFixed(2)}`,
       publishedAt: now,
       type: SignalType.TECHNICAL,
       tickers,
@@ -324,7 +329,8 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
         sourceName: 'Jintel Technicals',
         sourceType: 'ENRICHMENT',
         reliability: 0.9,
-        title: `${entity.name ?? tickers[0]} Technicals: ${parts[0]}`,
+        // Stable title for content-hash dedup — live indicator values go in content only
+        title: `${entity.name ?? tickers[0]} Technical Indicators`,
         content: parts.join('\n'),
         publishedAt: now,
         type: SignalType.TECHNICAL,
@@ -334,7 +340,8 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     }
   }
 
-  // 8. Social sentiment
+  // 8. Social sentiment — title must be stable per-day for content-hash dedup.
+  // Live-changing values (rank, mention counts) go in content only.
   if (entity.sentiment) {
     const s = entity.sentiment;
     const rankDelta = s.rank24hAgo - s.rank;
@@ -346,8 +353,8 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       sourceName: 'Jintel Social Sentiment',
       sourceType: 'ENRICHMENT',
       reliability: 0.7,
-      title: `${entity.name ?? tickers[0]} Social: Rank #${s.rank} (${rankDir}) | ${s.mentions} mentions (${mentionDir})`,
-      content: `Social sentiment for ${s.name}: Rank #${s.rank}, ${s.mentions} mentions, ${s.upvotes} upvotes (24h ago: rank #${s.rank24hAgo}, ${s.mentions24hAgo} mentions)`,
+      title: `${entity.name ?? tickers[0]} Social Sentiment`,
+      content: `Rank #${s.rank} (${rankDir}) | ${s.mentions} mentions (${mentionDir}), ${s.upvotes} upvotes (24h ago: rank #${s.rank24hAgo}, ${s.mentions24hAgo} mentions)`,
       publishedAt: now,
       type: SignalType.SENTIMENT,
       tickers,

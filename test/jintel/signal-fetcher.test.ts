@@ -103,7 +103,7 @@ describe('enrichmentToSignals — signal type classification', () => {
           ticker: 'AAPL',
           price: 150.0,
           change: 5.0,
-          changePercent: 3.5,
+          changePercent: 9.0,
           volume: 80000000,
           timestamp: '2026-03-31T16:00:00Z',
           source: 'yahoo',

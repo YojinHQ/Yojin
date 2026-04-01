@@ -80,16 +80,6 @@ function classifySignal(signal: { outputType?: string | null }): ItemType {
   return 'insight';
 }
 
-const typeLabel: Record<ItemType, string> = {
-  alert: 'ALERT',
-  insight: 'INSIGHT',
-};
-
-const typeLabelColor: Record<ItemType, string> = {
-  alert: 'text-warning',
-  insight: 'text-success',
-};
-
 const dataAccentBorder: Record<ItemType, string> = {
   alert: 'border-warning/30',
   insight: 'border-success/30',
@@ -419,17 +409,17 @@ function IntelFeedCard({
         <ItemIcon icon={item.icon} sentiment={item.sentiment} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className={cn('text-2xs font-semibold tracking-wide uppercase', typeLabelColor[item.type])}>
-              {typeLabel[item.type]}
-            </span>
             <span
               className={cn(
-                'rounded-full px-1.5 py-0.5 text-[9px] font-medium leading-none',
+                'rounded-full px-1.5 py-0.5 text-[9px] font-semibold leading-none uppercase tracking-wide',
                 signalTypeBadgeColor[item.signalType] ?? 'bg-text-muted/10 text-text-muted',
               )}
             >
               {signalTypeLabel[item.signalType] ?? item.signalType}
             </span>
+            {item.type === 'alert' && (
+              <span className="text-2xs font-semibold tracking-wide uppercase text-warning">ALERT</span>
+            )}
             {item.verdict && (
               <span
                 className={cn(
