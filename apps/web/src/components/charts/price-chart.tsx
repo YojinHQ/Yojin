@@ -20,6 +20,8 @@ export interface PriceChartDatum {
 
 interface PriceChartProps {
   data: PriceChartDatum[];
+  /** When true, preserves intraday timestamps and shows time on the axis. */
+  intraday?: boolean;
 }
 
 const COLORS = {
@@ -35,19 +37,32 @@ const COLORS = {
   volumeDown: 'rgba(255, 90, 94, 0.25)',
 } as const;
 
-/** Deduplicate by date (keep last occurrence), normalize to yyyy-mm-dd, sort chronologically. */
-function dedup(data: PriceChartDatum[]): PriceChartDatum[] {
+/** Deduplicate by date key (keep last occurrence), sort chronologically. */
+function dedup(data: PriceChartDatum[], intraday: boolean): PriceChartDatum[] {
   const map = new Map<string, PriceChartDatum>();
   for (const d of data) {
-    const day = d.date.slice(0, 10);
-    map.set(day, { ...d, date: day });
+    if (intraday) {
+      // Use full ISO string as key to preserve intraday granularity
+      map.set(d.date, d);
+    } else {
+      const day = d.date.slice(0, 10);
+      map.set(day, { ...d, date: day });
+    }
   }
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function toChartData(data: PriceChartDatum[]): CandlestickData<Time>[] {
+function toTime(dateStr: string, intraday: boolean): Time {
+  if (intraday) {
+    // Convert ISO string to Unix timestamp (seconds) for intraday
+    return (new Date(dateStr).getTime() / 1000) as unknown as Time;
+  }
+  return dateStr as Time;
+}
+
+function toChartData(data: PriceChartDatum[], intraday: boolean): CandlestickData<Time>[] {
   return data.map((d) => ({
-    time: d.date as Time,
+    time: toTime(d.date, intraday),
     open: d.open,
     high: d.high,
     low: d.low,
@@ -55,15 +70,15 @@ function toChartData(data: PriceChartDatum[]): CandlestickData<Time>[] {
   }));
 }
 
-function toVolumeData(data: PriceChartDatum[]) {
+function toVolumeData(data: PriceChartDatum[], intraday: boolean) {
   return data.map((d) => ({
-    time: d.date as Time,
+    time: toTime(d.date, intraday),
     value: d.volume,
     color: d.close >= d.open ? COLORS.volumeUp : COLORS.volumeDown,
   }));
 }
 
-export function PriceChart({ data }: PriceChartProps) {
+export function PriceChart({ data, intraday = false }: PriceChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
@@ -98,7 +113,7 @@ export function PriceChart({ data }: PriceChartProps) {
           rightPriceScale: { borderColor: COLORS.border },
           timeScale: {
             borderColor: COLORS.border,
-            timeVisible: false,
+            timeVisible: intraday,
             fixLeftEdge: true,
             fixRightEdge: true,
           },
@@ -107,7 +122,7 @@ export function PriceChart({ data }: PriceChartProps) {
 
         chartRef.current = chart;
 
-        const clean = dedup(data);
+        const clean = dedup(data, intraday);
 
         const candleSeries = chart.addSeries(CandlestickSeries, {
           upColor: COLORS.up,
@@ -117,14 +132,14 @@ export function PriceChart({ data }: PriceChartProps) {
           wickDownColor: COLORS.downWick,
           wickUpColor: COLORS.upWick,
         });
-        candleSeries.setData(toChartData(clean));
+        candleSeries.setData(toChartData(clean, intraday));
 
         const volumeSeries = chart.addSeries(HistogramSeries, {
           priceFormat: { type: 'volume' },
           priceScaleId: 'volume',
         });
         chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
-        volumeSeries.setData(toVolumeData(clean));
+        volumeSeries.setData(toVolumeData(clean, intraday));
 
         chart.timeScale().fitContent();
 
@@ -148,7 +163,7 @@ export function PriceChart({ data }: PriceChartProps) {
       chartRef.current?.remove();
       chartRef.current = null;
     };
-  }, [data]);
+  }, [data, intraday]);
 
   return <div ref={containerRef} className="w-full h-[360px]" />;
 }

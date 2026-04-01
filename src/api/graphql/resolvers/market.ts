@@ -154,7 +154,7 @@ interface TickerPriceHistory {
 
 export async function priceHistoryQuery(
   _parent: unknown,
-  args: { tickers: string[]; range?: string },
+  args: { tickers: string[]; range?: string; interval?: string },
 ): Promise<TickerPriceHistory[]> {
   if (!jintelClient) return [];
 
@@ -162,6 +162,7 @@ export async function priceHistoryQuery(
     const result = await jintelClient.priceHistory(
       args.tickers.map((t) => t.toUpperCase()),
       args.range ?? '1y',
+      args.interval,
     );
     return result.success ? result.data : [];
   } catch (err) {

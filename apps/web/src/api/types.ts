@@ -273,6 +273,7 @@ export interface PriceHistoryQueryResult {
 export interface PriceHistoryQueryVariables {
   tickers: string[];
   range?: string;
+  interval?: string;
 }
 
 export interface Article {

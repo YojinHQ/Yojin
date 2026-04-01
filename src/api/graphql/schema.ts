@@ -1039,7 +1039,7 @@ export const typeDefs = /* GraphQL */ `
     alerts(status: AlertStatus): [Alert!]!
     news(symbol: String, limit: Int): [Article!]!
     quote(symbol: String!): Quote
-    priceHistory(tickers: [String!]!, range: String): [TickerPriceHistory!]!
+    priceHistory(tickers: [String!]!, range: String, interval: String): [TickerPriceHistory!]!
     listConnections: [Connection!]!
     detectAvailableTiers(platform: String!): [TierAvailability!]!
     listDataSources: [DataSource!]!
