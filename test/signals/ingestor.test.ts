@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SignalArchive } from '../../src/signals/archive.js';
 import { SignalIngestor } from '../../src/signals/ingestor.js';
 import type { RawSignalInput } from '../../src/signals/ingestor.js';
-import { SummaryGenerator } from '../../src/signals/summary-generator.js';
+import { QualityAgent } from '../../src/signals/quality-agent.js';
 
 function makeInput(overrides: Partial<RawSignalInput> = {}): RawSignalInput {
   return {
@@ -182,43 +182,42 @@ describe('SignalIngestor', () => {
     expect(result.ingested).toBe(0);
   });
 
-  describe('false-match and quality filtering', () => {
-    function makeSummaryGenerator(
+  describe('quality agent filtering', () => {
+    function makeQualityAgent(
       overrides: Partial<{
-        isFalseMatch: boolean;
-        isIrrelevant: boolean;
+        verdict: 'KEEP' | 'DROP';
+        dropReason: string;
         qualityScore: number;
       }> = {},
-    ): SummaryGenerator {
+    ): QualityAgent {
+      const { verdict = 'KEEP', dropReason, qualityScore = 75 } = overrides;
       const response = JSON.stringify({
         tier1: 'Test headline',
         tier2: 'Test summary for the signal.',
         sentiment: 'NEUTRAL',
         isUrgent: false,
-        isIrrelevant: false,
-        isFalseMatch: false,
-        qualityScore: 75,
-        ...overrides,
+        verdict,
+        dropReason: dropReason ?? null,
+        qualityScore,
+        duplicateOf: null,
       });
-      return new SummaryGenerator({ complete: async () => response });
+      return new QualityAgent({ complete: async () => response });
     }
 
     it('drops signals flagged as false matches', async () => {
-      ingestor.setSummaryGenerator(makeSummaryGenerator({ isFalseMatch: true, qualityScore: 10 }));
+      ingestor.setQualityAgent(makeQualityAgent({ verdict: 'DROP', dropReason: 'false_match', qualityScore: 10 }));
 
       const result = await ingestor.ingest([
         makeInput({ title: 'Apple Music page for song lyrics', tickers: ['AXTI'] }),
       ]);
 
-      // Signal is counted as ingested by the ingestor (it passed dedup),
-      // but filtered out by enrichWithSummaries before archive write
       expect(result.ingested).toBe(1);
       const signals = await archive.query({});
       expect(signals).toHaveLength(0);
     });
 
     it('drops signals with quality score below threshold', async () => {
-      ingestor.setSummaryGenerator(makeSummaryGenerator({ qualityScore: 20 }));
+      ingestor.setQualityAgent(makeQualityAgent({ qualityScore: 20 }));
 
       const result = await ingestor.ingest([makeInput({ title: 'Generic market chatter with no impact' })]);
 
@@ -228,7 +227,7 @@ describe('SignalIngestor', () => {
     });
 
     it('keeps signals with quality score at threshold', async () => {
-      ingestor.setSummaryGenerator(makeSummaryGenerator({ qualityScore: 40 }));
+      ingestor.setQualityAgent(makeQualityAgent({ qualityScore: 40 }));
 
       const result = await ingestor.ingest([makeInput({ title: 'Moderate relevance market signal' })]);
 
@@ -237,8 +236,8 @@ describe('SignalIngestor', () => {
       expect(signals).toHaveLength(1);
     });
 
-    it('keeps high-quality signals that are not false matches', async () => {
-      ingestor.setSummaryGenerator(makeSummaryGenerator({ qualityScore: 85, isFalseMatch: false }));
+    it('keeps high-quality signals', async () => {
+      ingestor.setQualityAgent(makeQualityAgent({ qualityScore: 85 }));
 
       const result = await ingestor.ingest([makeInput({ title: 'AAPL earnings beat by 15%', tickers: ['AAPL'] })]);
 
@@ -248,8 +247,8 @@ describe('SignalIngestor', () => {
       expect(signals[0].tier1).toBe('Test headline');
     });
 
-    it('does not filter signals without a summary generator', async () => {
-      // No summary generator wired — signals pass through raw
+    it('does not filter signals without a quality agent', async () => {
+      // No quality agent wired — signals pass through raw
       const result = await ingestor.ingest([makeInput({ title: 'Signal without LLM enrichment' })]);
 
       expect(result.ingested).toBe(1);

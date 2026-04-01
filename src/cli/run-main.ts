@@ -39,12 +39,11 @@ import { resolveDataRoot } from '../paths.js';
 import { Scheduler } from '../scheduler.js';
 import { JsonlSessionStore } from '../sessions/jsonl-store.js';
 import { SignalClustering } from '../signals/clustering.js';
-import type { ClassificationResult, ClassifyInput } from '../signals/clustering.js';
 import { AssessmentConfigSchema } from '../signals/curation/assessment-types.js';
 import { registerFullCurationWorkflow } from '../signals/curation/full-curation-workflow.js';
 import { runCurationPipeline } from '../signals/curation/pipeline.js';
 import { CurationConfigSchema } from '../signals/curation/types.js';
-import { SummaryGenerator } from '../signals/summary-generator.js';
+import { QualityAgent } from '../signals/quality-agent.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
 
 const require = createRequire(import.meta.url);
@@ -117,8 +116,7 @@ async function buildFullRuntime(): Promise<{
   setOnboardingClaudeCodeProvider(claudeProvider);
   setAiConfigProviderRouter(providerRouter);
 
-  // Wire signal clustering — LLM-based dedup, linking, and summary/outputType classification.
-  // Uses a lightweight completion adapter so SummaryGenerator and classify calls go through ProviderRouter.
+  // Wire signal quality pipeline — single QualityAgent handles enrichment, dedup, and quality gating.
   const llmComplete = async (prompt: string): Promise<string> => {
     const result = await providerRouter.completeWithTools({
       model: 'haiku',
@@ -132,35 +130,16 @@ async function buildFullRuntime(): Promise<{
     return text;
   };
 
-  const summaryGenerator = new SummaryGenerator({ complete: llmComplete });
-
-  const classify = async (input: ClassifyInput): Promise<ClassificationResult> => {
-    const prompt = `You are a financial news deduplication classifier. Compare these two signals and respond with exactly one word: SAME, RELATED, or DIFFERENT.
-
-Signal A: [${input.existing.type}] "${input.existing.title}" (tickers: ${input.existing.tickers.join(', ')}, time: ${input.existing.time})
-Signal B: [${input.incoming.type}] "${input.incoming.title}" (tickers: ${input.incoming.tickers.join(', ')}, time: ${input.incoming.time})
-
-SAME = identical event from different sources
-RELATED = causally connected events (e.g. earnings report + analyst reaction)
-DIFFERENT = unrelated events that happen to share a ticker
-
-Answer:`;
-    const raw = await llmComplete(prompt);
-    const trimmed = raw.trim().toUpperCase();
-    if (trimmed === 'SAME' || trimmed === 'RELATED' || trimmed === 'DIFFERENT') return trimmed;
-    // Fallback: if LLM returns something unexpected, treat as DIFFERENT to avoid bad merges
-    return 'DIFFERENT';
-  };
+  const qualityAgent = new QualityAgent({ complete: llmComplete });
 
   const clustering = new SignalClustering({
     archive: services.signalArchive,
     groupArchive: services.signalGroupArchive,
-    classify,
-    generator: summaryGenerator,
+    qualityAgent,
     concurrencyLimit: 5,
   });
   services.signalIngestor.setClustering(clustering);
-  services.signalIngestor.setSummaryGenerator(summaryGenerator);
+  services.signalIngestor.setQualityAgent(qualityAgent);
 
   // ReflectionEngine with lazy price provider — reads jintelToolOptions.client at call time.
   const priceProvider = createJintelPriceProvider({

@@ -107,6 +107,12 @@ export const SignalSchema = z.object({
   sentiment: SignalSentimentSchema.optional(),
   // Feed classification
   outputType: SignalOutputTypeSchema.default('INSIGHT'),
+  // LLM quality assessment — persisted so curation pipeline can filter generically
+  // without regex blocklists. All optional for backward compat with pre-existing signals.
+  qualityScore: z.number().int().min(0).max(100).optional(),
+  isFalseMatch: z.boolean().optional(),
+  isIrrelevant: z.boolean().optional(),
+  isDuplicate: z.boolean().optional(),
   // Causal chain linking
   groupId: z.string().nullable().optional(),
   // Append-only versioning for multi-source merge

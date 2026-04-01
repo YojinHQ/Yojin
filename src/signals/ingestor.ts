@@ -17,7 +17,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import type { SignalArchive } from './archive.js';
 import type { SignalClustering } from './clustering.js';
-import type { SummaryGenerator } from './summary-generator.js';
+import type { QualityAgent, QualityVerdict, RecentSignalContext } from './quality-agent.js';
 import { extractTickers } from './ticker-extractor.js';
 import type { SymbolResolver } from './ticker-extractor.js';
 import { SignalSchema } from './types.js';
@@ -25,6 +25,45 @@ import type { Signal, SignalType } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 
 const logger = createSubsystemLogger('signal-ingestor');
+
+// ---------------------------------------------------------------------------
+// Pre-ingest quality filter — cheap deterministic checks that catch obvious
+// junk BEFORE we spend LLM tokens on summary generation. Patterns consolidated
+// from Jintel signal-fetcher and data-source adapters.
+// ---------------------------------------------------------------------------
+
+/** Non-financial domains that frequently match short tickers as substrings. */
+const JUNK_DOMAIN_RE =
+  /\b(spotify\.com|soundcloud\.com|genius\.com|bandcamp\.com|deezer\.com|tidal\.com|shazam\.com|collinsdictionary\.com|merriam-webster\.com|dictionary\.com|wiktionary\.org|wikipedia\.org|urbandictionary\.com|cambridge\.org\/dictionary|oxforddictionaries\.com|imdb\.com|rottentomatoes\.com|fandom\.com)\b/i;
+
+/** Title patterns that indicate non-financial content or scraper junk. */
+const JUNK_TITLE_RE =
+  /stock quote price|stock quotes? from|in real time$|tradingview|quote & history|price and forecast|price chart|commission-free|buy and sell|song and lyrics|official music video|official video|official audio|full album|definition and meaning|definition of\b|meaning of\b|\bdefinition\b.*\bdictionary\b|__\w+__/i;
+
+/** Minimum title length for a meaningful signal. */
+const MIN_TITLE_LENGTH = 10;
+
+/** Maximum age (in ms) for a signal to be worth processing. */
+const MAX_SIGNAL_AGE_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+
+/** Fast pre-filter: returns false for items that are obvious junk. */
+function passesPreFilter(item: RawSignalInput): boolean {
+  const title = item.title?.trim();
+  if (!title || title.length < MIN_TITLE_LENGTH) return false;
+
+  // Stale content
+  const pubDate = new Date(item.publishedAt);
+  if (isNaN(pubDate.getTime()) || Date.now() - pubDate.getTime() > MAX_SIGNAL_AGE_MS) return false;
+
+  // Non-financial domains
+  const link = (item.metadata?.link as string) ?? item.link ?? '';
+  if (link && JUNK_DOMAIN_RE.test(link)) return false;
+
+  // Junk title patterns
+  if (JUNK_TITLE_RE.test(title)) return false;
+
+  return true;
+}
 
 /** Raw data item from a data source, before classification. */
 export interface RawSignalInput {
@@ -76,7 +115,7 @@ export class SignalIngestor {
   private readonly archive: SignalArchive;
   private readonly symbolResolver?: SymbolResolver;
   private clustering?: SignalClustering;
-  private summaryGenerator?: SummaryGenerator;
+  private qualityAgent?: QualityAgent;
   private portfolioTickerProvider?: PortfolioTickerProvider;
   private postIngestHook?: PostIngestHook;
   private knownHashes = new Map<string, string>(); // contentHash → signalId
@@ -103,9 +142,9 @@ export class SignalIngestor {
     this.clustering = clustering;
   }
 
-  /** Late-wire summary generator — generates tier1/tier2 for signals that bypass clustering. */
-  setSummaryGenerator(generator: SummaryGenerator): void {
-    this.summaryGenerator = generator;
+  /** Late-wire quality agent — single LLM gate for all incoming signals. */
+  setQualityAgent(agent: QualityAgent): void {
+    this.qualityAgent = agent;
   }
 
   /** Reset cached state after external data wipe (clearAppData). */
@@ -134,6 +173,12 @@ export class SignalIngestor {
   async ingest(items: RawSignalInput[]): Promise<IngestResult> {
     await this.initialize();
 
+    // Pre-filter: cheap deterministic checks before we spend LLM tokens.
+    const preFiltered = items.filter(passesPreFilter);
+    if (preFiltered.length < items.length) {
+      logger.debug(`Pre-filter dropped ${items.length - preFiltered.length}/${items.length} items`);
+    }
+
     // Load portfolio tickers once for the entire batch
     const portfolioTickers = this.portfolioTickerProvider ? await this.portfolioTickerProvider() : null;
 
@@ -143,7 +188,7 @@ export class SignalIngestor {
     const signals: Signal[] = [];
     let dropped = 0;
 
-    for (const item of items) {
+    for (const item of preFiltered) {
       try {
         const signal = this.toSignal(item);
         if (!signal) continue;
@@ -204,11 +249,11 @@ export class SignalIngestor {
           await this.clustering.processSignals(signals);
         } catch (err) {
           logger.warn('Signal clustering failed, writing raw signals as fallback', { error: err });
-          const enriched = await this.enrichWithSummaries(signals);
+          const enriched = await this.evaluateQuality(signals);
           await this.archive.appendBatch(enriched);
         }
       } else {
-        const enriched = await this.enrichWithSummaries(signals);
+        const enriched = await this.evaluateQuality(signals);
         await this.archive.appendBatch(enriched);
       }
       logger.info(`Ingested ${signals.length} signals${dropped > 0 ? `, ${dropped} dropped (not in portfolio)` : ''}`);
@@ -377,79 +422,100 @@ export class SignalIngestor {
   }
 
   /**
-   * Generate tier1/tier2/sentiment for signals that don't go through clustering.
-   * Skips signals that already have summaries (from a previous run or manual override).
-   * Best-effort — LLM failures leave the signal unchanged.
+   * Run the quality agent on signals that don't go through clustering.
+   * Single LLM call per signal — decides KEEP/DROP and produces summaries.
    */
-  /** Minimum quality score (0-100) for a signal to pass ingestion. Below this = dropped. */
-  private static readonly MIN_QUALITY_SCORE = 40;
+  private async evaluateQuality(signals: Signal[]): Promise<Signal[]> {
+    if (!this.qualityAgent) return signals;
 
-  private async enrichWithSummaries(signals: Signal[]): Promise<Signal[]> {
-    if (!this.summaryGenerator) return signals;
+    // Pre-fetch recent signals for all tickers in the batch (single query, no N+1).
+    const allTickers = [...new Set(signals.flatMap((s) => s.assets.map((a) => a.ticker)))];
+    const recentByTicker = await this.getRecentSignalsByTicker(allTickers);
 
     const results: Signal[] = [];
-    let irrelevantDropped = 0;
-    let falseMatchDropped = 0;
-    let lowQualityDropped = 0;
+    const dropCounts: Record<string, number> = {};
     for (const signal of signals) {
       const hasSummary = Boolean(signal.tier1 && signal.tier2);
       try {
-        const summary = await this.summaryGenerator.generate(signal);
-        // Drop signals the LLM identified as non-financial content
-        // (e.g. music, entertainment, scraped boilerplate matching a ticker)
-        if (summary.isIrrelevant) {
-          irrelevantDropped++;
-          logger.info('Dropped irrelevant signal', { signalId: signal.id, title: signal.title, tier1: summary.tier1 });
-          continue;
+        // Collect recent signals for this signal's tickers (deduplicated by id)
+        const seen = new Set<string>();
+        const recentContext: RecentSignalContext[] = [];
+        for (const asset of signal.assets) {
+          for (const r of recentByTicker.get(asset.ticker) ?? []) {
+            if (!seen.has(r.id) && r.id !== signal.id) {
+              seen.add(r.id);
+              recentContext.push({ title: r.title, tier1: r.tier1, publishedAt: r.publishedAt });
+            }
+          }
         }
-        // Drop signals where the ticker association is wrong
-        // (e.g. Apple Music page tagged under AXTI, a person's name matching a ticker)
-        if (summary.isFalseMatch) {
-          falseMatchDropped++;
-          logger.info('Dropped false-match signal', {
+
+        const verdict: QualityVerdict = await this.qualityAgent.evaluate(signal, recentContext);
+
+        if (verdict.verdict === 'DROP') {
+          const reason = verdict.dropReason ?? 'unknown';
+          dropCounts[reason] = (dropCounts[reason] ?? 0) + 1;
+          logger.info('Quality agent dropped signal', {
             signalId: signal.id,
             title: signal.title,
-            tickers: signal.assets.map((a) => a.ticker),
+            reason,
+            qualityScore: verdict.qualityScore,
           });
           continue;
         }
-        // Drop low-quality signals that add noise without material value
-        if (summary.qualityScore < SignalIngestor.MIN_QUALITY_SCORE) {
-          lowQualityDropped++;
-          logger.info('Dropped low-quality signal', {
-            signalId: signal.id,
-            title: signal.title,
-            qualityScore: summary.qualityScore,
-          });
-          continue;
-        }
-        // If the signal already had summaries (e.g. from Jintel Research), keep them —
-        // the LLM call was only for quality gating, not to overwrite upstream copy.
+
+        // Persist quality fields + summaries on the signal
+        const qualityFields = {
+          qualityScore: verdict.qualityScore,
+          isFalseMatch: false,
+          isIrrelevant: false,
+          isDuplicate: false,
+        };
+
         if (hasSummary) {
-          results.push(signal);
+          results.push({ ...signal, ...qualityFields });
         } else {
           results.push({
             ...signal,
-            tier1: summary.tier1,
-            tier2: summary.tier2,
-            sentiment: summary.sentiment,
-            outputType: summary.outputType,
+            tier1: verdict.tier1,
+            tier2: verdict.tier2,
+            sentiment: verdict.sentiment,
+            outputType: verdict.outputType,
+            ...qualityFields,
           });
         }
       } catch (err) {
-        logger.warn('Summary generation failed for signal, using raw', {
+        logger.warn('Quality evaluation failed for signal, using raw', {
           signalId: signal.id,
           error: err instanceof Error ? err.message : String(err),
         });
         results.push(signal);
       }
     }
-    const totalDropped = irrelevantDropped + falseMatchDropped + lowQualityDropped;
+    const totalDropped = Object.values(dropCounts).reduce((sum, n) => sum + n, 0);
     if (totalDropped > 0) {
-      logger.info(
-        `Dropped ${totalDropped} signals during enrichment (irrelevant: ${irrelevantDropped}, false-match: ${falseMatchDropped}, low-quality: ${lowQualityDropped})`,
-      );
+      logger.info(`Quality agent dropped ${totalDropped} signals`, dropCounts);
     }
     return results;
+  }
+
+  private static readonly RECENT_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+
+  /** Single-query fetch of recent signals grouped by ticker for dedup context. */
+  private async getRecentSignalsByTicker(tickers: string[]): Promise<Map<string, Signal[]>> {
+    if (tickers.length === 0) return new Map();
+    const since = new Date(Date.now() - SignalIngestor.RECENT_LOOKBACK_MS).toISOString();
+    const recent = await this.archive.query({ tickers, since, limit: tickers.length * 10 });
+    const byTicker = new Map<string, Signal[]>();
+    for (const signal of recent) {
+      for (const asset of signal.assets) {
+        const group = byTicker.get(asset.ticker);
+        if (group) {
+          group.push(signal);
+        } else {
+          byTicker.set(asset.ticker, [signal]);
+        }
+      }
+    }
+    return byTicker;
   }
 }

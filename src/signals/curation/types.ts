@@ -61,6 +61,8 @@ export type CurationWeights = z.infer<typeof CurationWeightsSchema>;
 export const CurationConfigSchema = z.object({
   /** Minimum signal confidence to pass filter (0–1). */
   minConfidence: z.number().min(0).max(1).default(0.3),
+  /** Minimum LLM quality score (0–100) to pass filter. Signals below this are noise. */
+  minQualityScore: z.number().int().min(0).max(100).default(40),
   /** Maximum curated signals per portfolio position. */
   topNPerPosition: z.number().int().min(1).default(20),
   /** Pipeline run interval in minutes. */

@@ -50,7 +50,13 @@ const PROMOTIONAL_CONTENT_RE =
 // Applied to signal body + LLM summaries so self-described junk is caught even when
 // the title looks plausible.
 const JUNK_CONTENT_RE =
-  /(?:tracking pixel|ad[- ]?related image|no substantive (?:financial )?(?:news|content)|only (?:contains?|includes?) (?:tracking|ad|pixel|image)|no (?:usable|actionable|meaningful) (?:data|information|content|signal)|(?:lacks|lacking) substance|content is inaccessible|website boilerplate|navigation elements with no actual)/i;
+  /(?:tracking pixel|ad[- ]?related image|no substantive (?:financial |market )?(?:news|content|signal|data)|only (?:contains?|includes?) (?:tracking|ad|pixel|image)|no (?:usable|actionable|meaningful) (?:data|information|content|signal)|(?:lacks|lacking) substance|content is inaccessible|website boilerplate|navigation elements with no actual)/i;
+
+// Deterministic false-match detector — mirrors the safety net in SummaryGenerator but
+// applied at the curation stage to catch signals that were ingested from external sources
+// (e.g. Jintel Research) with tier1/tier2 already set, bypassing the SummaryGenerator gate.
+const FALSE_MATCH_RE =
+  /\b(?:false[- ]match|false[- ]positive)\b|\bno (?:relevance|relation) to\b|\bnot .{1,40}(?:stock|ticker|corporation|company)\b/i;
 
 // ---------------------------------------------------------------------------
 // Pipeline options
@@ -220,7 +226,7 @@ export async function runCurationPipeline(options: CurationPipelineOptions): Pro
   const alreadyCurated = await curatedStore.queryByTickers([...portfolioTickers], { limit: 10000 });
   const alreadyCuratedIds = new Set(alreadyCurated.map((cs) => cs.signal.id));
 
-  // 2. FILTER — confidence, spam, portfolio match, already-curated
+  // 2. FILTER — LLM quality flags (primary), then deterministic safety nets
   const spamRegexes = config.spamPatterns.map((p) => new RegExp(p, 'i'));
 
   const filtered = rawSignals.filter((signal) => {
@@ -230,6 +236,14 @@ export async function runCurationPipeline(options: CurationPipelineOptions): Pro
     // Skip recurring data snapshots (price, technicals, sentiment) — they feed insight
     // generation via DataBrief but aren't actionable as standalone Intel Feed cards.
     if (signal.sources.some((s) => DATA_SNAPSHOT_SOURCES.has(s.id))) return false;
+
+    // --- PRIMARY GATE: LLM quality assessment (persisted at ingestion/clustering) ---
+    if (signal.isFalseMatch === true) return false;
+    if (signal.isIrrelevant === true) return false;
+    if (signal.isDuplicate === true) return false;
+    if (signal.qualityScore !== undefined && signal.qualityScore < config.minQualityScore) return false;
+
+    // --- SAFETY NETS: deterministic fallbacks for signals that bypassed LLM enrichment ---
 
     // Confidence threshold
     if (signal.confidence < config.minConfidence) return false;
@@ -242,6 +256,10 @@ export async function runCurationPipeline(options: CurationPipelineOptions): Pro
     // the LLM may have described the junk content in its summary.
     const bodyText = [signal.content, signal.tier1, signal.tier2].filter(Boolean).join(' ');
     if (JUNK_CONTENT_RE.test(bodyText)) return false;
+
+    // False-match text pattern — catches signals from external sources that report
+    // false-match detections as insights (e.g. "no relevance to AXT Inc.").
+    if (FALSE_MATCH_RE.test(bodyText)) return false;
 
     // Must have at least one portfolio ticker
     return signal.assets.some((a) => portfolioTickers.has(a.ticker));

@@ -1,14 +1,13 @@
 /**
- * SignalClustering — LLM-based fuzzy deduplication and causal linking pipeline.
+ * SignalClustering — deduplication and causal linking pipeline.
  *
- * For each newly ingested signal:
- *   1. Find candidate signals from the archive sharing tickers within a 6-hour window.
- *   2. No candidates → generate summary and store enriched signal.
- *   3. Classify each candidate as SAME / RELATED / DIFFERENT.
- *      - SAME    → merge sources, bump version, regenerate summary.
- *      - RELATED → enrich new signal, link both in a SignalGroup.
- *      - DIFFERENT → try next candidate. If all differ → enrich independently.
- *   4. A semaphore caps concurrent LLM calls.
+ * Uses the QualityAgent (single LLM gate) for enrichment and duplicate detection.
+ * No separate classify LLM call — the quality agent's verdict handles it:
+ *   - verdict=DROP + dropReason=duplicate + duplicateOf → merge sources (SAME)
+ *   - verdict=KEEP + same ticker+day as existing signal → link as RELATED
+ *   - verdict=KEEP + no overlap → store independently
+ *
+ * A semaphore caps concurrent LLM calls.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -16,14 +15,15 @@ import { randomUUID } from 'node:crypto';
 import type { SignalArchive } from './archive.js';
 import type { SignalGroupArchive } from './group-archive.js';
 import type { SignalGroup } from './group-types.js';
-import type { SummaryGenerator, SummaryResult } from './summary-generator.js';
+import type { QualityAgent, QualityVerdict } from './quality-agent.js';
 import type { Signal } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 
 const logger = createSubsystemLogger('signal-clustering');
 
 // ---------------------------------------------------------------------------
-// Public interface
+// Public interface (kept for backward compat — ClassifyInput/ClassificationResult
+// are no longer used internally but may be referenced by tests or external code)
 // ---------------------------------------------------------------------------
 
 export type ClassificationResult = 'SAME' | 'RELATED' | 'DIFFERENT';
@@ -36,10 +36,8 @@ export interface ClassifyInput {
 export interface ClusteringOptions {
   archive: SignalArchive;
   groupArchive: SignalGroupArchive;
-  /** LLM classification: returns SAME, RELATED, or DIFFERENT */
-  classify: (input: ClassifyInput) => Promise<ClassificationResult>;
-  /** Summary generator for tier1/tier2/sentiment/outputType */
-  generator: SummaryGenerator;
+  /** Quality agent for enrichment and duplicate detection */
+  qualityAgent: QualityAgent;
   /** Max concurrent LLM calls (default 5) */
   concurrencyLimit?: number;
 }
@@ -88,7 +86,7 @@ export class SignalClustering {
   }
 
   /**
-   * Process newly ingested signals — fuzzy dedup + link related.
+   * Process newly ingested signals — quality evaluation + dedup + store.
    * Fire-and-forget safe: errors are caught and logged, never thrown.
    */
   async processSignals(signals: Signal[]): Promise<void> {
@@ -100,7 +98,6 @@ export class SignalClustering {
           signalId: signal.id,
           error: error instanceof Error ? error.message : String(error),
         });
-        // Write raw signal so it isn't lost — ingestor relies on us for all writes
         try {
           await this.options.archive.append(signal);
         } catch (writeErr) {
@@ -114,13 +111,14 @@ export class SignalClustering {
   }
 
   // ---------------------------------------------------------------------------
-  // Private: process a single signal
+  // Private: process a single signal via quality agent
   // ---------------------------------------------------------------------------
 
   private async processOne(signal: Signal): Promise<void> {
     const tickers = signal.assets.map((a) => a.ticker);
     const sixHoursAgo = new Date(new Date(signal.publishedAt).getTime() - 6 * 60 * 60 * 1000).toISOString();
 
+    // Fetch recent signals for context (duplicate detection + signal groups)
     const candidates = await this.options.archive.query({
       tickers,
       since: sixHoursAgo,
@@ -128,72 +126,118 @@ export class SignalClustering {
       limit: 20,
     });
 
-    // Filter: must share at least 1 ticker, must not be the signal itself
     const tickerSet = new Set(tickers);
-    const filtered = candidates.filter((c) => c.id !== signal.id && c.assets.some((a) => tickerSet.has(a.ticker)));
+    const recentSignals = candidates.filter((c) => c.id !== signal.id && c.assets.some((a) => tickerSet.has(a.ticker)));
 
-    if (filtered.length === 0) {
-      await this.enrichAndStore(signal);
+    // Single LLM call — quality agent decides everything
+    const verdict = await this.evaluateWithSemaphore(signal, recentSignals);
+
+    if (verdict.verdict === 'DROP') {
+      if (verdict.dropReason === 'duplicate' && verdict.duplicateOf) {
+        // Merge sources into the existing signal instead of dropping entirely
+        await this.mergeIntoExisting(signal, recentSignals, verdict.duplicateOf);
+      } else {
+        logger.info('Quality agent dropped signal via clustering', {
+          signalId: signal.id,
+          title: signal.title,
+          reason: verdict.dropReason,
+          qualityScore: verdict.qualityScore,
+        });
+      }
       return;
     }
 
-    // Sort by ticker overlap (most overlap first)
-    const sorted = this.sortByOverlap(filtered, tickerSet);
+    // KEEP — enrich and store
+    const enriched: Signal = {
+      ...signal,
+      tier1: signal.tier1 ?? verdict.tier1,
+      tier2: signal.tier2 ?? verdict.tier2,
+      sentiment: verdict.sentiment,
+      outputType: verdict.outputType,
+      qualityScore: verdict.qualityScore,
+      version: (signal.version ?? 1) + 1,
+    };
 
-    for (const candidate of sorted) {
-      const result = await this.classifyWithSemaphore(candidate, signal);
+    // Link as related if there are recent signals for the same ticker+day
+    const day = signal.publishedAt.slice(0, 10);
+    const sameDaySignal = recentSignals.find((c) => c.publishedAt.slice(0, 10) === day);
+    if (sameDaySignal) {
+      const allTickers = Array.from(
+        new Set([...sameDaySignal.assets.map((a) => a.ticker), ...signal.assets.map((a) => a.ticker)]),
+      );
+      const now = new Date().toISOString();
 
-      if (result === 'SAME') {
-        await this.mergeSame(candidate, signal);
-        return;
+      if (sameDaySignal.groupId) {
+        // Add to existing group
+        enriched.groupId = sameDaySignal.groupId;
+        const group = await this.options.groupArchive.getById(sameDaySignal.groupId);
+        if (group) {
+          const updatedGroup: SignalGroup = {
+            ...group,
+            signalIds: Array.from(new Set([...group.signalIds, signal.id])),
+            tickers: Array.from(new Set([...group.tickers, ...allTickers])),
+            lastEventAt: signal.publishedAt > group.lastEventAt ? signal.publishedAt : group.lastEventAt,
+            version: group.version + 1,
+            updatedAt: now,
+          };
+          await this.options.groupArchive.appendUpdate(updatedGroup);
+        }
+      } else {
+        // Create a new group linking both signals
+        const groupId = `grp-${randomUUID()}`;
+        enriched.groupId = groupId;
+
+        const existingTier1 = sameDaySignal.tier1 ?? sameDaySignal.title;
+        const incomingTier1 = enriched.tier1 ?? signal.title;
+
+        const group: SignalGroup = {
+          id: groupId,
+          signalIds: [sameDaySignal.id, signal.id],
+          tickers: allTickers,
+          summary: `${existingTier1} → ${incomingTier1}`,
+          outputType: 'INSIGHT',
+          firstEventAt: sameDaySignal.publishedAt < signal.publishedAt ? sameDaySignal.publishedAt : signal.publishedAt,
+          lastEventAt: sameDaySignal.publishedAt > signal.publishedAt ? sameDaySignal.publishedAt : signal.publishedAt,
+          version: 1,
+          createdAt: now,
+          updatedAt: now,
+        };
+        await this.options.groupArchive.append(group);
+
+        // Update existing signal with groupId
+        const updatedExisting: Signal = {
+          ...sameDaySignal,
+          groupId,
+          version: (sameDaySignal.version ?? 1) + 1,
+        };
+        await this.options.archive.appendUpdate(updatedExisting);
       }
-
-      if (result === 'RELATED') {
-        await this.linkRelated(candidate, signal);
-        return;
-      }
-
-      // DIFFERENT — try next candidate
     }
 
-    // All candidates are DIFFERENT — enrich independently
-    await this.enrichAndStore(signal);
+    await this.options.archive.append(enriched);
   }
 
   // ---------------------------------------------------------------------------
-  // Private: classify with semaphore
+  // Private: merge sources into existing signal (duplicate detected by quality agent)
   // ---------------------------------------------------------------------------
 
-  private async classifyWithSemaphore(existing: Signal, incoming: Signal): Promise<ClassificationResult> {
-    await this.semaphore.acquire();
-    try {
-      return await this.options.classify({
-        existing: {
-          title: existing.title,
-          type: existing.type,
-          tickers: existing.assets.map((a) => a.ticker),
-          time: existing.publishedAt,
-        },
-        incoming: {
-          title: incoming.title,
-          type: incoming.type,
-          tickers: incoming.assets.map((a) => a.ticker),
-          time: incoming.publishedAt,
-        },
-      });
-    } finally {
-      this.semaphore.release();
+  private async mergeIntoExisting(incoming: Signal, candidates: Signal[], duplicateOfTitle: string): Promise<void> {
+    // Find the existing signal by matching title/tier1
+    const normalizedTarget = duplicateOfTitle.trim().toLowerCase();
+    const existing = candidates.find(
+      (c) => c.title.trim().toLowerCase() === normalizedTarget || c.tier1?.trim().toLowerCase() === normalizedTarget,
+    );
+
+    if (!existing) {
+      // Can't find the target — store as-is rather than losing data
+      await this.options.archive.append(incoming);
+      return;
     }
-  }
 
-  // ---------------------------------------------------------------------------
-  // Private: SAME — merge source into existing signal, bump version
-  // ---------------------------------------------------------------------------
-
-  private async mergeSame(existing: Signal, incoming: Signal): Promise<void> {
-    // Merge sources from incoming into existing (deduplicate by source id)
+    // Merge sources (deduplicate by source id)
     const existingSourceIds = new Set(existing.sources.map((s) => s.id));
     const newSources = incoming.sources.filter((s) => !existingSourceIds.has(s.id));
+    if (newSources.length === 0) return; // nothing new to merge
 
     const merged: Signal = {
       ...existing,
@@ -201,195 +245,30 @@ export class SignalClustering {
       version: (existing.version ?? 1) + 1,
     };
 
-    const summary = await this.generateWithSemaphore(merged);
+    await this.options.archive.appendUpdate(merged);
 
-    // Drop signals the LLM identified as non-financial content
-    if (summary.isIrrelevant) {
-      logger.info('Dropped irrelevant merged signal via clustering', {
-        existingId: existing.id,
-        incomingId: incoming.id,
-        tier1: summary.tier1,
-      });
-      return;
-    }
-
-    const enriched: Signal = { ...merged, ...summary };
-
-    await this.options.archive.appendUpdate(enriched);
-
-    logger.debug('SignalClustering: merged duplicate signal', {
+    logger.debug('SignalClustering: merged duplicate sources', {
       existingId: existing.id,
       incomingId: incoming.id,
-      newVersion: enriched.version,
+      newSourceCount: newSources.length,
     });
   }
 
   // ---------------------------------------------------------------------------
-  // Private: RELATED — enrich new signal and create/update a SignalGroup
+  // Private: evaluate with semaphore
   // ---------------------------------------------------------------------------
 
-  private async linkRelated(existing: Signal, incoming: Signal): Promise<void> {
-    // Generate summary for the incoming signal (without storing yet)
-    const summary = await this.generateWithSemaphore(incoming);
-
-    // Drop signals the LLM identified as non-financial content
-    if (summary.isIrrelevant) {
-      logger.info('Dropped irrelevant related signal via clustering', {
-        signalId: incoming.id,
-        title: incoming.title,
-        tier1: summary.tier1,
-      });
-      return;
-    }
-
-    const now = new Date().toISOString();
-
-    // Determine if either signal already belongs to a group
-    const existingGroupId = existing.groupId ?? null;
-    const incomingGroupId = incoming.groupId ?? null;
-
-    const resolvedGroupId = existingGroupId ?? incomingGroupId ?? `grp-${randomUUID()}`;
-
-    // Build group summary from tier1 values
-    const existingTier1 = existing.tier1 ?? existing.title;
-    const incomingTier1 = summary.tier1;
-    const groupSummary = `${existingTier1} → ${incomingTier1}`;
-
-    // Collect all tickers for the group
-    const allTickers = Array.from(
-      new Set([...existing.assets.map((a) => a.ticker), ...incoming.assets.map((a) => a.ticker)]),
-    );
-
-    // Try to add to an existing group (either signal may already belong to one)
-    const knownGroupId = existingGroupId ?? incomingGroupId;
-    if (knownGroupId) {
-      const group = await this.options.groupArchive.getById(knownGroupId);
-      if (group) {
-        const updatedGroup: SignalGroup = {
-          ...group,
-          signalIds: Array.from(new Set([...group.signalIds, existing.id, incoming.id])),
-          tickers: Array.from(new Set([...group.tickers, ...allTickers])),
-          summary: groupSummary,
-          lastEventAt: incoming.publishedAt > group.lastEventAt ? incoming.publishedAt : group.lastEventAt,
-          version: group.version + 1,
-          updatedAt: now,
-        };
-        await this.options.groupArchive.appendUpdate(updatedGroup);
-
-        // Store incoming signal enriched + with groupId
-        const enrichedIncoming: Signal = {
-          ...incoming,
-          ...summary,
-          groupId: knownGroupId,
-          version: (incoming.version ?? 1) + 1,
-        };
-        await this.options.archive.appendUpdate(enrichedIncoming);
-
-        // Ensure existing signal also has the groupId
-        if (!existingGroupId) {
-          const updatedExisting: Signal = {
-            ...existing,
-            groupId: knownGroupId,
-            version: (existing.version ?? 1) + 1,
-          };
-          await this.options.archive.appendUpdate(updatedExisting);
-        }
-
-        logger.debug('SignalClustering: added signal to existing group', {
-          groupId: knownGroupId,
-          incomingId: incoming.id,
-        });
-        return;
-      }
-    }
-
-    // Create a new group
-    const group: SignalGroup = {
-      id: resolvedGroupId,
-      signalIds: [existing.id, incoming.id],
-      tickers: allTickers,
-      summary: groupSummary,
-      outputType: 'INSIGHT',
-      firstEventAt: existing.publishedAt < incoming.publishedAt ? existing.publishedAt : incoming.publishedAt,
-      lastEventAt: existing.publishedAt > incoming.publishedAt ? existing.publishedAt : incoming.publishedAt,
-      version: 1,
-      createdAt: now,
-      updatedAt: now,
-    };
-    await this.options.groupArchive.append(group);
-
-    // Update existing signal with groupId
-    const updatedExisting: Signal = {
-      ...existing,
-      groupId: resolvedGroupId,
-      version: (existing.version ?? 1) + 1,
-    };
-    await this.options.archive.appendUpdate(updatedExisting);
-
-    // Store incoming signal enriched + with groupId in one write
-    const enrichedIncoming: Signal = {
-      ...incoming,
-      ...summary,
-      groupId: resolvedGroupId,
-      version: (incoming.version ?? 1) + 1,
-    };
-    await this.options.archive.appendUpdate(enrichedIncoming);
-
-    logger.debug('SignalClustering: created new SignalGroup', {
-      groupId: resolvedGroupId,
-      existingId: existing.id,
-      incomingId: incoming.id,
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Private: enrich a signal, store it, and return the summary
-  // ---------------------------------------------------------------------------
-
-  private async enrichAndStore(signal: Signal): Promise<SummaryResult> {
-    const summary = await this.generateWithSemaphore(signal);
-
-    // Drop signals the LLM identified as non-financial content
-    if (summary.isIrrelevant) {
-      logger.info('Dropped irrelevant signal via clustering', {
-        signalId: signal.id,
-        title: signal.title,
-        tier1: summary.tier1,
-      });
-      return summary;
-    }
-
-    const enriched: Signal = {
-      ...signal,
-      ...summary,
-      version: (signal.version ?? 1) + 1,
-    };
-    await this.options.archive.append(enriched);
-    return summary;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Private: generate summary with semaphore
-  // ---------------------------------------------------------------------------
-
-  private async generateWithSemaphore(signal: Signal): Promise<SummaryResult> {
+  private async evaluateWithSemaphore(signal: Signal, recentSignals: Signal[]): Promise<QualityVerdict> {
+    const context = recentSignals.map((s) => ({
+      title: s.title,
+      tier1: s.tier1,
+      publishedAt: s.publishedAt,
+    }));
     await this.semaphore.acquire();
     try {
-      return await this.options.generator.generate(signal);
+      return await this.options.qualityAgent.evaluate(signal, context);
     } finally {
       this.semaphore.release();
     }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Private: sort candidates by ticker overlap (most overlap first)
-  // ---------------------------------------------------------------------------
-
-  private sortByOverlap(candidates: Signal[], tickerSet: Set<string>): Signal[] {
-    return [...candidates].sort((a, b) => {
-      const overlapA = a.assets.filter((asset) => tickerSet.has(asset.ticker)).length;
-      const overlapB = b.assets.filter((asset) => tickerSet.has(asset.ticker)).length;
-      return overlapB - overlapA;
-    });
   }
 }

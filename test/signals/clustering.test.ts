@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignalArchive } from '../../src/signals/archive.js';
 import { SignalClustering } from '../../src/signals/clustering.js';
 import { SignalGroupArchive } from '../../src/signals/group-archive.js';
+import type { QualityVerdict } from '../../src/signals/quality-agent.js';
 import type { Signal } from '../../src/signals/types.js';
 
 // ---------------------------------------------------------------------------
@@ -33,12 +34,13 @@ function makeSignal(overrides: Partial<Signal> = {}): Signal {
   };
 }
 
-const DEFAULT_SUMMARY = {
+const KEEP_VERDICT: QualityVerdict = {
+  verdict: 'KEEP',
   tier1: 'Apple earnings beat expectations',
   tier2: 'Apple reported record earnings this quarter, beating analyst expectations.',
-  sentiment: 'BULLISH' as const,
-  outputType: 'INSIGHT' as const,
-  isIrrelevant: false,
+  sentiment: 'BULLISH',
+  outputType: 'INSIGHT',
+  qualityScore: 75,
 };
 
 // ---------------------------------------------------------------------------
@@ -65,67 +67,64 @@ describe('SignalClustering', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 1. No candidates
+  // 1. No candidates — KEEP verdict enriches and stores
   // -------------------------------------------------------------------------
 
   it('enriches signal with tier1/tier2/sentiment/outputType when no candidates exist', async () => {
-    const generator = { generate: vi.fn().mockResolvedValue(DEFAULT_SUMMARY) };
-    const classify = vi.fn();
+    const qualityAgent = { evaluate: vi.fn().mockResolvedValue(KEEP_VERDICT) };
 
-    const clustering = new SignalClustering({ archive, groupArchive, classify, generator });
+    const clustering = new SignalClustering({ archive, groupArchive, qualityAgent });
     const signal = makeSignal();
 
     await clustering.processSignals([signal]);
 
-    // Generator was called
-    expect(generator.generate).toHaveBeenCalledOnce();
-    expect(generator.generate).toHaveBeenCalledWith(expect.objectContaining({ id: signal.id }));
-
-    // Classify was never called (no candidates)
-    expect(classify).not.toHaveBeenCalled();
+    // Quality agent was called
+    expect(qualityAgent.evaluate).toHaveBeenCalledOnce();
 
     // Enriched signal is stored in the archive
     const stored = await archive.query({ tickers: ['AAPL'] });
     expect(stored).toHaveLength(1);
-    expect(stored[0].tier1).toBe(DEFAULT_SUMMARY.tier1);
-    expect(stored[0].tier2).toBe(DEFAULT_SUMMARY.tier2);
-    expect(stored[0].sentiment).toBe(DEFAULT_SUMMARY.sentiment);
-    expect(stored[0].outputType).toBe(DEFAULT_SUMMARY.outputType);
+    expect(stored[0].tier1).toBe(KEEP_VERDICT.tier1);
+    expect(stored[0].tier2).toBe(KEEP_VERDICT.tier2);
+    expect(stored[0].sentiment).toBe(KEEP_VERDICT.sentiment);
+    expect(stored[0].outputType).toBe(KEEP_VERDICT.outputType);
     expect(stored[0].version).toBe(2); // bumped from 1
   });
 
   // -------------------------------------------------------------------------
-  // 2. SAME — merge
+  // 2. Duplicate — merge sources
   // -------------------------------------------------------------------------
 
-  it('merges source into existing signal and bumps version on SAME', async () => {
+  it('merges source into existing signal when quality agent detects duplicate', async () => {
     const existingSignal = makeSignal({ id: 'existing-001', contentHash: 'hash-existing', version: 1 });
     await archive.append(existingSignal);
 
     const incomingSignal = makeSignal({
       id: 'incoming-001',
       contentHash: 'hash-incoming',
-      title: existingSignal.title, // same story, different source
+      title: existingSignal.title,
       sources: [{ id: 'reuters', name: 'Reuters', type: 'RSS', reliability: 0.9 }],
     });
 
-    const generator = { generate: vi.fn().mockResolvedValue(DEFAULT_SUMMARY) };
-    const classify = vi.fn().mockResolvedValue('SAME');
+    const duplicateVerdict: QualityVerdict = {
+      ...KEEP_VERDICT,
+      verdict: 'DROP',
+      dropReason: 'duplicate',
+      duplicateOf: existingSignal.title,
+    };
+    const qualityAgent = { evaluate: vi.fn().mockResolvedValue(duplicateVerdict) };
 
-    const clustering = new SignalClustering({ archive, groupArchive, classify, generator });
+    const clustering = new SignalClustering({ archive, groupArchive, qualityAgent });
     await clustering.processSignals([incomingSignal]);
 
-    // classify was called with existing vs incoming
-    expect(classify).toHaveBeenCalledOnce();
+    expect(qualityAgent.evaluate).toHaveBeenCalledOnce();
 
     // The merged signal should have both sources
     const stored = await archive.query({ tickers: ['AAPL'] });
-    // There will be the original + the merged update — dedup keeps highest version
     const merged = stored.find((s) => s.id === 'existing-001');
     expect(merged).toBeDefined();
     expect(merged!.version).toBe(2);
     expect(merged!.sources.some((s) => s.id === 'reuters')).toBe(true);
-    expect(merged!.tier1).toBe(DEFAULT_SUMMARY.tier1);
 
     // The incoming signal itself should NOT appear as a separate entry
     const incoming = stored.find((s) => s.id === 'incoming-001');
@@ -133,12 +132,32 @@ describe('SignalClustering', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 3. RELATED — SignalGroup
+  // 3. KEEP + same ticker+day — links to existing group
   // -------------------------------------------------------------------------
 
-  it('creates new signal and SignalGroup when RELATED', async () => {
-    const existingSignal = makeSignal({ id: 'existing-002', contentHash: 'hash-e2', version: 1 });
+  it('links signal to existing group when same ticker+day', async () => {
+    // Pre-create an existing signal with a groupId
+    const existingSignal = makeSignal({
+      id: 'existing-002',
+      contentHash: 'hash-e2',
+      version: 1,
+      groupId: 'grp-existing',
+    });
     await archive.append(existingSignal);
+
+    // Create the group in the group archive
+    await groupArchive.appendUpdate({
+      id: 'grp-existing',
+      signalIds: ['existing-002'],
+      tickers: ['AAPL'],
+      summary: 'Apple earnings beat expectations',
+      outputType: 'INSIGHT',
+      firstEventAt: existingSignal.publishedAt,
+      lastEventAt: existingSignal.publishedAt,
+      version: 1,
+      createdAt: existingSignal.publishedAt,
+      updatedAt: existingSignal.publishedAt,
+    });
 
     const incomingSignal = makeSignal({
       id: 'incoming-002',
@@ -146,85 +165,119 @@ describe('SignalClustering', () => {
       title: 'Apple faces supply chain disruption (follow-up)',
     });
 
-    const generator = { generate: vi.fn().mockResolvedValue(DEFAULT_SUMMARY) };
-    const classify = vi.fn().mockResolvedValue('RELATED');
+    const qualityAgent = { evaluate: vi.fn().mockResolvedValue(KEEP_VERDICT) };
 
-    const clustering = new SignalClustering({ archive, groupArchive, classify, generator });
+    const clustering = new SignalClustering({ archive, groupArchive, qualityAgent });
     await clustering.processSignals([incomingSignal]);
 
-    expect(classify).toHaveBeenCalledOnce();
-    expect(generator.generate).toHaveBeenCalledOnce();
+    expect(qualityAgent.evaluate).toHaveBeenCalledOnce();
 
-    // A SignalGroup should have been created
+    // Incoming signal should be linked to the existing group
+    const allSignals = await archive.query({ tickers: ['AAPL'] });
+    const incomingStored = allSignals.find((s) => s.id === 'incoming-002');
+    expect(incomingStored).toBeDefined();
+    expect(incomingStored!.groupId).toBe('grp-existing');
+    expect(incomingStored!.tier1).toBe(KEEP_VERDICT.tier1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 4. KEEP + same ticker+day, no existing group — creates new group
+  // -------------------------------------------------------------------------
+
+  it('creates new group when same-day signal exists without a group', async () => {
+    const existingSignal = makeSignal({
+      id: 'existing-003',
+      contentHash: 'hash-e3',
+      version: 1,
+      // Same day, no groupId
+    });
+    await archive.append(existingSignal);
+
+    const incomingSignal = makeSignal({
+      id: 'incoming-003',
+      contentHash: 'hash-i3',
+      title: 'Apple faces supply chain disruption (follow-up)',
+    });
+
+    const qualityAgent = { evaluate: vi.fn().mockResolvedValue(KEEP_VERDICT) };
+
+    const clustering = new SignalClustering({ archive, groupArchive, qualityAgent });
+    await clustering.processSignals([incomingSignal]);
+
+    expect(qualityAgent.evaluate).toHaveBeenCalledOnce();
+
+    // A new group should have been created
     const groups = await groupArchive.query({});
     expect(groups).toHaveLength(1);
-    expect(groups[0].signalIds).toContain('existing-002');
-    expect(groups[0].signalIds).toContain('incoming-002');
+    expect(groups[0].signalIds).toContain('existing-003');
+    expect(groups[0].signalIds).toContain('incoming-003');
     expect(groups[0].tickers).toContain('AAPL');
     expect(groups[0].id).toMatch(/^grp-/);
 
-    // Both signals should have the groupId set
+    // Both signals should have the groupId
     const allSignals = await archive.query({ tickers: ['AAPL'] });
-    const existingUpdated = allSignals.find((s) => s.id === 'existing-002');
-    const incomingStored = allSignals.find((s) => s.id === 'incoming-002');
+    const existingUpdated = allSignals.find((s) => s.id === 'existing-003');
+    const incomingStored = allSignals.find((s) => s.id === 'incoming-003');
 
     expect(existingUpdated).toBeDefined();
     expect(existingUpdated!.groupId).toBe(groups[0].id);
 
     expect(incomingStored).toBeDefined();
     expect(incomingStored!.groupId).toBe(groups[0].id);
-    expect(incomingStored!.tier1).toBe(DEFAULT_SUMMARY.tier1);
+    expect(incomingStored!.tier1).toBe(KEEP_VERDICT.tier1);
   });
 
   // -------------------------------------------------------------------------
-  // 4. DIFFERENT — independent signal
+  // 4b. KEEP + different day — independent signal
   // -------------------------------------------------------------------------
 
-  it('creates independent signal when all candidates are DIFFERENT', async () => {
-    const existingSignal = makeSignal({ id: 'existing-003', contentHash: 'hash-e3', version: 1 });
+  it('creates independent signal when no same-day candidate exists', async () => {
+    const existingSignal = makeSignal({
+      id: 'existing-004',
+      contentHash: 'hash-e4',
+      version: 1,
+      // Published on a different day
+      publishedAt: '2026-03-24T10:00:00.000Z',
+    });
     await archive.append(existingSignal);
 
     const incomingSignal = makeSignal({
-      id: 'incoming-003',
-      contentHash: 'hash-i3',
+      id: 'incoming-004',
+      contentHash: 'hash-i4',
       title: 'Unrelated Apple product launch announcement',
     });
 
-    const generator = { generate: vi.fn().mockResolvedValue(DEFAULT_SUMMARY) };
-    const classify = vi.fn().mockResolvedValue('DIFFERENT');
+    const qualityAgent = { evaluate: vi.fn().mockResolvedValue(KEEP_VERDICT) };
 
-    const clustering = new SignalClustering({ archive, groupArchive, classify, generator });
+    const clustering = new SignalClustering({ archive, groupArchive, qualityAgent });
     await clustering.processSignals([incomingSignal]);
-
-    expect(classify).toHaveBeenCalledOnce();
-    expect(generator.generate).toHaveBeenCalledOnce();
 
     // No groups created
     const groups = await groupArchive.query({});
     expect(groups).toHaveLength(0);
 
-    // Incoming signal stored independently with enrichment
+    // Incoming signal stored independently
     const allSignals = await archive.query({ tickers: ['AAPL'] });
-    const stored = allSignals.find((s) => s.id === 'incoming-003');
+    const stored = allSignals.find((s) => s.id === 'incoming-004');
     expect(stored).toBeDefined();
-    expect(stored!.tier1).toBe(DEFAULT_SUMMARY.tier1);
+    expect(stored!.tier1).toBe(KEEP_VERDICT.tier1);
     expect(stored!.groupId).toBeUndefined();
   });
 
   // -------------------------------------------------------------------------
-  // 5. Irrelevant signal filtering
+  // 5. DROP — irrelevant signal
   // -------------------------------------------------------------------------
 
-  it('drops irrelevant signal in enrichAndStore (no candidates)', async () => {
-    const irrelevantSummary = {
-      ...DEFAULT_SUMMARY,
-      tier1: 'Irrelevant Dictionary Page, Not Financial News',
-      isIrrelevant: true,
+  it('drops signal when quality agent returns DROP with irrelevant reason', async () => {
+    const dropVerdict: QualityVerdict = {
+      ...KEEP_VERDICT,
+      verdict: 'DROP',
+      dropReason: 'irrelevant',
+      qualityScore: 15,
     };
-    const generator = { generate: vi.fn().mockResolvedValue(irrelevantSummary) };
-    const classify = vi.fn();
+    const qualityAgent = { evaluate: vi.fn().mockResolvedValue(dropVerdict) };
 
-    const clustering = new SignalClustering({ archive, groupArchive, classify, generator });
+    const clustering = new SignalClustering({ archive, groupArchive, qualityAgent });
     const signal = makeSignal();
 
     await clustering.processSignals([signal]);
@@ -234,70 +287,34 @@ describe('SignalClustering', () => {
     expect(stored).toHaveLength(0);
   });
 
-  it('drops irrelevant signal on SAME merge', async () => {
-    const existingSignal = makeSignal({ id: 'existing-irr1', contentHash: 'hash-e-irr1', version: 1 });
-    await archive.append(existingSignal);
+  it('drops signal when quality agent returns DROP with false_match reason', async () => {
+    const dropVerdict: QualityVerdict = {
+      ...KEEP_VERDICT,
+      verdict: 'DROP',
+      dropReason: 'false_match',
+      qualityScore: 10,
+    };
+    const qualityAgent = { evaluate: vi.fn().mockResolvedValue(dropVerdict) };
 
-    const incomingSignal = makeSignal({
-      id: 'incoming-irr1',
-      contentHash: 'hash-i-irr1',
-      title: existingSignal.title,
-      sources: [{ id: 'reuters', name: 'Reuters', type: 'RSS', reliability: 0.9 }],
-    });
+    const clustering = new SignalClustering({ archive, groupArchive, qualityAgent });
+    const signal = makeSignal();
 
-    const irrelevantSummary = { ...DEFAULT_SUMMARY, isIrrelevant: true };
-    const generator = { generate: vi.fn().mockResolvedValue(irrelevantSummary) };
-    const classify = vi.fn().mockResolvedValue('SAME');
+    await clustering.processSignals([signal]);
 
-    const clustering = new SignalClustering({ archive, groupArchive, classify, generator });
-    await clustering.processSignals([incomingSignal]);
-
-    // Existing signal should remain unchanged (no merge update written)
     const stored = await archive.query({ tickers: ['AAPL'] });
-    expect(stored).toHaveLength(1);
-    expect(stored[0].id).toBe('existing-irr1');
-    expect(stored[0].version).toBe(1); // not bumped
-  });
-
-  it('drops irrelevant signal on RELATED link', async () => {
-    const existingSignal = makeSignal({ id: 'existing-irr2', contentHash: 'hash-e-irr2', version: 1 });
-    await archive.append(existingSignal);
-
-    const incomingSignal = makeSignal({
-      id: 'incoming-irr2',
-      contentHash: 'hash-i-irr2',
-      title: 'Dictionary definition of uh-huh',
-    });
-
-    const irrelevantSummary = { ...DEFAULT_SUMMARY, isIrrelevant: true };
-    const generator = { generate: vi.fn().mockResolvedValue(irrelevantSummary) };
-    const classify = vi.fn().mockResolvedValue('RELATED');
-
-    const clustering = new SignalClustering({ archive, groupArchive, classify, generator });
-    await clustering.processSignals([incomingSignal]);
-
-    // No group should be created
-    const groups = await groupArchive.query({});
-    expect(groups).toHaveLength(0);
-
-    // Only the original signal should remain
-    const stored = await archive.query({ tickers: ['AAPL'] });
-    expect(stored).toHaveLength(1);
-    expect(stored[0].id).toBe('existing-irr2');
-    expect(stored[0].groupId).toBeUndefined(); // not linked
+    expect(stored).toHaveLength(0);
   });
 
   // -------------------------------------------------------------------------
-  // 6. Clustering failure doesn't throw
+  // 6. Error handling — doesn't throw
   // -------------------------------------------------------------------------
 
   it('does not throw when processSignals encounters an error', async () => {
-    const generator = {
-      generate: vi.fn().mockRejectedValue(new Error('LLM unavailable')),
+    const qualityAgent = {
+      evaluate: vi.fn().mockRejectedValue(new Error('LLM unavailable')),
     };
-    const classify = vi.fn();
 
-    const clustering = new SignalClustering({ archive, groupArchive, classify, generator });
+    const clustering = new SignalClustering({ archive, groupArchive, qualityAgent });
     const signal = makeSignal();
 
     // Should not throw
@@ -306,16 +323,15 @@ describe('SignalClustering', () => {
 
   it('continues processing remaining signals after one fails', async () => {
     let callCount = 0;
-    const generator = {
-      generate: vi.fn().mockImplementation(() => {
+    const qualityAgent = {
+      evaluate: vi.fn().mockImplementation(() => {
         callCount++;
         if (callCount === 1) throw new Error('First call fails');
-        return Promise.resolve(DEFAULT_SUMMARY);
+        return Promise.resolve(KEEP_VERDICT);
       }),
     };
-    const classify = vi.fn();
 
-    const clustering = new SignalClustering({ archive, groupArchive, classify, generator });
+    const clustering = new SignalClustering({ archive, groupArchive, qualityAgent });
     const signal1 = makeSignal({ id: 'fail-001', contentHash: 'ch1' });
     const signal2 = makeSignal({ id: 'ok-002', contentHash: 'ch2' });
 
@@ -325,11 +341,11 @@ describe('SignalClustering', () => {
     const stored = await archive.query({ tickers: ['AAPL'] });
     const ok = stored.find((s) => s.id === 'ok-002');
     expect(ok).toBeDefined();
-    expect(ok!.tier1).toBe(DEFAULT_SUMMARY.tier1);
+    expect(ok!.tier1).toBe(KEEP_VERDICT.tier1);
   });
 
   // -------------------------------------------------------------------------
-  // 6. Concurrency limit respected
+  // 7. Concurrency limit respected
   // -------------------------------------------------------------------------
 
   it('respects concurrencyLimit by capping concurrent LLM calls to the specified max', async () => {
@@ -337,45 +353,25 @@ describe('SignalClustering', () => {
     let activeCalls = 0;
     let maxObservedConcurrency = 0;
 
-    // We need candidates in the archive to trigger classify calls.
-    // Place a single AAPL signal — all incoming will be classified against it.
-    const existing = makeSignal({ id: 'anchor', contentHash: 'anchor-hash', version: 1 });
-    await archive.append(existing);
-
-    const classify = vi.fn().mockImplementation(async () => {
-      activeCalls++;
-      maxObservedConcurrency = Math.max(maxObservedConcurrency, activeCalls);
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      activeCalls--;
-      return 'DIFFERENT';
-    });
-
-    const generator = {
-      generate: vi.fn().mockImplementation(async () => {
+    const qualityAgent = {
+      evaluate: vi.fn().mockImplementation(async () => {
         activeCalls++;
         maxObservedConcurrency = Math.max(maxObservedConcurrency, activeCalls);
         await new Promise((resolve) => setTimeout(resolve, 5));
         activeCalls--;
-        return DEFAULT_SUMMARY;
+        return KEEP_VERDICT;
       }),
     };
 
-    // Build 10 unique signals so each hits classify + generator sequentially
     const signals = Array.from({ length: 10 }, (_, i) => makeSignal({ id: `test-${i}`, contentHash: `ch-${i}` }));
 
     const clustering = new SignalClustering({
       archive,
       groupArchive,
-      classify,
-      generator,
+      qualityAgent,
       concurrencyLimit: LIMIT,
     });
 
-    // processSignals is sequential per signal, but within a signal LLM calls
-    // go through the semaphore. Since we process signals one at a time and each
-    // signal makes one classify + one generator call (serially), the concurrency
-    // max should never exceed 1 at a time in this sequential mode.
-    // The semaphore guards against parallel bursts — verify it doesn't exceed LIMIT.
     await clustering.processSignals(signals);
 
     expect(maxObservedConcurrency).toBeLessThanOrEqual(LIMIT);
