@@ -155,8 +155,8 @@ export const QUOTE_QUERY = gql`
 `;
 
 export const PRICE_HISTORY_QUERY = gql`
-  query PriceHistory($tickers: [String!]!, $range: String) {
-    priceHistory(tickers: $tickers, range: $range) {
+  query PriceHistory($tickers: [String!]!, $range: String, $interval: String) {
+    priceHistory(tickers: $tickers, range: $range, interval: $interval) {
       ticker
       history {
         date
