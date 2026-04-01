@@ -386,15 +386,13 @@ export async function runCurationPipeline(options: CurationPipelineOptions): Pro
     return !cs.scores.some((score) => tickerDayHasExplanation.has(`${score.ticker}|${day}`));
   });
 
-  // 5. STORE — write curated signals
   await curatedStore.writeBatch(finalCurated);
 
-  // Prevent portfolio signals from being re-curated as watchlist
+  // Prevent multi-ticker signals from being re-curated as WATCHLIST
   for (const cs of finalCurated) {
     alreadyCuratedIds.add(cs.signal.id);
   }
 
-  // 6. WATCHLIST PASS — curate signals for watchlist tickers (excluding portfolio tickers)
   const watchlistResult = options.watchlistEntries
     ? await curateWatchlistSignals({
         watchlistEntries: options.watchlistEntries,
@@ -416,7 +414,6 @@ export async function runCurationPipeline(options: CurationPipelineOptions): Pro
   const totalProcessed = rawSignals.length + watchlistResult.rawCount;
   const totalCurated = finalCurated.length + watchlistResult.curated.length;
 
-  // Save watermark after both passes — covers portfolio-only, watchlist-only, and mixed runs
   if (totalProcessed > 0) {
     const latestIngestedAt =
       rawSignals.length > 0

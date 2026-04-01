@@ -147,8 +147,6 @@ export async function curatedSignalsResolver(
   // CRITICAL verdict boost — multiply composite score for ranking
   const VERDICT_BOOST: Record<string, number> = { CRITICAL: 1.5, IMPORTANT: 1.1 };
 
-  // Filter out dismissed signals and NOISE verdicts — NOISE means the agents determined
-  // the signal has no value, so it shouldn't appear in the feed at all.
   const noiseIds = new Set<string>();
   for (const [id, assessment] of assessmentBySignalId) {
     if (assessment.verdict === 'NOISE') noiseIds.add(id);
@@ -160,22 +158,32 @@ export async function curatedSignalsResolver(
     return true;
   });
 
-  // Title-level dedup — keep the curated signal with the highest composite score per unique title
-  const byTitle = new Map<string, (typeof nonDismissed)[number]>();
-  for (const cs of nonDismissed) {
-    const key = cs.signal.title.trim().toLowerCase();
-    const existing = byTitle.get(key);
-    if (!existing) {
-      byTitle.set(key, cs);
-    } else {
-      const maxExisting = Math.max(...existing.scores.map((s) => s.compositeScore));
-      const maxCurrent = Math.max(...cs.scores.map((s) => s.compositeScore));
-      if (maxCurrent > maxExisting) byTitle.set(key, cs);
+  function deduplicateByTitle(signals: typeof nonDismissed): typeof nonDismissed {
+    const byTitle = new Map<string, (typeof nonDismissed)[number]>();
+    for (const cs of signals) {
+      const key = cs.signal.title.trim().toLowerCase();
+      const existing = byTitle.get(key);
+      if (!existing) {
+        byTitle.set(key, cs);
+      } else {
+        const maxExisting = Math.max(...existing.scores.map((s) => s.compositeScore));
+        const maxCurrent = Math.max(...cs.scores.map((s) => s.compositeScore));
+        if (maxCurrent > maxExisting) byTitle.set(key, cs);
+      }
     }
+    return [...byTitle.values()];
   }
 
+  // Dedup within each feedTarget so a watchlist signal can't shadow a same-titled portfolio signal
+  const deduped = args.feedTarget
+    ? deduplicateByTitle(nonDismissed)
+    : [
+        ...deduplicateByTitle(nonDismissed.filter((cs) => cs.feedTarget === 'PORTFOLIO')),
+        ...deduplicateByTitle(nonDismissed.filter((cs) => cs.feedTarget === 'WATCHLIST')),
+      ];
+
   // Sort with verdict-boosted scores — CRITICAL signals bubble to top
-  const sorted = [...byTitle.values()].sort((a, b) => {
+  const sorted = deduped.sort((a, b) => {
     const assessA = assessmentBySignalId.get(a.signal.id);
     const assessB = assessmentBySignalId.get(b.signal.id);
     const boostA = assessA ? (VERDICT_BOOST[assessA.verdict] ?? 1) : 1;
