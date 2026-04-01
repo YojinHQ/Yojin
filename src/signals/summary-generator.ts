@@ -53,6 +53,11 @@ interface LlmResponse {
 
 const VALID_SENTIMENTS = new Set(['BULLISH', 'BEARISH', 'MIXED', 'NEUTRAL']);
 
+/** Deterministic false-match detector — catches cases where the LLM describes a
+ *  false match in its tier1/tier2 text but forgets to set isFalseMatch=true. */
+const FALSE_MATCH_TEXT_PATTERN =
+  /\bnot (related to|about|referring to)\b|\bno relevance to\b|\bnot .{1,40}(stock|ticker|corporation|company)\b|\bis about .{1,60}, not\b/i;
+
 // ---------------------------------------------------------------------------
 // SummaryGenerator
 // ---------------------------------------------------------------------------
@@ -168,13 +173,18 @@ Set "qualityScore" (0-100) based on how useful this signal is for investment dec
       throw new Error(`Invalid sentiment: ${sentimentRaw}`);
     }
 
+    // Deterministic safety net: if the LLM's own text admits the signal is
+    // unrelated to the tagged asset, force isFalseMatch even if the flag wasn't set.
+    const falseMatchOverride =
+      isFalseMatch || FALSE_MATCH_TEXT_PATTERN.test(tier1) || FALSE_MATCH_TEXT_PATTERN.test(tier2);
+
     return {
       tier1,
       tier2,
       sentiment: sentimentRaw as LlmResponse['sentiment'],
       isUrgent,
       isIrrelevant,
-      isFalseMatch,
+      isFalseMatch: falseMatchOverride,
       qualityScore,
     };
   }
