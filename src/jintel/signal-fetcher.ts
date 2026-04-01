@@ -140,7 +140,7 @@ function mentionsEntity(text: string, tickers: string[], entityName: string | un
 }
 
 const JUNK_TITLE_PATTERN =
-  /__\w+__|stock quote price|stock quotes? from|stock price|in real time$|tradingview|quote & history|price and forecast|price chart|commission-free|buy and sell|spy vs\.? spy|song and lyrics|official music video|official video|official audio|full album|definition and meaning|definition of\b|meaning of\b|\bdefinition\b.*\bdictionary\b/i;
+  /__\w+__|stock quote price|stock quotes? from|stock price|in real time$|tradingview|quote & history|price and forecast|price chart|commission-free|buy and sell|closed at \$|what you need to know$|spy vs\.? spy|song and lyrics|official music video|official video|official audio|full album|definition and meaning|definition of\b|meaning of\b|\bdefinition\b.*\bdictionary\b/i;
 
 /**
  * Domains that produce entertainment/non-financial or reference content.
