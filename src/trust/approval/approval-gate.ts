@@ -13,9 +13,9 @@ import { DEFAULT_APPROVAL_CONFIG } from './config.js';
 import type { NotificationBus } from '../../core/notification-bus.js';
 import type { AuditLog } from '../audit/types.js';
 
-export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired';
+type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired';
 
-export interface ApprovalRequest {
+interface ApprovalRequest {
   id: string;
   action: string;
   description: string;
@@ -25,7 +25,7 @@ export interface ApprovalRequest {
   status: ApprovalStatus;
 }
 
-export type ApprovalResult = { approved: true } | { approved: false; reason: string; timedOut: boolean };
+type ApprovalResult = { approved: true } | { approved: false; reason: string; timedOut: boolean };
 
 interface PendingRequest {
   request: ApprovalRequest;

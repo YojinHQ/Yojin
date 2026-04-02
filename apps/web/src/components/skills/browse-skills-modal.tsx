@@ -188,7 +188,7 @@ const templates: Template[] = [
   {
     name: 'Sentiment Tracker',
     category: 'RESEARCH',
-    description: 'Monitor sentiment shifts via Keelson',
+    description: 'Monitor sentiment shifts via Jintel',
     iconBg: iconBgs.research1,
     icon: <IconEye />,
   },

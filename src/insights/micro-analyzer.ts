@@ -57,7 +57,7 @@ Content priorities:
 - If all available data is low-quality promotional content, say so and lower conviction accordingly.
 - Be concise. Every field should be information-dense.`;
 
-export interface AnalyzeTickerOptions {
+interface AnalyzeTickerOptions {
   source: MicroInsightSource;
 }
 

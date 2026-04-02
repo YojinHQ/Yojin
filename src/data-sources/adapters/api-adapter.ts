@@ -16,7 +16,7 @@ import type {
   HealthCheckResult,
 } from '../types.js';
 
-export interface ApiAdapterOptions {
+interface ApiAdapterOptions {
   vault?: EncryptedVault;
   /** Optional custom health check — used for Jintel to delegate to JintelClient. */
   healthCheckFn?: () => Promise<HealthCheckResult>;

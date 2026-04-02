@@ -7,8 +7,6 @@
  *
  * Uses headed mode (visible browser) to bypass Cloudflare Turnstile bot protection
  * on claude.ai. This is acceptable because Yojin runs as a desktop app.
- *
- * Adapted from ai-team's Puppeteer-based ClaudeOAuthService.
  */
 
 import type { Browser, BrowserContext, Page } from 'playwright';

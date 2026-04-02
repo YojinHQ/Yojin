@@ -218,41 +218,13 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
           agentId: 'bull-researcher',
           maxIterations: hasGatherer ? 1 : undefined,
           disabledTools: hasGatherer ? DEBATE_DISABLED_TOOLS : undefined,
-          buildMessage: (prev) => {
-            const researchOutput = prev.get('research-analyst')?.text ?? '';
-            const riskOutput = prev.get('risk-manager')?.text ?? '';
-            const dataBriefs = prev.get('__data_briefs')?.text ?? '';
-
-            return (
-              `Build the strongest possible BULLISH case for each position.\n` +
-              `Use ONLY the data provided — do NOT call any tools.\n\n` +
-              `## Research Brief\n${researchOutput}\n\n` +
-              `## Risk Assessment\n${riskOutput}\n\n` +
-              (dataBriefs ? `## Position Data\n${dataBriefs}\n\n` : '') +
-              `For each position: bullish thesis, supporting evidence (cite specific numbers/signals), ` +
-              `why bears are wrong, upcoming catalysts, and conviction (1-5).`
-            );
-          },
+          buildMessage: (prev) => buildStanceMessage('BULLISH', prev),
         },
         {
           agentId: 'bear-researcher',
           maxIterations: hasGatherer ? 1 : undefined,
           disabledTools: hasGatherer ? DEBATE_DISABLED_TOOLS : undefined,
-          buildMessage: (prev) => {
-            const researchOutput = prev.get('research-analyst')?.text ?? '';
-            const riskOutput = prev.get('risk-manager')?.text ?? '';
-            const dataBriefs = prev.get('__data_briefs')?.text ?? '';
-
-            return (
-              `Build the strongest possible BEARISH case for each position.\n` +
-              `Use ONLY the data provided — do NOT call any tools.\n\n` +
-              `## Research Brief\n${researchOutput}\n\n` +
-              `## Risk Assessment\n${riskOutput}\n\n` +
-              (dataBriefs ? `## Position Data\n${dataBriefs}\n\n` : '') +
-              `For each position: bearish thesis, supporting evidence (cite specific numbers/signals), ` +
-              `why bulls are wrong, downside risks, and conviction (1-5).`
-            );
-          },
+          buildMessage: (prev) => buildStanceMessage('BEARISH', prev),
         },
       ],
 
@@ -480,6 +452,30 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
   });
 
   logger.info('ProcessInsights workflow registered');
+}
+
+// ---------------------------------------------------------------------------
+// Helpers — shared logic extracted from workflow stages
+// ---------------------------------------------------------------------------
+
+/** Build the stance-specific prompt for bull/bear adversarial researchers. */
+function buildStanceMessage(stance: 'BULLISH' | 'BEARISH', prev: Map<string, { text: string }>): string {
+  const researchOutput = prev.get('research-analyst')?.text ?? '';
+  const riskOutput = prev.get('risk-manager')?.text ?? '';
+  const dataBriefs = prev.get('__data_briefs')?.text ?? '';
+
+  const oppositeNoun = stance === 'BULLISH' ? 'bears' : 'bulls';
+  const closingDetail = stance === 'BULLISH' ? 'upcoming catalysts' : 'downside risks';
+
+  return (
+    `Build the strongest possible ${stance} case for each position.\n` +
+    `Use ONLY the data provided — do NOT call any tools.\n\n` +
+    `## Research Brief\n${researchOutput}\n\n` +
+    `## Risk Assessment\n${riskOutput}\n\n` +
+    (dataBriefs ? `## Position Data\n${dataBriefs}\n\n` : '') +
+    `For each position: ${stance.toLowerCase()} thesis, supporting evidence (cite specific numbers/signals), ` +
+    `why ${oppositeNoun} are wrong, ${closingDetail}, and conviction (1-5).`
+  );
 }
 
 // ---------------------------------------------------------------------------

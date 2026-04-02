@@ -29,12 +29,7 @@ function createDefaultAlerts(): Alert[] {
   ];
 }
 
-let alertStore: Alert[] = createDefaultAlerts();
-
-/** Reset alert store to defaults — used in tests to prevent order-dependence. */
-export function resetAlertStore(): void {
-  alertStore = createDefaultAlerts();
-}
+const alertStore: Alert[] = createDefaultAlerts();
 
 // ---------------------------------------------------------------------------
 // Query resolvers

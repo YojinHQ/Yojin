@@ -13,7 +13,7 @@ import { createSubsystemLogger } from '../logging/logger.js';
 const logger = createSubsystemLogger('skill-evaluator');
 
 /** Portfolio context passed to the evaluator for condition checking. */
-export interface PortfolioContext {
+interface PortfolioContext {
   /** Position weights by ticker (0-1). */
   weights: Record<string, number>;
   /** Current prices by ticker. */

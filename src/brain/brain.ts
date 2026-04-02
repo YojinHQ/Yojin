@@ -11,15 +11,9 @@ import { appendFile, mkdir, readFile } from 'node:fs/promises';
 
 import type { BrainCommit, Brain as BrainInterface } from './types.js';
 import { BrainCommitSchema } from './types.js';
-import { type SubsystemLogger, createSubsystemLogger } from '../logging/logger.js';
+import { createSafeLogger } from '../logging/logger.js';
 
-let logger: SubsystemLogger;
-try {
-  logger = createSubsystemLogger('brain');
-} catch {
-  const noop = () => {};
-  logger = { trace: noop, debug: noop, info: noop, warn: noop, error: noop, fatal: noop, child: () => logger };
-}
+const logger = createSafeLogger('brain');
 
 const BRAIN_DIR = 'brain';
 const COMMITS_FILE = `${BRAIN_DIR}/commits.jsonl`;

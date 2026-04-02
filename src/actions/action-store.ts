@@ -23,7 +23,7 @@ export interface ActionStoreOptions {
   dir: string; // e.g. 'data/actions'
 }
 
-export interface ActionQueryFilter {
+interface ActionQueryFilter {
   status?: ActionStatus;
   since?: string; // ISO date string
   limit?: number;

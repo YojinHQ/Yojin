@@ -37,17 +37,15 @@ export type DataSourceCapability = z.infer<typeof DataSourceCapabilitySchema>;
 // Query — uniform request for all data sources
 // ---------------------------------------------------------------------------
 
-export const DataQuerySchema = z.object({
-  capability: z.string(),
-  symbol: z.string().optional(),
-  url: z.string().optional(),
-  urls: z.array(z.string()).optional(),
-  prompt: z.string().optional(),
-  schema: z.unknown().optional(),
-  params: z.record(z.unknown()).default({}),
-});
-
-export type DataQuery = z.infer<typeof DataQuerySchema>;
+export interface DataQuery {
+  capability: string;
+  symbol?: string;
+  url?: string;
+  urls?: string[];
+  prompt?: string;
+  schema?: unknown;
+  params: Record<string, unknown>;
+}
 
 // ---------------------------------------------------------------------------
 // Result — uniform response from all data sources

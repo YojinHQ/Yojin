@@ -7,8 +7,6 @@
  * Two auth modes:
  * - `api_key`: contains a standard `OPENAI_API_KEY`
  * - `chatgpt`: contains OAuth JWT tokens (access_token, refresh_token)
- *
- * @see https://github.com/openai/codex — codex-rs/login/src/auth/storage.rs
  */
 
 import { execFile } from 'node:child_process';

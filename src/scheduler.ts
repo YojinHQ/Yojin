@@ -238,6 +238,9 @@ export class Scheduler {
   private readonly microRegistry = new Map<string, MicroAssetState>();
   private microCompletionCount = 0;
 
+  // Generation counter — incremented on reset() to invalidate in-flight batches
+  private resetGeneration = 0;
+
   // Snap notification dedup — prevent channel spam
   private lastSnapContentHash: string | undefined;
   private lastSnapNotifiedAt = 0;
@@ -297,6 +300,25 @@ export class Scheduler {
       this.microTimer = null;
     }
     logger.info('Scheduler stopped');
+  }
+
+  /**
+   * Reset in-memory state after "Clear App Data".
+   * Clears the micro registry so stale tickers don't trigger research,
+   * and resets snap dedup so a fresh snap isn't suppressed.
+   */
+  reset(): void {
+    this.resetGeneration++;
+    this.microRegistry.clear();
+    this.microCompletionCount = 0;
+    this.lastSnapContentHash = undefined;
+    this.lastSnapNotifiedAt = 0;
+    if (this.pendingMicroTimer) {
+      clearTimeout(this.pendingMicroTimer);
+      this.pendingMicroTimer = null;
+    }
+    this.pendingMicroTickers.clear();
+    logger.info('Scheduler state reset');
   }
 
   // ---------------------------------------------------------------------------
@@ -413,6 +435,7 @@ export class Scheduler {
     }
 
     this.microRunning = true;
+    const gen = this.resetGeneration;
     const symbols = assets.map((a) => a.symbol);
     logger.info('Micro research batch started', { symbols });
 
@@ -463,6 +486,12 @@ export class Scheduler {
           }),
         ),
       );
+
+      // Abort if scheduler was reset mid-flight (clear app data)
+      if (this.resetGeneration !== gen) {
+        logger.info('Micro batch cancelled — scheduler was reset mid-flight');
+        return;
+      }
 
       // Update registry timestamps and count completions
       for (let i = 0; i < results.length; i++) {

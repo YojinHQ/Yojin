@@ -9,6 +9,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { Snap } from './types.js';
+import { assetSnapsFromMicro } from './types.js';
 import type { MicroInsight } from '../insights/micro-types.js';
 import type { InsightReport } from '../insights/types.js';
 
@@ -19,16 +20,7 @@ export interface SnapFromInsightOptions {
 
 /** Derive a Snap from an InsightReport + optional micro insights. */
 export function snapFromInsight(report: InsightReport, options?: SnapFromInsightOptions): Snap {
-  const assetSnaps = options?.microInsights
-    ? [...options.microInsights.values()]
-        .filter((mi) => mi.assetSnap.length > 0)
-        .map((mi) => ({
-          symbol: mi.symbol,
-          snap: mi.assetSnap,
-          rating: mi.rating,
-          generatedAt: mi.generatedAt,
-        }))
-    : [];
+  const assetSnaps = options?.microInsights ? assetSnapsFromMicro(options.microInsights.values()) : [];
 
   return {
     id: `snap-${randomUUID().slice(0, 8)}`,

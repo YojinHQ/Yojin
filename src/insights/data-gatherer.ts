@@ -80,14 +80,14 @@ export interface DataBrief {
   profile: TickerProfileBrief | null;
 }
 
-export interface FilingBrief {
+interface FilingBrief {
   type: string;
   date: string;
   description: string | null;
   url: string;
 }
 
-export interface SignalBrief {
+interface SignalBrief {
   id: string;
   type: string;
   title: string;
@@ -101,7 +101,7 @@ export interface SignalBrief {
   groupId: string | null;
 }
 
-export interface TechnicalsBrief {
+interface TechnicalsBrief {
   rsi: number | null;
   macd: { macd: number; signal: number; histogram: number } | null;
   bollingerBands: { upper: number; middle: number; lower: number } | null;
@@ -112,7 +112,7 @@ export interface TechnicalsBrief {
   mfi: number | null;
 }
 
-export interface SocialSentimentBrief {
+interface SocialSentimentBrief {
   rank: number;
   mentions: number;
   upvotes: number;
@@ -131,14 +131,14 @@ export interface MemoryBrief {
   actualReturn: number | null;
 }
 
-export interface NewsArticleBrief {
+interface NewsArticleBrief {
   title: string;
   source: string;
   snippet: string;
   date: string | null;
 }
 
-export interface ResearchBrief {
+interface ResearchBrief {
   title: string;
   author: string | null;
   text: string;
@@ -146,7 +146,7 @@ export interface ResearchBrief {
   score: number;
 }
 
-export interface GatherResult {
+interface GatherResult {
   briefs: DataBrief[];
   snapshotId: string;
   previousReport: InsightReport | null;

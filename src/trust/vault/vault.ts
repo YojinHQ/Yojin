@@ -90,13 +90,7 @@ export class EncryptedVault implements SecretVault {
   /** Derive encryption key from passphrase. Must be called before any operation. */
   async unlock(passphrase: string): Promise<void> {
     const data = this.loadOrCreateVault();
-    const key = await pbkdf2Async(
-      passphrase,
-      Buffer.from(data.salt, 'base64'),
-      PBKDF2_ITERATIONS,
-      KEY_LENGTH,
-      'sha512',
-    );
+    const key = await this.deriveKey(passphrase, Buffer.from(data.salt, 'base64'));
 
     // Verify passphrase against canary if vault has one
     if (data.canary) {
@@ -223,13 +217,7 @@ export class EncryptedVault implements SecretVault {
   async changePassphrase(currentPassphrase: string, newPassphrase: string): Promise<void> {
     // Verify current passphrase by deriving key and checking canary
     const data = this.loadOrCreateVault();
-    const currentKey = await pbkdf2Async(
-      currentPassphrase,
-      Buffer.from(data.salt, 'base64'),
-      PBKDF2_ITERATIONS,
-      KEY_LENGTH,
-      'sha512',
-    );
+    const currentKey = await this.deriveKey(currentPassphrase, Buffer.from(data.salt, 'base64'));
 
     if (data.canary) {
       try {
@@ -266,7 +254,7 @@ export class EncryptedVault implements SecretVault {
 
     // New salt + derive new key
     const newSalt = randomBytes(SALT_LENGTH);
-    const newKey = await pbkdf2Async(newPassphrase, newSalt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha512');
+    const newKey = await this.deriveKey(newPassphrase, newSalt);
 
     // Re-encrypt all entries
     data.salt = newSalt.toString('base64');
@@ -294,6 +282,11 @@ export class EncryptedVault implements SecretVault {
     // Write new canary
     data.canary = undefined;
     this.writeCanary();
+  }
+
+  /** Derive encryption key from passphrase + salt via PBKDF2 (single source of truth). */
+  private async deriveKey(passphrase: string, salt: Buffer): Promise<Buffer> {
+    return pbkdf2Async(passphrase, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha512');
   }
 
   private ensureUnlocked(): { key: Buffer; data: VaultFile } {

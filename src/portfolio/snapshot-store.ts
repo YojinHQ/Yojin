@@ -108,7 +108,7 @@ export class PortfolioSnapshotStore {
   /**
    * Return the latest snapshot with PII redacted — balances converted to
    * ranges, account IDs hashed. Use this before sending data to external
-   * services (Keelson enrichment, etc.).
+   * services (Jintel enrichment, etc.).
    */
   async getLatestRedacted(redactor: PiiRedactor): Promise<RedactedSnapshot | null> {
     const snapshot = await this.getLatest();

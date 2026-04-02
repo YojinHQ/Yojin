@@ -12,16 +12,10 @@ import { copyFile, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import type { PersonaManager as PersonaManagerInterface } from './types.js';
-import { type SubsystemLogger, createSubsystemLogger } from '../logging/logger.js';
+import { createSafeLogger } from '../logging/logger.js';
 import { resolveDefaultsRoot } from '../paths.js';
 
-let logger: SubsystemLogger;
-try {
-  logger = createSubsystemLogger('brain/persona');
-} catch {
-  const noop = () => {};
-  logger = { trace: noop, debug: noop, info: noop, warn: noop, error: noop, fatal: noop, child: () => logger };
-}
+const logger = createSafeLogger('brain/persona');
 
 const OVERRIDE_PERSONA_PATH = 'brain/persona.md';
 

@@ -71,7 +71,7 @@ const mockSkills: Skill[] = [
   {
     id: '7',
     name: 'Sentiment Shift Alert',
-    description: 'Emails you and drafts a research note when Keelson sentiment score shifts significantly.',
+    description: 'Emails you and drafts a research note when Jintel sentiment score shifts significantly.',
     category: 'RESEARCH',
     active: true,
     source: 'custom',

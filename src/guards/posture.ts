@@ -32,7 +32,3 @@ export const POSTURE_CONFIGS: Record<PostureName, PostureConfig> = {
     mode: 'observe',
   },
 };
-
-export function getPostureConfig(name: PostureName): PostureConfig {
-  return POSTURE_CONFIGS[name];
-}

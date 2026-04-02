@@ -7,6 +7,8 @@
 
 import { z } from 'zod';
 
+import type { MicroInsight } from '../insights/micro-types.js';
+
 export const SnapActionItemSchema = z.object({
   text: z.string().min(1),
   signalIds: z.array(z.string()),
@@ -20,6 +22,17 @@ export const AssetSnapSchema = z.object({
   generatedAt: z.string().min(1),
 });
 export type AssetSnap = z.infer<typeof AssetSnapSchema>;
+
+/** Extract asset snaps from micro insights — filters to non-empty snaps and maps to AssetSnap shape. */
+export function assetSnapsFromMicro(microInsights: Iterable<MicroInsight>): AssetSnap[] {
+  const result: AssetSnap[] = [];
+  for (const mi of microInsights) {
+    if (mi.assetSnap.length > 0) {
+      result.push({ symbol: mi.symbol, snap: mi.assetSnap, rating: mi.rating, generatedAt: mi.generatedAt });
+    }
+  }
+  return result;
+}
 
 export const SnapSchema = z.object({
   id: z.string().min(1),

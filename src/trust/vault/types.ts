@@ -18,9 +18,7 @@ export const VaultEntrySchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
-export type VaultEntry = z.infer<typeof VaultEntrySchema>;
-
-export const CanarySchema = z.object({
+const CanarySchema = z.object({
   /** Encrypted canary value (base64). */
   value: z.string(),
   /** Initialization vector (base64). */

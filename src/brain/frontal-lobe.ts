@@ -13,15 +13,9 @@ import { dirname } from 'node:path';
 
 import { BrainStore } from './brain.js';
 import type { BrainCommit, FrontalLobe as FrontalLobeInterface } from './types.js';
-import { type SubsystemLogger, createSubsystemLogger } from '../logging/logger.js';
+import { createSafeLogger } from '../logging/logger.js';
 
-let logger: SubsystemLogger;
-try {
-  logger = createSubsystemLogger('brain/frontal-lobe');
-} catch {
-  const noop = () => {};
-  logger = { trace: noop, debug: noop, info: noop, warn: noop, error: noop, fatal: noop, child: () => logger };
-}
+const logger = createSafeLogger('brain/frontal-lobe');
 
 const FRONTAL_LOBE_FILE = 'brain/frontal-lobe.md';
 

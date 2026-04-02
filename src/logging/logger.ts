@@ -215,4 +215,29 @@ export function createSubsystemLogger(subsystem: string): SubsystemLogger {
   return getLogger().sub(subsystem);
 }
 
+/**
+ * Create a subsystem logger with a no-op fallback if initialization fails.
+ *
+ * Use this in modules that may be imported before the logger is initialized
+ * (e.g. brain modules loaded at module-evaluation time). If `createSubsystemLogger`
+ * throws (because resolveDataRoot / mkdirSync fails), returns a silent no-op logger.
+ */
+export function createSafeLogger(subsystem: string): SubsystemLogger {
+  try {
+    return createSubsystemLogger(subsystem);
+  } catch {
+    const noop = () => {};
+    const noopLogger: SubsystemLogger = {
+      trace: noop,
+      debug: noop,
+      info: noop,
+      warn: noop,
+      error: noop,
+      fatal: noop,
+      child: () => noopLogger,
+    };
+    return noopLogger;
+  }
+}
+
 export { YojinLogger as Logger };

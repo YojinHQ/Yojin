@@ -14,7 +14,7 @@ import type {
 } from '@yojinhq/jintel-client';
 import { GDP, INFLATION, INTEREST_RATES, SP500_MULTIPLES, buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
-import { riskSignalsToRaw } from './tools.js';
+import { formatNumber, riskSignalsToRaw } from './tools.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
 import { JUNK_DOMAIN_RE, JUNK_TITLE_RE } from '../signals/quality-patterns.js';
@@ -111,13 +111,6 @@ export async function fetchJintelSignals(
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatLargeNumber(n: number): string {
-  if (n >= 1e12) return `${(n / 1e12).toFixed(1)}T`;
-  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
-  return n.toLocaleString();
-}
-
 /** Check if text mentions any of the entity's tickers or name (word-boundary safe). */
 function mentionsEntity(text: string, tickers: string[], entityName: string | undefined): boolean {
   const haystack = text.toUpperCase();
@@ -194,7 +187,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
 
     // Key fundamentals
     const marketCap = fund?.marketCap ?? quote.marketCap;
-    if (marketCap) contentLines.push(`Market Cap: $${formatLargeNumber(marketCap)}`);
+    if (marketCap) contentLines.push(`Market Cap: $${formatNumber(marketCap)}`);
     if (fund?.peRatio != null) contentLines.push(`P/E Ratio: ${fund.peRatio.toFixed(1)}`);
     if (fund?.eps != null) contentLines.push(`EPS: $${fund.eps.toFixed(2)}`);
     if (fund?.beta != null) contentLines.push(`Beta: ${fund.beta.toFixed(2)}`);

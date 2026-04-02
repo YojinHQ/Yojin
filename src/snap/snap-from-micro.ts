@@ -9,6 +9,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { Snap } from './types.js';
+import { assetSnapsFromMicro } from './types.js';
 import type { ProviderRouter } from '../ai-providers/router.js';
 import type { MicroInsight } from '../insights/micro-types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
@@ -66,14 +67,7 @@ export async function snapFromMicro(
   }
 
   // Build asset snaps (always included regardless of AI output)
-  const assetSnaps = insights
-    .filter((mi) => mi.assetSnap.length > 0)
-    .map((mi) => ({
-      symbol: mi.symbol,
-      snap: mi.assetSnap,
-      rating: mi.rating,
-      generatedAt: mi.generatedAt,
-    }));
+  const assetSnaps = assetSnapsFromMicro(insights);
 
   // Sort by portfolio exposure first (biggest positions first), then conviction
   const sortedInsights = [...insights].sort((a, b) => {

@@ -19,3 +19,8 @@ Scope (pass as arguments):
 - `main`: review all commits since the last merge from main
 - `HEAD~3`: review the last 3 commits
 - Any git revision range (e.g., `abc123..HEAD`, `main..HEAD`)
+
+After completing the review and sharing results with the user, write the marker file so the pre-commit hook allows the next commit:
+```bash
+touch /tmp/regression-dog-reviewed.marker
+```
