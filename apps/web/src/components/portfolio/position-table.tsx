@@ -170,7 +170,8 @@ export default function PositionTable({ positions, onAdd }: { positions: Positio
               return (
                 <tr
                   key={`${pos.symbol}:${pos.platform}:${safePage * pageSize + idx}`}
-                  className="border-t border-border transition-colors hover:bg-bg-hover group"
+                  onClick={() => openAssetDetail(pos.symbol)}
+                  className="border-t border-border transition-colors hover:bg-bg-hover group cursor-pointer"
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -180,13 +181,7 @@ export default function PositionTable({ positions, onAdd }: { positions: Positio
                         size="md"
                       />
                       <div>
-                        <button
-                          type="button"
-                          onClick={() => openAssetDetail(pos.symbol)}
-                          className="cursor-pointer font-medium text-text-primary hover:text-accent-primary"
-                        >
-                          {pos.symbol}
-                        </button>
+                        <span className="font-medium text-text-primary">{pos.symbol}</span>
                       </div>
                     </div>
                   </td>
@@ -243,7 +238,10 @@ export default function PositionTable({ positions, onAdd }: { positions: Positio
                     {weight.toFixed(1)}%
                   </td>
                   <td className="px-2 py-3">
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div
+                      className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <button
                         type="button"
                         title="Edit position"
