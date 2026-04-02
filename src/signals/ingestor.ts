@@ -18,6 +18,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { SignalArchive } from './archive.js';
 import type { SignalClustering } from './clustering.js';
 import type { QualityAgent, QualityVerdict, RecentSignalContext } from './quality-agent.js';
+import { JUNK_DOMAIN_RE, JUNK_TITLE_RE, MAX_SIGNAL_AGE_MS, MIN_TITLE_LENGTH } from './quality-patterns.js';
 import { extractTickers } from './ticker-extractor.js';
 import type { SymbolResolver } from './ticker-extractor.js';
 import { SignalSchema } from './types.js';
@@ -28,23 +29,8 @@ const logger = createSubsystemLogger('signal-ingestor');
 
 // ---------------------------------------------------------------------------
 // Pre-ingest quality filter — cheap deterministic checks that catch obvious
-// junk BEFORE we spend LLM tokens on summary generation. Patterns consolidated
-// from Jintel signal-fetcher and data-source adapters.
+// junk BEFORE we spend LLM tokens on quality evaluation.
 // ---------------------------------------------------------------------------
-
-/** Non-financial domains that frequently match short tickers as substrings. */
-const JUNK_DOMAIN_RE =
-  /\b(spotify\.com|soundcloud\.com|genius\.com|bandcamp\.com|deezer\.com|tidal\.com|shazam\.com|collinsdictionary\.com|merriam-webster\.com|dictionary\.com|wiktionary\.org|wikipedia\.org|urbandictionary\.com|cambridge\.org\/dictionary|oxforddictionaries\.com|imdb\.com|rottentomatoes\.com|fandom\.com)\b/i;
-
-/** Title patterns that indicate non-financial content or scraper junk. */
-const JUNK_TITLE_RE =
-  /stock quote price|stock quotes? from|in real time$|tradingview|quote & history|price and forecast|price chart|commission-free|buy and sell|song and lyrics|official music video|official video|official audio|full album|definition and meaning|definition of\b|meaning of\b|\bdefinition\b.*\bdictionary\b|__\w+__/i;
-
-/** Minimum title length for a meaningful signal. */
-const MIN_TITLE_LENGTH = 10;
-
-/** Maximum age (in ms) for a signal to be worth processing. */
-const MAX_SIGNAL_AGE_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 /** Fast pre-filter: returns false for items that are obvious junk. */
 function passesPreFilter(item: RawSignalInput): boolean {

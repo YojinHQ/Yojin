@@ -1,8 +1,8 @@
 /**
  * QualityAgent — single LLM gate for all incoming signals.
  *
- * Replaces multiple LLM touchpoints (SummaryGenerator, clustering classify,
- * curation regex patterns) with one well-prompted evaluation per signal.
+ * Single LLM gate for all incoming signals — one well-prompted evaluation
+ * that replaces multiple prior LLM touchpoints.
  *
  * Produces:
  *   - verdict: KEEP or DROP (the decision)
@@ -11,6 +11,7 @@
  *   - duplicateOf (title of existing signal if this is a duplicate — enables source merge)
  */
 
+import { FALSE_MATCH_TEXT_RE } from './quality-patterns.js';
 import type { Signal, SignalOutputType, SignalSentiment } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 
@@ -58,11 +59,6 @@ export interface QualityAgentOptions {
 const VALID_SENTIMENTS = new Set(['BULLISH', 'BEARISH', 'MIXED', 'NEUTRAL']);
 const VALID_VERDICTS = new Set(['KEEP', 'DROP']);
 const VALID_DROP_REASONS = new Set(['false_match', 'irrelevant', 'duplicate', 'low_quality']);
-
-/** Deterministic false-match safety net — catches cases where the LLM describes
- *  a false match in its text but returns verdict=KEEP. */
-const FALSE_MATCH_TEXT_RE =
-  /\bnot (?:related to|about|referring to)\b|\bno relevance to\b|\bnot .{1,40}(?:stock|ticker|corporation|company)\b|\bis about .{1,60}, not\b/i;
 
 // ---------------------------------------------------------------------------
 // QualityAgent

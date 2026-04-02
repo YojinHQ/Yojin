@@ -12,6 +12,7 @@ import { createSubsystemLogger } from '../../logging/logger.js';
 import type { PortfolioSnapshotStore } from '../../portfolio/snapshot-store.js';
 import type { WatchlistEntry } from '../../watchlist/types.js';
 import type { SignalArchive } from '../archive.js';
+import { FALSE_MATCH_LABEL_RE, JUNK_CONTENT_RE } from '../quality-patterns.js';
 import type { PortfolioRelevanceScore, Signal, SignalOutputType, SignalType } from '../types.js';
 import type { CuratedSignalStore } from './curated-signal-store.js';
 import type { CuratedSignal, CurationConfig, CurationRunResult } from './types.js';
@@ -46,18 +47,6 @@ const DATA_SNAPSHOT_SOURCES = new Set(['jintel-snapshot', 'jintel-technicals', '
 // survive if the underlying event is real.
 const PROMOTIONAL_CONTENT_RE =
   /(?:is .+ (?:a buy|a sell|undervalued|overvalued)\??|(?:top|best) \d+ stocks? to (?:buy|sell|watch)|should you (?:buy|sell)|stocks? everyone is (?:buying|talking)|wall street.s (?:top pick|best kept secret)|(?:millionaire|retire|rich) (?:maker|pick|stock)|next (?:big thing|amazon|tesla)|could (?:soar|crash|skyrocket|plummet) \d+%|don.t miss (?:this|these)|hidden gem|under.?the.?radar)/i;
-
-// Content patterns that indicate a signal is junk — tracking pixels, ad images, empty scrapes.
-// Applied to signal body + LLM summaries so self-described junk is caught even when
-// the title looks plausible.
-const JUNK_CONTENT_RE =
-  /(?:tracking pixel|ad[- ]?related image|no substantive (?:financial |market )?(?:news|content|signal|data)|only (?:contains?|includes?) (?:tracking|ad|pixel|image)|no (?:usable|actionable|meaningful) (?:data|information|content|signal)|(?:lacks|lacking) substance|content is inaccessible|website boilerplate|navigation elements with no actual)/i;
-
-// Deterministic false-match detector — mirrors the safety net in SummaryGenerator but
-// applied at the curation stage to catch signals that were ingested from external sources
-// (e.g. Jintel Research) with tier1/tier2 already set, bypassing the SummaryGenerator gate.
-const FALSE_MATCH_RE =
-  /\b(?:false[- ]match|false[- ]positive)\b|\bno (?:relevance|relation) to\b|\bnot .{1,40}(?:stock|ticker|corporation|company)\b/i;
 
 // ---------------------------------------------------------------------------
 // Pipeline options
@@ -319,7 +308,7 @@ export async function runCurationPipeline(options: CurationPipelineOptions): Pro
 
     // False-match text pattern — catches signals from external sources that report
     // false-match detections as insights (e.g. "no relevance to AXT Inc.").
-    if (FALSE_MATCH_RE.test(bodyText)) return false;
+    if (FALSE_MATCH_LABEL_RE.test(bodyText)) return false;
 
     // Must have at least one portfolio ticker
     return signal.assets.some((a) => portfolioTickers.has(a.ticker));

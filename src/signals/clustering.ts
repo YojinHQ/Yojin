@@ -22,16 +22,8 @@ import { createSubsystemLogger } from '../logging/logger.js';
 const logger = createSubsystemLogger('signal-clustering');
 
 // ---------------------------------------------------------------------------
-// Public interface (kept for backward compat — ClassifyInput/ClassificationResult
-// are no longer used internally but may be referenced by tests or external code)
+// Public interface
 // ---------------------------------------------------------------------------
-
-export type ClassificationResult = 'SAME' | 'RELATED' | 'DIFFERENT';
-
-export interface ClassifyInput {
-  existing: { title: string; type: string; tickers: string[]; time: string };
-  incoming: { title: string; type: string; tickers: string[]; time: string };
-}
 
 export interface ClusteringOptions {
   archive: SignalArchive;

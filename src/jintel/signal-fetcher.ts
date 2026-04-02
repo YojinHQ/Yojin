@@ -17,6 +17,7 @@ import { GDP, INFLATION, INTEREST_RATES, SP500_MULTIPLES, buildBatchEnrichQuery 
 import { riskSignalsToRaw } from './tools.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
+import { JUNK_DOMAIN_RE, JUNK_TITLE_RE } from '../signals/quality-patterns.js';
 import { SignalTypeSchema } from '../signals/types.js';
 
 const SignalType = SignalTypeSchema.enum;
@@ -139,16 +140,6 @@ function mentionsEntity(text: string, tickers: string[], entityName: string | un
   return false;
 }
 
-const JUNK_TITLE_PATTERN =
-  /__\w+__|stock quote price|stock quotes? from|stock price|in real time$|tradingview|quote & history|price and forecast|price chart|commission-free|buy and sell|closed at \$|what you need to know$|spy vs\.? spy|song and lyrics|official music video|official video|official audio|full album|definition and meaning|definition of\b|meaning of\b|\bdefinition\b.*\bdictionary\b/i;
-
-/**
- * Domains that produce entertainment/non-financial or reference content.
- * These frequently match short tickers as substrings (e.g. "Unh Unh" → UNH).
- */
-const JUNK_DOMAIN_PATTERN =
-  /\b(spotify\.com|soundcloud\.com|genius\.com|bandcamp\.com|deezer\.com|tidal\.com|shazam\.com|collinsdictionary\.com|merriam-webster\.com|dictionary\.com|wiktionary\.org|wikipedia\.org|urbandictionary\.com|cambridge\.org\/dictionary|oxforddictionaries\.com)\b/i;
-
 /** Titles that are just entity names with optional ticker suffix (e.g. "Invesco QQQ ETF | ICVT", "Apple Inc (AAPL)") */
 function isEntityNameTitle(title: string, entityName: string | undefined): boolean {
   if (!entityName) return false;
@@ -265,8 +256,8 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
   const entityName = entity.name;
   for (const article of entity.news ?? []) {
     if (!article.title) continue;
-    if (JUNK_TITLE_PATTERN.test(article.title)) continue;
-    if (article.link && JUNK_DOMAIN_PATTERN.test(article.link)) continue;
+    if (JUNK_TITLE_RE.test(article.title)) continue;
+    if (article.link && JUNK_DOMAIN_RE.test(article.link)) continue;
     if (isEntityNameTitle(article.title, entityName)) continue;
     const text = `${article.title} ${article.snippet ?? ''}`;
     if (!mentionsEntity(text, tickers, entityName)) continue;
@@ -289,8 +280,8 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
   // 6. Research articles — skip junk page titles and irrelevant articles
   for (const article of entity.research ?? []) {
     if (!article.title) continue;
-    if (JUNK_TITLE_PATTERN.test(article.title)) continue;
-    if (article.url && JUNK_DOMAIN_PATTERN.test(article.url)) continue;
+    if (JUNK_TITLE_RE.test(article.title)) continue;
+    if (article.url && JUNK_DOMAIN_RE.test(article.url)) continue;
     if (isEntityNameTitle(article.title, entityName)) continue;
     const researchText = `${article.title} ${article.text ?? ''}`;
     if (!mentionsEntity(researchText, tickers, entityName)) continue;
