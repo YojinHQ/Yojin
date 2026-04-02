@@ -665,6 +665,7 @@ export const typeDefs = /* GraphQL */ `
     id: ID!
     name: String!
     status: ChannelStatus!
+    statusMessage: String
     description: String
     requiredCredentials: [String!]!
   }

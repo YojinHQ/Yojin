@@ -12,6 +12,8 @@ export interface ChannelMeta {
   logo?: string;
   description: string;
   setupInstructions: string;
+  /** Optional link to embed in setup instructions (replaces first occurrence of link.text). */
+  setupLink?: { text: string; url: string };
   credentialFields: ChannelCredentialField[];
   connectionType?: 'token' | 'qr';
 }
@@ -34,6 +36,7 @@ const CHANNEL_META: Record<string, ChannelMeta> = {
     description: 'Bot notifications, approval buttons, daily briefings',
     setupInstructions:
       'Open Telegram, message @BotFather, send /newbot and follow the prompts. Paste the bot token below.',
+    setupLink: { text: '@BotFather', url: 'https://t.me/BotFather' },
     credentialFields: [
       {
         key: 'TELEGRAM_BOT_TOKEN',

@@ -151,6 +151,29 @@ function findChannel(id: string): ChannelDef | undefined {
   return CHANNEL_DEFS.find((d) => d.id === id);
 }
 
+// Cached validation results with 60s TTL to avoid hitting external APIs on every listChannels query.
+const VALIDATION_TTL_MS = 60_000;
+const validationCache = new Map<string, { status: string; statusMessage: string | null; cachedAt: number }>();
+
+function getCachedValidation(channelId: string): { status: string; statusMessage: string | null } | null {
+  const entry = validationCache.get(channelId);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > VALIDATION_TTL_MS) {
+    validationCache.delete(channelId);
+    return null;
+  }
+  return { status: entry.status, statusMessage: entry.statusMessage };
+}
+
+function setCachedValidation(channelId: string, status: string, statusMessage: string | null): void {
+  validationCache.set(channelId, { status, statusMessage, cachedAt: Date.now() });
+}
+
+/** Invalidate cached validation for a channel (e.g. after connect/disconnect). */
+function invalidateValidationCache(channelId: string): void {
+  validationCache.delete(channelId);
+}
+
 function toCredMap(credentials: CredentialInput[]): Record<string, string> {
   const map: Record<string, string> = {};
   for (const c of credentials) map[c.key] = c.value;
@@ -179,11 +202,20 @@ async function stopChannel(id: string): Promise<void> {
 }
 
 export async function listChannelsQuery(): Promise<
-  { id: string; name: string; status: string; description: string | null; requiredCredentials: string[] }[]
+  {
+    id: string;
+    name: string;
+    status: string;
+    statusMessage: string | null;
+    description: string | null;
+    requiredCredentials: string[];
+  }[]
 > {
   return Promise.all(
     CHANNEL_DEFS.map(async (def) => {
       let status = 'NOT_CONNECTED';
+      let statusMessage: string | null = null;
+
       if (def.id === 'whatsapp') {
         if (oauthDir) {
           const connected = await access(join(oauthDir, 'whatsapp', 'creds.json'))
@@ -196,12 +228,35 @@ export async function listChannelsQuery(): Promise<
       } else if (vault) {
         const v = vault;
         const checks = await Promise.all(def.requiredCredentials.map((k) => v.has(k)));
-        if (checks.every(Boolean)) status = 'CONNECTED';
+        if (checks.every(Boolean)) {
+          // Use cached validation result if available (avoids hitting external APIs every query)
+          const cached = getCachedValidation(def.id);
+          if (cached) {
+            status = cached.status;
+            statusMessage = cached.statusMessage;
+          } else {
+            const credMap: Record<string, string> = {};
+            for (const key of def.requiredCredentials) {
+              const val = await v.get(key);
+              if (val) credMap[key] = val;
+            }
+            const validation = await def.validate(credMap);
+            if (validation.valid) {
+              status = 'CONNECTED';
+            } else {
+              status = 'ERROR';
+              statusMessage = validation.error ?? 'Credentials are no longer valid';
+            }
+            setCachedValidation(def.id, status, statusMessage);
+          }
+        }
       }
+
       return {
         id: def.id,
         name: def.name,
         status,
+        statusMessage,
         description: def.description,
         requiredCredentials: def.requiredCredentials,
       };
@@ -236,6 +291,7 @@ export async function connectChannelMutation(
   for (const c of args.credentials) await vault.set(c.key, c.value);
 
   const startErr = await startChannel(args.id);
+  invalidateValidationCache(args.id);
   if (startErr) return { success: true, error: startErr };
 
   recordSuccess();
@@ -252,6 +308,7 @@ export async function disconnectChannelMutation(_parent: unknown, args: { id: st
   if (def.id === 'whatsapp') {
     await cleanupPairingSession();
     await stopChannel('whatsapp');
+    invalidateValidationCache('whatsapp');
     if (oauthDir) {
       await rm(join(oauthDir, 'whatsapp'), { recursive: true, force: true });
     }
@@ -259,6 +316,7 @@ export async function disconnectChannelMutation(_parent: unknown, args: { id: st
   }
 
   await stopChannel(args.id);
+  invalidateValidationCache(args.id);
 
   for (const key of def.requiredCredentials) {
     if (await vault.has(key)) await vault.delete(key);

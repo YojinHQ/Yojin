@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -12,7 +13,37 @@ import {
 import Spinner from '../common/spinner.js';
 import Button from '../common/button.js';
 import Modal from '../common/modal.js';
+import type { ChannelMeta } from './channel-meta.js';
 import { getChannelMeta } from './channel-meta.js';
+
+const QR_TIMEOUT_SEC = 120;
+
+/** Renders setup instructions, replacing the first occurrence of setupLink.text with a clickable link. */
+function SetupInstructions({ meta }: { meta: ChannelMeta }): ReactNode {
+  if (!meta.setupInstructions) return null;
+
+  if (!meta.setupLink) {
+    return <p className="text-sm text-text-secondary mb-5">{meta.setupInstructions}</p>;
+  }
+
+  const idx = meta.setupInstructions.indexOf(meta.setupLink.text);
+  if (idx === -1) {
+    return <p className="text-sm text-text-secondary mb-5">{meta.setupInstructions}</p>;
+  }
+
+  const before = meta.setupInstructions.slice(0, idx);
+  const after = meta.setupInstructions.slice(idx + meta.setupLink.text.length);
+
+  return (
+    <p className="text-sm text-text-secondary mb-5">
+      {before}
+      <a href={meta.setupLink.url} target="_blank" rel="noopener noreferrer" className="text-accent-primary underline">
+        {meta.setupLink.text}
+      </a>
+      {after}
+    </p>
+  );
+}
 
 interface ConnectChannelModalProps {
   open: boolean;
@@ -24,51 +55,72 @@ interface ConnectChannelModalProps {
 interface QrPairingFlowProps {
   channelId: string;
   channelLabel: string;
-  setupInstructions: string;
+  meta: ChannelMeta;
   onConnected: () => void;
   onClose: () => void;
 }
 
-function QrPairingFlow({ channelId, channelLabel, setupInstructions, onConnected, onClose }: QrPairingFlowProps) {
+function QrPairingFlow({ channelId, channelLabel, meta, onConnected, onClose }: QrPairingFlowProps) {
   const [qrData, setQrData] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [initiated, setInitiated] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(QR_TIMEOUT_SEC);
+  const [expired, setExpired] = useState(false);
+  const countdownRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   const [, initiatePairing] = useInitiateChannelPairing();
   const [, cancelPairing] = useCancelChannelPairing();
   const [pairingResult] = useChannelPairing(initiated ? channelId : null);
 
-  // Kick off pairing on mount, cancel on unmount
-  useEffect(() => {
-    let cancelled = false;
+  const startCountdown = useCallback(() => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    setSecondsLeft(QR_TIMEOUT_SEC);
+    setExpired(false);
+    countdownRef.current = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current);
+          setExpired(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
 
-    async function start() {
-      const result = await initiatePairing({ id: channelId });
+  const startPairing = useCallback(async () => {
+    setError(null);
+    setQrData(null);
+    setExpired(false);
+    setConnected(false);
 
-      if (cancelled) return;
+    const result = await initiatePairing({ id: channelId });
 
-      if (result.error) {
-        setError(result.error.message || 'Failed to start pairing');
-        return;
-      }
-
-      if (!result.data?.initiateChannelPairing.success) {
-        setError(result.data?.initiateChannelPairing.error ?? 'Failed to start pairing');
-        return;
-      }
-
-      if (result.data.initiateChannelPairing.qrData) {
-        setQrData(result.data.initiateChannelPairing.qrData);
-      }
-
-      setInitiated(true);
+    if (result.error) {
+      setError(result.error.message || 'Failed to start pairing');
+      return;
     }
 
-    void start();
+    if (!result.data?.initiateChannelPairing.success) {
+      setError(result.data?.initiateChannelPairing.error ?? 'Failed to start pairing');
+      return;
+    }
+
+    if (result.data.initiateChannelPairing.qrData) {
+      setQrData(result.data.initiateChannelPairing.qrData);
+    }
+
+    setInitiated(true);
+    startCountdown();
+  }, [channelId, initiatePairing, startCountdown]);
+
+  // Kick off pairing on mount, cancel on unmount
+  useEffect(() => {
+    void startPairing();
 
     return () => {
-      cancelled = true;
+      if (countdownRef.current) clearInterval(countdownRef.current);
       void cancelPairing({ id: channelId });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -84,6 +136,7 @@ function QrPairingFlow({ channelId, channelLabel, setupInstructions, onConnected
     }
 
     if (event.status === 'CONNECTED') {
+      if (countdownRef.current) clearInterval(countdownRef.current);
       setConnected(true);
       const timer = setTimeout(() => {
         onConnected();
@@ -92,13 +145,21 @@ function QrPairingFlow({ channelId, channelLabel, setupInstructions, onConnected
     }
 
     if (event.status === 'FAILED' || event.status === 'EXPIRED') {
-      setError(event.error ?? (event.status === 'EXPIRED' ? 'QR code expired. Please try again.' : 'Pairing failed'));
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      setExpired(true);
+      setError(event.error ?? (event.status === 'EXPIRED' ? 'QR code expired.' : 'Pairing failed'));
     }
   }, [pairingResult.data, onConnected]);
 
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
   return (
     <>
-      {setupInstructions && <p className="text-sm text-text-secondary mb-5">{setupInstructions}</p>}
+      <SetupInstructions meta={meta} />
 
       <div className="flex flex-col items-center justify-center gap-4 py-2 mb-6">
         {connected ? (
@@ -116,18 +177,26 @@ function QrPairingFlow({ channelId, channelLabel, setupInstructions, onConnected
             </div>
             <p className="text-sm font-medium text-success">Connected to {channelLabel}</p>
           </div>
-        ) : qrData ? (
-          <div className="rounded-xl bg-white p-4">
-            <QRCodeSVG value={qrData} size={200} level="M" />
+        ) : qrData && !expired ? (
+          <div className="flex flex-col items-center gap-3">
+            <div className="rounded-xl bg-white p-4">
+              <QRCodeSVG value={qrData} size={200} level="M" />
+            </div>
+            <p className="text-xs text-text-muted tabular-nums">Expires in {formatTime(secondsLeft)}</p>
           </div>
-        ) : error ? null : (
+        ) : error ? (
+          <div className="flex flex-col items-center gap-3 py-4">
+            <p className="text-sm text-error text-center">{error}</p>
+            <Button variant="primary" size="sm" onClick={() => void startPairing()}>
+              Try again
+            </Button>
+          </div>
+        ) : (
           <div className="flex flex-col items-center gap-3 py-8">
             <Spinner size="lg" />
             <p className="text-sm text-text-muted">Generating QR code…</p>
           </div>
         )}
-
-        {error && <p className="text-sm text-error text-center">{error}</p>}
       </div>
 
       <div className="flex justify-end gap-3">
@@ -145,6 +214,10 @@ interface TokenFlowProps {
   onClose: () => void;
 }
 
+function isRateLimited(errorMsg: string | null): boolean {
+  return !!errorMsg?.startsWith('Too many attempts');
+}
+
 function TokenFlow({ channelId, onConnected, onClose }: TokenFlowProps) {
   const meta = getChannelMeta(channelId);
   const fields = meta.credentialFields;
@@ -160,7 +233,9 @@ function TokenFlow({ channelId, onConnected, onClose }: TokenFlowProps) {
 
   const handleFieldChange = (key: string, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
-    setError(null);
+    if (!isRateLimited(error)) {
+      setError(null);
+    }
     setValidated(false);
   };
 
@@ -216,7 +291,7 @@ function TokenFlow({ channelId, onConnected, onClose }: TokenFlowProps) {
 
   return (
     <>
-      {meta.setupInstructions && <p className="text-sm text-text-secondary mb-4">{meta.setupInstructions}</p>}
+      <SetupInstructions meta={meta} />
 
       <div className="space-y-4 mb-6">
         {fields.map((field) => (
@@ -234,7 +309,13 @@ function TokenFlow({ channelId, onConnected, onClose }: TokenFlowProps) {
         ))}
       </div>
 
-      {error && <p className="text-sm text-error mb-4">{error}</p>}
+      {error && isRateLimited(error) ? (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 mb-4">
+          <p className="text-sm text-warning">{error}</p>
+        </div>
+      ) : error ? (
+        <p className="text-sm text-error mb-4">{error}</p>
+      ) : null}
 
       {validated && <p className="text-sm text-success mb-4">Token validated successfully</p>}
 
@@ -243,7 +324,13 @@ function TokenFlow({ channelId, onConnected, onClose }: TokenFlowProps) {
           Cancel
         </Button>
         {!validated ? (
-          <Button variant="primary" size="sm" loading={validating} disabled={!allFieldsFilled} onClick={handleValidate}>
+          <Button
+            variant="primary"
+            size="sm"
+            loading={validating}
+            disabled={!allFieldsFilled || isRateLimited(error)}
+            onClick={handleValidate}
+          >
             Validate
           </Button>
         ) : (
@@ -269,7 +356,7 @@ export function ConnectChannelModal({ open, channelId, onClose, onConnected }: C
         <QrPairingFlow
           channelId={channelId}
           channelLabel={meta.label}
-          setupInstructions={meta.setupInstructions}
+          meta={meta}
           onConnected={onConnected}
           onClose={handleClose}
         />

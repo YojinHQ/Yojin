@@ -71,6 +71,7 @@ export interface Channel {
   id: string;
   name: string;
   status: ChannelStatus;
+  statusMessage: string | null;
   description: string | null;
   requiredCredentials: string[];
 }

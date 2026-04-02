@@ -369,6 +369,7 @@ export const LIST_CHANNELS_QUERY = gql`
       id
       name
       status
+      statusMessage
       description
       requiredCredentials
     }

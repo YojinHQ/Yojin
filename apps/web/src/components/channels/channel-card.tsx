@@ -42,7 +42,11 @@ export function ChannelCard({ channel, onConnect, onDisconnect, disconnecting = 
               {label}
             </Badge>
           </div>
-          <p className="mt-0.5 text-xs text-text-muted">{meta.description}</p>
+          {channel.status === 'ERROR' && channel.statusMessage ? (
+            <p className="mt-0.5 text-xs text-error">{channel.statusMessage}</p>
+          ) : (
+            <p className="mt-0.5 text-xs text-text-muted">{meta.description}</p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
