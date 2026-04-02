@@ -75,7 +75,7 @@ function Sparkline({
     const rawY = 32 - ((prevClose - min) / range) * 24 - 4;
     // Clamp to SVG viewBox so the baseline is visible even when prevClose is
     // outside the candle data range (e.g. pre-market gap).
-    baselineY = Math.max(0, Math.min(32, rawY));
+    baselineY = Math.max(0.5, Math.min(31.5, rawY));
   }
 
   // Positive: fill below line to bottom; Negative: fill above line to baseline
