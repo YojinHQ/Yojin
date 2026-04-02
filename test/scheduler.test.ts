@@ -82,32 +82,32 @@ describe('Scheduler', () => {
     return { execute: executeMock } as unknown as import('../src/agents/orchestrator.js').Orchestrator;
   }
 
-  it('does not fire when no digestSchedule is configured', async () => {
-    await writeFile(join(dataRoot, 'config', 'alerts.json'), JSON.stringify({}));
+  it('does not fire macro flow when cooldown has not elapsed', async () => {
+    // Pre-seed state with a recent macro run
+    await writeFile(
+      join(dataRoot, 'cron', 'state.json'),
+      JSON.stringify({ lastRuns: { 'macro-flow': new Date().toISOString() } }),
+    );
 
     const execute = vi.fn().mockResolvedValue(new Map());
     const scheduler = new Scheduler({
       orchestrator: makeOrchestrator(execute),
       dataRoot,
-      checkIntervalMs: 100_000, // won't fire via interval
+      checkIntervalMs: 100_000,
     });
 
-    // Access private tick via prototype
     await (scheduler as unknown as { tick: () => Promise<void> }).tick();
 
+    // Macro should NOT fire — cooldown (2 hours) not elapsed
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it('fires when cron matches current time', async () => {
-    const now = new Date();
-    const cron = `${now.getMinutes()} ${now.getHours()} * * *`;
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
+  it('fires macro flow when 2-hour cooldown has elapsed', async () => {
+    // Pre-seed state with a macro run > 2 hours ago
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
     await writeFile(
-      join(dataRoot, 'config', 'alerts.json'),
-      JSON.stringify({
-        digestSchedule: { time: `${now.getHours()}:${now.getMinutes()}`, timezone: tz, cron },
-      }),
+      join(dataRoot, 'cron', 'state.json'),
+      JSON.stringify({ lastRuns: { 'macro-flow': threeHoursAgo } }),
     );
 
     const execute = vi.fn().mockResolvedValue(new Map());
@@ -119,51 +119,12 @@ describe('Scheduler', () => {
 
     await (scheduler as unknown as { tick: () => Promise<void> }).tick();
 
-    expect(execute).toHaveBeenCalledWith('process-insights', {
-      message: 'Scheduled daily portfolio insights',
-    });
+    // Macro flow runs full-curation then process-insights
+    expect(execute).toHaveBeenCalledWith('full-curation', {});
   });
 
-  it('does not fire twice on the same day', async () => {
-    const now = new Date();
-    const cron = `${now.getMinutes()} ${now.getHours()} * * *`;
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    await writeFile(
-      join(dataRoot, 'config', 'alerts.json'),
-      JSON.stringify({
-        digestSchedule: { time: `${now.getHours()}:${now.getMinutes()}`, timezone: tz, cron },
-      }),
-    );
-
-    const execute = vi.fn().mockResolvedValue(new Map());
-    const scheduler = new Scheduler({
-      orchestrator: makeOrchestrator(execute),
-      dataRoot,
-      checkIntervalMs: 100_000,
-    });
-
-    // First tick — should fire
-    await (scheduler as unknown as { tick: () => Promise<void> }).tick();
-    expect(execute).toHaveBeenCalledTimes(1);
-
-    // Second tick — should NOT fire (already ran today)
-    await (scheduler as unknown as { tick: () => Promise<void> }).tick();
-    expect(execute).toHaveBeenCalledTimes(1);
-  });
-
-  it('persists state to cron/state.json', async () => {
-    const now = new Date();
-    const cron = `${now.getMinutes()} ${now.getHours()} * * *`;
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    await writeFile(
-      join(dataRoot, 'config', 'alerts.json'),
-      JSON.stringify({
-        digestSchedule: { time: `${now.getHours()}:${now.getMinutes()}`, timezone: tz, cron },
-      }),
-    );
-
+  it('persists macro-flow state to cron/state.json', async () => {
+    // No prior state — macro should fire on first tick
     const execute = vi.fn().mockResolvedValue(new Map());
     const scheduler = new Scheduler({
       orchestrator: makeOrchestrator(execute),
@@ -175,11 +136,17 @@ describe('Scheduler', () => {
 
     const stateRaw = await readFile(join(dataRoot, 'cron', 'state.json'), 'utf-8');
     const state = JSON.parse(stateRaw);
-    expect(state.lastRuns['process-insights']).toBeDefined();
-    expect(new Date(state.lastRuns['process-insights']).getTime()).toBeGreaterThan(0);
+    expect(state.lastRuns['macro-flow']).toBeDefined();
+    expect(new Date(state.lastRuns['macro-flow']).getTime()).toBeGreaterThan(0);
   });
 
-  it('start and stop manage the timer', () => {
+  it('start and stop manage the timer', async () => {
+    // Pre-seed state so tick() doesn't trigger async macro flow
+    await writeFile(
+      join(dataRoot, 'cron', 'state.json'),
+      JSON.stringify({ lastRuns: { 'macro-flow': new Date().toISOString() } }),
+    );
+
     const execute = vi.fn().mockResolvedValue(new Map());
     const scheduler = new Scheduler({
       orchestrator: makeOrchestrator(execute),

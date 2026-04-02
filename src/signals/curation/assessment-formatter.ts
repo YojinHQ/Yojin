@@ -1,11 +1,11 @@
 /**
- * Assessment formatter — converts curated signals into a compact text format
+ * Assessment formatter — converts signals into a compact text format
  * optimized for agent consumption (~50-80 tokens per signal vs ~200-300 raw JSON).
  *
  * Groups signals by ticker with thesis context and position sizing.
  */
 
-import type { CuratedSignal } from './types.js';
+import type { Signal } from '../types.js';
 
 export interface TickerThesis {
   rating: string;
@@ -19,11 +19,11 @@ export interface TickerPosition {
 }
 
 /**
- * Format curated signals for agent assessment. Compact, pipe-delimited format
+ * Format signals for agent assessment. Compact, pipe-delimited format
  * designed to minimize token usage while preserving all decision-relevant fields.
  */
 export function formatSignalsForAssessment(
-  signalsByTicker: Map<string, CuratedSignal[]>,
+  signalsByTicker: Map<string, Signal[]>,
   thesisByTicker: Map<string, TickerThesis>,
   positionsByTicker: Map<string, TickerPosition>,
 ): string {
@@ -48,14 +48,12 @@ export function formatSignalsForAssessment(
     header += '\n---';
 
     // Signal lines — compact, one per line
-    const lines = signals.map((cs, i) => {
-      const s = cs.signal;
+    const lines = signals.map((s, i) => {
       const age = formatAge(s.publishedAt);
       const sentiment = s.sentiment ? ` ${s.sentiment}` : '';
-      const topScore = Math.max(...cs.scores.filter((sc) => sc.ticker === ticker).map((sc) => sc.compositeScore));
       const grouped = s.groupId ? ` group:${s.groupId}` : '';
 
-      return `${i + 1}. [${s.id}] ${s.type} "${truncate(s.title, 80)}" conf:${s.confidence.toFixed(2)}${sentiment} ${age} (score:${topScore.toFixed(2)})${grouped}`;
+      return `${i + 1}. [${s.id}] ${s.type} "${truncate(s.title, 80)}" conf:${s.confidence.toFixed(2)}${sentiment} ${age}${grouped}`;
     });
 
     sections.push(`${header}\n${lines.join('\n')}`);

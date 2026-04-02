@@ -7,7 +7,7 @@
 import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { SignalArchive, SignalQueryFilter } from '../../../signals/archive.js';
 import type { AssessmentStore } from '../../../signals/curation/assessment-store.js';
-import { classifyOutputType } from '../../../signals/curation/pipeline.js';
+import { classifyOutputType } from '../../../signals/signal-filter.js';
 import type { Signal, SignalSentiment, SignalType, SourceType } from '../../../signals/types.js';
 
 // ---------------------------------------------------------------------------

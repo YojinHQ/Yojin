@@ -42,7 +42,6 @@ import { JsonlSessionStore } from '../sessions/jsonl-store.js';
 import { SignalClustering } from '../signals/clustering.js';
 import { AssessmentConfigSchema } from '../signals/curation/assessment-types.js';
 import { registerFullCurationWorkflow } from '../signals/curation/full-curation-workflow.js';
-import { runCurationPipeline } from '../signals/curation/pipeline.js';
 import { CurationConfigSchema } from '../signals/curation/types.js';
 import { QualityAgent } from '../signals/quality-agent.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
@@ -198,7 +197,7 @@ async function startGateway(): Promise<void> {
     profileStore: services.profileStore,
     gathererOptions: {
       snapshotStore: services.snapshotStore,
-      curatedSignalStore: services.curatedSignalStore,
+      signalArchive: services.signalArchive,
       insightStore: services.insightStore,
       getJintelClient: () => services.jintelToolOptions.client,
       memoryStores: services.memoryStores,
@@ -209,7 +208,7 @@ async function startGateway(): Promise<void> {
       snapshotStore: services.snapshotStore,
       fallbackGathererOptions: {
         snapshotStore: services.snapshotStore,
-        curatedSignalStore: services.curatedSignalStore,
+        signalArchive: services.signalArchive,
         insightStore: services.insightStore,
         getJintelClient: () => services.jintelToolOptions.client,
         memoryStores: services.memoryStores,
@@ -226,34 +225,22 @@ async function startGateway(): Promise<void> {
   const assessmentConfigRaw = await loadJsonConfig(`${dataRoot}/config/assessment.json`, AssessmentConfigSchema);
   const assessmentConfig = AssessmentConfigSchema.parse(assessmentConfigRaw);
 
-  // Auto-curate: run Tier 1 deterministic curation after every ingestion
+  // Log ingestion events
   services.signalIngestor.setPostIngestHook(async (ingested) => {
     if (ingested === 0) return;
     await eventLog.append({
       type: 'system',
-      data: { message: `Ingested ${ingested} new signal${ingested !== 1 ? 's' : ''} — running curation` },
-    });
-    await runCurationPipeline({
-      signalArchive: services.signalArchive,
-      curatedStore: services.curatedSignalStore,
-      snapshotStore: services.snapshotStore,
-      config: curationConfig,
-      watchlistEntries: services.watchlistStore?.list(),
+      data: { message: `Ingested ${ingested} new signal${ingested !== 1 ? 's' : ''}` },
     });
   });
 
   registerFullCurationWorkflow(orchestrator, {
     signalArchive: services.signalArchive,
-    curatedSignalStore: services.curatedSignalStore,
     assessmentStore: services.assessmentStore,
     insightStore: services.insightStore,
     snapshotStore: services.snapshotStore,
-    curationConfig,
     assessmentConfig,
-    getJintelClient: () => services.jintelToolOptions.client,
-    signalIngestor: services.signalIngestor,
     assessmentWorkflowStartMs: services.assessmentWorkflowStartMs,
-    getWatchlistEntries: () => services.watchlistStore?.list() ?? [],
   });
   setCurationOrchestrator(orchestrator);
   setCurationPipelineDeps({ archive: services.signalArchive, config: curationConfig });
@@ -290,13 +277,6 @@ async function startGateway(): Promise<void> {
     orchestrator,
     dataRoot,
     reflectionEngine: services.reflectionEngine,
-    // Curation pipeline runs every 15 min
-    curationPipeline: {
-      signalArchive: services.signalArchive,
-      curatedStore: services.curatedSignalStore,
-      snapshotStore: services.snapshotStore,
-      config: curationConfig,
-    },
     skillEvaluator: services.skillEvaluator,
     actionStore: services.actionStore,
     snapshotStore: services.snapshotStore,
@@ -312,7 +292,7 @@ async function startGateway(): Promise<void> {
     watchlistStore: services.watchlistStore,
     memoryStores: services.memoryStores,
     profileStore: services.profileStore,
-    curatedSignalStore: services.curatedSignalStore,
+    signalArchive: services.signalArchive,
   });
   scheduler.start();
 
@@ -383,7 +363,7 @@ async function runInsights(): Promise<void> {
     profileStore: services.profileStore,
     gathererOptions: {
       snapshotStore: services.snapshotStore,
-      curatedSignalStore: services.curatedSignalStore,
+      signalArchive: services.signalArchive,
       insightStore: services.insightStore,
       getJintelClient: () => services.jintelToolOptions.client,
       memoryStores: services.memoryStores,

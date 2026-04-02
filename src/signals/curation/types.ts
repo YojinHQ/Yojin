@@ -1,57 +1,15 @@
 /**
- * Signal Curation types — schemas for the deterministic signal curation pipeline.
- *
- * CuratedSignal wraps a raw Signal with portfolio relevance scores.
- * The pipeline filters, scores, and ranks signals against the user's portfolio,
- * producing a curated set for downstream consumers (Insights, UI).
+ * Signal Curation types — configuration and routing for the signal scoring pipeline.
  */
 
 import { z } from 'zod';
 
-import { PortfolioRelevanceScoreSchema, SignalSchema } from '../types.js';
-
 // ---------------------------------------------------------------------------
-// FeedTarget — routes curated signals to portfolio or watchlist feed
+// FeedTarget — routes scored signals to portfolio or watchlist feed
 // ---------------------------------------------------------------------------
 
 export const FeedTargetSchema = z.enum(['PORTFOLIO', 'WATCHLIST']);
 export type FeedTarget = z.infer<typeof FeedTargetSchema>;
-
-// ---------------------------------------------------------------------------
-// CuratedSignal — a signal with relevance scores and feed routing
-// ---------------------------------------------------------------------------
-
-export const CuratedSignalSchema = z.object({
-  signal: SignalSchema,
-  scores: z.array(PortfolioRelevanceScoreSchema).min(1),
-  curatedAt: z.string().datetime(),
-  feedTarget: FeedTargetSchema.default('PORTFOLIO'),
-});
-export type CuratedSignal = z.infer<typeof CuratedSignalSchema>;
-
-// ---------------------------------------------------------------------------
-// Watermark — tracks pipeline progress for incremental processing
-// ---------------------------------------------------------------------------
-
-export const CurationWatermarkSchema = z.object({
-  lastRunAt: z.string().datetime(),
-  lastSignalIngestedAt: z.string().datetime(),
-  signalsProcessed: z.number().int().min(0),
-  signalsCurated: z.number().int().min(0),
-});
-export type CurationWatermark = z.infer<typeof CurationWatermarkSchema>;
-
-// ---------------------------------------------------------------------------
-// Pipeline run result
-// ---------------------------------------------------------------------------
-
-export const CurationRunResultSchema = z.object({
-  signalsProcessed: z.number().int().min(0),
-  signalsCurated: z.number().int().min(0),
-  signalsDropped: z.number().int().min(0),
-  durationMs: z.number().min(0),
-});
-export type CurationRunResult = z.infer<typeof CurationRunResultSchema>;
 
 // ---------------------------------------------------------------------------
 // Configuration — loaded from data/config/curation.json

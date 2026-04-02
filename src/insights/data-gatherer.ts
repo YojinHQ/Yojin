@@ -21,7 +21,8 @@ import type { MemoryEntry } from '../memory/types.js';
 import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
 import type { TickerProfileStore } from '../profiles/profile-store.js';
 import type { TickerProfileBrief } from '../profiles/types.js';
-import type { CuratedSignalStore } from '../signals/curation/curated-signal-store.js';
+import type { SignalArchive } from '../signals/archive.js';
+import { filterSignals } from '../signals/signal-filter.js';
 import type { Signal, SignalOutputType, SignalSentiment } from '../signals/types.js';
 
 const logger = createSubsystemLogger('data-gatherer');
@@ -155,7 +156,7 @@ interface GatherResult {
 
 export interface DataGathererOptions {
   snapshotStore: PortfolioSnapshotStore;
-  curatedSignalStore: CuratedSignalStore;
+  signalArchive: SignalArchive;
   insightStore: InsightStore;
   /** Getter to resolve the current Jintel client (may be hot-swapped after vault unlock). */
   getJintelClient?: () => JintelClient | undefined;
@@ -170,7 +171,7 @@ export interface DataGathererOptions {
 
 export async function gatherDataBriefs(options: DataGathererOptions): Promise<GatherResult> {
   const start = Date.now();
-  const { snapshotStore, curatedSignalStore, insightStore, getJintelClient, memoryStores, profileStore } = options;
+  const { snapshotStore, signalArchive, insightStore, getJintelClient, memoryStores, profileStore } = options;
   const jintelClient = getJintelClient?.();
   if (!jintelClient) {
     logger.warn('Jintel client not available — skipping enrichment and quotes');
@@ -198,14 +199,16 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
     // Unified enrichment + news (1 API call per 20 tickers)
     // Returns Map<inputTicker, entity> — preserves portfolio ticker → entity association
     jintelClient ? batchEnrichAllChunked(jintelClient, tickers) : Promise.resolve(new Map<string, Entity>()),
-    // Curated signals (local, already scored by the curation pipeline)
-    curatedSignalStore.queryByTickers(tickers, { since: sevenDaysAgo, limit: 100 * tickers.length }),
+    // Signals from archive, filtered for quality (no curation store needed)
+    signalArchive
+      .query({ tickers, since: sevenDaysAgo, limit: 100 * tickers.length })
+      .then((raw) => filterSignals(raw, { relevantTickers: new Set(tickers) })),
     // Memories (local, fast)
     recallAllMemories(memoryStores, tickers),
     // Previous report (local, fast)
     insightStore.getLatest(),
   ]);
-  const signals = curatedSignals.map((cs) => cs.signal);
+  const signals = curatedSignals;
 
   // 3. Index data by ticker for O(1) lookup
   const signalsByTicker = groupSignalsByTicker(signals, tickers);
@@ -774,7 +777,7 @@ function buildAllProfileBriefs(
 
 export interface SingleBriefOptions {
   snapshotStore: PortfolioSnapshotStore;
-  curatedSignalStore: CuratedSignalStore;
+  signalArchive: SignalArchive;
   getJintelClient?: () => JintelClient | undefined;
   memoryStores: Map<string, SignalMemoryStore>;
   profileStore?: TickerProfileStore;
@@ -785,7 +788,7 @@ export interface SingleBriefOptions {
  * to avoid the overhead of gathering briefs for all positions.
  */
 export async function buildSingleBrief(symbol: string, options: SingleBriefOptions): Promise<DataBrief | null> {
-  const { snapshotStore, curatedSignalStore, getJintelClient, memoryStores, profileStore } = options;
+  const { snapshotStore, signalArchive, getJintelClient, memoryStores, profileStore } = options;
   const jintelClient = getJintelClient?.();
 
   // Find the position in the current snapshot
@@ -821,11 +824,13 @@ export async function buildSingleBrief(symbol: string, options: SingleBriefOptio
       ? jintelClient.quotes([ticker]).catch(() => ({ success: false as const, error: 'quotes failed' }))
       : Promise.resolve(null),
     jintelClient ? batchEnrichAllChunked(jintelClient, [ticker]) : Promise.resolve(new Map<string, Entity>()),
-    curatedSignalStore.queryByTickers([ticker], { since: sevenDaysAgo, limit: 100 }),
+    signalArchive
+      .query({ tickers: [ticker], since: sevenDaysAgo, limit: 100 })
+      .then((raw) => filterSignals(raw, { relevantTickers: new Set([ticker]) })),
     recallAllMemories(memoryStores, [ticker]),
   ]);
 
-  const signals = curatedSignals.map((cs) => cs.signal);
+  const signals = curatedSignals;
   const quoteMap = indexQuotes(quotes);
   const memMap = indexMemories(memories, [ticker]);
   const profile = profileStore ? profileStore.buildBrief(ticker) : null;

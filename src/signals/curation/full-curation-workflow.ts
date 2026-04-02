@@ -1,54 +1,43 @@
 /**
- * Full Curation workflow — Tier 1 (deterministic) + Tier 2 (agent-based) in one pipeline.
+ * Full Curation workflow — agent-based signal assessment pipeline.
  *
  * Pipeline:
- *   beforeWorkflow:
- *     0. Run deterministic curation pipeline (Tier 1) — score, filter, rank
- *     1. Pre-aggregate curated signals + thesis context for agents
+ *   beforeWorkflow: Pre-aggregate signals + thesis context for agents
  *   Stage 0: Research Analyst (LLM, 1 iteration) — classify CRITICAL/IMPORTANT/NOISE
  *   Stage 1: Strategist (LLM, 1 iteration) — score against thesis, persist via save_signal_assessment
  *   afterWorkflow: update assessment watermark
+ *
+ * Signal ingestion happens upstream: micro flow fetches Jintel per-ticker every 5 min,
+ * and the scheduler's 15-min tick fetches CLI/RSS/MCP data sources. This workflow
+ * reads from the already-populated archive — no fetching here.
  *
  * Emits WorkflowProgressEvents throughout for live UI activity log.
  * Used by the "Run Curation" button in the UI. The separate `signal-assessment`
  * workflow remains for scheduler-only Tier 2 runs.
  */
 
-import type { JintelClient } from '@yojinhq/jintel-client';
-
 import { type TickerPosition, type TickerThesis, formatSignalsForAssessment } from './assessment-formatter.js';
 import type { AssessmentStore } from './assessment-store.js';
 import type { AssessmentConfig } from './assessment-types.js';
-import type { CuratedSignalStore } from './curated-signal-store.js';
-import { runCurationPipeline } from './pipeline.js';
-import type { CuratedSignal, CurationConfig } from './types.js';
 import type { Orchestrator } from '../../agents/orchestrator.js';
 import { emitProgress } from '../../agents/orchestrator.js';
 import type { InsightStore } from '../../insights/insight-store.js';
-import { fetchJintelSignals, fetchMacroIndicators } from '../../jintel/signal-fetcher.js';
 import { createSubsystemLogger } from '../../logging/logger.js';
 import type { PortfolioSnapshotStore } from '../../portfolio/snapshot-store.js';
-import type { WatchlistEntry } from '../../watchlist/types.js';
 import type { SignalArchive } from '../archive.js';
-import type { SignalIngestor } from '../ingestor.js';
+import { DEFAULT_SPAM_PATTERNS, deduplicateByTitle, filterSignals } from '../signal-filter.js';
+import type { Signal } from '../types.js';
 
 const logger = createSubsystemLogger('full-curation');
 
 export interface FullCurationWorkflowOptions {
   signalArchive: SignalArchive;
-  curatedSignalStore: CuratedSignalStore;
   assessmentStore: AssessmentStore;
   insightStore: InsightStore;
   snapshotStore: PortfolioSnapshotStore;
-  curationConfig: CurationConfig;
   assessmentConfig: AssessmentConfig;
-  /** Getter for Jintel client (may be hot-swapped after vault unlock). */
-  getJintelClient?: () => JintelClient | undefined;
-  signalIngestor?: SignalIngestor;
   /** Mutable ref shared with the assessment tool for accurate durationMs tracking. */
   assessmentWorkflowStartMs?: { value: number };
-  /** Watchlist entries for watchlist curation pass. */
-  getWatchlistEntries?: () => WatchlistEntry[];
 }
 
 // All RA tools disabled — data is pre-aggregated, pure analysis in 1 iteration.
@@ -103,18 +92,7 @@ const STRATEGIST_DISABLED_TOOLS = [
 const WF_ID = 'full-curation';
 
 export function registerFullCurationWorkflow(orchestrator: Orchestrator, options: FullCurationWorkflowOptions): void {
-  const {
-    signalArchive,
-    curatedSignalStore,
-    assessmentStore,
-    insightStore,
-    snapshotStore,
-    curationConfig,
-    getJintelClient,
-    signalIngestor,
-    assessmentWorkflowStartMs,
-    getWatchlistEntries,
-  } = options;
+  const { signalArchive, assessmentStore, insightStore, snapshotStore, assessmentWorkflowStartMs } = options;
 
   // State shared between beforeWorkflow and afterWorkflow
   let latestCuratedAt = '';
@@ -211,92 +189,15 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
         assessmentWorkflowStartMs.value = Date.now();
       }
 
-      // ------------------------------------------------------------------
-      // STAGE 0: Fetch fresh signals from Jintel for portfolio tickers
-      // ------------------------------------------------------------------
-      const snapshot0 = await snapshotStore.getLatest();
-      const jintelClient = getJintelClient?.();
-
-      if (snapshot0 && snapshot0.positions.length > 0 && jintelClient && signalIngestor) {
-        const portfolioTickers = snapshot0.positions.map((p) => p.symbol);
-        emitProgress({
-          workflowId: WF_ID,
-          stage: 'activity',
-          message: `Stage 0: Fetching Jintel data for ${portfolioTickers.length} tickers...`,
-          timestamp: new Date().toISOString(),
-        });
-
-        // Use curation watermark to only fetch signals newer than last run
-        const fetchWatermark = await curatedSignalStore.getLatestWatermark();
-        const fetchSince = fetchWatermark?.lastRunAt;
-
-        // Fetch ticker-specific signals and macro indicators in parallel
-        const [fetchResult, macroResult] = await Promise.all([
-          fetchJintelSignals(jintelClient, signalIngestor, portfolioTickers, {
-            since: fetchSince,
-          }),
-          fetchMacroIndicators(jintelClient, signalIngestor),
-        ]);
-        emitProgress({
-          workflowId: WF_ID,
-          stage: 'activity',
-          message: `Stage 0 complete: ${fetchResult.ingested + macroResult.ingested} signals ingested (${macroResult.ingested} macro), ${fetchResult.duplicates + macroResult.duplicates} duplicates skipped`,
-          timestamp: new Date().toISOString(),
-        });
-      } else if (jintelClient && signalIngestor) {
-        // No portfolio but Jintel is available — still fetch macro indicators
-        const macroResult = await fetchMacroIndicators(jintelClient, signalIngestor);
-        emitProgress({
-          workflowId: WF_ID,
-          stage: 'activity',
-          message: `Stage 0: ${macroResult.ingested} macro signals ingested (no portfolio tickers)`,
-          timestamp: new Date().toISOString(),
-        });
-      } else {
-        emitProgress({
-          workflowId: WF_ID,
-          stage: 'activity',
-          message: 'Stage 0: Skipped — Jintel client not available',
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // ------------------------------------------------------------------
-      // TIER 1: Run deterministic curation pipeline
-      // ------------------------------------------------------------------
+      // Pre-aggregation: load signals + thesis context for agent assessment
       emitProgress({
         workflowId: WF_ID,
         stage: 'activity',
-        message: 'Tier 1: Running deterministic signal curation...',
+        message: 'Loading signals and thesis context...',
         timestamp: new Date().toISOString(),
       });
 
-      const curationResult = await runCurationPipeline({
-        signalArchive,
-        curatedStore: curatedSignalStore,
-        snapshotStore,
-        config: curationConfig,
-        watchlistEntries: getWatchlistEntries?.(),
-      });
-
-      emitProgress({
-        workflowId: WF_ID,
-        stage: 'activity',
-        message: `Tier 1 complete: ${curationResult.signalsCurated} curated from ${curationResult.signalsProcessed} signals (${curationResult.durationMs}ms)`,
-        timestamp: new Date().toISOString(),
-      });
-
-      // ------------------------------------------------------------------
-      // TIER 2 pre-aggregation: load curated signals + thesis context
-      // ------------------------------------------------------------------
-      emitProgress({
-        workflowId: WF_ID,
-        stage: 'activity',
-        message: 'Tier 2: Loading curated signals and thesis context...',
-        timestamp: new Date().toISOString(),
-      });
-
-      // Skip watermark check — we just ran Tier 1, process ALL curated signals from last 7 days
+      // Load signals from the archive (already populated by micro flow + data source fetches)
       const snapshot = await snapshotStore.getLatest();
       if (!snapshot || snapshot.positions.length === 0) {
         logger.info('No portfolio — skipping assessment');
@@ -313,20 +214,24 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
 
       const tickers = snapshot.positions.map((p) => p.symbol);
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const curatedSignals = await curatedSignalStore.queryByTickers(tickers, { since: sevenDaysAgo });
 
-      // For full-curation, skip watermark — assess all recent curated signals
+      // Query and filter signals from archive
+      const rawSignals = await signalArchive.query({ tickers, since: sevenDaysAgo });
+      const filtered = filterSignals(rawSignals, {
+        relevantTickers: new Set(tickers),
+        spamPatterns: DEFAULT_SPAM_PATTERNS,
+      });
+
+      // Only signals ingested after the assessment watermark
       const watermark = await assessmentStore.getLatestWatermark();
-      const newSignals = watermark
-        ? curatedSignals.filter((cs) => cs.curatedAt > watermark.lastCuratedAt)
-        : curatedSignals;
+      const newSignals = watermark ? filtered.filter((s) => s.ingestedAt > watermark.lastCuratedAt) : filtered;
 
       if (newSignals.length === 0) {
-        logger.info('No new curated signals to assess');
+        logger.info('No new signals to assess');
         emitProgress({
           workflowId: WF_ID,
           stage: 'activity',
-          message: 'No new curated signals to assess — skipping Tier 2 agents',
+          message: 'No new signals to assess — skipping agents',
           timestamp: new Date().toISOString(),
         });
         outputs.set('__assessment_signals', {
@@ -340,10 +245,14 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
         return;
       }
 
-      signalCount = newSignals.length;
+      // Dedup by title and trim to a reasonable batch for agents
+      const deduped = deduplicateByTitle(newSignals);
+      const trimmed = deduped.sort((a, b) => b.confidence - a.confidence).slice(0, 30);
+
+      signalCount = trimmed.length;
       latestCuratedAt = newSignals.reduce(
-        (latest, cs) => (cs.curatedAt > latest ? cs.curatedAt : latest),
-        newSignals[0].curatedAt,
+        (latest, s) => (s.ingestedAt > latest ? s.ingestedAt : latest),
+        newSignals[0].ingestedAt,
       );
 
       // Load thesis context from latest InsightReport
@@ -369,19 +278,7 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
       }
 
       // Group signals by ticker
-      const signalsByTicker = new Map<string, CuratedSignal[]>();
-      for (const cs of newSignals) {
-        for (const score of cs.scores) {
-          const group = signalsByTicker.get(score.ticker);
-          if (group) {
-            if (!group.some((existing) => existing.signal.id === cs.signal.id)) {
-              group.push(cs);
-            }
-          } else {
-            signalsByTicker.set(score.ticker, [cs]);
-          }
-        }
-      }
+      const signalsByTicker = groupByTicker(trimmed);
 
       // Format compactly for agent consumption
       const formatted = formatSignalsForAssessment(signalsByTicker, thesisByTicker, positionsByTicker);
@@ -389,7 +286,7 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
       emitProgress({
         workflowId: WF_ID,
         stage: 'activity',
-        message: `Tier 2: Loaded ${newSignals.length} curated signals across ${signalsByTicker.size} tickers for agent assessment`,
+        message: `Loaded ${trimmed.length} signals across ${signalsByTicker.size} tickers for agent assessment`,
         timestamp: new Date().toISOString(),
       });
 
@@ -423,4 +320,21 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
   });
 
   logger.info('FullCuration workflow registered');
+}
+
+function groupByTicker(signals: Signal[]): Map<string, Signal[]> {
+  const byTicker = new Map<string, Signal[]>();
+  for (const s of signals) {
+    for (const asset of s.assets) {
+      const group = byTicker.get(asset.ticker);
+      if (group) {
+        if (!group.some((existing) => existing.id === s.id)) {
+          group.push(s);
+        }
+      } else {
+        byTicker.set(asset.ticker, [s]);
+      }
+    }
+  }
+  return byTicker;
 }

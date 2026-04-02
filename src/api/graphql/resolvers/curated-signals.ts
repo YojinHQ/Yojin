@@ -1,7 +1,12 @@
 /**
- * Curated signal resolvers — query curated signals and manage the curation pipeline.
+ * Curated signal resolvers — query signals from the archive, filter, and rank
+ * by agent assessment verdicts.
  *
- * Module-level state: setCuratedSignalStore and setCurationOrchestrator are called at startup.
+ * Reads directly from SignalArchive. Ranking comes from macro flow assessment
+ * verdicts (CRITICAL > IMPORTANT > unassessed > NOISE). Simple quality-based
+ * fallback for signals not yet assessed.
+ *
+ * Module-level state is set at startup via setter functions.
  */
 
 import { fetchAllEnabledSources } from './fetch-data-source.js';
@@ -13,28 +18,25 @@ import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.j
 import type { SignalArchive } from '../../../signals/archive.js';
 import type { AssessmentStore } from '../../../signals/curation/assessment-store.js';
 import type { SignalAssessment } from '../../../signals/curation/assessment-types.js';
-import type { CuratedSignalStore } from '../../../signals/curation/curated-signal-store.js';
-import { runCurationPipeline } from '../../../signals/curation/pipeline.js';
 import type { CurationConfig, FeedTarget } from '../../../signals/curation/types.js';
+import { DEFAULT_SPAM_PATTERNS, deduplicateByTitle, filterSignals } from '../../../signals/signal-filter.js';
+import type { Signal } from '../../../signals/types.js';
 import type { WatchlistStore } from '../../../watchlist/watchlist-store.js';
 
 const log = createSubsystemLogger('curated-signals-resolver');
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
-let store: CuratedSignalStore | null = null;
 let assessmentStore: AssessmentStore | null = null;
 let curationOrchestrator: Orchestrator | null = null;
 let snapshotStore: PortfolioSnapshotStore | null = null;
 let signalArchive: SignalArchive | null = null;
 let curationConfig: CurationConfig | null = null;
 let watchlistStore: WatchlistStore | null = null;
-
-export function setCuratedSignalStore(s: CuratedSignalStore): void {
-  store = s;
-}
 
 export function setCuratedAssessmentStore(s: AssessmentStore): void {
   assessmentStore = s;
@@ -89,50 +91,87 @@ interface CurationStatusGql {
 // Resolvers
 // ---------------------------------------------------------------------------
 
+/** Verdict priority for ranking — higher is better. */
+const VERDICT_RANK: Record<string, number> = { CRITICAL: 3, IMPORTANT: 2, NOISE: 0 };
+
 export async function curatedSignalsResolver(
   _parent: unknown,
   args: { ticker?: string; since?: string; limit?: number; offset?: number; feedTarget?: FeedTarget },
 ): Promise<CuratedSignalGql[]> {
-  if (!store) return [];
+  if (!signalArchive || !snapshotStore) return [];
 
   // Resolve tickers based on feedTarget filter
-  let tickers: string[];
-  if (args.ticker) {
-    tickers = [args.ticker];
-  } else {
-    const portfolioTickers: string[] = [];
-    const watchlistTickers: string[] = [];
+  const portfolioTickers: string[] = [];
+  const watchlistEntries = watchlistStore?.list() ?? [];
+  const watchlistTickers: string[] = [];
 
-    if (args.feedTarget !== 'WATCHLIST' && snapshotStore) {
+  if (args.ticker) {
+    portfolioTickers.push(args.ticker);
+  } else {
+    if (args.feedTarget !== 'WATCHLIST') {
       const snapshot = await snapshotStore.getLatest();
       if (snapshot && snapshot.positions.length > 0) {
         portfolioTickers.push(...snapshot.positions.map((p) => p.symbol.toUpperCase()));
       }
     }
-    if (args.feedTarget !== 'PORTFOLIO' && watchlistStore) {
-      watchlistTickers.push(...watchlistStore.list().map((e) => e.symbol.toUpperCase()));
+    if (args.feedTarget !== 'PORTFOLIO') {
+      watchlistTickers.push(...watchlistEntries.map((e) => e.symbol.toUpperCase()));
     }
-
-    tickers = [...new Set([...portfolioTickers, ...watchlistTickers])];
   }
-  if (tickers.length === 0) return [];
 
-  const [curated, dismissedIds] = await Promise.all([
-    store.queryByTickers(tickers, {
-      since: args.since,
-      limit: args.limit ?? 200,
-    }),
-    store.getDismissedIds(),
-  ]);
+  const allTickers = [...new Set([...portfolioTickers, ...watchlistTickers])];
+  if (allTickers.length === 0) return [];
 
-  // Load latest assessments for verdict enrichment — keyed by signalId for O(1) join
+  // Query raw signals from archive — default 7-day window
+  const since = args.since ?? new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
+  const rawSignals = await signalArchive.query({ tickers: allTickers, since });
+
+  // Get dismissed IDs
+  const dismissedIds = await signalArchive.getDismissedIds();
+
+  // Filter
+  const filtered = filterSignals(rawSignals, {
+    minQualityScore: curationConfig?.minQualityScore ?? 40,
+    minConfidence: curationConfig?.minConfidence ?? 0.3,
+    spamPatterns: curationConfig?.spamPatterns ?? DEFAULT_SPAM_PATTERNS,
+    excludeIds: dismissedIds,
+  });
+
+  // Classify signals as portfolio or watchlist
+  const portfolioTickerSet = new Set(portfolioTickers);
+  const watchlistTickerSet = new Set(watchlistTickers.filter((t) => !portfolioTickerSet.has(t)));
+
+  type TaggedSignal = { signal: Signal; feedTarget: FeedTarget };
+  const tagged: TaggedSignal[] = [];
+
+  for (const signal of filtered) {
+    const isPortfolio = signal.assets.some((a) => portfolioTickerSet.has(a.ticker));
+    const isWatchlist = signal.assets.some((a) => watchlistTickerSet.has(a.ticker));
+
+    if (isPortfolio && args.feedTarget !== 'WATCHLIST') {
+      tagged.push({ signal, feedTarget: 'PORTFOLIO' });
+    } else if (isWatchlist && args.feedTarget !== 'PORTFOLIO') {
+      tagged.push({ signal, feedTarget: 'WATCHLIST' });
+    }
+  }
+
+  // Title dedup per feed target
+  const portfolioSignals = deduplicateByTitle(tagged.filter((t) => t.feedTarget === 'PORTFOLIO').map((t) => t.signal));
+  const watchlistSignals = deduplicateByTitle(tagged.filter((t) => t.feedTarget === 'WATCHLIST').map((t) => t.signal));
+
+  // Rebuild tagged list after dedup
+  const dedupedTagged: TaggedSignal[] = [
+    ...portfolioSignals.map((s) => ({ signal: s, feedTarget: 'PORTFOLIO' as FeedTarget })),
+    ...watchlistSignals.map((s) => ({ signal: s, feedTarget: 'WATCHLIST' as FeedTarget })),
+  ];
+
+  // Load assessments for verdict-based ranking
   let assessmentBySignalId = new Map<string, SignalAssessment>();
   if (assessmentStore) {
     try {
-      const reports = await assessmentStore.queryByTickers(tickers, { limit: 10 });
+      const reports = await assessmentStore.queryByTickers(allTickers, { limit: 10 });
       for (const report of reports) {
         for (const a of report.assessments) {
-          // Keep the most recent assessment per signal (reports are newest-first)
           if (!assessmentBySignalId.has(a.signalId)) {
             assessmentBySignalId.set(a.signalId, a);
           }
@@ -144,73 +183,42 @@ export async function curatedSignalsResolver(
     }
   }
 
-  // CRITICAL verdict boost — multiply composite score for ranking
-  const VERDICT_BOOST: Record<string, number> = { CRITICAL: 1.5, IMPORTANT: 1.1 };
-
-  const noiseIds = new Set<string>();
-  for (const [id, assessment] of assessmentBySignalId) {
-    if (assessment.verdict === 'NOISE') noiseIds.add(id);
-  }
-  const nonDismissed = curated.filter((cs) => {
-    if (dismissedIds.has(cs.signal.id)) return false;
-    if (noiseIds.has(cs.signal.id)) return false;
-    if (args.feedTarget && cs.feedTarget !== args.feedTarget) return false;
-    return true;
+  // Filter out NOISE verdicts
+  const visible = dedupedTagged.filter((t) => {
+    const assessment = assessmentBySignalId.get(t.signal.id);
+    return !assessment || assessment.verdict !== 'NOISE';
   });
 
-  function deduplicateByTitle(signals: typeof nonDismissed): typeof nonDismissed {
-    const byTitle = new Map<string, (typeof nonDismissed)[number]>();
-    for (const cs of signals) {
-      const key = cs.signal.title.trim().toLowerCase();
-      const existing = byTitle.get(key);
-      if (!existing) {
-        byTitle.set(key, cs);
-      } else {
-        const maxExisting = Math.max(...existing.scores.map((s) => s.compositeScore));
-        const maxCurrent = Math.max(...cs.scores.map((s) => s.compositeScore));
-        if (maxCurrent > maxExisting) byTitle.set(key, cs);
-      }
-    }
-    return [...byTitle.values()];
-  }
-
-  // Dedup within each feedTarget so a watchlist signal can't shadow a same-titled portfolio signal
-  const deduped = args.feedTarget
-    ? deduplicateByTitle(nonDismissed)
-    : [
-        ...deduplicateByTitle(nonDismissed.filter((cs) => cs.feedTarget === 'PORTFOLIO')),
-        ...deduplicateByTitle(nonDismissed.filter((cs) => cs.feedTarget === 'WATCHLIST')),
-      ];
-
-  // Sort with verdict-boosted scores — CRITICAL signals bubble to top
-  const sorted = deduped.sort((a, b) => {
+  // Sort by verdict rank (CRITICAL > IMPORTANT > unassessed), then by confidence
+  const sorted = visible.sort((a, b) => {
     const assessA = assessmentBySignalId.get(a.signal.id);
     const assessB = assessmentBySignalId.get(b.signal.id);
-    const boostA = assessA ? (VERDICT_BOOST[assessA.verdict] ?? 1) : 1;
-    const boostB = assessB ? (VERDICT_BOOST[assessB.verdict] ?? 1) : 1;
-    const maxA = Math.max(...a.scores.map((s) => s.compositeScore)) * boostA;
-    const maxB = Math.max(...b.scores.map((s) => s.compositeScore)) * boostB;
-    return maxB - maxA;
+    const rankA = assessA ? (VERDICT_RANK[assessA.verdict] ?? 1) : 1;
+    const rankB = assessB ? (VERDICT_RANK[assessB.verdict] ?? 1) : 1;
+    if (rankA !== rankB) return rankB - rankA;
+    return b.signal.confidence - a.signal.confidence;
   });
 
-  // Pagination — offset/limit applied after dedup + sort
+  // Pagination
   const offset = args.offset ?? 0;
   const limit = args.limit ?? 200;
-  const visible = sorted.slice(offset, offset + limit);
+  const page = sorted.slice(offset, offset + limit);
 
-  return visible.map((cs) => {
-    const assessment = assessmentBySignalId.get(cs.signal.id);
+  return page.map((t) => {
+    const assessment = assessmentBySignalId.get(t.signal.id);
+    const tickers = t.signal.assets.map((a) => a.ticker);
+
     return {
-      signal: toGql(cs.signal),
-      scores: cs.scores.map((s) => ({
-        signalId: s.signalId,
-        ticker: s.ticker,
-        exposureWeight: s.exposureWeight,
-        typeRelevance: s.typeRelevance,
-        compositeScore: s.compositeScore,
+      signal: toGql(t.signal),
+      scores: tickers.map((ticker) => ({
+        signalId: t.signal.id,
+        ticker,
+        exposureWeight: 0,
+        typeRelevance: 0,
+        compositeScore: assessment?.relevanceScore ?? t.signal.confidence,
       })),
-      curatedAt: cs.curatedAt,
-      feedTarget: cs.feedTarget,
+      curatedAt: t.signal.ingestedAt,
+      feedTarget: t.feedTarget,
       verdict: assessment?.verdict ?? null,
       thesisAlignment: assessment?.thesisAlignment ?? null,
       actionability: assessment?.actionability ?? null,
@@ -219,20 +227,20 @@ export async function curatedSignalsResolver(
 }
 
 export async function curationStatusResolver(): Promise<CurationStatusGql> {
-  if (!store) return { lastRunAt: null, signalsProcessed: 0, signalsCurated: 0 };
+  if (!assessmentStore) return { lastRunAt: null, signalsProcessed: 0, signalsCurated: 0 };
 
-  const watermark = await store.getLatestWatermark();
+  const watermark = await assessmentStore.getLatestWatermark();
   if (!watermark) return { lastRunAt: null, signalsProcessed: 0, signalsCurated: 0 };
 
   return {
     lastRunAt: watermark.lastRunAt,
-    signalsProcessed: watermark.signalsProcessed,
-    signalsCurated: watermark.signalsCurated,
+    signalsProcessed: watermark.signalsAssessed,
+    signalsCurated: watermark.signalsKept,
   };
 }
 
 // ---------------------------------------------------------------------------
-// Full Curation (Tier 1 + Tier 2) — with progress events
+// Full Curation — with progress events
 // ---------------------------------------------------------------------------
 
 let activeFullCuration: Promise<boolean> | null = null;
@@ -243,13 +251,13 @@ export function getCurationWorkflowStatus(): { running: boolean; startedAt: stri
 }
 
 export async function dismissSignalResolver(_parent: unknown, args: { signalId: string }): Promise<boolean> {
-  if (!store) throw new Error('CuratedSignalStore not available');
-  await store.dismiss(args.signalId);
+  if (!signalArchive) throw new Error('SignalArchive not available');
+  await signalArchive.dismiss(args.signalId);
   return true;
 }
 
 // ---------------------------------------------------------------------------
-// Refresh Intel Feed — fetch data sources + run Tier 1 curation
+// Refresh Intel Feed — fetch data sources
 // ---------------------------------------------------------------------------
 
 interface RefreshIntelFeedResult {
@@ -261,7 +269,7 @@ interface RefreshIntelFeedResult {
 let activeRefresh: Promise<RefreshIntelFeedResult> | null = null;
 
 export async function refreshIntelFeedResolver(): Promise<RefreshIntelFeedResult> {
-  if (!store || !snapshotStore || !signalArchive || !curationConfig) {
+  if (!snapshotStore || !signalArchive) {
     return { signalsFetched: 0, signalsCurated: 0, error: 'Intel feed pipeline not initialized' };
   }
 
@@ -271,7 +279,6 @@ export async function refreshIntelFeedResolver(): Promise<RefreshIntelFeedResult
 
   activeRefresh = (async () => {
     try {
-      // Step 1: Fetch fresh signals from all enabled data sources
       const fetchResult = await fetchAllEnabledSources();
       log.info('Intel feed refresh — data fetch complete', {
         ingested: fetchResult.totalIngested,
@@ -279,23 +286,9 @@ export async function refreshIntelFeedResolver(): Promise<RefreshIntelFeedResult
         sources: fetchResult.sourcesAttempted,
       });
 
-      // Step 2: Run Tier 1 curation pipeline
-      const curationResult = await runCurationPipeline({
-        signalArchive,
-        curatedStore: store,
-        snapshotStore,
-        config: curationConfig,
-        watchlistEntries: watchlistStore?.list(),
-      });
-
-      log.info('Intel feed refresh — curation complete', {
-        processed: curationResult.signalsProcessed,
-        curated: curationResult.signalsCurated,
-      });
-
       return {
         signalsFetched: fetchResult.totalIngested,
-        signalsCurated: curationResult.signalsCurated,
+        signalsCurated: fetchResult.totalIngested,
         error: fetchResult.errors.length > 0 ? fetchResult.errors.join('; ') : null,
       };
     } catch (err) {

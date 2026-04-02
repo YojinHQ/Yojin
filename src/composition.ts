@@ -22,7 +22,6 @@ import { setChannelDataRoot, setChannelOAuthDir, setChannelVault } from './api/g
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
 import {
   setCuratedAssessmentStore,
-  setCuratedSignalStore,
   setCuratedSnapshotStore,
   setCuratedWatchlistStore,
 } from './api/graphql/resolvers/curated-signals.js';
@@ -99,7 +98,6 @@ import { registerAllConnectors } from './scraper/platforms/index.js';
 import { SignalArchive } from './signals/archive.js';
 import { AssessmentStore } from './signals/curation/assessment-store.js';
 import { createAssessmentTools } from './signals/curation/assessment-tools.js';
-import { CuratedSignalStore } from './signals/curation/curated-signal-store.js';
 import { SignalGroupArchive } from './signals/group-archive.js';
 import { SignalIngestor } from './signals/ingestor.js';
 import { createSignalTools } from './signals/tools.js';
@@ -160,7 +158,6 @@ export interface YojinServices {
   signalArchive: SignalArchive;
   signalGroupArchive: SignalGroupArchive;
   signalIngestor: SignalIngestor;
-  curatedSignalStore: CuratedSignalStore;
   assessmentStore: AssessmentStore;
   /** Mutable ref — workflows set this before agent stages to track pipeline duration. */
   assessmentWorkflowStartMs: { value: number };
@@ -602,10 +599,8 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     toolRegistry.register(tool);
   }
 
-  // Curated signal + assessment stores (created before wireInsights which needs curatedSignalStore)
-  const curatedSignalStore = new CuratedSignalStore(dataRoot);
+  // Assessment store + resolver wiring
   const assessmentStore = new AssessmentStore(dataRoot);
-  setCuratedSignalStore(curatedSignalStore);
   setCuratedSnapshotStore(snapshotStore);
   setCuratedAssessmentStore(assessmentStore);
   setCuratedWatchlistStore(watchlistStore);
@@ -613,7 +608,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   setSignalAssessmentStore(assessmentStore);
 
   // Insight tools (1 tool: save_insight_report)
-  const { insightStore, tools: insightTools } = wireInsights({ dataRoot, curatedSignalStore });
+  const { insightStore, tools: insightTools } = wireInsights({ dataRoot, signalArchive });
   for (const tool of insightTools) {
     toolRegistry.register(tool);
   }
@@ -724,7 +719,6 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     signalArchive,
     signalGroupArchive,
     signalIngestor,
-    curatedSignalStore,
     assessmentStore,
     assessmentWorkflowStartMs,
     actionStore,

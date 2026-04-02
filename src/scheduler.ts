@@ -1,11 +1,14 @@
 /**
- * Lightweight job scheduler — runs a unified intelligence pipeline:
+ * Lightweight job scheduler — two-flow intelligence pipeline:
  *
- * 1. Micro research: per-asset AI analysis every 5 minutes (Sonnet LLM call).
- *    Triggered immediately on position/watchlist add, then on a 5-min cadence.
- * 2. Every 15 minutes: fetch data sources → Tier 1 curation → skill evaluation.
- * 3. Macro research: portfolio-wide multi-agent analysis triggered when enough
- *    micro research cycles complete OR on a daily cron schedule.
+ * 1. **Micro flow**: per-asset AI analysis every 5 minutes (Sonnet LLM call).
+ *    Triggered immediately on position/watchlist add or website open,
+ *    then on a 5-min cadence. Keeps per-ticker data fresh.
+ *
+ * 2. **Macro flow**: portfolio-wide multi-agent analysis every 2 hours.
+ *    Also triggers when all micro flows complete for all assets today.
+ *    Pipeline: CLI data fetch → signal assessment (RA + Strategist) →
+ *    ProcessInsights → skill evaluation → snap → reflection.
  *
  * State is persisted to data/cron/state.json so restarts don't re-run
  * a job that already fired within its cooldown window.
@@ -23,8 +26,6 @@ import type { ActionStore } from './actions/action-store.js';
 import type { Orchestrator } from './agents/orchestrator.js';
 import { emitProgress } from './agents/orchestrator.js';
 import type { ProviderRouter } from './ai-providers/router.js';
-import { fetchAllEnabledSources } from './api/graphql/resolvers/fetch-data-source.js';
-import { AlertsConfigSchema } from './config/config.js';
 import type { EventLog } from './core/event-log.js';
 import type { NotificationBus } from './core/notification-bus.js';
 import type { InsightStore } from './insights/insight-store.js';
@@ -39,9 +40,6 @@ import type { MemoryAgentRole } from './memory/types.js';
 import type { PortfolioSnapshotStore } from './portfolio/snapshot-store.js';
 import type { TickerProfileStore } from './profiles/profile-store.js';
 import type { SignalArchive } from './signals/archive.js';
-import type { CuratedSignalStore } from './signals/curation/curated-signal-store.js';
-import { runCurationPipeline } from './signals/curation/pipeline.js';
-import type { CurationConfig } from './signals/curation/types.js';
 import type { SignalIngestor } from './signals/ingestor.js';
 import type { SkillEvaluator } from './skills/skill-evaluator.js';
 import { snapFromInsight } from './snap/snap-from-insight.js';
@@ -93,22 +91,6 @@ export function cronMatchesNow(expr: string, now: Date): boolean {
   return now.getMinutes() === fields.minute && now.getHours() === fields.hour;
 }
 
-/**
- * Check if a job already ran today (based on the cron's date in the target timezone).
- */
-function alreadyRanToday(lastRunIso: string | undefined, timezone: string): boolean {
-  if (!lastRunIso) return false;
-
-  const lastRun = new Date(lastRunIso);
-  const now = new Date();
-
-  // Compare dates in the user's timezone
-  const lastRunDate = lastRun.toLocaleDateString('en-CA', { timeZone: timezone }); // YYYY-MM-DD
-  const todayDate = now.toLocaleDateString('en-CA', { timeZone: timezone });
-
-  return lastRunDate === todayDate;
-}
-
 // ---------------------------------------------------------------------------
 // Scheduler
 // ---------------------------------------------------------------------------
@@ -120,13 +102,6 @@ export interface SchedulerOptions {
   checkIntervalMs?: number;
   /** Reflection engine — runs after insights to grade past predictions. */
   reflectionEngine?: ReflectionEngine;
-  /** Curation pipeline dependencies — required for scheduled curation. */
-  curationPipeline?: {
-    signalArchive: SignalArchive;
-    curatedStore: CuratedSignalStore;
-    snapshotStore: PortfolioSnapshotStore;
-    config: CurationConfig;
-  };
   /** Skill evaluator — evaluates active skills after curation. */
   skillEvaluator?: SkillEvaluator;
   /** Action store — persists actions created from fired skill triggers. */
@@ -157,20 +132,14 @@ export interface SchedulerOptions {
   memoryStores?: Map<MemoryAgentRole, SignalMemoryStore>;
   /** Ticker profile store — per-asset knowledge for DataBriefs. */
   profileStore?: TickerProfileStore;
-  /** Curated signal store — for building single-ticker DataBriefs. */
-  curatedSignalStore?: CuratedSignalStore;
+  /** Signal archive — for building single-ticker DataBriefs. */
+  signalArchive?: SignalArchive;
   /** Micro research interval in ms (default: 5 * 60_000 = 5 minutes). */
   microIntervalMs?: number;
 }
 
-/** Minimum interval between curation runs (15 minutes). */
-const CURATION_INTERVAL_MS = 15 * 60 * 1000;
-
-/** Minimum interval between insight runs (2 hours) — prevents over-processing. */
-const INSIGHTS_COOLDOWN_MS = 2 * 60 * 60 * 1000;
-
-/** Minimum curated signals to justify an insights run. */
-const MIN_SIGNALS_FOR_INSIGHTS = 3;
+/** Minimum interval between macro flow runs (2 hours). */
+const MACRO_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
 /** Default expiry window for actions created from skill triggers. */
 const ACTION_EXPIRY_HOURS = 24;
@@ -194,13 +163,12 @@ function snapContentHash(snap: { intelSummary?: string; actionItems: { text: str
 /** Max concurrent micro research runs per tick. */
 const MAX_MICRO_CONCURRENCY = 3;
 
-/** How many micro completions before triggering a macro run. */
-const MICRO_THRESHOLD_FOR_MACRO = 5;
-
 interface MicroAssetState {
   symbol: string;
   source: MicroInsightSource;
   lastMicroAt: string | null;
+  /** Whether this asset has completed micro research today. */
+  completedToday: boolean;
 }
 
 export class Scheduler {
@@ -208,7 +176,6 @@ export class Scheduler {
   private readonly dataRoot: string;
   private readonly checkIntervalMs: number;
   private readonly reflectionEngine?: ReflectionEngine;
-  private readonly curationPipeline?: SchedulerOptions['curationPipeline'];
   private readonly skillEvaluator?: SkillEvaluator;
   private readonly actionStore?: ActionStore;
   private readonly snapshotStore?: PortfolioSnapshotStore;
@@ -225,7 +192,7 @@ export class Scheduler {
   private readonly watchlistStore?: WatchlistStore;
   private readonly memoryStores?: Map<MemoryAgentRole, SignalMemoryStore>;
   private readonly profileStore?: TickerProfileStore;
-  private readonly curatedSignalStore?: CuratedSignalStore;
+  private readonly signalArchive?: SignalArchive;
   private readonly microIntervalMs: number;
 
   // Timers
@@ -236,7 +203,6 @@ export class Scheduler {
 
   // Micro research state
   private readonly microRegistry = new Map<string, MicroAssetState>();
-  private microCompletionCount = 0;
 
   // Generation counter — incremented on reset() to invalidate in-flight batches
   private resetGeneration = 0;
@@ -250,7 +216,6 @@ export class Scheduler {
     this.dataRoot = options.dataRoot;
     this.checkIntervalMs = options.checkIntervalMs ?? 60_000;
     this.reflectionEngine = options.reflectionEngine;
-    this.curationPipeline = options.curationPipeline;
     this.skillEvaluator = options.skillEvaluator;
     this.actionStore = options.actionStore;
     this.snapshotStore = options.snapshotStore;
@@ -267,7 +232,7 @@ export class Scheduler {
     this.watchlistStore = options.watchlistStore;
     this.memoryStores = options.memoryStores;
     this.profileStore = options.profileStore;
-    this.curatedSignalStore = options.curatedSignalStore;
+    this.signalArchive = options.signalArchive;
     this.microIntervalMs = options.microIntervalMs ?? DEFAULT_MICRO_INTERVAL_MS;
   }
 
@@ -310,7 +275,6 @@ export class Scheduler {
   reset(): void {
     this.resetGeneration++;
     this.microRegistry.clear();
-    this.microCompletionCount = 0;
     this.lastSnapContentHash = undefined;
     this.lastSnapNotifiedAt = 0;
     if (this.pendingMicroTimer) {
@@ -338,10 +302,12 @@ export class Scheduler {
       const symbol = t.toUpperCase();
       this.pendingMicroTickers.set(symbol, source);
       // Register/update in micro registry
+      const existing = this.microRegistry.get(symbol);
       this.microRegistry.set(symbol, {
         symbol,
         source,
         lastMicroAt: null, // force immediate run
+        completedToday: existing?.completedToday ?? false,
       });
     }
     if (this.pendingMicroTimer) return; // already debounced
@@ -353,24 +319,19 @@ export class Scheduler {
     }, 3_000);
   }
 
-  /** Backward-compat alias — triggers macro flow for full portfolio analysis. */
-  triggerCuration(): void {
-    void this.runMacroFlow();
-  }
-
   /**
    * Populate the micro registry from current portfolio + watchlist.
    * Called once on scheduler start.
    */
   private async populateMicroRegistry(): Promise<void> {
-    const store = this.snapshotStore ?? this.curationPipeline?.snapshotStore;
+    const store = this.snapshotStore;
     if (store) {
       const snapshot = await store.getLatest();
       if (snapshot) {
         for (const pos of snapshot.positions) {
           const symbol = pos.symbol.toUpperCase();
           if (!this.microRegistry.has(symbol)) {
-            this.microRegistry.set(symbol, { symbol, source: 'portfolio', lastMicroAt: null });
+            this.microRegistry.set(symbol, { symbol, source: 'portfolio', lastMicroAt: null, completedToday: false });
           }
         }
       }
@@ -380,7 +341,7 @@ export class Scheduler {
       for (const entry of this.watchlistStore.list()) {
         const symbol = entry.symbol.toUpperCase();
         if (!this.microRegistry.has(symbol)) {
-          this.microRegistry.set(symbol, { symbol, source: 'watchlist', lastMicroAt: null });
+          this.microRegistry.set(symbol, { symbol, source: 'watchlist', lastMicroAt: null, completedToday: false });
         }
       }
     }
@@ -450,19 +411,11 @@ export class Scheduler {
         }
       }
 
-      // Curate signals so DataBriefs have fresh curated data
-      if (this.curationPipeline) {
-        await runCurationPipeline({
-          ...this.curationPipeline,
-          watchlistEntries: this.watchlistStore?.list(),
-        });
-      }
-
-      // Resolve the curated signal store
-      const curatedStore = this.curatedSignalStore ?? this.curationPipeline?.curatedStore;
-      const snapshotStore = this.snapshotStore ?? this.curationPipeline?.snapshotStore;
-      if (!curatedStore || !snapshotStore) {
-        logger.warn('Micro research skipped — missing curatedSignalStore or snapshotStore');
+      // Resolve dependencies for micro research
+      const archive = this.signalArchive;
+      const snapshotStore = this.snapshotStore;
+      if (!archive || !snapshotStore) {
+        logger.warn('Micro research skipped — missing signalArchive or snapshotStore');
         return;
       }
 
@@ -476,7 +429,7 @@ export class Scheduler {
             microInsightStore,
             briefOptions: {
               snapshotStore,
-              curatedSignalStore: curatedStore,
+              signalArchive: archive,
               getJintelClient: this.getJintelClient,
               memoryStores: this.memoryStores ?? new Map(),
               profileStore: this.profileStore,
@@ -493,7 +446,7 @@ export class Scheduler {
         return;
       }
 
-      // Update registry timestamps and count completions
+      // Update registry timestamps and mark completed today
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
         const asset = assets[i];
@@ -502,8 +455,10 @@ export class Scheduler {
 
         if (result.status === 'fulfilled' && result.value.insight) {
           const state = this.microRegistry.get(symbol);
-          if (state) state.lastMicroAt = new Date().toISOString();
-          this.microCompletionCount++;
+          if (state) {
+            state.lastMicroAt = new Date().toISOString();
+            state.completedToday = true;
+          }
 
           logger.info('Micro research complete', {
             symbol,
@@ -518,10 +473,11 @@ export class Scheduler {
       // Regenerate snap from micro insights (immediate feedback before macro)
       await this.regenerateSnapFromMicro();
 
-      // Check if we should trigger macro
-      if (this.microCompletionCount >= MICRO_THRESHOLD_FOR_MACRO) {
-        logger.info('Micro threshold reached — triggering macro flow', { completions: this.microCompletionCount });
-        this.microCompletionCount = 0;
+      // Trigger macro when all registered assets have completed micro today
+      if (this.allMicrosCompletedToday()) {
+        logger.info('All micro flows completed for all assets — triggering macro flow', {
+          assets: this.microRegistry.size,
+        });
         void this.runMacroFlow();
       }
     } catch (err) {
@@ -532,65 +488,84 @@ export class Scheduler {
   }
 
   // ---------------------------------------------------------------------------
-  // Macro flow — portfolio-wide analysis (insights, snap, actions)
+  // Macro flow — portfolio-wide analysis (assessment + insights + skills + snap)
   // ---------------------------------------------------------------------------
 
+  /**
+   * Check if all registered micro assets have completed at least once today.
+   */
+  private allMicrosCompletedToday(): boolean {
+    if (this.microRegistry.size === 0) return false;
+    for (const state of this.microRegistry.values()) {
+      if (!state.completedToday) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Reset daily completion flags — called at the start of each macro run
+   * so micro flows can trigger the next macro after a full cycle.
+   */
+  private resetDailyMicroFlags(): void {
+    for (const state of this.microRegistry.values()) {
+      state.completedToday = false;
+    }
+  }
+
+  /**
+   * Run the full macro flow:
+   *   1. Fetch CLI/RSS/MCP data sources
+   *   2. Signal assessment (RA + Strategist via full-curation workflow)
+   *   3. ProcessInsights (full multi-agent analysis)
+   *   4. Skill evaluation → Actions
+   *   5. Snap brief regeneration
+   *   6. Reflection sweep
+   */
   private async runMacroFlow(): Promise<void> {
-    if (!this.curationPipeline) return;
     if (this.running) {
-      logger.info('Skipping macro flow — scheduler already running');
+      logger.info('Skipping macro flow — already running');
       return;
     }
 
     logger.info('Macro flow started — portfolio-wide analysis');
     this.running = true;
+
+    // Reset daily flags so the next micro cycle can trigger another macro
+    this.resetDailyMicroFlags();
+
+    // Persist watermark before execution to prevent re-runs on crash
+    const state = await this.loadState();
+    state.lastRuns['macro-flow'] = new Date().toISOString();
+    await this.saveState(state);
+
     try {
-      // Fetch CLI data sources
-      const fetchResult = await fetchAllEnabledSources();
-      if (fetchResult.totalIngested > 0 && this.eventLog) {
-        await this.eventLog.append({
-          type: 'system',
-          data: {
-            message: `Fetched ${fetchResult.totalIngested} new signal${fetchResult.totalIngested !== 1 ? 's' : ''} from ${fetchResult.sourcesAttempted} data source${fetchResult.sourcesAttempted !== 1 ? 's' : ''}`,
-          },
-        });
+      // 1. Signal assessment (RA + Strategist classify signals from archive)
+      try {
+        await this.orchestrator.execute('full-curation', {});
+        logger.info('Signal assessment complete');
+      } catch (err) {
+        logger.error('Signal assessment failed (continuing macro flow)', { error: err });
       }
 
-      // Fetch Jintel signals for ALL portfolio tickers
-      const jintelClient = this.getJintelClient?.();
-      if (jintelClient && this.signalIngestor) {
-        const store = this.snapshotStore ?? this.curationPipeline.snapshotStore;
-        const snapshot = await store.getLatest();
-        if (snapshot && snapshot.positions.length > 0) {
-          const allTickers = snapshot.positions.map((p) => p.symbol);
-          const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-          const jintelResult = await fetchJintelSignals(jintelClient, this.signalIngestor, allTickers, { since });
-          logger.info('Macro flow Jintel fetch complete', {
-            ingested: jintelResult.ingested,
-            duplicates: jintelResult.duplicates,
-            tickers: jintelResult.tickers,
-          });
-        }
-      }
+      // 2. ProcessInsights (full multi-agent analysis)
+      await this.runInsightsWorkflow('Macro flow — portfolio-wide analysis');
 
-      // Full curation pass
-      const result = await runCurationPipeline({
-        ...this.curationPipeline,
-        watchlistEntries: this.watchlistStore?.list(),
-      });
-      logger.info('Macro flow curation complete', {
-        signalsProcessed: result.signalsProcessed,
-        signalsCurated: result.signalsCurated,
-      });
-
-      // Regenerate snap + evaluate skills
-      await this.regenerateSnap();
+      // 3. Skill evaluation → create Actions
       await this.evaluateSkillsAfterCuration();
 
-      // Trigger insights if enough new data
-      // signalsCurated already includes Jintel signals that passed curation — don't double-count
-      if (result.signalsCurated >= MIN_SIGNALS_FOR_INSIGHTS) {
-        await this.maybeRunInsights(result.signalsCurated);
+      // 5. Snap brief regeneration
+      await this.regenerateSnap();
+
+      // 6. Save portfolio history snapshot
+      if (this.snapshotStore) {
+        try {
+          const latest = await this.snapshotStore.getLatest();
+          if (latest && latest.positions.length > 0) {
+            await this.snapshotStore.appendHistoryPoint(latest);
+          }
+        } catch (err) {
+          logger.warn('Failed to save history snapshot', { error: err });
+        }
       }
     } catch (err) {
       logger.error('Macro flow failed', { error: err });
@@ -599,114 +574,35 @@ export class Scheduler {
     }
   }
 
-  /** Single tick — check if any scheduled jobs should fire. */
+  /** Single tick — check if the macro flow should fire. */
   private async tick(): Promise<void> {
     if (this.running) return; // Prevent overlapping runs
-    this.running = true;
 
     try {
-      await this.checkCurationSchedule();
-      await this.checkInsightsSchedule();
+      await this.checkMacroSchedule();
     } catch (err) {
       logger.error('Scheduler tick failed', { error: err });
-    } finally {
-      this.running = false;
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Curation schedule (every 15 minutes)
+  // Macro schedule (every 2 hours)
   // ---------------------------------------------------------------------------
 
   /**
-   * Run the Tier 1 curation pipeline if 15+ minutes have elapsed since the
-   * last run.  After curation, evaluate active skills and create Actions for
-   * any triggers that fire.
+   * Check if the macro flow should run based on the 2-hour cadence.
+   * The macro flow is also triggered by allMicrosCompletedToday().
    */
-  private async checkCurationSchedule(): Promise<void> {
-    if (!this.curationPipeline) return;
-
+  private async checkMacroSchedule(): Promise<void> {
     const state = await this.loadState();
-    const lastRun = state.lastRuns['run-curation'];
+    const lastRun = state.lastRuns['macro-flow'];
 
     if (lastRun) {
       const elapsed = Date.now() - new Date(lastRun).getTime();
-      if (elapsed < CURATION_INTERVAL_MS) return;
+      if (elapsed < MACRO_INTERVAL_MS) return;
     }
 
-    logger.info('Triggering scheduled data fetch + curation pipeline');
-
-    // Persist the watermark before execution to prevent re-runs on crash
-    state.lastRuns['run-curation'] = new Date().toISOString();
-    await this.saveState(state);
-
-    try {
-      // Fetch fresh signals from all enabled data sources before curation
-      const fetchResult = await fetchAllEnabledSources();
-      if (fetchResult.totalIngested > 0) {
-        logger.info('Pre-curation data fetch', {
-          ingested: fetchResult.totalIngested,
-          duplicates: fetchResult.totalDuplicates,
-          sources: fetchResult.sourcesAttempted,
-        });
-
-        if (this.eventLog) {
-          await this.eventLog.append({
-            type: 'system',
-            data: {
-              message: `Fetched ${fetchResult.totalIngested} new signal${fetchResult.totalIngested !== 1 ? 's' : ''} from ${fetchResult.sourcesAttempted} data source${fetchResult.sourcesAttempted !== 1 ? 's' : ''}`,
-            },
-          });
-        }
-      }
-
-      const result = await runCurationPipeline({
-        ...this.curationPipeline,
-        watchlistEntries: this.watchlistStore?.list(),
-      });
-
-      logger.info('Scheduled curation complete', {
-        signalsProcessed: result.signalsProcessed,
-        signalsCurated: result.signalsCurated,
-        durationMs: result.durationMs,
-      });
-
-      if (this.eventLog && result.signalsProcessed > 0) {
-        await this.eventLog.append({
-          type: 'system',
-          data: {
-            message: `Signal curation completed — ${result.signalsCurated} of ${result.signalsProcessed} signals curated`,
-          },
-        });
-      }
-
-      // Save a history snapshot so the Total Value chart accumulates data
-      // over time — even when positions aren't modified.
-      const historyStore = this.snapshotStore ?? this.curationPipeline?.snapshotStore;
-      if (historyStore) {
-        try {
-          const latest = await historyStore.getLatest();
-          if (latest && latest.positions.length > 0) {
-            await historyStore.appendHistoryPoint(latest);
-          }
-        } catch (err) {
-          logger.warn('Failed to save history snapshot', { error: err });
-        }
-      }
-
-      // Regenerate snap brief from latest insight report
-      await this.regenerateSnap();
-
-      // Evaluate active skills after curation
-      await this.evaluateSkillsAfterCuration();
-
-      // Trigger insights if meaningful new signals warrant it
-      if (result.signalsCurated >= MIN_SIGNALS_FOR_INSIGHTS) {
-        await this.maybeRunInsights(result.signalsCurated);
-      }
-    } catch (err) {
-      logger.error('Scheduled curation failed', { error: err });
-    }
+    await this.runMacroFlow();
   }
 
   private maybePublishSnap(snap: import('./snap/types.js').Snap): void {
@@ -742,7 +638,7 @@ export class Scheduler {
       if (microInsights.size === 0) return;
 
       // Build portfolio exposure context so the snap prioritizes high-weight positions
-      const store = this.snapshotStore ?? this.curationPipeline?.snapshotStore;
+      const store = this.snapshotStore;
       let exposure: import('./snap/snap-from-micro.js').PortfolioExposure[] | undefined;
       if (store) {
         const snapshot = await store.getLatest();
@@ -772,7 +668,7 @@ export class Scheduler {
 
   /**
    * Regenerate the snap brief from the latest insight report.
-   * Runs after each curation cycle (~every 15 minutes).
+   * Runs as part of the macro flow.
    */
   private async regenerateSnap(): Promise<void> {
     if (!this.snapStore || !this.insightStore) return;
@@ -807,7 +703,7 @@ export class Scheduler {
     if (!this.skillEvaluator || !this.actionStore) return;
 
     // Resolve snapshot store — prefer the top-level option, fall back to curation pipeline's store
-    const store = this.snapshotStore ?? this.curationPipeline?.snapshotStore;
+    const store = this.snapshotStore;
     if (!store) return;
 
     const snapshot = await store.getLatest();
@@ -896,58 +792,10 @@ export class Scheduler {
   }
 
   // ---------------------------------------------------------------------------
-  // Insights — triggered automatically after curation when warranted
+  // Insights — runs as part of the macro flow
   // ---------------------------------------------------------------------------
 
-  /**
-   * Run insights if enough time has passed since the last run.
-   * Called after curation when new signals were curated.
-   *
-   * Gate logic:
-   * - No insights ever generated → always run (first-time bootstrap)
-   * - Last insights run < INSIGHTS_COOLDOWN_MS ago → skip
-   * - Otherwise → run
-   */
-  private async maybeRunInsights(signalsCurated: number): Promise<void> {
-    const state = await this.loadState();
-    const lastInsightsRun = state.lastRuns['process-insights'];
-
-    if (lastInsightsRun) {
-      const elapsed = Date.now() - new Date(lastInsightsRun).getTime();
-      if (elapsed < INSIGHTS_COOLDOWN_MS) {
-        logger.info('Skipping insights — cooldown not elapsed', {
-          elapsedMin: Math.round(elapsed / 60_000),
-          cooldownMin: Math.round(INSIGHTS_COOLDOWN_MS / 60_000),
-          signalsCurated,
-        });
-        return;
-      }
-    }
-
-    await this.runInsightsWorkflow(`Auto-triggered after curation — ${signalsCurated} new signals curated`);
-  }
-
-  /**
-   * Also check the daily cron schedule — ensures insights run at least once
-   * per day even if curation produces fewer than MIN_SIGNALS_FOR_INSIGHTS.
-   */
-  private async checkInsightsSchedule(): Promise<void> {
-    const config = await this.loadAlertsConfig();
-    if (!config.digestSchedule) return;
-
-    const { cron, timezone } = config.digestSchedule;
-    const now = this.nowInTimezone(timezone);
-
-    if (!cronMatchesNow(cron, now)) return;
-
-    // Check if already ran today
-    const state = await this.loadState();
-    if (alreadyRanToday(state.lastRuns['process-insights'], timezone)) return;
-
-    await this.runInsightsWorkflow('Scheduled daily portfolio insights');
-  }
-
-  /** Shared insights execution — used by both auto-trigger and daily cron. */
+  /** Execute the process-insights workflow + post-processing (reflection, notifications). */
   private async runInsightsWorkflow(reason: string): Promise<void> {
     logger.info('Triggering process-insights workflow', { reason });
 
@@ -997,43 +845,9 @@ export class Scheduler {
     }
   }
 
-  /**
-   * Get the current time as a Date in the target timezone.
-   * We need minute/hour in the user's timezone to match the cron expression.
-   */
-  private nowInTimezone(timezone: string): Date {
-    const now = new Date();
-    // Format in target timezone to get local hour/minute
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      hour: 'numeric',
-      minute: 'numeric',
-      hourCycle: 'h23',
-    }).formatToParts(now);
-
-    const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
-    const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
-
-    // Return a Date with the timezone-adjusted hour/minute
-    // (only used for cron matching, not persistence)
-    const adjusted = new Date(now);
-    adjusted.setHours(hour, minute, 0, 0);
-    return adjusted;
-  }
-
   // ---------------------------------------------------------------------------
   // Config & state I/O
   // ---------------------------------------------------------------------------
-
-  private async loadAlertsConfig(): Promise<z.infer<typeof AlertsConfigSchema>> {
-    const configPath = join(this.dataRoot, 'config', 'alerts.json');
-    try {
-      const raw = await readFile(configPath, 'utf-8');
-      return AlertsConfigSchema.parse(JSON.parse(raw));
-    } catch {
-      return AlertsConfigSchema.parse({});
-    }
-  }
 
   private statePath(): string {
     return join(this.dataRoot, 'cron', 'state.json');

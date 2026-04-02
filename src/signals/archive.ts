@@ -13,7 +13,7 @@
  *       2026-03-22.jsonl
  */
 
-import { appendFile, mkdir, readFile, readdir } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { Signal } from './types.js';
@@ -322,9 +322,42 @@ export class SignalArchive {
     return true;
   }
 
+  // ---------------------------------------------------------------------------
+  // Dismiss tracking
+  // ---------------------------------------------------------------------------
+
+  private cachedDismissedIds: Set<string> | null = null;
+
+  private get dismissedPath(): string {
+    return join(this.dir, 'dismissed.json');
+  }
+
+  /** Load the set of dismissed signal IDs (cached in memory after first load). */
+  async getDismissedIds(): Promise<Set<string>> {
+    if (this.cachedDismissedIds) return this.cachedDismissedIds;
+    try {
+      const raw = await readFile(this.dismissedPath, 'utf-8');
+      const ids = JSON.parse(raw) as string[];
+      this.cachedDismissedIds = new Set(ids);
+    } catch {
+      this.cachedDismissedIds = new Set();
+    }
+    return this.cachedDismissedIds;
+  }
+
+  /** Mark a signal as dismissed. */
+  async dismiss(signalId: string): Promise<void> {
+    const dismissed = await this.getDismissedIds();
+    dismissed.add(signalId);
+    await this.ensureDir();
+    await writeFile(this.dismissedPath, JSON.stringify([...dismissed], null, 2));
+    logger.info('Signal dismissed', { signalId });
+  }
+
   /** Reset cached state after external data wipe (clearAppData). */
   reset(): void {
     this.dirCreated = false;
+    this.cachedDismissedIds = null;
   }
 
   private async ensureDir(): Promise<void> {

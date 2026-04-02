@@ -28,11 +28,10 @@ import { GuardRunner } from '../src/guards/guard-runner.js';
 import { InsightStore } from '../src/insights/insight-store.js';
 import { PortfolioSnapshotStore } from '../src/portfolio/snapshot-store.js';
 import { InMemorySessionStore } from '../src/sessions/memory-store.js';
+import { SignalArchive } from '../src/signals/archive.js';
 import { AssessmentStore } from '../src/signals/curation/assessment-store.js';
 import { createAssessmentTools } from '../src/signals/curation/assessment-tools.js';
-import { registerSignalAssessmentWorkflow } from '../src/signals/curation/assessment-workflow.js';
-import { CuratedSignalStore } from '../src/signals/curation/curated-signal-store.js';
-import type { CuratedSignal } from '../src/signals/curation/types.js';
+import { registerFullCurationWorkflow } from '../src/signals/curation/full-curation-workflow.js';
 import type { Signal } from '../src/signals/types.js';
 import { FileAuditLog } from '../src/trust/audit/audit-log.js';
 
@@ -76,22 +75,6 @@ function makeSignal(id: string, ticker: string, title: string, sentiment: 'BULLI
     sentiment,
     outputType: 'INSIGHT',
     version: 1,
-  };
-}
-
-function makeCuratedSignal(signal: Signal, ticker: string, score: number): CuratedSignal {
-  return {
-    signal,
-    scores: [
-      {
-        signalId: signal.id,
-        ticker,
-        exposureWeight: 0.15,
-        typeRelevance: 0.8,
-        compositeScore: score,
-      },
-    ],
-    curatedAt: new Date(NOW.getTime() - 30 * 60_000).toISOString(), // 30 min ago
   };
 }
 
@@ -224,7 +207,7 @@ function createAssessmentMockProvider(): AgentLoopProvider {
 describe('E2E Signal Assessment workflow', () => {
   let tempDir: string;
   let assessmentStore: AssessmentStore;
-  let curatedSignalStore: CuratedSignalStore;
+  let signalArchive: SignalArchive;
   let insightStore: InsightStore;
   let snapshotStore: PortfolioSnapshotStore;
   let orchestrator: Orchestrator;
@@ -233,7 +216,7 @@ describe('E2E Signal Assessment workflow', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'yojin-assessment-e2e-'));
 
     assessmentStore = new AssessmentStore(tempDir);
-    curatedSignalStore = new CuratedSignalStore(tempDir);
+    signalArchive = new SignalArchive({ dir: join(tempDir, 'signals') });
     insightStore = new InsightStore(tempDir);
     snapshotStore = new PortfolioSnapshotStore(tempDir);
 
@@ -268,20 +251,14 @@ describe('E2E Signal Assessment workflow', () => {
       platform: 'MANUAL',
     });
 
-    // Seed curated signals
+    // Seed signals in the archive
     const sig1 = makeSignal('sig-001', 'AAPL', 'Q4 earnings beat estimates by 8%', 'BULLISH');
     const sig2 = makeSignal('sig-002', 'AAPL', 'Apple AI partnership with OpenAI', 'BULLISH');
     const sig3 = makeSignal('sig-003', 'AAPL', 'Weekly tech roundup: Apple, Google, Meta', 'NEUTRAL');
     const sig4 = makeSignal('sig-004', 'BTC', 'Bitcoin ETF sees record $1B inflows', 'BULLISH');
     const sig5 = makeSignal('sig-005', 'BTC', 'Retail sentiment mixed on crypto', 'BEARISH');
 
-    await curatedSignalStore.writeBatch([
-      makeCuratedSignal(sig1, 'AAPL', 0.82),
-      makeCuratedSignal(sig2, 'AAPL', 0.75),
-      makeCuratedSignal(sig3, 'AAPL', 0.45),
-      makeCuratedSignal(sig4, 'BTC', 0.88),
-      makeCuratedSignal(sig5, 'BTC', 0.4),
-    ]);
+    await signalArchive.appendBatch([sig1, sig2, sig3, sig4, sig5]);
 
     // Seed an insight report (provides thesis context)
     await insightStore.save({
@@ -362,12 +339,12 @@ describe('E2E Signal Assessment workflow', () => {
     });
 
     orchestrator = new Orchestrator(runtime);
-    registerSignalAssessmentWorkflow(orchestrator, {
-      curatedSignalStore,
+    registerFullCurationWorkflow(orchestrator, {
+      signalArchive,
       assessmentStore,
       insightStore,
       snapshotStore,
-      config: { intervalMinutes: 60, maxSignalsPerPosition: 5 },
+      assessmentConfig: { intervalMinutes: 60, maxSignalsPerPosition: 5 },
     });
   });
 
@@ -376,7 +353,7 @@ describe('E2E Signal Assessment workflow', () => {
   });
 
   it('executes the full signal-assessment workflow', async () => {
-    const results = await orchestrator.execute('signal-assessment', {});
+    const results = await orchestrator.execute('full-curation', {});
 
     // Both agents should have produced output
     expect(results.has('research-analyst')).toBe(true);
@@ -384,7 +361,7 @@ describe('E2E Signal Assessment workflow', () => {
   });
 
   it('Research Analyst classifies signals in 1 iteration', async () => {
-    const results = await orchestrator.execute('signal-assessment', {});
+    const results = await orchestrator.execute('full-curation', {});
 
     const ra = results.get('research-analyst');
     expect(ra).toBeDefined();
@@ -395,7 +372,7 @@ describe('E2E Signal Assessment workflow', () => {
   });
 
   it('Strategist calls save_signal_assessment and gets tool result', async () => {
-    const results = await orchestrator.execute('signal-assessment', {});
+    const results = await orchestrator.execute('full-curation', {});
 
     const strategist = results.get('strategist');
     expect(strategist).toBeDefined();
@@ -410,7 +387,7 @@ describe('E2E Signal Assessment workflow', () => {
     const before = await assessmentStore.getLatest();
     expect(before).toBeNull();
 
-    await orchestrator.execute('signal-assessment', {});
+    await orchestrator.execute('full-curation', {});
 
     // After: report should be persisted
     const report = await assessmentStore.getLatest();
@@ -423,7 +400,7 @@ describe('E2E Signal Assessment workflow', () => {
   });
 
   it('assessment verdicts are correct', async () => {
-    await orchestrator.execute('signal-assessment', {});
+    await orchestrator.execute('full-curation', {});
 
     const report = await assessmentStore.getLatest();
     expect(report).not.toBeNull();
@@ -446,7 +423,7 @@ describe('E2E Signal Assessment workflow', () => {
     const wmBefore = await assessmentStore.getLatestWatermark();
     expect(wmBefore).toBeNull();
 
-    await orchestrator.execute('signal-assessment', {});
+    await orchestrator.execute('full-curation', {});
 
     const wm = await assessmentStore.getLatestWatermark();
     expect(wm).not.toBeNull();
@@ -458,10 +435,10 @@ describe('E2E Signal Assessment workflow', () => {
 
   it('skips assessment when no new curated signals since watermark', async () => {
     // Run once to set watermark
-    await orchestrator.execute('signal-assessment', {});
+    await orchestrator.execute('full-curation', {});
 
     // Run again — watermark should make it skip (no new signals after lastCuratedAt)
-    const results2 = await orchestrator.execute('signal-assessment', {});
+    const results2 = await orchestrator.execute('full-curation', {});
 
     // RA still runs but with empty signal data (beforeWorkflow sets empty text)
     const ra2 = results2.get('research-analyst');
@@ -503,15 +480,15 @@ describe('E2E Signal Assessment workflow', () => {
     });
 
     const orch = new Orchestrator(runtime);
-    registerSignalAssessmentWorkflow(orch, {
-      curatedSignalStore,
+    registerFullCurationWorkflow(orch, {
+      signalArchive,
       assessmentStore: freshAssessmentStore,
       insightStore,
       snapshotStore,
-      config: { intervalMinutes: 60, maxSignalsPerPosition: 5 },
+      assessmentConfig: { intervalMinutes: 60, maxSignalsPerPosition: 5 },
     });
 
-    await orch.execute('signal-assessment', {});
+    await orch.execute('full-curation', {});
 
     // The RA's message (first LLM call) should contain formatted signal data with thesis
     const calls = (provider.completeWithTools as ReturnType<typeof vi.fn>).mock.calls;
@@ -529,7 +506,7 @@ describe('E2E Signal Assessment workflow', () => {
   });
 
   it('AssessmentReport schema validates correctly', async () => {
-    await orchestrator.execute('signal-assessment', {});
+    await orchestrator.execute('full-curation', {});
 
     const report = await assessmentStore.getLatest();
     expect(report).not.toBeNull();

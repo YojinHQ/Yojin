@@ -5,16 +5,15 @@ import {
   type TickerThesis,
   formatSignalsForAssessment,
 } from '../../src/signals/curation/assessment-formatter.js';
-import type { CuratedSignal } from '../../src/signals/curation/types.js';
 import type { Signal } from '../../src/signals/types.js';
 
-function makeSignal(overrides: Partial<Signal> = {}): Signal {
+function makeSignal(ticker: string, overrides: Partial<Signal> = {}): Signal {
   return {
     id: 'sig-001',
     contentHash: 'hash-001',
     type: 'NEWS',
     title: 'Apple Q4 earnings beat expectations',
-    assets: [{ ticker: 'AAPL', relevance: 0.9, linkType: 'DIRECT' }],
+    assets: [{ ticker, relevance: 0.9, linkType: 'DIRECT' }],
     sources: [{ id: 'reuters', name: 'Reuters', type: 'RSS', reliability: 0.8 }],
     publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2h ago
     ingestedAt: new Date().toISOString(),
@@ -25,26 +24,10 @@ function makeSignal(overrides: Partial<Signal> = {}): Signal {
   };
 }
 
-function makeCurated(ticker: string, overrides: Partial<Signal> = {}): CuratedSignal {
-  return {
-    signal: makeSignal({ assets: [{ ticker, relevance: 0.9, linkType: 'DIRECT' }], ...overrides }),
-    scores: [
-      {
-        signalId: overrides.id ?? 'sig-001',
-        ticker,
-        exposureWeight: 0.3,
-        typeRelevance: 0.7,
-        compositeScore: 0.72,
-      },
-    ],
-    curatedAt: new Date().toISOString(),
-  };
-}
-
 describe('formatSignalsForAssessment', () => {
   it('formats signals grouped by ticker', () => {
-    const signalsByTicker = new Map<string, CuratedSignal[]>([
-      ['AAPL', [makeCurated('AAPL', { id: 'sig-1' }), makeCurated('AAPL', { id: 'sig-2' })]],
+    const signalsByTicker = new Map<string, Signal[]>([
+      ['AAPL', [makeSignal('AAPL', { id: 'sig-1' }), makeSignal('AAPL', { id: 'sig-2' })]],
     ]);
 
     const result = formatSignalsForAssessment(signalsByTicker, new Map(), new Map());
@@ -57,7 +40,7 @@ describe('formatSignalsForAssessment', () => {
   });
 
   it('includes thesis context when available', () => {
-    const signalsByTicker = new Map([['AAPL', [makeCurated('AAPL')]]]);
+    const signalsByTicker = new Map([['AAPL', [makeSignal('AAPL')]]]);
     const thesisByTicker = new Map<string, TickerThesis>([
       ['AAPL', { rating: 'BULLISH', conviction: 0.8, thesis: 'Strong AI narrative' }],
     ]);
@@ -68,7 +51,7 @@ describe('formatSignalsForAssessment', () => {
   });
 
   it('includes position sizing context', () => {
-    const signalsByTicker = new Map([['AAPL', [makeCurated('AAPL')]]]);
+    const signalsByTicker = new Map([['AAPL', [makeSignal('AAPL')]]]);
     const positionsByTicker = new Map<string, TickerPosition>([
       ['AAPL', { marketValue: 18000, portfolioPercent: 0.12 }],
     ]);
@@ -80,8 +63,8 @@ describe('formatSignalsForAssessment', () => {
 
   it('formats multiple tickers as separate sections', () => {
     const signalsByTicker = new Map([
-      ['AAPL', [makeCurated('AAPL', { id: 'sig-a' })]],
-      ['MSFT', [makeCurated('MSFT', { id: 'sig-b' })]],
+      ['AAPL', [makeSignal('AAPL', { id: 'sig-a' })]],
+      ['MSFT', [makeSignal('MSFT', { id: 'sig-b' })]],
     ]);
 
     const result = formatSignalsForAssessment(signalsByTicker, new Map(), new Map());
@@ -91,7 +74,7 @@ describe('formatSignalsForAssessment', () => {
   });
 
   it('includes sentiment when available', () => {
-    const signalsByTicker = new Map([['AAPL', [makeCurated('AAPL', { id: 'sig-1', sentiment: 'BULLISH' })]]]);
+    const signalsByTicker = new Map([['AAPL', [makeSignal('AAPL', { id: 'sig-1', sentiment: 'BULLISH' })]]]);
 
     const result = formatSignalsForAssessment(signalsByTicker, new Map(), new Map());
 
@@ -99,7 +82,7 @@ describe('formatSignalsForAssessment', () => {
   });
 
   it('includes groupId for clustered signals', () => {
-    const signalsByTicker = new Map([['AAPL', [makeCurated('AAPL', { id: 'sig-1', groupId: 'grp-abc' })]]]);
+    const signalsByTicker = new Map([['AAPL', [makeSignal('AAPL', { id: 'sig-1', groupId: 'grp-abc' })]]]);
 
     const result = formatSignalsForAssessment(signalsByTicker, new Map(), new Map());
 
@@ -108,7 +91,7 @@ describe('formatSignalsForAssessment', () => {
 
   it('is more compact than raw JSON', () => {
     const signals = Array.from({ length: 10 }, (_, i) =>
-      makeCurated('AAPL', { id: `sig-${i}`, title: `Signal number ${i} about AAPL` }),
+      makeSignal('AAPL', { id: `sig-${i}`, title: `Signal number ${i} about AAPL` }),
     );
     const signalsByTicker = new Map([['AAPL', signals]]);
 
@@ -121,7 +104,7 @@ describe('formatSignalsForAssessment', () => {
 
   it('truncates long titles', () => {
     const longTitle = 'A'.repeat(120);
-    const signalsByTicker = new Map([['AAPL', [makeCurated('AAPL', { id: 'sig-1', title: longTitle })]]]);
+    const signalsByTicker = new Map([['AAPL', [makeSignal('AAPL', { id: 'sig-1', title: longTitle })]]]);
 
     const result = formatSignalsForAssessment(signalsByTicker, new Map(), new Map());
 
