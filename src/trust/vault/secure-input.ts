@@ -6,7 +6,7 @@
  * 1. LLM calls `store_credential` with a key name and description
  * 2. This tool takes over: prompts the user via stderr, reads with no echo
  * 3. Value goes directly into the encrypted vault
- * 4. LLM receives only: "Credential 'KEELSON_API_KEY' stored successfully"
+ * 4. LLM receives only: "Credential 'JINTEL_API_KEY' stored successfully"
  *
  * The secret value NEVER appears in stdout, tool results, or LLM context.
  */
@@ -17,10 +17,10 @@ import type { SecretVault } from './types.js';
 import type { ToolDefinition, ToolResult } from '../../core/types.js';
 
 const StoreCredentialParams = z.object({
-  /** Vault key name (e.g. 'KEELSON_API_KEY', 'OPENBB_FMP_KEY'). */
+  /** Vault key name (e.g. 'JINTEL_API_KEY', 'BINANCE_API_KEY'). */
   key: z.string().min(1).describe('The name to store the credential under'),
   /** Human-readable description shown in the TTY prompt. */
-  description: z.string().describe('Description shown to the user (e.g. "Keelson API key for portfolio enrichment")'),
+  description: z.string().describe('Description shown to the user (e.g. "Jintel API key for portfolio enrichment")'),
 });
 
 const CheckCredentialParams = z.object({
