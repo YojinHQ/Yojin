@@ -59,6 +59,30 @@ describe('CostTracker', () => {
     expect(snap.byModel.has('claude-opus-4-6')).toBe(true);
   });
 
+  it('matches gpt-4o-mini to its own pricing, not gpt-4o', () => {
+    const tracker = new CostTracker();
+    const cost = tracker.addUsage('gpt-4o-mini', {
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+    });
+
+    // gpt-4o-mini: $0.15/Mtok input + $0.60/Mtok output = $0.75
+    // NOT gpt-4o: $2.50 + $10 = $12.50
+    expect(cost).toBeCloseTo(0.75, 2);
+  });
+
+  it('matches o1-mini to its own pricing, not o1', () => {
+    const tracker = new CostTracker();
+    const cost = tracker.addUsage('o1-mini', {
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+    });
+
+    // o1-mini: $3/Mtok input + $12/Mtok output = $15
+    // NOT o1: $15 + $60 = $75
+    expect(cost).toBeCloseTo(15, 2);
+  });
+
   it('uses fallback pricing for unknown models', () => {
     const tracker = new CostTracker();
     const cost = tracker.addUsage('unknown-model-v1', {

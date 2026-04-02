@@ -80,8 +80,6 @@ export interface CostSnapshot {
 export interface CostTrackerConfig {
   /** Max USD per agent loop run. When exceeded, the loop is told to stop. */
   maxRunBudgetUsd?: number;
-  /** Max USD per day (across all runs). */
-  maxDailyBudgetUsd?: number;
 }
 
 export class CostTracker {
@@ -137,6 +135,11 @@ export class CostTracker {
     return false;
   }
 
+  /** The configured per-run budget cap (undefined if no cap). */
+  get maxRunBudgetUsd(): number | undefined {
+    return this.config.maxRunBudgetUsd;
+  }
+
   /** Get a snapshot of current costs. */
   snapshot(): CostSnapshot {
     let totalInput = 0;
@@ -179,12 +182,20 @@ export class CostTracker {
   // ---------------------------------------------------------------------------
 
   private getPricing(model: string): ModelPricing {
-    // Try exact match first, then prefix match
+    // Pass 1: exact match
     for (const [key, pricing] of MODEL_PRICING) {
-      if (model === key || model.startsWith(key)) {
-        return pricing;
+      if (model === key) return pricing;
+    }
+    // Pass 2: longest prefix wins (avoids gpt-4o matching before gpt-4o-mini)
+    let best: ModelPricing | undefined;
+    let bestLen = 0;
+    for (const [key, pricing] of MODEL_PRICING) {
+      if (model.startsWith(key) && key.length > bestLen) {
+        best = pricing;
+        bestLen = key.length;
       }
     }
+    if (best) return best;
     logger.debug('Unknown model pricing, using fallback', { model });
     return FALLBACK_PRICING;
   }

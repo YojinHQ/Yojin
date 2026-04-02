@@ -144,7 +144,11 @@ export async function runAgentLoop(
         agentId,
         totalCostUsd: snap.totalCostUsd,
       });
-      emit(onEvent, { type: 'budget_exceeded', totalCostUsd: snap.totalCostUsd, budgetUsd: snap.totalCostUsd });
+      emit(onEvent, {
+        type: 'budget_exceeded',
+        totalCostUsd: snap.totalCostUsd,
+        budgetUsd: costTracker.maxRunBudgetUsd ?? snap.totalCostUsd,
+      });
       const lastAssistant = messages.filter((m) => m.role === 'assistant').pop();
       const fallbackText = extractText(lastAssistant) || 'I stopped because the cost budget was exceeded.';
       emit(onEvent, { type: 'done', text: fallbackText, iterations });
@@ -308,16 +312,20 @@ export async function runAgentLoop(
     // Append assistant message with tool_use blocks
     messages.push({ role: 'assistant', content: response.content });
 
-    // Submit any tool calls that weren't already started during streaming
-    for (const call of toolCalls) {
-      if (streamingExecutor.pendingCount === 0 && streamingExecutor.getCompletedResults().length === 0) {
-        // No streaming tool execution happened — submit all tools now (non-streaming provider)
+    // Submit any tool calls that weren't already started during streaming.
+    // Check BEFORE the loop — once we addToolCall, pendingCount changes.
+    const streamingWasActive = streamingExecutor.pendingCount > 0 || streamingExecutor.getCompletedResults().length > 0;
+
+    if (!streamingWasActive) {
+      // Non-streaming provider: submit all tools now
+      for (const call of toolCalls) {
         streamingExecutor.addToolCall(call);
-      } else {
-        // Streaming was active — only submit tools that weren't already started
-        const alreadyStarted = streamingExecutor.getCompletedResults().some((r) => r.toolCallId === call.id);
-        if (!alreadyStarted && streamingExecutor.pendingCount === 0) {
-          // Tool wasn't captured during stream (edge case) — submit now
+      }
+    } else {
+      // Streaming was active — only submit tools that weren't already started
+      const startedIds = new Set(streamingExecutor.getCompletedResults().map((r) => r.toolCallId));
+      for (const call of toolCalls) {
+        if (!startedIds.has(call.id)) {
           streamingExecutor.addToolCall(call);
         }
       }
