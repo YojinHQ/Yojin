@@ -167,6 +167,37 @@ export default function PositionsPreview() {
     }
   }, [data?.positions, detectNewPositions]);
 
+  // Detect price changes and trigger directional glow on cells
+  const [priceGlowMap, setPriceGlowMap] = useState<Map<string, 'up' | 'down'>>(new Map());
+  const prevPricesRef = useRef<Map<string, number>>(new Map());
+  const priceGlowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const positions = data?.positions ?? [];
+    if (positions.length === 0) return;
+
+    const glows = new Map<string, 'up' | 'down'>();
+    const nextPrices = new Map<string, number>();
+
+    for (const p of positions) {
+      const key = `${p.symbol}:${p.platform}`;
+      nextPrices.set(key, p.currentPrice);
+      const prev = prevPricesRef.current.get(key);
+      if (prev != null && prev !== p.currentPrice) {
+        glows.set(key, p.currentPrice > prev ? 'up' : 'down');
+      }
+    }
+
+    prevPricesRef.current = nextPrices;
+    if (glows.size === 0) return;
+
+    setTimeout(() => {
+      setPriceGlowMap(glows);
+      if (priceGlowTimerRef.current) clearTimeout(priceGlowTimerRef.current);
+      priceGlowTimerRef.current = setTimeout(() => setPriceGlowMap(new Map()), 5_000);
+    }, 0);
+  }, [data?.positions]);
+
   if (!jintelConfigured) {
     return (
       <DashboardCard title="Portfolio">
@@ -293,7 +324,13 @@ export default function PositionsPreview() {
 
                   {/* Change % + extended-hours percent + hover tooltip for $ values */}
                   <td className="whitespace-nowrap px-3 py-2 text-right">
-                    <div className="group relative inline-block text-right">
+                    <div
+                      className={cn(
+                        'group relative inline-block text-right rounded-md px-1.5 py-0.5',
+                        priceGlowMap.get(posKey) === 'up' && 'animate-price-up',
+                        priceGlowMap.get(posKey) === 'down' && 'animate-price-down',
+                      )}
+                    >
                       <div className={cn('text-xs tabular-nums', colorClass)}>
                         {dcp != null ? (
                           <>
