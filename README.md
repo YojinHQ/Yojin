@@ -30,7 +30,7 @@ A **deterministic security layer** — vault, guard pipeline, PII redactor, and 
 | **Analyst**      | Ingests signals from Jintel, runs technical analysis (SMA, RSI, BBANDS), extracts tickers from news. Maintains a self-evolving working memory — past analyses, recommendations, and their actual outcomes are stored and retrieved via BM25 to inform every future decision. |
 | **Strategist**   | Owns the Brain (persona, working memory, emotions). Runs bull/bear debate analysis. Defines strategy — asset allocation, rebalancing rules, entry/exit logic tailored to your goals.                                                                                         |
 | **Risk Manager** | Analyzes exposure, concentration, correlation, drawdown. Monitors markets 24/7. Delivers alerts via Telegram, WhatsApp, and daily portfolio digests.                                                                                                                         |
-| **Trader**       | Executes trades on target platforms (Robinhood, Coinbase, IBKR, Schwab, Binance, and more).                                                                                                                                                                                  |
+| **Trader**       | Executes trades on target platforms (Robinhood, Coinbase, IBKR, Binance, Fidelity, PolyMarket, and more).                                                                                                                                                                    |
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -366,7 +366,13 @@ pnpm dev:fe        # Web app only (Vite dev server)
 pnpm build         # Compile TypeScript
 pnpm start         # Run compiled output
 pnpm test          # Run tests (vitest)
+pnpm typecheck     # TypeScript type checking (tsc --noEmit)
+pnpm lint          # ESLint (src/, providers/, channels/, test/)
+pnpm format        # Prettier format all files
 pnpm ci            # Full CI check (format, typecheck, lint, test)
+pnpm build:all     # Build all workspace packages
+pnpm test:all      # Run tests across all packages
+pnpm ci:all        # Full CI check across all packages
 pnpm setup         # OAuth setup flow (Claude)
 pnpm storybook     # Start Storybook for web components
 ```
@@ -387,6 +393,10 @@ yojin/
 │   ├── scraper/        # Playwright automation (platforms/)
 │   ├── portfolio/      # Snapshot store
 │   ├── watchlist/      # JSONL-backed watchlist with Jintel enrichment
+│   ├── actions/        # Action data model (PENDING → APPROVED/REJECTED/EXPIRED)
+│   ├── skills/         # Trading strategy definitions and evaluation
+│   ├── snap/           # Snap briefs — short periodic summaries
+│   ├── profiles/       # Per-ticker knowledge profiles (TickerProfileStore)
 │   ├── guards/         # 12-guard safety pipeline (security/ + finance/)
 │   ├── trust/          # Vault, PII redaction, approval gate, audit log
 │   ├── security/       # Security utilities
@@ -394,8 +404,14 @@ yojin/
 │   ├── hooks/          # Lifecycle hooks
 │   ├── acp/            # Agent Client Protocol server
 │   ├── api/            # GraphQL API (graphql-yoga on Hono)
+│   ├── gateway/        # HTTP server hosting GraphQL API and WebSocket subscriptions
 │   ├── ai-providers/   # Provider router (Anthropic, Claude Code, OpenRouter, Codex)
 │   ├── auth/           # Claude OAuth PKCE flow, token manager
+│   ├── tools/          # Agent tools (portfolio, brain, data-source, display, error-analysis)
+│   ├── cli/            # CLI commands (chat, setup, bootstrap, onboarding)
+│   ├── config/         # Zod-validated config loader with env var resolution
+│   ├── sessions/       # Session management — per-user/channel conversation state
+│   ├── logging/        # Structured logging with token/secret redaction
 │   ├── plugin-sdk/     # Plugin SDK exports
 │   └── plugins/        # ProviderPlugin + ChannelPlugin interfaces, registry
 ├── apps/

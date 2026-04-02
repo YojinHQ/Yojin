@@ -52,7 +52,7 @@ export type SignalOutputType = z.infer<typeof SignalOutputTypeSchema>;
 // ---------------------------------------------------------------------------
 
 export const SignalDataSourceSchema = z.object({
-  id: z.string().min(1), // e.g. 'openbb-fmp', 'rss-reuters', 'keelson'
+  id: z.string().min(1), // e.g. 'jintel', 'rss-reuters'
   name: z.string().min(1),
   type: SourceTypeSchema,
   reliability: z.number().min(0).max(1),
