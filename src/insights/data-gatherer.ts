@@ -22,7 +22,7 @@ import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
 import type { TickerProfileStore } from '../profiles/profile-store.js';
 import type { TickerProfileBrief } from '../profiles/types.js';
 import type { SignalArchive } from '../signals/archive.js';
-import { filterSignals } from '../signals/signal-filter.js';
+import { DEFAULT_SPAM_PATTERNS, filterSignals } from '../signals/signal-filter.js';
 import type { Signal, SignalOutputType, SignalSentiment } from '../signals/types.js';
 
 const logger = createSubsystemLogger('data-gatherer');
@@ -202,7 +202,7 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
     // Signals from archive, filtered for quality (no curation store needed)
     signalArchive
       .query({ tickers, since: sevenDaysAgo, limit: 100 * tickers.length })
-      .then((raw) => filterSignals(raw, { relevantTickers: new Set(tickers) })),
+      .then((raw) => filterSignals(raw, { relevantTickers: new Set(tickers), spamPatterns: DEFAULT_SPAM_PATTERNS })),
     // Memories (local, fast)
     recallAllMemories(memoryStores, tickers),
     // Previous report (local, fast)
@@ -826,7 +826,7 @@ export async function buildSingleBrief(symbol: string, options: SingleBriefOptio
     jintelClient ? batchEnrichAllChunked(jintelClient, [ticker]) : Promise.resolve(new Map<string, Entity>()),
     signalArchive
       .query({ tickers: [ticker], since: sevenDaysAgo, limit: 100 })
-      .then((raw) => filterSignals(raw, { relevantTickers: new Set([ticker]) })),
+      .then((raw) => filterSignals(raw, { relevantTickers: new Set([ticker]), spamPatterns: DEFAULT_SPAM_PATTERNS })),
     recallAllMemories(memoryStores, [ticker]),
   ]);
 

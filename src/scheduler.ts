@@ -7,8 +7,8 @@
  *
  * 2. **Macro flow**: portfolio-wide multi-agent analysis every 2 hours.
  *    Also triggers when all micro flows complete for all assets today.
- *    Pipeline: CLI data fetch → signal assessment (RA + Strategist) →
- *    ProcessInsights → skill evaluation → snap → reflection.
+ *    Pipeline: signal assessment (RA + Strategist) → ProcessInsights →
+ *    skill evaluation → snap → reflection.
  *
  * State is persisted to data/cron/state.json so restarts don't re-run
  * a job that already fired within its cooldown window.
@@ -553,10 +553,10 @@ export class Scheduler {
       // 3. Skill evaluation → create Actions
       await this.evaluateSkillsAfterCuration();
 
-      // 5. Snap brief regeneration
+      // 4. Snap brief regeneration
       await this.regenerateSnap();
 
-      // 6. Save portfolio history snapshot
+      // 5. Save portfolio history snapshot
       if (this.snapshotStore) {
         try {
           const latest = await this.snapshotStore.getLatest();
