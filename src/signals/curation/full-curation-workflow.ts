@@ -8,8 +8,8 @@
  *   afterWorkflow: update assessment watermark
  *
  * Signal ingestion happens upstream: micro flow fetches Jintel per-ticker every 5 min,
- * and the scheduler's 15-min tick fetches CLI/RSS/MCP data sources. This workflow
- * reads from the already-populated archive — no fetching here.
+ * and refreshIntelFeedResolver (UI-triggered) fetches CLI/RSS/MCP data sources.
+ * This workflow reads from the already-populated archive — no fetching here.
  *
  * Emits WorkflowProgressEvents throughout for live UI activity log.
  * Used by the "Run Curation" button in the UI. The separate `signal-assessment`

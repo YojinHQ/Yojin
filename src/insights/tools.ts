@@ -21,7 +21,7 @@ import {
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import { getLogger } from '../logging/index.js';
 import type { SignalArchive } from '../signals/archive.js';
-import { filterSignals } from '../signals/signal-filter.js';
+import { DEFAULT_SPAM_PATTERNS, filterSignals } from '../signals/signal-filter.js';
 
 const log = getLogger().sub('insight-tools');
 
@@ -170,7 +170,10 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
           since: sevenDaysAgo,
           limit: 200 * allTickers.length,
         });
-        const filtered = filterSignals(allSignals, { relevantTickers: new Set(allTickers) });
+        const filtered = filterSignals(allSignals, {
+          relevantTickers: new Set(allTickers),
+          spamPatterns: DEFAULT_SPAM_PATTERNS,
+        });
 
         // Group signal IDs by ticker (1 pass, pre-compiled Set)
         const tickerSet = new Set(allTickers.map((t) => t.split('-')[0].toUpperCase()));

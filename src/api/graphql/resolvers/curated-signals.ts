@@ -288,7 +288,7 @@ export async function refreshIntelFeedResolver(): Promise<RefreshIntelFeedResult
 
       return {
         signalsFetched: fetchResult.totalIngested,
-        signalsCurated: fetchResult.totalIngested,
+        signalsCurated: 0,
         error: fetchResult.errors.length > 0 ? fetchResult.errors.join('; ') : null,
       };
     } catch (err) {
