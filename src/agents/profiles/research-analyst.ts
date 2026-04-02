@@ -15,6 +15,11 @@ export function createResearchAnalystProfile(): AgentProfile {
       'news_search',
       'sanctions_screen',
       'web_search',
+      'get_news',
+      'get_research',
+      'get_sentiment',
+      'get_derivatives',
+      'price_history',
       // Signal tools
       'glob_signals',
       'grep_signals',

@@ -1,12 +1,13 @@
 /**
  * Jintel agent tools — search_entities, enrich_entity, market_quotes,
- * sanctions_screen, economy queries (GDP, inflation, rates, S&P 500).
+ * sanctions_screen, price_history, economy queries (GDP, inflation, rates, S&P 500).
  *
  * Wraps JintelClient for agent use. When the client is not configured,
  * tools return a helpful error guiding the user to set up their API key.
  */
 
 import {
+  type DerivativesData,
   type EconomicDataPoint,
   type EnrichmentField,
   type Entity,
@@ -21,12 +22,16 @@ import {
   type JintelClient,
   type JintelResult,
   type MarketQuote,
+  type NewsArticle,
+  type ResearchResult,
   type RiskSignal,
   type SP500DataPoint,
   type SP500Series,
   SP500SeriesSchema,
   SP500_MULTIPLES,
   type SanctionsMatch,
+  type SocialSentiment,
+  type TickerPriceHistory,
 } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
@@ -266,6 +271,120 @@ function formatSP500Data(data: SP500DataPoint[]): string {
   const recent = sorted.slice(0, 20);
   const lines = recent.map((d) => `${d.date}: ${d.value.toFixed(2)}`);
   return `# S&P 500 — ${sorted[0]?.name ?? 'Multiples'}\n${lines.join('\n')}${sorted.length > 20 ? `\n\n... and ${sorted.length - 20} more data points` : ''}`;
+}
+
+function formatPriceHistory(data: TickerPriceHistory[]): string {
+  if (data.length === 0) return 'No price history available.';
+  return data
+    .map((th) => {
+      if (th.history.length === 0) return `## ${th.ticker}\nNo data points.`;
+      const lines = th.history.map(
+        (h) =>
+          `${h.date} | O:${h.open.toFixed(2)} H:${h.high.toFixed(2)} L:${h.low.toFixed(2)} C:${h.close.toFixed(2)} V:${formatNumber(h.volume)}`,
+      );
+      const first = th.history[0];
+      const last = th.history[th.history.length - 1];
+      const changePct = first.close !== 0 ? ((last.close - first.close) / first.close) * 100 : 0;
+      const dir = changePct >= 0 ? '↑' : '↓';
+      return (
+        `## ${th.ticker} (${th.history.length} candles)\n` +
+        `Period change: ${dir} ${changePct.toFixed(2)}% ($${first.close.toFixed(2)} → $${last.close.toFixed(2)})\n\n` +
+        lines.join('\n')
+      );
+    })
+    .join('\n\n');
+}
+
+function formatNews(articles: NewsArticle[]): string {
+  if (articles.length === 0) return 'No news articles found.';
+  return articles
+    .map((a) => {
+      const parts = [`- **${a.title}**`];
+      parts.push(`  Source: ${a.source}${a.date ? ` | ${a.date}` : ''}`);
+      if (a.snippet) parts.push(`  ${a.snippet}`);
+      if (a.link) parts.push(`  ${a.link}`);
+      return parts.join('\n');
+    })
+    .join('\n');
+}
+
+function formatResearch(reports: ResearchResult[]): string {
+  if (reports.length === 0) return 'No research reports found.';
+  return reports
+    .map((r) => {
+      const parts = [`- **${r.title}**${r.score ? ` (relevance: ${r.score.toFixed(2)})` : ''}`];
+      if (r.author || r.publishedDate) {
+        parts.push(`  ${[r.author, r.publishedDate].filter(Boolean).join(' — ')}`);
+      }
+      if (r.text) {
+        const preview = r.text.length > 300 ? r.text.slice(0, 297) + '…' : r.text;
+        parts.push(`  ${preview}`);
+      }
+      if (r.url) parts.push(`  ${r.url}`);
+      return parts.join('\n');
+    })
+    .join('\n');
+}
+
+function formatSentiment(s: SocialSentiment): string {
+  const rankDelta = s.rank24hAgo - s.rank;
+  const rankDir = rankDelta > 0 ? `↑${rankDelta}` : rankDelta < 0 ? `↓${Math.abs(rankDelta)}` : '→';
+  const mentionDelta = s.mentions - s.mentions24hAgo;
+  const mentionDir = mentionDelta > 0 ? `+${mentionDelta}` : `${mentionDelta}`;
+
+  const lines = [
+    `# ${s.name} (${s.ticker}) — Social Sentiment`,
+    `Rank: #${s.rank} (${rankDir} in 24h)`,
+    `Mentions: ${s.mentions} (${mentionDir} in 24h)`,
+    `Upvotes: ${s.upvotes}`,
+  ];
+
+  // Momentum interpretation
+  if (rankDelta > 5) lines.push('\n📈 Strong upward momentum — rapidly gaining social attention');
+  else if (rankDelta > 0) lines.push('\n📈 Positive momentum — gaining social attention');
+  else if (rankDelta < -5) lines.push('\n📉 Declining momentum — losing social attention');
+  else if (rankDelta < 0) lines.push('\n📉 Slight decline in social attention');
+
+  return lines.join('\n');
+}
+
+function formatDerivatives(d: DerivativesData, ticker: string): string {
+  const sections: string[] = [`# ${ticker} — Derivatives`];
+
+  if (d.futures.length > 0) {
+    const futureLines = d.futures.map(
+      (f) => `  ${f.expiration}${f.price != null ? `: $${f.price.toFixed(2)}` : ''}${f.date ? ` (${f.date})` : ''}`,
+    );
+    sections.push(`## Futures Curve (${d.futures.length} contracts)\n${futureLines.join('\n')}`);
+  }
+
+  if (d.options.length > 0) {
+    const calls = d.options.filter((o) => o.optionType === 'CALL');
+    const puts = d.options.filter((o) => o.optionType === 'PUT');
+
+    const formatOption = (o: DerivativesData['options'][number]) => {
+      const parts = [`  $${o.strike.toFixed(2)} ${o.expiration}`];
+      if (o.lastTradePrice != null) parts.push(`Last: $${o.lastTradePrice.toFixed(2)}`);
+      if (o.bid != null && o.ask != null) parts.push(`Bid/Ask: $${o.bid.toFixed(2)}/$${o.ask.toFixed(2)}`);
+      if (o.impliedVolatility != null) parts.push(`IV: ${(o.impliedVolatility * 100).toFixed(1)}%`);
+      if (o.openInterest != null) parts.push(`OI: ${formatNumber(o.openInterest)}`);
+      if (o.delta != null) parts.push(`Δ:${o.delta.toFixed(3)}`);
+      return parts.join(' | ');
+    };
+
+    if (calls.length > 0) {
+      sections.push(`## Calls (${calls.length})\n${calls.map(formatOption).join('\n')}`);
+    }
+    if (puts.length > 0) {
+      sections.push(`## Puts (${puts.length})\n${puts.map(formatOption).join('\n')}`);
+    }
+  }
+
+  if (d.futures.length === 0 && d.options.length === 0) {
+    sections.push('No derivatives data available.');
+  }
+
+  return sections.join('\n\n');
 }
 
 export function formatNumber(n: number): string {
@@ -548,6 +667,175 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     },
   };
 
+  const priceHistory: ToolDefinition = {
+    name: 'price_history',
+    description:
+      'Get historical OHLCV (open/high/low/close/volume) price data for one or more tickers.\n\n' +
+      'Ranges: 1d, 5d, 1m, 3m, 6m, 1y, 2y, 5y, max\n' +
+      'Intervals: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1W, 1M, 1Q\n\n' +
+      'Use for price trend analysis, chart patterns, support/resistance levels, or comparing ' +
+      'price performance across assets over a time period.',
+    parameters: z.object({
+      tickers: z
+        .array(z.string())
+        .min(1)
+        .max(10)
+        .describe('Ticker symbols to fetch history for (e.g. ["AAPL", "NVDA"])'),
+      range: z.string().optional().describe('Time range (default "1y"). Options: 1d, 5d, 1m, 3m, 6m, 1y, 2y, 5y, max'),
+      interval: z
+        .string()
+        .optional()
+        .describe('Candle interval (default "1d"). Options: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1W, 1M, 1Q'),
+    }),
+    async execute(params: { tickers: string[]; range?: string; interval?: string }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const result = await safeCall(() =>
+        client.priceHistory(
+          params.tickers.map((t) => t.toUpperCase()),
+          params.range ?? '1y',
+          params.interval,
+        ),
+      );
+      if (!result.ok) return result.toolResult;
+      const handled = handleResult(result.data);
+      if (!handled.ok) return handled.toolResult;
+      return { content: formatPriceHistory(handled.data) };
+    },
+  };
+
+  const getNews: ToolDefinition = {
+    name: 'get_news',
+    description:
+      'Get recent news articles for a ticker. Returns headlines, sources, snippets, and links.\n\n' +
+      'Use when the user asks about recent news, events, or headlines for a specific stock or crypto asset.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, BTC, TSLA)'),
+    }),
+    async execute(params: { ticker: string }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const result = await safeCall(() =>
+        client.enrichEntity(params.ticker.toUpperCase(), ['news'] as EnrichmentField[]),
+      );
+      if (!result.ok) return result.toolResult;
+      const handled = handleResult(result.data);
+      if (!handled.ok) return handled.toolResult;
+
+      const entity = handled.data as Entity;
+      if (!entity.news?.length) {
+        return { content: `No recent news found for ${params.ticker}.` };
+      }
+
+      // Best-effort ingest news as signals
+      if (options.ingestor) {
+        const rawSignals: RawSignalInput[] = entity.news.map((a) => ({
+          sourceId: 'jintel',
+          sourceName: a.source || 'Jintel',
+          sourceType: 'API' as const,
+          reliability: 0.75,
+          title: a.title,
+          content: a.snippet || a.title,
+          publishedAt: a.date ?? new Date(new Date().toISOString().slice(0, 10)).toISOString(),
+          type: 'NEWS' as const,
+          tickers: entity.tickers ?? [params.ticker.toUpperCase()],
+          confidence: 0.7,
+          metadata: { source: a.source, link: a.link },
+        }));
+        await bestEffortIngest(options.ingestor, rawSignals);
+      }
+
+      return { content: `# ${entity.name ?? params.ticker} — News\n\n${formatNews(entity.news)}` };
+    },
+  };
+
+  const getResearch: ToolDefinition = {
+    name: 'get_research',
+    description:
+      'Get analyst research reports for a ticker. Returns report titles, authors, publication dates, ' +
+      'full text excerpts, relevance scores, and URLs.\n\n' +
+      'Use when the user asks about analyst opinions, research coverage, or deep-dive analysis for an asset.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, BTC, NVDA)'),
+    }),
+    async execute(params: { ticker: string }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const result = await safeCall(() =>
+        client.enrichEntity(params.ticker.toUpperCase(), ['research'] as EnrichmentField[]),
+      );
+      if (!result.ok) return result.toolResult;
+      const handled = handleResult(result.data);
+      if (!handled.ok) return handled.toolResult;
+
+      const entity = handled.data as Entity;
+      if (!entity.research?.length) {
+        return { content: `No research reports found for ${params.ticker}.` };
+      }
+
+      return { content: `# ${entity.name ?? params.ticker} — Research\n\n${formatResearch(entity.research)}` };
+    },
+  };
+
+  const getSentiment: ToolDefinition = {
+    name: 'get_sentiment',
+    description:
+      'Get social sentiment metrics for a ticker. Returns social rank, mention count, upvotes, ' +
+      'and 24-hour momentum.\n\n' +
+      'Use when the user asks about social buzz, community sentiment, trending status, or ' +
+      'retail investor attention for a stock or crypto.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, BTC, GME)'),
+    }),
+    async execute(params: { ticker: string }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const result = await safeCall(() =>
+        client.enrichEntity(params.ticker.toUpperCase(), ['sentiment'] as EnrichmentField[]),
+      );
+      if (!result.ok) return result.toolResult;
+      const handled = handleResult(result.data);
+      if (!handled.ok) return handled.toolResult;
+
+      const entity = handled.data as Entity;
+      if (!entity.sentiment) {
+        return { content: `No sentiment data available for ${params.ticker}.` };
+      }
+
+      return { content: formatSentiment(entity.sentiment) };
+    },
+  };
+
+  const getDerivatives: ToolDefinition = {
+    name: 'get_derivatives',
+    description:
+      'Get derivatives data (futures curve + options chain) for a ticker. Returns futures ' +
+      'expiration/price and options with strike, type, delta, implied volatility, open interest, ' +
+      'and bid/ask.\n\n' +
+      'Primarily available for crypto assets. Use when the user asks about options flow, ' +
+      'futures contango/backwardation, implied volatility, or derivatives positioning.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Ticker symbol (e.g. BTC, ETH)'),
+    }),
+    async execute(params: { ticker: string }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const result = await safeCall(() =>
+        client.enrichEntity(params.ticker.toUpperCase(), ['derivatives'] as EnrichmentField[]),
+      );
+      if (!result.ok) return result.toolResult;
+      const handled = handleResult(result.data);
+      if (!handled.ok) return handled.toolResult;
+
+      const entity = handled.data as Entity;
+      if (!entity.derivatives) {
+        return { content: `No derivatives data available for ${params.ticker}.` };
+      }
+
+      return { content: formatDerivatives(entity.derivatives, entity.name ?? params.ticker) };
+    },
+  };
+
   return [
     searchEntities,
     enrichEntity,
@@ -555,6 +843,11 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     marketQuotes,
     sanctionsScreen,
     runTechnical,
+    priceHistory,
+    getNews,
+    getResearch,
+    getSentiment,
+    getDerivatives,
     getGdp,
     getInflation,
     getInterestRates,
