@@ -166,7 +166,7 @@ export default function PositionsPreview() {
   useEffect(() => {
     const positions = data?.positions ?? [];
     if (positions.length > 0) {
-      detectNewPositions(positions.map((p) => `${p.symbol}:${p.platform}`));
+      detectNewPositions([...new Set(positions.map((p) => p.symbol))]);
     }
   }, [data?.positions, detectNewPositions]);
 
@@ -179,11 +179,17 @@ export default function PositionsPreview() {
     const positions = data?.positions ?? [];
     if (positions.length === 0) return;
 
+    // Dedupe by symbol, keeping the highest market value entry — mirrors the render path
+    const dedupSeen = new Set<string>();
+    const deduped = [...positions]
+      .sort((a, b) => b.marketValue - a.marketValue)
+      .filter((p) => (dedupSeen.has(p.symbol) ? false : (dedupSeen.add(p.symbol), true)));
+
     const glows = new Map<string, 'up' | 'down'>();
     const nextPrices = new Map<string, number>();
 
-    for (const p of positions) {
-      const key = `${p.symbol}:${p.platform}`;
+    for (const p of deduped) {
+      const key = p.symbol;
       nextPrices.set(key, p.currentPrice);
       const prev = prevPricesRef.current.get(key);
       if (prev != null && prev !== p.currentPrice) {
@@ -254,8 +260,12 @@ export default function PositionsPreview() {
     );
   }
 
-  // Sort by market value descending, show top 10
-  const top = [...data.positions].sort((a, b) => b.marketValue - a.marketValue).slice(0, 10);
+  // Dedupe by symbol (same asset across accounts), sort by market value descending, show top 10
+  const seen = new Set<string>();
+  const top = [...data.positions]
+    .sort((a, b) => b.marketValue - a.marketValue)
+    .filter((p) => (seen.has(p.symbol) ? false : (seen.add(p.symbol), true)))
+    .slice(0, 10);
 
   return (
     <DashboardCard title="Portfolio" headerAction={viewAllLink}>
@@ -279,7 +289,7 @@ export default function PositionsPreview() {
               const arrow = isUp ? '\u25B2' : isDown ? '\u25BC' : '';
               const ext = getExtendedHoursLabel(marketStatus, pos);
 
-              const posKey = `${pos.symbol}:${pos.platform}`;
+              const posKey = pos.symbol;
               return (
                 <tr
                   key={posKey}
