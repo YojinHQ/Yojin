@@ -282,9 +282,10 @@ export async function runAgentLoop(
       const finalText = piiScanner && piiMap ? await piiScanner.restore(thoughtText, piiMap) : thoughtText;
       emit(onEvent, { type: 'done', text: finalText, iterations });
       messages.push({ role: 'assistant', content: response.content });
-      // Restore original user message in history so future turns don't see stale PII tags
-      if (piiMap) {
+      // Restore PII in all stored messages so session history is clean
+      if (piiScanner && piiMap) {
         messages[originalUserIdx] = { role: 'user', content: userMessage };
+        await restoreMessagesInPlace(piiScanner, piiMap, messages);
       }
       return {
         text: finalText,
@@ -312,23 +313,10 @@ export async function runAgentLoop(
     // Append assistant message with tool_use blocks
     messages.push({ role: 'assistant', content: response.content });
 
-    // Submit any tool calls that weren't already started during streaming.
-    // Check BEFORE the loop — once we addToolCall, pendingCount changes.
-    const streamingWasActive = streamingExecutor.pendingCount > 0 || streamingExecutor.getCompletedResults().length > 0;
-
-    if (!streamingWasActive) {
-      // Non-streaming provider: submit all tools now
-      for (const call of toolCalls) {
-        streamingExecutor.addToolCall(call);
-      }
-    } else {
-      // Streaming was active — only submit tools that weren't already started
-      const startedIds = new Set(streamingExecutor.getCompletedResults().map((r) => r.toolCallId));
-      for (const call of toolCalls) {
-        if (!startedIds.has(call.id)) {
-          streamingExecutor.addToolCall(call);
-        }
-      }
+    // Submit all tool calls — addToolCall is idempotent, so tools already
+    // started during streaming are safely skipped.
+    for (const call of toolCalls) {
+      streamingExecutor.addToolCall(call);
     }
 
     // Wait for all tools to complete
@@ -379,8 +367,9 @@ export async function runAgentLoop(
     totalOutputTokens: totalUsage.outputTokens,
   });
   emit(onEvent, { type: 'max_iterations', iterations });
-  if (piiMap) {
+  if (piiScanner && piiMap) {
     messages[originalUserIdx] = { role: 'user', content: userMessage };
+    await restoreMessagesInPlace(piiScanner, piiMap, messages);
   }
   const lastAssistant = messages.filter((m) => m.role === 'assistant').pop();
   const fallbackText = extractText(lastAssistant);
@@ -405,6 +394,22 @@ function extractText(message: AgentMessage | undefined): string {
     .filter((b): b is TextBlock => b.type === 'text')
     .map((b) => b.text)
     .join('');
+}
+
+/** Restore PII tags in all assistant text blocks so stored session history is clean. */
+async function restoreMessagesInPlace(
+  piiScanner: import('../trust/pii/chat-scanner.js').ChatPiiScanner,
+  piiMap: import('rehydra').EncryptedPIIMap,
+  messages: AgentMessage[],
+): Promise<void> {
+  for (const msg of messages) {
+    if (msg.role !== 'assistant' || typeof msg.content === 'string') continue;
+    for (const block of msg.content) {
+      if (block.type === 'text') {
+        (block as TextBlock).text = await piiScanner.restore((block as TextBlock).text, piiMap);
+      }
+    }
+  }
 }
 
 /** Scrub PII from user messages before sending to LLM. */

@@ -20,9 +20,6 @@ import type {
   CurationWorkflowStatusQueryResult,
   InsightsWorkflowStatusQueryResult,
   WorkflowProgressEvent,
-  InsightRating,
-  InsightReport,
-  PortfolioHealth,
   PositionInsight,
   Signal,
 } from '../api/types';
@@ -82,30 +79,6 @@ const sentimentVariant: Record<string, BadgeVariant> = {
   BEARISH: 'error',
   NEUTRAL: 'neutral',
   MIXED: 'warning',
-};
-
-const ratingVariant: Record<InsightRating, BadgeVariant> = {
-  VERY_BULLISH: 'success',
-  BULLISH: 'success',
-  NEUTRAL: 'warning',
-  BEARISH: 'error',
-  VERY_BEARISH: 'error',
-};
-
-const ratingLabel: Record<InsightRating, string> = {
-  VERY_BULLISH: 'Very Bullish',
-  BULLISH: 'Bullish',
-  NEUTRAL: 'Neutral',
-  BEARISH: 'Bearish',
-  VERY_BEARISH: 'Very Bearish',
-};
-
-const healthVariant: Record<PortfolioHealth, BadgeVariant> = {
-  STRONG: 'success',
-  HEALTHY: 'success',
-  CAUTIOUS: 'warning',
-  WEAK: 'error',
-  CRITICAL: 'error',
 };
 
 const signalTypeVariant: Record<string, BadgeVariant> = {
@@ -536,9 +509,6 @@ function InsightsContent() {
                 message="No recent signals. Signals will appear automatically as the pipeline runs."
               />
             )}
-            {/* Portfolio-level analysis summary */}
-            {report && <PortfolioSummaryCard report={report} />}
-
             {signalsByTicker.length > 0 && (
               <div className="space-y-3">
                 {signalsByTicker.map(({ ticker, signals }) => {
@@ -652,76 +622,6 @@ function EmptyState({
       )}
       <p className="text-base text-text-muted text-center max-w-sm">{message}</p>
       {children}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Portfolio-level summary card (shown above position cards when analysis exists)
-// ---------------------------------------------------------------------------
-
-function PortfolioSummaryCard({ report }: { report: InsightReport }) {
-  return (
-    <div className="space-y-3 mb-4">
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Portfolio Health</h3>
-            <Badge variant={healthVariant[report.portfolio.overallHealth]} size="sm">
-              {report.portfolio.overallHealth}
-            </Badge>
-          </div>
-          <p className="text-sm text-text-primary leading-relaxed">{report.portfolio.summary}</p>
-        </Card>
-
-        <Card className="p-4">
-          <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Agent Confidence</h3>
-          <div className="space-y-3">
-            <ConfidenceBar label="Confidence" value={report.emotionState.confidence} />
-            <ConfidenceBar label="Risk Appetite" value={report.emotionState.riskAppetite} />
-          </div>
-          {report.emotionState.reason && (
-            <p className="mt-3 text-xs text-text-muted leading-relaxed">{report.emotionState.reason}</p>
-          )}
-        </Card>
-      </div>
-
-      {(report.portfolio.macroContext || report.portfolio.sectorThemes.length > 0) && (
-        <Card className="p-4">
-          {report.portfolio.macroContext && (
-            <>
-              <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Macro Context</h3>
-              <p className="text-sm text-text-primary leading-relaxed mb-3">{report.portfolio.macroContext}</p>
-            </>
-          )}
-          {report.portfolio.sectorThemes.length > 0 && (
-            <>
-              <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Sector Themes</h3>
-              <div className="flex flex-wrap gap-1.5">
-                {report.portfolio.sectorThemes.map((theme, i) => (
-                  <span key={i} className="px-2.5 py-1 rounded-md bg-bg-tertiary text-xs text-text-secondary">
-                    {theme}
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
-        </Card>
-      )}
-
-      {report.portfolio.actionItems.length > 0 && (
-        <Card className="p-4">
-          <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Action Items</h3>
-          <ul className="space-y-1.5">
-            {report.portfolio.actionItems.map((item, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
-                <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-primary" />
-                {item.text}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
     </div>
   );
 }
@@ -891,13 +791,7 @@ function PositionSignalCard({
       >
         <div className="flex items-center gap-3">
           <span className="text-base font-semibold text-text-primary">{ticker}</span>
-          {insight && (
-            <Badge variant={ratingVariant[insight.rating]} size="sm">
-              {ratingLabel[insight.rating]}
-            </Badge>
-          )}
           {name !== ticker && <span className="text-sm text-text-muted">{name}</span>}
-          {insight && <ConvictionMeter value={insight.conviction} />}
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-bg-tertiary">
@@ -1250,45 +1144,6 @@ function SignalRow({
           </div>
         )}
       </Card>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Confidence / conviction meters
-// ---------------------------------------------------------------------------
-
-function ConfidenceBar({ label, value }: { label: string; value: number }) {
-  const pct = Math.round(value * 100);
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-sm text-text-secondary">{label}</span>
-        <span className="text-sm font-semibold text-text-primary">{pct}%</span>
-      </div>
-      <div className="h-2 rounded-full bg-bg-tertiary">
-        <div
-          className={cn(
-            'h-2 rounded-full transition-all',
-            pct >= 70 ? 'bg-success' : pct >= 40 ? 'bg-warning' : 'bg-error',
-          )}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function ConvictionMeter({ value }: { value: number }) {
-  const pct = Math.round(value * 100);
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-sm text-text-muted">Conviction</span>
-      <span
-        className={cn('text-sm font-semibold', pct >= 70 ? 'text-success' : pct >= 40 ? 'text-warning' : 'text-error')}
-      >
-        {pct}%
-      </span>
     </div>
   );
 }
