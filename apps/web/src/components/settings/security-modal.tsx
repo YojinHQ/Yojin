@@ -71,7 +71,7 @@ export function SecurityModal({ open, onClose }: SecurityModalProps) {
       onClose={onClose}
       maxWidth="max-w-3xl"
       wrapperClassName="pl-(--spacing-sidebar-width)"
-      className="min-h-[70vh] px-10 py-8 flex items-center"
+      className="px-10 py-8"
       aria-labelledby="security-modal-title"
     >
       <div className="mx-auto max-w-2xl space-y-6">
