@@ -88,7 +88,7 @@ function Sparkline({
 
   return (
     <div className="pointer-events-none flex items-center gap-1">
-      <div className="h-7 w-[80px]">
+      <div className="h-7 w-full">
         <svg viewBox="0 0 120 32" className="h-full w-full" preserveAspectRatio="none">
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
@@ -260,13 +260,19 @@ export default function PositionsPreview() {
   return (
     <DashboardCard title="Portfolio" headerAction={viewAllLink}>
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full text-left">
+        <table className="w-full table-fixed text-left">
+          <colgroup>
+            <col className="w-[24%]" />
+            <col className="w-[28%]" />
+            <col className="w-[24%]" />
+            <col className="w-[24%]" />
+          </colgroup>
           <thead className="sticky top-0 z-10 bg-bg-card">
             <tr className="border-b border-border">
               <th className={TH}>Asset</th>
               <th className={cn(TH, 'w-[80px]')} />
-              <th className={cn(TH, 'text-right')}>Price Today</th>
-              <th className={cn(TH, 'text-right')}>Change %</th>
+              <th className={cn(TH, 'text-right')}>Price</th>
+              <th className={cn(TH, 'text-right')}>Change</th>
             </tr>
           </thead>
           <tbody>
@@ -289,9 +295,9 @@ export default function PositionsPreview() {
                   )}
                   onClick={() => openAssetDetail(pos.symbol)}
                 >
-                  {/* Asset: logo + symbol + name */}
-                  <td className="px-3 py-2">
-                    <div className="flex min-w-0 items-center gap-2">
+                  {/* Asset: logo + symbol */}
+                  <td className="px-2 py-2">
+                    <div className="flex min-w-0 items-center gap-1.5">
                       <SymbolLogo
                         symbol={pos.symbol}
                         assetClass={pos.assetClass.toLowerCase() as 'equity' | 'crypto'}
@@ -299,13 +305,13 @@ export default function PositionsPreview() {
                       />
                       <div className="flex min-w-0 flex-col">
                         <span className="text-xs font-semibold leading-tight text-text-primary">{pos.symbol}</span>
-                        <span className="truncate text-2xs leading-tight text-text-muted">{pos.name}</span>
+                        <span className="truncate text-2xs leading-tight text-text-muted max-w-[80px]">{pos.name}</span>
                       </div>
                     </div>
                   </td>
 
                   {/* Sparkline */}
-                  <td className="px-3 py-2">
+                  <td className="px-1 py-2">
                     {pos.sparkline ? (
                       <Sparkline
                         symbol={pos.symbol}
@@ -314,19 +320,19 @@ export default function PositionsPreview() {
                         isMarketOpen={marketStatus === 'open' && pos.assetClass !== 'CRYPTO'}
                       />
                     ) : (
-                      <div className="flex h-8 w-[100px] items-center justify-center">
+                      <div className="flex h-7 w-full items-center justify-center">
                         <span className="text-2xs text-text-muted/40">—</span>
                       </div>
                     )}
                   </td>
 
                   {/* Price Today */}
-                  <td className="whitespace-nowrap px-3 py-2 text-right text-xs font-medium tabular-nums text-text-primary">
+                  <td className="whitespace-nowrap px-2 py-2 text-right text-xs font-medium tabular-nums text-text-primary">
                     {formatCurrency(pos.currentPrice)}
                   </td>
 
                   {/* Change % + extended-hours percent + hover tooltip for $ values */}
-                  <td className="whitespace-nowrap px-3 py-2 text-right">
+                  <td className="whitespace-nowrap px-2 py-2 text-right">
                     <div
                       className={cn(
                         'group relative inline-block text-right rounded-md px-1.5 py-0.5',
