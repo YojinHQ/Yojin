@@ -23,6 +23,10 @@ globs: ["src/agents/**/*.ts", "src/brain/**/*.ts", "src/core/agent-runtime.ts"]
 - Commit history = git-like versioned snapshots at decision points.
 - Other agents are stateless — they produce reports on demand.
 
+## Tool Registration Checklist
+- **Wire new tools to agent profiles.** When adding a tool to `ToolRegistry` (e.g. via `createJintelTools`), also add it to every relevant agent profile's `tools` array in `src/agents/profiles/`. `AgentRegistry.getToolsForAgent` calls `toolRegistry.subset(profile.tools)` — tools not listed are **silently skipped** in all agent-scoped and orchestrated workflows. Only the unscoped general chat (`toolRegistry.all()`) sees unregistered tools.
+- **Tool descriptions must match serialized output.** If a tool's `description` promises specific data fields to the LLM (e.g. "returns Greeks: delta, gamma, theta, vega"), verify the formatter actually serializes all of them. The LLM trusts the description — overpromising leads to hallucinated assertions.
+
 ## Orchestration
 - The orchestrator in `src/agents/orchestrator.ts` triggers agents in sequence or parallel depending on the workflow.
 - Standard flows: scheduled digest, user query analysis, trade execution.
