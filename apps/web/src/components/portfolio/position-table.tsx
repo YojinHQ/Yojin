@@ -65,14 +65,108 @@ function getPlatformLabel(platform: string): string {
 
 const TH = 'px-4 py-2.5 text-2xs font-medium uppercase tracking-wider text-text-muted';
 
+// ---------------------------------------------------------------------------
+// Group positions by symbol
+// ---------------------------------------------------------------------------
+
+interface GroupedPosition extends Position {
+  primaryPlatform: string;
+  extraAccountCount: number;
+  underlying: Position[];
+}
+
+function groupPositions(positions: Position[]): GroupedPosition[] {
+  const bySymbol = new Map<string, Position[]>();
+  for (const pos of positions) {
+    const group = bySymbol.get(pos.symbol);
+    if (group) {
+      group.push(pos);
+    } else {
+      bySymbol.set(pos.symbol, [pos]);
+    }
+  }
+
+  return [...bySymbol.values()].map((group) => {
+    const totalQty = group.reduce((s, p) => s + p.quantity, 0);
+    const totalMv = group.reduce((s, p) => s + p.marketValue, 0);
+    const totalCost = group.reduce((s, p) => s + p.costBasis * p.quantity, 0);
+    const totalPnl = group.reduce((s, p) => s + p.unrealizedPnl, 0);
+    const weightedCost = totalQty > 0 ? totalCost / totalQty : 0;
+    const pnlPct = totalCost > 0 ? ((totalMv - totalCost) / totalCost) * 100 : 0;
+
+    // Primary platform = largest allocation by market value
+    const sorted = [...group].sort((a, b) => b.marketValue - a.marketValue);
+    const primary = sorted[0];
+    const distinctPlatforms = new Set(group.map((p) => p.platform));
+
+    return {
+      ...primary,
+      quantity: totalQty,
+      costBasis: weightedCost,
+      currentPrice: totalQty > 0 ? totalMv / totalQty : primary.currentPrice,
+      marketValue: totalMv,
+      unrealizedPnl: totalPnl,
+      unrealizedPnlPercent: pnlPct,
+      primaryPlatform: primary.platform,
+      extraAccountCount: distinctPlatforms.size - 1,
+      underlying: sorted,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Platform selector (shared by Edit & Remove modals)
+// ---------------------------------------------------------------------------
+
+function PlatformSelector({
+  positions,
+  selected,
+  onSelect,
+}: {
+  positions: Position[];
+  selected: string;
+  onSelect: (platform: string) => void;
+}) {
+  if (positions.length <= 1) return null;
+  return (
+    <div className="mb-4">
+      <label className="mb-1.5 block text-xs font-medium text-text-secondary">Account</label>
+      <div className="flex flex-wrap gap-1.5">
+        {positions.map((p) => (
+          <button
+            key={p.platform}
+            type="button"
+            onClick={() => onSelect(p.platform)}
+            className={cn(
+              'cursor-pointer rounded-lg border px-2.5 py-1 text-2xs font-medium transition-colors',
+              selected === p.platform
+                ? 'border-accent-primary/40 bg-accent-primary/10 text-accent-primary'
+                : 'border-border bg-bg-tertiary text-text-muted hover:text-text-primary hover:border-border-light',
+            )}
+          >
+            {getPlatformLabel(p.platform)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Position Table
+// ---------------------------------------------------------------------------
+
 export default function PositionTable({ positions, onAdd }: { positions: Position[]; onAdd?: () => void }) {
   const { openAssetDetail } = useAssetDetailModal();
   const totalValue = useMemo(() => positions.reduce((sum, p) => sum + p.marketValue, 0), [positions]);
-  const [editing, setEditing] = useState<Position | null>(null);
-  const [removing, setRemoving] = useState<Position | null>(null);
+  const [editingGroup, setEditingGroup] = useState<Position[] | null>(null);
+  const [removingGroup, setRemovingGroup] = useState<Position[] | null>(null);
 
-  // Sort by value descending
-  const sorted = useMemo(() => [...positions].sort((a, b) => b.marketValue - a.marketValue), [positions]);
+  // Group by symbol, then sort by value descending
+  const grouped = useMemo(() => {
+    const groups = groupPositions(positions);
+    return groups.sort((a, b) => b.marketValue - a.marketValue);
+  }, [positions]);
 
   if (positions.length === 0) {
     return <EmptyState title="No positions found" description="Import a portfolio to see your positions." />;
@@ -110,14 +204,11 @@ export default function PositionTable({ positions, onAdd }: { positions: Positio
             </tr>
           </thead>
           <tbody>
-            {sorted.map((pos, idx) => {
+            {grouped.map((pos) => {
               const weight = totalValue > 0 ? (pos.marketValue / totalValue) * 100 : 0;
 
               return (
-                <tr
-                  key={`${pos.symbol}:${pos.platform}:${idx}`}
-                  className="border-t border-border transition-colors hover:bg-bg-hover group"
-                >
+                <tr key={pos.symbol} className="border-t border-border transition-colors hover:bg-bg-hover group">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <SymbolLogo
@@ -137,9 +228,24 @@ export default function PositionTable({ positions, onAdd }: { positions: Positio
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={cn('inline-block rounded px-1.5 py-0.5 text-2xs font-medium', PLATFORM_BADGE)}>
-                      {getPlatformLabel(pos.platform)}
-                    </span>
+                    <div className="group/tip relative inline-block">
+                      <span className={cn('inline-block rounded px-1.5 py-0.5 text-2xs font-medium', PLATFORM_BADGE)}>
+                        {getPlatformLabel(pos.primaryPlatform)}
+                        {pos.extraAccountCount > 0 && (
+                          <span className="ml-1 text-text-muted/70">+{pos.extraAccountCount}</span>
+                        )}
+                      </span>
+                      {pos.extraAccountCount > 0 && (
+                        <div className="pointer-events-none absolute left-0 top-full z-10 mt-1 hidden rounded-lg border border-border bg-bg-secondary px-3 py-2 shadow-lg group-hover/tip:block">
+                          {pos.underlying.map((p) => (
+                            <div key={p.platform} className="whitespace-nowrap text-2xs text-text-secondary py-0.5">
+                              {getPlatformLabel(p.platform)}
+                              <span className="ml-2 text-text-muted">{formatCurrency(p.marketValue)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
                     {formatQuantity(pos.quantity)}
@@ -169,7 +275,7 @@ export default function PositionTable({ positions, onAdd }: { positions: Positio
                       <button
                         type="button"
                         title="Edit position"
-                        onClick={() => setEditing(pos)}
+                        onClick={() => setEditingGroup(pos.underlying)}
                         className="cursor-pointer rounded p-1 text-text-muted hover:text-text-primary hover:bg-bg-tertiary transition-colors"
                       >
                         <svg
@@ -189,7 +295,7 @@ export default function PositionTable({ positions, onAdd }: { positions: Positio
                       <button
                         type="button"
                         title="Remove position"
-                        onClick={() => setRemoving(pos)}
+                        onClick={() => setRemovingGroup(pos.underlying)}
                         className="cursor-pointer rounded p-1 text-text-muted hover:text-error hover:bg-error/10 transition-colors"
                       >
                         <svg
@@ -215,8 +321,8 @@ export default function PositionTable({ positions, onAdd }: { positions: Positio
         </table>
       </div>
 
-      {editing && <EditPositionModal position={editing} onClose={() => setEditing(null)} />}
-      {removing && <RemovePositionModal position={removing} onClose={() => setRemoving(null)} />}
+      {editingGroup && <EditPositionModal positions={editingGroup} onClose={() => setEditingGroup(null)} />}
+      {removingGroup && <RemovePositionModal positions={removingGroup} onClose={() => setRemovingGroup(null)} />}
     </>
   );
 }
@@ -225,11 +331,25 @@ export default function PositionTable({ positions, onAdd }: { positions: Positio
 // Edit Position Modal
 // ---------------------------------------------------------------------------
 
-function EditPositionModal({ position, onClose }: { position: Position; onClose: () => void }) {
-  const [quantity, setQuantity] = useState(String(position.quantity));
-  const [costBasis, setCostBasis] = useState(String(position.costBasis));
+function EditPositionModal({ positions, onClose }: { positions: Position[]; onClose: () => void }) {
+  const [selectedPlatform, setSelectedPlatform] = useState(positions[0].platform);
+  const selected = positions.find((p) => p.platform === selectedPlatform) ?? positions[0];
+
+  const [quantity, setQuantity] = useState(String(selected.quantity));
+  const [costBasis, setCostBasis] = useState(String(selected.costBasis));
   const [error, setError] = useState('');
   const [{ fetching }, editPosition] = useEditPosition();
+
+  const handlePlatformChange = useCallback(
+    (platform: string) => {
+      setSelectedPlatform(platform);
+      const pos = positions.find((p) => p.platform === platform) ?? positions[0];
+      setQuantity(String(pos.quantity));
+      setCostBasis(String(pos.costBasis));
+      setError('');
+    },
+    [positions],
+  );
 
   const handleSave = useCallback(async () => {
     const q = parseFloat(quantity);
@@ -245,15 +365,15 @@ function EditPositionModal({ position, onClose }: { position: Position; onClose:
     setError('');
 
     const result = await editPosition({
-      symbol: position.symbol,
-      platform: position.platform,
+      symbol: selected.symbol,
+      platform: selected.platform,
       input: {
-        symbol: position.symbol,
-        name: position.name,
+        symbol: selected.symbol,
+        name: selected.name,
         quantity: q,
         costBasis: p,
-        assetClass: position.assetClass,
-        platform: position.platform,
+        assetClass: selected.assetClass,
+        platform: selected.platform,
       },
     });
 
@@ -262,15 +382,17 @@ function EditPositionModal({ position, onClose }: { position: Position; onClose:
       return;
     }
     onClose();
-  }, [quantity, costBasis, position, editPosition, onClose]);
+  }, [quantity, costBasis, selected, editPosition, onClose]);
 
   const q = parseFloat(quantity);
   const p = parseFloat(costBasis);
   const totalValue = !isNaN(q) && !isNaN(p) ? q * p : 0;
 
   return (
-    <Modal open onClose={onClose} title={`Edit ${position.symbol}`} maxWidth="max-w-md">
+    <Modal open onClose={onClose} title={`Edit ${selected.symbol}`} maxWidth="max-w-md">
       <div>
+        <PlatformSelector positions={positions} selected={selectedPlatform} onSelect={handlePlatformChange} />
+
         <div className="mb-4 flex gap-3">
           <div className="flex-1">
             <Input
@@ -323,15 +445,18 @@ function EditPositionModal({ position, onClose }: { position: Position; onClose:
 // Remove Position Modal
 // ---------------------------------------------------------------------------
 
-function RemovePositionModal({ position, onClose }: { position: Position; onClose: () => void }) {
+function RemovePositionModal({ positions, onClose }: { positions: Position[]; onClose: () => void }) {
+  const [selectedPlatform, setSelectedPlatform] = useState(positions[0].platform);
+  const selected = positions.find((p) => p.platform === selectedPlatform) ?? positions[0];
+
   const [error, setError] = useState('');
   const [{ fetching }, removePosition] = useRemovePosition();
 
   const handleRemove = useCallback(async () => {
     setError('');
     const result = await removePosition({
-      symbol: position.symbol,
-      platform: position.platform,
+      symbol: selected.symbol,
+      platform: selected.platform,
     });
 
     if (result.error) {
@@ -339,14 +464,23 @@ function RemovePositionModal({ position, onClose }: { position: Position; onClos
       return;
     }
     onClose();
-  }, [position, removePosition, onClose]);
+  }, [selected, removePosition, onClose]);
 
   return (
     <Modal open onClose={onClose} title="Remove Position" maxWidth="max-w-sm">
       <div>
+        <PlatformSelector
+          positions={positions}
+          selected={selectedPlatform}
+          onSelect={(p) => {
+            setSelectedPlatform(p);
+            setError('');
+          }}
+        />
+
         <p className="mb-4 text-sm text-text-secondary">
-          Remove <span className="font-semibold text-text-primary">{position.symbol}</span> (
-          {getPlatformLabel(position.platform)}) from your portfolio?
+          Remove <span className="font-semibold text-text-primary">{selected.symbol}</span> (
+          {getPlatformLabel(selected.platform)}) from your portfolio?
         </p>
 
         {error && <p className="mb-3 text-xs font-medium text-error">{error}</p>}
