@@ -11,7 +11,7 @@ globs: ["src/agents/**/*.ts", "src/brain/**/*.ts", "src/core/agent-runtime.ts"]
 - Agents are NOT separate processes — they're profiles within AgentRuntime that share the ProviderRouter.
 
 ## Agent Scoping
-- Research Analyst: OpenBB SDK, equity research tools, news tools, Keelson enrichment, technicals.
+- Research Analyst: Jintel enrichment, equity research tools, news tools, technicals.
 - Strategist: Brain (persona, memory, emotion), research results, risk reports. The only agent with persistent cognitive state.
 - Risk Manager: Exposure analyzer, concentration scoring, correlation detection, earnings calendar, drawdown tracker.
 - Trader: Scraper (Playwright), platform login/logout, position tracking, order execution (Phase 2).

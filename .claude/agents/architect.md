@@ -22,7 +22,7 @@ Reviewer — ensure all code changes align with the architecture rules in `.clau
 ### Data Patterns
 - All state in `data/` as JSONL/JSON — no database
 - Default/override pattern for persona and agent configs
-- PII redaction before any external API call (Keelson)
+- PII redaction before any external API call (Jintel)
 - Zod schemas for all config and external data validation
 
 ### Extension Points

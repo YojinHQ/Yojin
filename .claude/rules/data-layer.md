@@ -1,25 +1,24 @@
 ---
-description: Rules for the OpenBB data layer and research tools
-globs: ["src/openbb/**/*.ts", "src/research/**/*.ts", "src/news/**/*.ts"]
+description: Rules for the data layer, Jintel integration, and signal ingestion
+globs: ["src/jintel/**/*.ts", "src/signals/**/*.ts", "src/data-sources/**/*.ts"]
 ---
 
 # Data Layer Rules
 
-## OpenBB SDK
-- TypeScript-native, in-process. No Python sidecar, no subprocess calls.
-- Each asset class has its own SDK module (`equity/`, `crypto/`, `currency/`, `commodity/`, `economy/`).
-- SymbolIndex provides zero-latency local lookups — use it instead of API calls for symbol resolution.
+## Jintel Integration
+- All market data, news, research, technicals, and sentiment flow through `@yojinhq/jintel-client`.
+- Batch enrichment via `src/jintel/` — always PII-redact before Jintel API calls.
+- Each asset class is handled by Jintel's entity/sub-graph model (market, technicals, news, research, sentiment, risk, regulatory, derivatives).
 
-## Research Tools
-- All research tools register with ToolRegistry via `src/research/adapter.ts`.
-- Tools are scoped to the Research Analyst agent — other agents access research results through shared state.
-- Technicals formulas work across asset classes: `SMA(CLOSE('AAPL', '1d'), 50)`.
+## Signal Ingestion
+- Background pipeline in `src/signals/` pulls from Jintel, deduplicates entries by content hash, extracts ticker mentions via `TickerExtractor`, and writes to the local JSONL archive.
+- Agent tools (`globSignals`, `grepSignals`, `readSignals`) search the archive — not the live API.
+- Signals are first-class data points with type, tickers, sources, confidence, and link type (DIRECT/INDIRECT/MACRO).
 
-## News System
-- Layer 1 (RSS collector) runs in the background, deduplicates via content hash, writes to JSONL archive.
-- Layer 2 (OpenBB API) is real-time, on-demand. Results piggybacked into the archive.
-- Agent tools (`globNews`, `grepNews`, `readNews`) search the archive — not the live API.
+## Data Sources
+- Pluggable data-feed framework in `src/data-sources/` — CLI tools, MCP servers, REST APIs under uniform DataQuery/DataResult interface.
+- New data sources register via the data source registry and are queryable through agent tools.
 
 ## Credential Mapping
-- OpenBB API credentials are mapped through `src/openbb/credential-map.ts`.
-- Config keys in `data/config/openbb.json` map to provider-specific API keys (e.g., FMP, Benzinga, EIA, FRED).
+- API credentials are stored in the encrypted vault and injected at the transport layer.
+- Never hardcode keys or include them in LLM prompts.
