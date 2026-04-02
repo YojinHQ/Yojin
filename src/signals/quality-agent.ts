@@ -30,12 +30,15 @@ export interface QualityVerdict {
   sentiment: SignalSentiment;
   outputType: SignalOutputType;
   qualityScore: number;
-  /** If duplicate, the title (or tier1) of the existing signal it duplicates. */
-  duplicateOf?: string;
+  /** If duplicate, the ID of the existing signal it duplicates. */
+  duplicateOfId?: string;
+  /** If causally related to an existing signal, its ID. */
+  relatedToId?: string;
 }
 
 /** Lightweight context for recent signals — passed to the LLM for duplicate detection. */
 export interface RecentSignalContext {
+  id: string;
   title: string;
   tier1?: string;
   publishedAt: string;
@@ -105,7 +108,7 @@ export class QualityAgent {
     if (recentSignals && recentSignals.length > 0) {
       const lines = recentSignals
         .slice(0, 10)
-        .map((s) => `- "${s.tier1 ?? s.title}" (${s.publishedAt.slice(0, 16)})`)
+        .map((s) => `- [${s.id}] "${s.tier1 ?? s.title}" (${s.publishedAt.slice(0, 16)})`)
         .join('\n');
       recentSection = `\n\n<recent_signals>\n${lines}\n</recent_signals>`;
     }
@@ -132,7 +135,8 @@ Evaluate this signal and respond with a JSON object only — no markdown, no ext
   "verdict": "KEEP or DROP",
   "dropReason": "false_match | irrelevant | duplicate | low_quality | null",
   "qualityScore": 0-100,
-  "duplicateOf": "title of the existing signal this duplicates, or null"
+  "duplicateOfId": "ID of the existing signal this duplicates (from [id] prefix in <recent_signals>), or null",
+  "relatedToId": "ID of a causally related signal in <recent_signals>, or null"
 }
 
 ## Verdict rules
@@ -146,7 +150,9 @@ CRITICAL: if your tier2 would say "not related to [company]" or "this is about [
 
 **DROP with dropReason "irrelevant"** when the content is NOT about finance, markets, or the company/asset. Examples: music, entertainment, sports, recipes, games, website boilerplate, navigation menus, cookie notices, tracking pixels.
 
-**DROP with dropReason "duplicate"** when the signal covers the SAME event already in <recent_signals>. Same fact from a different source or with different wording = duplicate. A genuinely new development about the same ticker is NOT a duplicate. Set "duplicateOf" to the matching signal's title. If no <recent_signals>, never use this reason.
+**DROP with dropReason "duplicate"** when the signal covers the SAME event already in <recent_signals>. Same fact from a different source or with different wording = duplicate. A genuinely new development about the same ticker is NOT a duplicate. Set "duplicateOfId" to the matching signal's ID (the [id] prefix). If no <recent_signals>, never use this reason.
+
+**relatedToId**: If this signal is causally connected to one in <recent_signals> (e.g. earnings report → analyst reaction, FDA approval → stock move), set "relatedToId" to that signal's ID. Do NOT set this for signals that merely share a ticker — only for events that form a narrative chain. If no causal link, set null.
 
 **DROP with dropReason "low_quality"** when qualityScore < ${this.minQualityScore}. Low quality = no material investment relevance, clickbait, generic commentary, old news rehashed, ad content.
 
@@ -189,13 +195,18 @@ CRITICAL: if your tier2 would say "not related to [company]" or "this is about [
     const dropReasonRaw = typeof obj['dropReason'] === 'string' ? obj['dropReason'].toLowerCase().trim() : null;
     const qualityScoreRaw = typeof obj['qualityScore'] === 'number' ? obj['qualityScore'] : 50;
     const qualityScore = Math.max(0, Math.min(100, Math.round(qualityScoreRaw)));
-    const duplicateOf = typeof obj['duplicateOf'] === 'string' ? obj['duplicateOf'].trim() || undefined : undefined;
+    const duplicateOfId =
+      typeof obj['duplicateOfId'] === 'string' ? obj['duplicateOfId'].trim() || undefined : undefined;
+    const relatedToId = typeof obj['relatedToId'] === 'string' ? obj['relatedToId'].trim() || undefined : undefined;
 
     if (!tier1) throw new Error('Missing tier1 in LLM response');
     if (!tier2) throw new Error('Missing tier2 in LLM response');
     if (!VALID_SENTIMENTS.has(sentimentRaw)) throw new Error(`Invalid sentiment: ${sentimentRaw}`);
 
-    // Normalize verdict — default to KEEP if unrecognized
+    // Normalize verdict — warn and default to KEEP if unrecognized
+    if (verdictRaw && !VALID_VERDICTS.has(verdictRaw)) {
+      logger.warn('QualityAgent: unrecognized verdict from LLM, defaulting to KEEP', { verdict: verdictRaw });
+    }
     let verdict: 'KEEP' | 'DROP' = VALID_VERDICTS.has(verdictRaw) ? (verdictRaw as 'KEEP' | 'DROP') : 'KEEP';
     let dropReason: DropReason | undefined =
       dropReasonRaw && VALID_DROP_REASONS.has(dropReasonRaw) ? (dropReasonRaw as DropReason) : undefined;
@@ -223,7 +234,8 @@ CRITICAL: if your tier2 would say "not related to [company]" or "this is about [
       sentiment,
       outputType,
       qualityScore,
-      duplicateOf: verdict === 'DROP' && dropReason === 'duplicate' ? duplicateOf : undefined,
+      duplicateOfId: verdict === 'DROP' && dropReason === 'duplicate' ? duplicateOfId : undefined,
+      relatedToId: verdict === 'KEEP' ? relatedToId : undefined,
     };
   }
 

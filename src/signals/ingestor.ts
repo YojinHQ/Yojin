@@ -444,7 +444,7 @@ export class SignalIngestor {
           for (const r of recentByTicker.get(asset.ticker) ?? []) {
             if (!seen.has(r.id) && r.id !== signal.id) {
               seen.add(r.id);
-              recentContext.push({ title: r.title, tier1: r.tier1, publishedAt: r.publishedAt });
+              recentContext.push({ id: r.id, title: r.title, tier1: r.tier1, publishedAt: r.publishedAt });
             }
           }
         }

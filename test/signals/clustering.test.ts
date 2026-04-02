@@ -110,7 +110,7 @@ describe('SignalClustering', () => {
       ...KEEP_VERDICT,
       verdict: 'DROP',
       dropReason: 'duplicate',
-      duplicateOf: existingSignal.title,
+      duplicateOfId: existingSignal.id,
     };
     const qualityAgent = { evaluate: vi.fn().mockResolvedValue(duplicateVerdict) };
 
@@ -132,11 +132,10 @@ describe('SignalClustering', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 3. KEEP + same ticker+day — links to existing group
+  // 3. KEEP + relatedToId → links to existing group
   // -------------------------------------------------------------------------
 
-  it('links signal to existing group when same ticker+day', async () => {
-    // Pre-create an existing signal with a groupId
+  it('links signal to existing group when LLM returns relatedToId', async () => {
     const existingSignal = makeSignal({
       id: 'existing-002',
       contentHash: 'hash-e2',
@@ -145,7 +144,6 @@ describe('SignalClustering', () => {
     });
     await archive.append(existingSignal);
 
-    // Create the group in the group archive
     await groupArchive.appendUpdate({
       id: 'grp-existing',
       signalIds: ['existing-002'],
@@ -165,14 +163,12 @@ describe('SignalClustering', () => {
       title: 'Apple faces supply chain disruption (follow-up)',
     });
 
-    const qualityAgent = { evaluate: vi.fn().mockResolvedValue(KEEP_VERDICT) };
+    const relatedVerdict: QualityVerdict = { ...KEEP_VERDICT, relatedToId: 'existing-002' };
+    const qualityAgent = { evaluate: vi.fn().mockResolvedValue(relatedVerdict) };
 
     const clustering = new SignalClustering({ archive, groupArchive, qualityAgent });
     await clustering.processSignals([incomingSignal]);
 
-    expect(qualityAgent.evaluate).toHaveBeenCalledOnce();
-
-    // Incoming signal should be linked to the existing group
     const allSignals = await archive.query({ tickers: ['AAPL'] });
     const incomingStored = allSignals.find((s) => s.id === 'incoming-002');
     expect(incomingStored).toBeDefined();
@@ -181,15 +177,14 @@ describe('SignalClustering', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 4. KEEP + same ticker+day, no existing group — creates new group
+  // 4. KEEP + relatedToId, no existing group → creates new group
   // -------------------------------------------------------------------------
 
-  it('creates new group when same-day signal exists without a group', async () => {
+  it('creates new group when LLM returns relatedToId and no group exists', async () => {
     const existingSignal = makeSignal({
       id: 'existing-003',
       contentHash: 'hash-e3',
       version: 1,
-      // Same day, no groupId
     });
     await archive.append(existingSignal);
 
@@ -199,14 +194,12 @@ describe('SignalClustering', () => {
       title: 'Apple faces supply chain disruption (follow-up)',
     });
 
-    const qualityAgent = { evaluate: vi.fn().mockResolvedValue(KEEP_VERDICT) };
+    const relatedVerdict: QualityVerdict = { ...KEEP_VERDICT, relatedToId: 'existing-003' };
+    const qualityAgent = { evaluate: vi.fn().mockResolvedValue(relatedVerdict) };
 
     const clustering = new SignalClustering({ archive, groupArchive, qualityAgent });
     await clustering.processSignals([incomingSignal]);
 
-    expect(qualityAgent.evaluate).toHaveBeenCalledOnce();
-
-    // A new group should have been created
     const groups = await groupArchive.query({});
     expect(groups).toHaveLength(1);
     expect(groups[0].signalIds).toContain('existing-003');
@@ -214,30 +207,24 @@ describe('SignalClustering', () => {
     expect(groups[0].tickers).toContain('AAPL');
     expect(groups[0].id).toMatch(/^grp-/);
 
-    // Both signals should have the groupId
     const allSignals = await archive.query({ tickers: ['AAPL'] });
     const existingUpdated = allSignals.find((s) => s.id === 'existing-003');
     const incomingStored = allSignals.find((s) => s.id === 'incoming-003');
 
-    expect(existingUpdated).toBeDefined();
     expect(existingUpdated!.groupId).toBe(groups[0].id);
-
-    expect(incomingStored).toBeDefined();
     expect(incomingStored!.groupId).toBe(groups[0].id);
     expect(incomingStored!.tier1).toBe(KEEP_VERDICT.tier1);
   });
 
   // -------------------------------------------------------------------------
-  // 4b. KEEP + different day — independent signal
+  // 4b. KEEP without relatedToId → independent signal (no spurious grouping)
   // -------------------------------------------------------------------------
 
-  it('creates independent signal when no same-day candidate exists', async () => {
+  it('does not group unrelated same-day signals when LLM returns no relatedToId', async () => {
     const existingSignal = makeSignal({
       id: 'existing-004',
       contentHash: 'hash-e4',
       version: 1,
-      // Published on a different day
-      publishedAt: '2026-03-24T10:00:00.000Z',
     });
     await archive.append(existingSignal);
 
@@ -247,16 +234,15 @@ describe('SignalClustering', () => {
       title: 'Unrelated Apple product launch announcement',
     });
 
+    // No relatedToId — LLM says these are unrelated
     const qualityAgent = { evaluate: vi.fn().mockResolvedValue(KEEP_VERDICT) };
 
     const clustering = new SignalClustering({ archive, groupArchive, qualityAgent });
     await clustering.processSignals([incomingSignal]);
 
-    // No groups created
     const groups = await groupArchive.query({});
     expect(groups).toHaveLength(0);
 
-    // Incoming signal stored independently
     const allSignals = await archive.query({ tickers: ['AAPL'] });
     const stored = allSignals.find((s) => s.id === 'incoming-004');
     expect(stored).toBeDefined();

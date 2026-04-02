@@ -133,9 +133,9 @@ export class SignalClustering {
     const verdict = await this.evaluateWithSemaphore(signal, recentSignals);
 
     if (verdict.verdict === 'DROP') {
-      if (verdict.dropReason === 'duplicate' && verdict.duplicateOf) {
+      if (verdict.dropReason === 'duplicate' && verdict.duplicateOfId) {
         // Merge sources into the existing signal instead of dropping entirely
-        await this.mergeIntoExisting(signal, recentSignals, verdict.duplicateOf);
+        await this.mergeIntoExisting(signal, recentSignals, verdict.duplicateOfId);
       } else {
         logger.info('Quality agent dropped signal via clustering', {
           signalId: signal.id,
@@ -155,62 +155,68 @@ export class SignalClustering {
       sentiment: verdict.sentiment,
       outputType: verdict.outputType,
       qualityScore: verdict.qualityScore,
+      isFalseMatch: false,
+      isIrrelevant: false,
+      isDuplicate: false,
       version: (signal.version ?? 1) + 1,
     };
 
-    // Link as related if there are recent signals for the same ticker+day
-    const day = signal.publishedAt.slice(0, 10);
-    const sameDaySignal = recentSignals.find((c) => c.publishedAt.slice(0, 10) === day);
-    if (sameDaySignal) {
-      const allTickers = Array.from(
-        new Set([...sameDaySignal.assets.map((a) => a.ticker), ...signal.assets.map((a) => a.ticker)]),
-      );
-      const now = new Date().toISOString();
+    // Link as related only when the LLM explicitly identifies a causal connection
+    if (verdict.relatedToId) {
+      const relatedSignal = recentSignals.find((c) => c.id === verdict.relatedToId);
+      if (relatedSignal) {
+        const allTickers = Array.from(
+          new Set([...relatedSignal.assets.map((a) => a.ticker), ...signal.assets.map((a) => a.ticker)]),
+        );
+        const now = new Date().toISOString();
 
-      if (sameDaySignal.groupId) {
-        // Add to existing group
-        enriched.groupId = sameDaySignal.groupId;
-        const group = await this.options.groupArchive.getById(sameDaySignal.groupId);
-        if (group) {
-          const updatedGroup: SignalGroup = {
-            ...group,
-            signalIds: Array.from(new Set([...group.signalIds, signal.id])),
-            tickers: Array.from(new Set([...group.tickers, ...allTickers])),
-            lastEventAt: signal.publishedAt > group.lastEventAt ? signal.publishedAt : group.lastEventAt,
-            version: group.version + 1,
+        if (relatedSignal.groupId) {
+          // Add to existing group
+          enriched.groupId = relatedSignal.groupId;
+          const group = await this.options.groupArchive.getById(relatedSignal.groupId);
+          if (group) {
+            const updatedGroup: SignalGroup = {
+              ...group,
+              signalIds: Array.from(new Set([...group.signalIds, signal.id])),
+              tickers: Array.from(new Set([...group.tickers, ...allTickers])),
+              lastEventAt: signal.publishedAt > group.lastEventAt ? signal.publishedAt : group.lastEventAt,
+              version: group.version + 1,
+              updatedAt: now,
+            };
+            await this.options.groupArchive.appendUpdate(updatedGroup);
+          }
+        } else {
+          // Create a new group linking both signals
+          const groupId = `grp-${randomUUID()}`;
+          enriched.groupId = groupId;
+
+          const existingTier1 = relatedSignal.tier1 ?? relatedSignal.title;
+          const incomingTier1 = enriched.tier1 ?? signal.title;
+
+          const group: SignalGroup = {
+            id: groupId,
+            signalIds: [relatedSignal.id, signal.id],
+            tickers: allTickers,
+            summary: `${existingTier1} → ${incomingTier1}`,
+            outputType: 'INSIGHT',
+            firstEventAt:
+              relatedSignal.publishedAt < signal.publishedAt ? relatedSignal.publishedAt : signal.publishedAt,
+            lastEventAt:
+              relatedSignal.publishedAt > signal.publishedAt ? relatedSignal.publishedAt : signal.publishedAt,
+            version: 1,
+            createdAt: now,
             updatedAt: now,
           };
-          await this.options.groupArchive.appendUpdate(updatedGroup);
+          await this.options.groupArchive.append(group);
+
+          // Update existing signal with groupId
+          const updatedExisting: Signal = {
+            ...relatedSignal,
+            groupId,
+            version: (relatedSignal.version ?? 1) + 1,
+          };
+          await this.options.archive.appendUpdate(updatedExisting);
         }
-      } else {
-        // Create a new group linking both signals
-        const groupId = `grp-${randomUUID()}`;
-        enriched.groupId = groupId;
-
-        const existingTier1 = sameDaySignal.tier1 ?? sameDaySignal.title;
-        const incomingTier1 = enriched.tier1 ?? signal.title;
-
-        const group: SignalGroup = {
-          id: groupId,
-          signalIds: [sameDaySignal.id, signal.id],
-          tickers: allTickers,
-          summary: `${existingTier1} → ${incomingTier1}`,
-          outputType: 'INSIGHT',
-          firstEventAt: sameDaySignal.publishedAt < signal.publishedAt ? sameDaySignal.publishedAt : signal.publishedAt,
-          lastEventAt: sameDaySignal.publishedAt > signal.publishedAt ? sameDaySignal.publishedAt : signal.publishedAt,
-          version: 1,
-          createdAt: now,
-          updatedAt: now,
-        };
-        await this.options.groupArchive.append(group);
-
-        // Update existing signal with groupId
-        const updatedExisting: Signal = {
-          ...sameDaySignal,
-          groupId,
-          version: (sameDaySignal.version ?? 1) + 1,
-        };
-        await this.options.archive.appendUpdate(updatedExisting);
       }
     }
 
@@ -221,12 +227,9 @@ export class SignalClustering {
   // Private: merge sources into existing signal (duplicate detected by quality agent)
   // ---------------------------------------------------------------------------
 
-  private async mergeIntoExisting(incoming: Signal, candidates: Signal[], duplicateOfTitle: string): Promise<void> {
-    // Find the existing signal by matching title/tier1
-    const normalizedTarget = duplicateOfTitle.trim().toLowerCase();
-    const existing = candidates.find(
-      (c) => c.title.trim().toLowerCase() === normalizedTarget || c.tier1?.trim().toLowerCase() === normalizedTarget,
-    );
+  private async mergeIntoExisting(incoming: Signal, candidates: Signal[], duplicateOfId: string): Promise<void> {
+    // Find the existing signal by ID (reliable match — no LLM paraphrasing risk)
+    const existing = candidates.find((c) => c.id === duplicateOfId);
 
     if (!existing) {
       // Can't find the target — store as-is rather than losing data
@@ -260,6 +263,7 @@ export class SignalClustering {
 
   private async evaluateWithSemaphore(signal: Signal, recentSignals: Signal[]): Promise<QualityVerdict> {
     const context = recentSignals.map((s) => ({
+      id: s.id,
       title: s.title,
       tier1: s.tier1,
       publishedAt: s.publishedAt,
