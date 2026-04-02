@@ -26,6 +26,7 @@ import { setInsightsOrchestrator } from '../api/graphql/resolvers/insights.js';
 import { setMicroInsightStore } from '../api/graphql/resolvers/micro-insights.js';
 import { setOnboardingClaudeCodeProvider, setOnboardingProvider } from '../api/graphql/resolvers/onboarding.js';
 import { setPortfolioChangedCallback } from '../api/graphql/resolvers/portfolio.js';
+import { onAppDataCleared } from '../api/graphql/resolvers/profile.js';
 import { setWatchlistChangedCallback } from '../api/graphql/resolvers/watchlist.js';
 import { buildContext } from '../composition.js';
 import { AgentRuntime } from '../core/agent-runtime.js';
@@ -314,6 +315,10 @@ async function startGateway(): Promise<void> {
     curatedSignalStore: services.curatedSignalStore,
   });
   scheduler.start();
+
+  // Reset scheduler in-memory state when user clears app data — prevents stale
+  // micro registry tickers from regenerating snap/actions immediately after wipe.
+  onAppDataCleared(() => scheduler.reset());
 
   // Trigger micro flow when portfolio changes — fetches intel for the changed tickers only
   setPortfolioChangedCallback((tickers) => scheduler.triggerMicroFlow(tickers));
