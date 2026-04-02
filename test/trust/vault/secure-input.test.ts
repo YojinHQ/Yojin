@@ -39,15 +39,15 @@ describe('createSecretTools', () => {
 
       const storeTool = tools.find((t) => t.name === 'store_credential')!;
       const result = await storeTool.execute({
-        key: 'KEELSON_API_KEY',
-        description: 'Keelson API key for enrichment',
+        key: 'JINTEL_API_KEY',
+        description: 'Jintel API key for enrichment',
       });
 
       // Value stored in vault
-      expect(vault.store['KEELSON_API_KEY']).toBe('super-secret-api-key-123');
+      expect(vault.store['JINTEL_API_KEY']).toBe('super-secret-api-key-123');
 
       // Tool result contains confirmation but NEVER the value
-      expect(result.content).toContain('KEELSON_API_KEY');
+      expect(result.content).toContain('JINTEL_API_KEY');
       expect(result.content).toContain('stored successfully');
       expect(result.content).not.toContain('super-secret-api-key-123');
       expect(result.isError).toBeUndefined();

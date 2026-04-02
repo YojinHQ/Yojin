@@ -9,7 +9,7 @@ function action(url: string): ProposedAction {
 
 describe('EgressGuard', () => {
   const guard = new EgressGuard({
-    allowedDomains: ['api.anthropic.com', 'api.keelson.dev', 'localhost'],
+    allowedDomains: ['api.anthropic.com', 'api.jintel.dev', 'localhost'],
   });
 
   it('passes when no url in action', () => {
@@ -18,7 +18,7 @@ describe('EgressGuard', () => {
 
   it('passes allowed domains', () => {
     expect(guard.check(action('https://api.anthropic.com/v1/messages')).pass).toBe(true);
-    expect(guard.check(action('https://api.keelson.dev/graphql')).pass).toBe(true);
+    expect(guard.check(action('https://api.jintel.dev/graphql')).pass).toBe(true);
     expect(guard.check(action('http://localhost:3000/health')).pass).toBe(true);
   });
 
