@@ -11,7 +11,7 @@ fi
 
 # Only gate on git commit commands (not git commit --amend which is already reviewed)
 if echo "$tool_command" | grep -qE '(^|&&|\|\||;|\()\s*git\s+commit\b' && ! echo "$tool_command" | grep -q -- '--amend'; then
-  echo "STOP: Before committing, run /regression-dog to review staged changes for regressions. Do not proceed with the commit until the regression review is complete and shared with the user."
+  echo "STOP: Before committing, run /regression-dog to review staged changes for regressions. Do not proceed with the commit until the regression review is complete and shared with the user." >&2
   exit 2
 fi
 
