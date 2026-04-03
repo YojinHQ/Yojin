@@ -42,6 +42,7 @@ WORKDIR /app
 COPY --from=build /app/dist/ ./dist/
 COPY --from=build /app/node_modules/ ./node_modules/
 COPY --from=build /app/package.json ./
+COPY --from=build /app/package.json ./dist/
 COPY --from=build /app/data/default/ ./data/default/
 COPY --from=build /app/apps/web/dist/ ./apps/web/dist/
 COPY --from=build /app/providers/ ./providers/
