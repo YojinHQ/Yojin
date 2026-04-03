@@ -1100,7 +1100,7 @@ function SignalRow({
 
             <div className="flex items-center gap-3 text-xs text-text-muted flex-wrap">
               <span>Published: {date.toLocaleString()}</span>
-              <span>· Curated: {new Date(curated.curatedAt).toLocaleString()}</span>
+              <span>· Ingested: {new Date(signal.ingestedAt).toLocaleString()}</span>
               <span>· Source: {signal.sources.map((s) => s.name).join(', ')}</span>
             </div>
 

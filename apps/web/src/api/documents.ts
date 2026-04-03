@@ -830,14 +830,16 @@ export const CURATED_SIGNALS_QUERY = gql`
         version
       }
       scores {
-        signalId
         ticker
-        exposureWeight
-        typeRelevance
         compositeScore
       }
-      curatedAt
       feedTarget
+      severity
+      assessment {
+        verdict
+        thesisAlignment
+        actionability
+      }
     }
   }
 `;
@@ -1270,12 +1272,13 @@ export const INTEL_FEED_QUERY = gql`
         ticker
         compositeScore
       }
-      curatedAt
       feedTarget
       severity
-      verdict
-      thesisAlignment
-      actionability
+      assessment {
+        verdict
+        thesisAlignment
+        actionability
+      }
     }
   }
 `;

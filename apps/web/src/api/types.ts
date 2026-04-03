@@ -998,19 +998,20 @@ export interface OnWorkflowProgressVariables {
 // ---------------------------------------------------------------------------
 
 export interface PortfolioRelevanceScore {
-  signalId: string;
   ticker: string;
-  exposureWeight: number;
-  typeRelevance: number;
   compositeScore: number;
 }
 
 export interface CuratedSignal {
   signal: Signal;
   scores: PortfolioRelevanceScore[];
-  curatedAt: string;
   feedTarget: FeedTarget;
   severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  assessment: {
+    verdict: 'CRITICAL' | 'IMPORTANT' | 'NOISE';
+    thesisAlignment: 'SUPPORTS' | 'CHALLENGES' | 'NEUTRAL';
+    actionability: number;
+  } | null;
 }
 
 export interface CuratedSignalsQueryResult {
@@ -1060,35 +1061,8 @@ export interface Action {
 // Intel Feed
 // ---------------------------------------------------------------------------
 
-export interface IntelFeedSignal {
-  id: string;
-  title: string;
-  type: string;
-  sentiment: string | null;
-  outputType: string | null;
-  tickers: string[];
-  publishedAt: string;
-  ingestedAt: string;
-  confidence: number;
-  link: string | null;
-  sources: { name: string; reliability: number }[];
-  tier1: string | null;
-  tier2: string | null;
-}
-
-export interface IntelFeedCuratedSignal {
-  signal: IntelFeedSignal;
-  scores: { ticker: string; compositeScore: number }[];
-  curatedAt: string;
-  feedTarget: FeedTarget;
-  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
-  verdict: 'CRITICAL' | 'IMPORTANT' | 'NOISE' | null;
-  thesisAlignment: 'SUPPORTS' | 'CHALLENGES' | 'NEUTRAL' | null;
-  actionability: number | null;
-}
-
 export interface IntelFeedQueryResult {
-  curatedSignals: IntelFeedCuratedSignal[];
+  curatedSignals: CuratedSignal[];
 }
 
 export interface IntelFeedQueryVariables {

@@ -939,26 +939,24 @@ export const typeDefs = /* GraphQL */ `
   # ---------------------------------------------------------------------------
 
   type PortfolioRelevanceScore {
-    signalId: String!
     ticker: String!
-    exposureWeight: Float!
-    typeRelevance: Float!
     compositeScore: Float!
   }
 
   type CuratedSignal {
     signal: Signal!
     scores: [PortfolioRelevanceScore!]!
-    curatedAt: String!
     feedTarget: FeedTarget!
     "Derived severity for ranking and feed presentation"
     severity: SignalSeverity!
-    "Agent assessment verdict (CRITICAL/IMPORTANT/NOISE) — null if not yet assessed"
-    verdict: SignalVerdict
-    "Alignment with investment thesis — null if not yet assessed"
-    thesisAlignment: ThesisAlignment
-    "How actionable this signal is (0-1) — null if not yet assessed"
-    actionability: Float
+    "Agent assessment summary — null if not yet assessed"
+    assessment: CuratedSignalAssessment
+  }
+
+  type CuratedSignalAssessment {
+    verdict: SignalVerdict!
+    thesisAlignment: ThesisAlignment!
+    actionability: Float!
   }
 
   type CurationStatus {

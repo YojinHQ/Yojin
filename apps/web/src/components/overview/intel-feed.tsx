@@ -37,7 +37,6 @@ interface IntelFeedItem {
   link: string | null;
   data?: DataRow[];
   verdict: 'CRITICAL' | 'IMPORTANT' | 'NOISE' | null;
-  thesisAlignment: 'SUPPORTS' | 'CHALLENGES' | 'NEUTRAL' | null;
 }
 
 /** Map signal type to an icon name. */
@@ -690,8 +689,7 @@ function IntelFeedContent() {
               ]
             : undefined,
         feedTarget: cs.feedTarget ?? 'PORTFOLIO',
-        verdict: cs.verdict ?? null,
-        thesisAlignment: cs.thesisAlignment ?? null,
+        verdict: cs.assessment?.verdict ?? null,
       };
     });
 

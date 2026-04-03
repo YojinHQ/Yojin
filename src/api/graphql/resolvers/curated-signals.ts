@@ -17,7 +17,7 @@ import { createSubsystemLogger } from '../../../logging/logger.js';
 import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { SignalArchive } from '../../../signals/archive.js';
 import type { AssessmentStore } from '../../../signals/curation/assessment-store.js';
-import type { SignalAssessment } from '../../../signals/curation/assessment-types.js';
+import type { SignalAssessment, SignalVerdict, ThesisAlignment } from '../../../signals/curation/assessment-types.js';
 import type { CurationConfig, FeedTarget } from '../../../signals/curation/types.js';
 import { DEFAULT_SPAM_PATTERNS, deduplicateByTitle, filterSignals } from '../../../signals/signal-filter.js';
 import type { Signal, SignalOutputType } from '../../../signals/types.js';
@@ -64,22 +64,20 @@ export function setCuratedWatchlistStore(s: WatchlistStore): void {
 // ---------------------------------------------------------------------------
 
 interface PortfolioRelevanceScoreGql {
-  signalId: string;
   ticker: string;
-  exposureWeight: number;
-  typeRelevance: number;
   compositeScore: number;
 }
 
 interface CuratedSignalGql {
   signal: SignalGql;
   scores: PortfolioRelevanceScoreGql[];
-  curatedAt: string;
   feedTarget: FeedTarget;
   severity: SignalSeverity;
-  verdict: string | null;
-  thesisAlignment: string | null;
-  actionability: number | null;
+  assessment: {
+    verdict: SignalVerdict;
+    thesisAlignment: ThesisAlignment;
+    actionability: number;
+  } | null;
 }
 
 interface CurationStatusGql {
@@ -300,18 +298,18 @@ export async function curatedSignalsResolver(
     return {
       signal: signalGql,
       scores: tickers.map((ticker) => ({
-        signalId: t.signal.id,
         ticker,
-        exposureWeight: 0,
-        typeRelevance: 0,
         compositeScore: assessment?.relevanceScore ?? t.signal.confidence,
       })),
-      curatedAt: t.signal.ingestedAt,
       feedTarget: t.feedTarget,
       severity,
-      verdict: assessment?.verdict ?? null,
-      thesisAlignment: assessment?.thesisAlignment ?? null,
-      actionability: assessment?.actionability ?? null,
+      assessment: assessment
+        ? {
+            verdict: assessment.verdict,
+            thesisAlignment: assessment.thesisAlignment,
+            actionability: assessment.actionability,
+          }
+        : null,
     };
   });
 }
