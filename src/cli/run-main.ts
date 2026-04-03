@@ -4,7 +4,8 @@
 
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { startChat } from './chat.js';
 import { setupToken } from './setup-token.js';
@@ -46,7 +47,7 @@ import { CurationConfigSchema } from '../signals/curation/types.js';
 import { QualityAgent } from '../signals/quality-agent.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
 
-const pkgPath = resolve(process.cwd(), 'package.json');
+const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../package.json');
 const { version: PKG_VERSION } = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version: string };
 
 export async function runMain(args: string[]): Promise<void> {

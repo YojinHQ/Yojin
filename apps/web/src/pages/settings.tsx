@@ -333,7 +333,12 @@ function ModelPicker() {
     setKeyError(null);
     setKeySuccess(false);
     try {
-      const res = await saveCredential({ provider, apiKey });
+      const trimmedKey = apiKey.trim();
+      if (!trimmedKey) {
+        setKeyError('API key cannot be empty');
+        return;
+      }
+      const res = await saveCredential({ provider, apiKey: trimmedKey });
       if (res.error) {
         setKeyError(res.error.message || 'Failed to save');
         return;
@@ -357,6 +362,10 @@ function ModelPicker() {
       const res = await removeCredential({ provider });
       if (res.error) {
         setKeyError(res.error.message || 'Failed to remove');
+        return;
+      }
+      if (!res.data?.removeAiCredential.success) {
+        setKeyError(res.data?.removeAiCredential.error || 'Failed to remove');
         return;
       }
       reexecuteConfig({ requestPolicy: 'network-only' });
