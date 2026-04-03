@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { SymbolLogo } from '../common/symbol-logo';
 import Button from '../common/button';
 import { cn } from '../../lib/utils';
+import { formatPrice } from '../../lib/format';
 import type { WatchlistEntry } from '../../api';
 
 // ---------------------------------------------------------------------------
@@ -81,9 +82,7 @@ export function SymbolCard({ entry, onRemove, removing }: SymbolCardProps) {
       <div className="mt-3 flex items-end justify-between">
         {hasQuote ? (
           <>
-            <span className="text-lg font-semibold text-text-primary">
-              ${(entry.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
+            <span className="text-lg font-semibold text-text-primary">{formatPrice(entry.price ?? 0)}</span>
             <span
               className={cn('text-sm font-medium', isUp ? 'text-success' : isDown ? 'text-error' : 'text-text-muted')}
             >

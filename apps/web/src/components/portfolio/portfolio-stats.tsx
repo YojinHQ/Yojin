@@ -1,16 +1,6 @@
 import type { PortfolioSnapshot } from '../../api/types';
 import { cn } from '../../lib/utils';
-
-function formatCurrency(n: number): string {
-  const abs = Math.abs(n);
-  const formatted = abs.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  return n < 0 ? `-${formatted}` : formatted;
-}
+import { formatPrice } from '../../lib/format';
 
 function formatPercent(n: number): string {
   const sign = n > 0 ? '+' : '';
@@ -25,11 +15,11 @@ export default function PortfolioStats({ portfolio }: PortfolioStatsProps) {
   const stats = [
     {
       label: 'Total Value',
-      value: portfolio ? formatCurrency(portfolio.totalValue) : '--',
+      value: portfolio ? formatPrice(portfolio.totalValue) : '--',
     },
     {
       label: 'Total P&L',
-      value: portfolio ? formatCurrency(portfolio.totalPnl) : '--',
+      value: portfolio ? formatPrice(portfolio.totalPnl) : '--',
       change: portfolio && portfolio.totalCost > 0 ? formatPercent(portfolio.totalPnlPercent) : null,
       positive: portfolio ? portfolio.totalPnl >= 0 : undefined,
     },
