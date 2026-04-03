@@ -66,6 +66,7 @@
     "*.{json,yml,yaml}": "prettier --write"
   },
   "dependencies": {
+    "@yojin/market-utils": "workspace:*",
     "@agentclientprotocol/sdk": "0.16.1",
     "@anthropic-ai/sdk": "0.80.0",
     "@grammyjs/transformer-throttler": "1.2.1",

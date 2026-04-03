@@ -5,6 +5,7 @@
  * empty state when no snapshots have been imported yet.
  */
 
+import { isUSMarketHoliday, toMarketDateKey } from '@yojin/market-utils';
 import type { JintelClient, MarketQuote, TickerPriceHistory } from '@yojinhq/jintel-client';
 
 import { getLogger } from '../../../logging/index.js';
@@ -46,45 +47,13 @@ export function setPortfolioWatchlistStore(s: WatchlistStore): void {
 // Market hours detection
 // ---------------------------------------------------------------------------
 
-/** NYSE observed holidays for 2026–2027. Source: https://www.nyse.com/trade/hours-calendars
- *  TODO: Add 2028 dates when NYSE publishes them. */
-const US_MARKET_HOLIDAYS = new Set([
-  // 2026
-  '2026-01-01', // New Year's Day
-  '2026-01-19', // Martin Luther King, Jr. Day
-  '2026-02-16', // Washington's Birthday
-  '2026-04-03', // Good Friday
-  '2026-05-25', // Memorial Day
-  '2026-06-19', // Juneteenth
-  '2026-07-03', // Independence Day (observed — Jul 4 is Sat)
-  '2026-09-07', // Labor Day
-  '2026-11-26', // Thanksgiving Day
-  '2026-12-25', // Christmas Day
-  // 2027
-  '2027-01-01', // New Year's Day
-  '2027-01-18', // Martin Luther King, Jr. Day
-  '2027-02-15', // Washington's Birthday
-  '2027-03-26', // Good Friday
-  '2027-05-31', // Memorial Day
-  '2027-06-18', // Juneteenth (observed — Jun 19 is Sat)
-  '2027-07-05', // Independence Day (observed — Jul 4 is Sun)
-  '2027-09-06', // Labor Day
-  '2027-11-25', // Thanksgiving Day
-  '2027-12-24', // Christmas Day (observed — Dec 25 is Sat)
-]);
-
-function isUSMarketHoliday(et: Date): boolean {
-  const key = `${et.getFullYear()}-${String(et.getMonth() + 1).padStart(2, '0')}-${String(et.getDate()).padStart(2, '0')}`;
-  return US_MARKET_HOLIDAYS.has(key);
-}
-
 /** Check if the US stock market is currently in regular trading hours (9:30–16:00 ET, Mon–Fri, non-holiday). */
 export function isUSMarketOpen(): boolean {
   const now = new Date();
   const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const day = et.getDay();
   if (day === 0 || day === 6) return false; // weekend
-  if (isUSMarketHoliday(et)) return false;
+  if (isUSMarketHoliday(toMarketDateKey(et))) return false;
   const minutes = et.getHours() * 60 + et.getMinutes();
   return minutes >= 570 && minutes < 960; // 9:30 (570) to 16:00 (960)
 }
@@ -95,7 +64,7 @@ function isUSWeekday(): boolean {
   const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const day = et.getDay();
   if (day === 0 || day === 6) return false;
-  return !isUSMarketHoliday(et);
+  return !isUSMarketHoliday(toMarketDateKey(et));
 }
 
 // ---------------------------------------------------------------------------

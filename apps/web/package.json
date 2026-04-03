@@ -14,6 +14,7 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
+    "@yojin/market-utils": "workspace:*",
     "@tailwindcss/vite": "4.2.2",
     "@urql/core": "6.0.1",
     "@urql/exchange-graphcache": "^9.0.0",
