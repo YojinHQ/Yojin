@@ -8,6 +8,7 @@
 import { z } from 'zod';
 
 import type { MicroInsight } from '../insights/micro-types.js';
+import { IdField } from '../types/base.js';
 
 export const SnapActionItemSchema = z.object({
   text: z.string().min(1),
@@ -35,7 +36,7 @@ export function assetSnapsFromMicro(microInsights: Iterable<MicroInsight>): Asse
 }
 
 export const SnapSchema = z.object({
-  id: z.string().min(1),
+  id: IdField,
   generatedAt: z.string().min(1),
   intelSummary: z.string().optional().default(''),
   actionItems: z.array(SnapActionItemSchema).default([]),

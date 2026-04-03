@@ -6,14 +6,11 @@ import { SNAP_QUERY, LATEST_INSIGHT_REPORT_QUERY } from '../../api/documents';
 import type { SnapQueryResult, LatestInsightReportQueryResult } from '../../api/types';
 import { timeAgo } from '../../lib/utils';
 import { useFeatureStatus } from '../../lib/feature-status';
-import { CardEmptyState } from '../common/card-empty-state';
 import { CardBlurGate } from '../common/card-blur-gate';
 import { FeatureCardGate } from '../common/feature-gate';
 import { DashboardCard } from '../common/dashboard-card';
 import Spinner from '../common/spinner';
-import Button from '../common/button';
 import { cn } from '../../lib/utils';
-import { useAddPositionModal } from '../../lib/add-position-modal-context';
 import { SignalChips } from './signal-chips';
 
 const UPDATED_GLOW_MS = 3_000;
@@ -22,12 +19,11 @@ function stripPrefix(text: string): string {
   return text.replace(/^(CRITICAL|HIGH|MEDIUM|LOW):\s*/i, '');
 }
 
-export default function YojinSnapCard({ hasPositions = false }: { hasPositions?: boolean }) {
+export default function YojinSnapCard() {
   const { aiConfigured, jintelConfigured } = useFeatureStatus();
   // Use cache-and-network so IntelSummaryCard's poll updates this component via cache (no duplicate requests)
   const [result] = useQuery<SnapQueryResult>({ query: SNAP_QUERY, requestPolicy: 'cache-and-network' });
   const [insightResult] = useQuery<LatestInsightReportQueryResult>({ query: LATEST_INSIGHT_REPORT_QUERY });
-  const { openModal } = useAddPositionModal();
   const navigate = useNavigate();
   const snap = result.data?.snap;
   const report = insightResult.data?.latestInsightReport;
@@ -93,30 +89,9 @@ export default function YojinSnapCard({ hasPositions = false }: { hasPositions?:
   if (!snap || snap.actionItems.length === 0) {
     return (
       <DashboardCard title="Actions" variant="feature" className="flex-1">
-        <CardBlurGate mockContent={<MockSnap />}>
-          <CardEmptyState
-            icon={
-              <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456Z"
-                />
-              </svg>
-            }
-            title="No actions yet"
-            description={
-              hasPositions ? 'Your brief will be generated shortly.' : 'Generated once your portfolio is loaded.'
-            }
-            action={
-              hasPositions ? undefined : (
-                <Button variant="primary" size="sm" onClick={openModal}>
-                  Add positions
-                </Button>
-              )
-            }
-          />
-        </CardBlurGate>
+        <div className="flex flex-1 items-center justify-center px-5 pb-5">
+          <span className="text-sm text-text-muted">No actions yet</span>
+        </div>
       </DashboardCard>
     );
   }

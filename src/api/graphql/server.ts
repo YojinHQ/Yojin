@@ -9,7 +9,12 @@ import type { Hono } from 'hono';
 
 import { actionResolver, actionsResolver, approveActionMutation, rejectActionMutation } from './resolvers/actions.js';
 import { activityLogQuery } from './resolvers/activity-log.js';
-import { aiConfigQuery, saveAiConfigMutation } from './resolvers/ai-config.js';
+import {
+  aiConfigQuery,
+  removeAiCredentialMutation,
+  saveAiConfigMutation,
+  saveAiCredentialMutation,
+} from './resolvers/ai-config.js';
 import { alertsQuery, createAlertMutation, dismissAlertMutation } from './resolvers/alerts.js';
 import {
   cancelChannelPairingMutation,
@@ -227,6 +232,8 @@ const schema = createSchema({
       toggleSkill: resolveToggleSkill,
       clearAppData: clearAppDataMutation,
       saveAiConfig: saveAiConfigMutation,
+      saveAiCredential: saveAiCredentialMutation,
+      removeAiCredential: removeAiCredentialMutation,
     },
     Subscription: {
       onAlert: onAlertSubscription,

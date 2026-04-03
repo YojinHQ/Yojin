@@ -3,8 +3,9 @@
  */
 
 import { spawn } from 'node:child_process';
-import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { startChat } from './chat.js';
 import { setupToken } from './setup-token.js';
@@ -19,7 +20,7 @@ import { ClaudeCodeProvider } from '../ai-providers/claude-code.js';
 import { ProviderRouter } from '../ai-providers/router.js';
 import { VercelAIProvider } from '../ai-providers/vercel-ai.js';
 import { setEventLog } from '../api/graphql/resolvers/activity-log.js';
-import { setAiConfigProviderRouter } from '../api/graphql/resolvers/ai-config.js';
+import { setAiConfigClaudeCodeProvider, setAiConfigProviderRouter } from '../api/graphql/resolvers/ai-config.js';
 import { setChannelRegistry } from '../api/graphql/resolvers/channels.js';
 import { setCurationOrchestrator, setCurationPipelineDeps } from '../api/graphql/resolvers/curated-signals.js';
 import { setInsightsOrchestrator } from '../api/graphql/resolvers/insights.js';
@@ -46,8 +47,8 @@ import { CurationConfigSchema } from '../signals/curation/types.js';
 import { QualityAgent } from '../signals/quality-agent.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
 
-const require = createRequire(import.meta.url);
-const { version: PKG_VERSION } = require('../../package.json') as { version: string };
+const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../package.json');
+const { version: PKG_VERSION } = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version: string };
 
 export async function runMain(args: string[]): Promise<void> {
   const command = args[0] ?? 'start';
@@ -115,6 +116,7 @@ async function buildFullRuntime(): Promise<{
   setOnboardingProvider(providerRouter);
   setOnboardingClaudeCodeProvider(claudeProvider);
   setAiConfigProviderRouter(providerRouter);
+  setAiConfigClaudeCodeProvider(claudeProvider);
 
   // Wire signal quality pipeline — single QualityAgent handles enrichment, dedup, and quality gating.
   const llmComplete = async (prompt: string): Promise<string> => {

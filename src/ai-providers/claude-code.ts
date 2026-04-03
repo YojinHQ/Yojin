@@ -193,6 +193,14 @@ export class ClaudeCodeProvider implements AIProvider {
     }
   }
 
+  private async ensureCliAvailable(): Promise<void> {
+    if (await this.isAvailable()) return;
+    throw new Error(
+      'No AI credentials configured. Set an Anthropic API key in Settings, ' +
+        'or install the Claude Code CLI and log in.',
+    );
+  }
+
   async completeWithTools(params: {
     model: string;
     system?: string;
@@ -221,6 +229,7 @@ export class ClaudeCodeProvider implements AIProvider {
           'CLI mode does not support image blocks. Set ANTHROPIC_API_KEY or log in via Claude Code OAuth.',
       );
     }
+    await this.ensureCliAvailable();
     return this.completeWithCli(params);
   }
 
@@ -244,7 +253,17 @@ export class ClaudeCodeProvider implements AIProvider {
       return this.streamWithSdk(this.client, params);
     }
 
-    // CLI mode: text only, no images.
+    // CLI mode: text only — fail fast if messages contain image blocks
+    const hasImages = params.messages.some(
+      (m) => Array.isArray(m.content) && m.content.some((b) => b.type === 'image'),
+    );
+    if (hasImages) {
+      throw new Error(
+        'Vision (image) content requires an API key or OAuth token. ' +
+          'CLI mode does not support image blocks. Set ANTHROPIC_API_KEY or log in via Claude Code OAuth.',
+      );
+    }
+    await this.ensureCliAvailable();
     return this.streamWithCli(params);
   }
 

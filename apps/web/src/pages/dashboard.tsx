@@ -61,7 +61,7 @@ export default function Dashboard() {
           <PortfolioOverview />
           <PositionsPreview />
           <IntelSummaryCard />
-          <YojinSnapCard hasPositions={hasData} />
+          <YojinSnapCard />
         </div>
       </div>
 

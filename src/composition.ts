@@ -18,6 +18,7 @@ import { createDefaultProfiles } from './agents/defaults.js';
 import { AgentRegistry } from './agents/registry.js';
 import { pubsub } from './api/graphql/pubsub.js';
 import { setActionStore } from './api/graphql/resolvers/actions.js';
+import { setAiConfigVault } from './api/graphql/resolvers/ai-config.js';
 import { setChannelDataRoot, setChannelOAuthDir, setChannelVault } from './api/graphql/resolvers/channels.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
 import {
@@ -331,7 +332,10 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   setOnboardingDataRoot(dataRoot);
   setOnboardingPersonaManager(persona);
   setOnboardingSnapshotStore(snapshotStore);
-  if (vault) setOnboardingVault(vault);
+  if (vault) {
+    setOnboardingVault(vault);
+    setAiConfigVault(vault);
+  }
   if (connectionManager) setOnboardingConnectionManager(connectionManager);
 
   // 6. DataSourceRegistry
@@ -590,7 +594,10 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   }
 
   // Portfolio tools (2 tools: save_portfolio_positions, get_portfolio)
-  for (const tool of createPortfolioTools({ snapshotStore })) {
+  for (const tool of createPortfolioTools({
+    snapshotStore,
+    onPortfolioSaved: (snapshot) => pubsub.publish('portfolioUpdate', snapshot),
+  })) {
     toolRegistry.register(tool);
   }
 

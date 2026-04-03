@@ -58,6 +58,7 @@ export type SignalType =
 export type SignalSentiment = 'BULLISH' | 'BEARISH' | 'MIXED' | 'NEUTRAL';
 export type SourceType = 'API' | 'RSS' | 'SCRAPER' | 'ENRICHMENT';
 export type SignalVerdict = 'CRITICAL' | 'IMPORTANT' | 'NOISE';
+export type SignalImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 export type ThesisAlignment = 'SUPPORTS' | 'CHALLENGES' | 'NEUTRAL';
 export type FeedTarget = 'PORTFOLIO' | 'WATCHLIST';
 
@@ -682,7 +683,7 @@ export interface SignalSummary {
   signalId: string;
   type: SignalType;
   title: string;
-  impact: string;
+  impact: SignalImpact;
   confidence: number;
   url: string | null;
   sourceCount: number;
@@ -806,6 +807,7 @@ export interface MicroInsight {
   opportunities: string[];
   sentiment: string;
   signalCount: number;
+  topSignalIds: string[];
   assetSnap: string;
   assetActions: string[];
   generatedAt: string;
@@ -1122,6 +1124,8 @@ export interface OnPriceMoveVariables {
 export interface AiConfig {
   defaultModel: string;
   defaultProvider: string;
+  hasAnthropicKey: boolean;
+  hasOpenaiKey: boolean;
 }
 
 export interface AiConfigQueryResult {
@@ -1134,6 +1138,28 @@ export interface SaveAiConfigMutationResult {
 
 export interface SaveAiConfigVariables {
   input: { defaultModel: string; defaultProvider?: string };
+}
+
+export interface SaveAiCredentialResult {
+  success: boolean;
+  error?: string;
+}
+
+export interface SaveAiCredentialMutationResult {
+  saveAiCredential: SaveAiCredentialResult;
+}
+
+export interface SaveAiCredentialVariables {
+  provider: string;
+  apiKey: string;
+}
+
+export interface RemoveAiCredentialMutationResult {
+  removeAiCredential: SaveAiCredentialResult;
+}
+
+export interface RemoveAiCredentialVariables {
+  provider: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -1152,4 +1178,72 @@ export interface DetectKeychainTokenResult {
 
 export interface DetectCodexTokenResult {
   detectCodexToken: KeychainTokenResult;
+}
+
+// ---------------------------------------------------------------------------
+// Skills
+// ---------------------------------------------------------------------------
+
+export type SkillCategory = 'RISK' | 'PORTFOLIO' | 'MARKET' | 'RESEARCH';
+
+export interface SkillTrigger {
+  type: string;
+  description: string;
+  params: string | null;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  category: SkillCategory;
+  active: boolean;
+  source: string;
+  createdBy: string;
+  createdAt: string;
+  content: string;
+  triggers: SkillTrigger[];
+  maxPositionSize: number | null;
+  tickers: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Ticker Profiles
+// ---------------------------------------------------------------------------
+
+export interface TickerProfileEntry {
+  id: string;
+  ticker: string;
+  category: string;
+  observation: string;
+  evidence: string;
+  insightReportId: string;
+  insightDate: string;
+  rating: string | null;
+  conviction: number | null;
+  priceAtObservation: number | null;
+  grade: string | null;
+  actualReturn: number | null;
+  createdAt: string;
+}
+
+export interface TickerProfileBrief {
+  entryCount: number;
+  recentPatterns: string[];
+  recentLessons: string[];
+  correlations: string[];
+  sentimentHistory: SentimentPoint[];
+}
+
+export interface SentimentPoint {
+  date: string;
+  rating: string;
+  conviction: number;
+}
+
+export interface TickerProfile {
+  ticker: string;
+  entryCount: number;
+  entries: TickerProfileEntry[];
+  brief: TickerProfileBrief;
 }

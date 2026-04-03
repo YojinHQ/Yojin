@@ -91,6 +91,27 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # ---------------------------------------------------------------------------
+  # Interfaces
+  # ---------------------------------------------------------------------------
+
+  """
+  Common fields for mutation results.
+  """
+  interface MutationResult {
+    success: Boolean!
+    error: String
+  }
+
+  # ---------------------------------------------------------------------------
+  # Shared inputs
+  # ---------------------------------------------------------------------------
+
+  input KeyValueInput {
+    key: String!
+    value: String!
+  }
+
+  # ---------------------------------------------------------------------------
   # Portfolio
   # ---------------------------------------------------------------------------
 
@@ -222,7 +243,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type TickerPriceHistory {
-    ticker: String!
+    ticker: ID!
     history: [PricePoint!]!
   }
 
@@ -275,7 +296,7 @@ export const typeDefs = /* GraphQL */ `
 
   type ChatMessage {
     id: ID!
-    threadId: String!
+    threadId: ID!
     role: ChatRole!
     content: String!
     timestamp: String!
@@ -284,9 +305,9 @@ export const typeDefs = /* GraphQL */ `
 
   type ChatEvent {
     type: ChatEventType!
-    threadId: String!
+    threadId: ID!
     delta: String
-    messageId: String
+    messageId: ID
     content: String
     error: String
     toolName: String
@@ -295,13 +316,13 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type SendMessagePayload {
-    threadId: String!
-    messageId: String!
+    threadId: ID!
+    messageId: ID!
   }
 
   type SessionSummary {
     id: ID!
-    threadId: String!
+    threadId: ID!
     title: String!
     createdAt: String!
     lastMessageAt: String
@@ -310,7 +331,7 @@ export const typeDefs = /* GraphQL */ `
 
   type SessionDetail {
     id: ID!
-    threadId: String!
+    threadId: ID!
     title: String!
     createdAt: String!
     lastMessageAt: String
@@ -356,21 +377,16 @@ export const typeDefs = /* GraphQL */ `
     DISCONNECTED
   }
 
-  input CredentialInput {
-    key: String!
-    value: String!
-  }
-
   input ConnectPlatformInput {
     platform: String!
     tier: IntegrationTier
-    credentials: [CredentialInput!]
+    credentials: [KeyValueInput!]
   }
 
-  type ConnectionResult {
+  type ConnectionResult implements MutationResult {
     success: Boolean!
-    connection: Connection
     error: String
+    connection: Connection
   }
 
   type Connection {
@@ -413,14 +429,9 @@ export const typeDefs = /* GraphQL */ `
     updatedAt: String!
   }
 
-  type VaultResult {
+  type VaultResult implements MutationResult {
     success: Boolean!
     error: String
-  }
-
-  input VaultSecretInput {
-    key: String!
-    value: String!
   }
 
   # ---------------------------------------------------------------------------
@@ -457,10 +468,10 @@ export const typeDefs = /* GraphQL */ `
     builtin: Boolean!
   }
 
-  type DataSourceResult {
+  type DataSourceResult implements MutationResult {
     success: Boolean!
-    dataSource: DataSource
     error: String
+    dataSource: DataSource
   }
 
   type FetchResult {
@@ -501,7 +512,7 @@ export const typeDefs = /* GraphQL */ `
     publishedAt: String!
     ingestedAt: String!
     confidence: Float!
-    contentHash: String!
+    contentHash: ID!
     tickers: [String!]!
     sources: [SignalSource!]!
     sourceCount: Int!
@@ -510,7 +521,7 @@ export const typeDefs = /* GraphQL */ `
     tier2: String
     sentiment: SignalSentiment
     outputType: SignalOutputType!
-    groupId: String
+    groupId: ID
     version: Int!
   }
 
@@ -537,8 +548,8 @@ export const typeDefs = /* GraphQL */ `
 
   type Action {
     id: ID!
-    signalId: String
-    skillId: String
+    signalId: ID
+    skillId: ID
     what: String!
     why: String!
     source: String!
@@ -583,21 +594,21 @@ export const typeDefs = /* GraphQL */ `
     state: String!
   }
 
-  type OAuthCompleteResult {
+  type OAuthCompleteResult implements MutationResult {
     success: Boolean!
+    error: String
     model: String
+  }
+
+  type MagicLinkResult implements MutationResult {
+    success: Boolean!
     error: String
   }
 
-  type MagicLinkResult {
+  type MagicLinkVerifyResult implements MutationResult {
     success: Boolean!
     error: String
-  }
-
-  type MagicLinkVerifyResult {
-    success: Boolean!
     model: String
-    error: String
   }
 
   input PersonaInput {
@@ -627,12 +638,12 @@ export const typeDefs = /* GraphQL */ `
     marketValue: Float
   }
 
-  type ScreenshotResult {
+  type ScreenshotResult implements MutationResult {
     success: Boolean!
+    error: String
     positions: [ExtractedPositionGql!]
     confidence: Float
     warnings: [String!]
-    error: String
   }
 
   input PositionInput {
@@ -677,7 +688,7 @@ export const typeDefs = /* GraphQL */ `
     requiredCredentials: [String!]!
   }
 
-  type ChannelResult {
+  type ChannelResult implements MutationResult {
     success: Boolean!
     error: String
   }
@@ -689,7 +700,7 @@ export const typeDefs = /* GraphQL */ `
     EXPIRED
   }
 
-  type PairingResult {
+  type PairingResult implements MutationResult {
     success: Boolean!
     error: String
     qrData: String
@@ -715,7 +726,7 @@ export const typeDefs = /* GraphQL */ `
     jintelConfigured: Boolean!
   }
 
-  type ValidateJintelKeyResult {
+  type ValidateJintelKeyResult implements MutationResult {
     success: Boolean!
     error: String
   }
@@ -747,7 +758,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type SignalSummary {
-    signalId: String!
+    signalId: ID!
     type: SignalType!
     title: String!
     impact: SignalImpact!
@@ -799,7 +810,7 @@ export const typeDefs = /* GraphQL */ `
 
   type InsightReport {
     id: ID!
-    snapshotId: String!
+    snapshotId: ID!
     positions: [PositionInsight!]!
     portfolio: PortfolioInsight!
     emotionState: EmotionState!
@@ -861,11 +872,11 @@ export const typeDefs = /* GraphQL */ `
 
   type TickerProfileEntry {
     id: ID!
-    ticker: String!
+    ticker: ID!
     category: String!
     observation: String!
     evidence: String!
-    insightReportId: String!
+    insightReportId: ID!
     insightDate: String!
     rating: String
     conviction: Float
@@ -890,7 +901,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type TickerProfile {
-    ticker: String!
+    ticker: ID!
     entryCount: Int!
     entries: [TickerProfileEntry!]!
     brief: TickerProfileBrief!
@@ -936,7 +947,7 @@ export const typeDefs = /* GraphQL */ `
     enrichedAt: String
   }
 
-  type WatchlistResult {
+  type WatchlistResult implements MutationResult {
     success: Boolean!
     error: String
   }
@@ -946,7 +957,7 @@ export const typeDefs = /* GraphQL */ `
   # ---------------------------------------------------------------------------
 
   type PortfolioRelevanceScore {
-    ticker: String!
+    ticker: ID!
     compositeScore: Float!
   }
 
@@ -977,8 +988,8 @@ export const typeDefs = /* GraphQL */ `
   # ---------------------------------------------------------------------------
 
   type SignalAssessment {
-    signalId: String!
-    ticker: String!
+    signalId: ID!
+    ticker: ID!
     verdict: SignalVerdict!
     relevanceScore: Float!
     reasoning: String!
@@ -1121,11 +1132,18 @@ export const typeDefs = /* GraphQL */ `
   type AiConfig {
     defaultModel: String!
     defaultProvider: String!
+    hasAnthropicKey: Boolean!
+    hasOpenaiKey: Boolean!
   }
 
   input AiConfigInput {
     defaultModel: String!
     defaultProvider: String
+  }
+
+  type SaveAiCredentialResult {
+    success: Boolean!
+    error: String
   }
 
   type Mutation {
@@ -1148,8 +1166,8 @@ export const typeDefs = /* GraphQL */ `
     unlockVault(passphrase: String!): VaultResult!
     setVaultPassphrase(newPassphrase: String!): VaultResult!
     changeVaultPassphrase(currentPassphrase: String!, newPassphrase: String!): VaultResult!
-    addVaultSecret(input: VaultSecretInput!): VaultResult!
-    updateVaultSecret(input: VaultSecretInput!): VaultResult!
+    addVaultSecret(input: KeyValueInput!): VaultResult!
+    updateVaultSecret(input: KeyValueInput!): VaultResult!
     deleteVaultSecret(key: String!): VaultResult!
     startOAuthFlow: OAuthFlowResult!
     completeOAuthFlow(code: String!, state: String!): OAuthCompleteResult!
@@ -1160,9 +1178,9 @@ export const typeDefs = /* GraphQL */ `
     parsePortfolioScreenshot(input: ScreenshotInput!): ScreenshotResult!
     confirmPositions(input: ConfirmPositionsInput!): Boolean!
     saveBriefingConfig(input: BriefingConfigInput!): Boolean!
-    connectChannel(id: ID!, credentials: [CredentialInput!]!): ChannelResult!
+    connectChannel(id: ID!, credentials: [KeyValueInput!]!): ChannelResult!
     disconnectChannel(id: ID!): ChannelResult!
-    validateChannelToken(id: ID!, credentials: [CredentialInput!]!): ChannelResult!
+    validateChannelToken(id: ID!, credentials: [KeyValueInput!]!): ChannelResult!
     initiateChannelPairing(id: ID!): PairingResult!
     cancelChannelPairing(id: ID!): ChannelResult!
     saveNotificationPreferences(channelId: ID!, enabledTypes: [String!]!): Boolean!
@@ -1179,6 +1197,8 @@ export const typeDefs = /* GraphQL */ `
     toggleSkill(id: ID!, active: Boolean!): Skill!
     clearAppData: Boolean!
     saveAiConfig(input: AiConfigInput!): AiConfig!
+    saveAiCredential(provider: String!, apiKey: String!): SaveAiCredentialResult!
+    removeAiCredential(provider: String!): SaveAiCredentialResult!
   }
 
   # ---------------------------------------------------------------------------
@@ -1191,7 +1211,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type WorkflowProgressEvent {
-    workflowId: String!
+    workflowId: ID!
     stage: String!
     stageIndex: Int
     totalStages: Int

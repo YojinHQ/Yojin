@@ -121,7 +121,7 @@ pnpm ci:all           # Full CI check across all packages
 - **Testing**: vitest 4
 - **Validation**: Zod schemas everywhere
 - **Logging**: tslog
-- **AI providers**: Anthropic SDK, Vercel AI SDK (`@ai-sdk/anthropic`, `@ai-sdk/openai`, `ai`)
+- **AI providers**: Anthropic SDK (`@anthropic-ai/sdk`), Codex CLI (via subprocess)
 - **Data enrichment**: `@yojinhq/jintel-client` (typed GraphQL client for Jintel API)
 - **Web UI**: React 19, Vite 6, Tailwind CSS 4, React Router 7, Recharts, lightweight-charts, lucide-react
 - **GraphQL**: graphql-yoga on Hono (server), urql + graphcache (client), graphql-sse (subscriptions)

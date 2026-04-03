@@ -45,3 +45,4 @@ data/*
 /config/
 
 .claude/worktrees/
+.env.docker

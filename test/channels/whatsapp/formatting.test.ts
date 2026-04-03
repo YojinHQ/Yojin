@@ -200,21 +200,22 @@ describe('formatAction', () => {
     expect(result).toContain('*New Action*');
   });
 
+  it('uses ticker as header for micro-observation actions', () => {
+    const microAction = { ...action, source: 'micro-observation: AAPL' };
+    const result = formatAction(microAction);
+    expect(result).toContain('*AAPL*');
+    expect(result).not.toContain('New Action');
+  });
+
   it('includes the what field', () => {
     const result = formatAction(action);
     expect(result).toContain('Review AAPL');
   });
 
-  it('includes why with WhatsApp italic label', () => {
+  it('does not include why or source fields', () => {
     const result = formatAction(action);
-    expect(result).toContain('_Why:_');
-    expect(result).toContain('RSI divergence on daily chart');
-  });
-
-  it('includes source with WhatsApp italic label', () => {
-    const result = formatAction(action);
-    expect(result).toContain('_Source:_');
-    expect(result).toContain('skill: momentum');
+    expect(result).not.toContain('_Why:_');
+    expect(result).not.toContain('_Source:_');
   });
 
   it('does not use HTML tags', () => {
@@ -282,9 +283,10 @@ describe('formatInsight', () => {
     expect(result).toContain('HEALTHY');
   });
 
-  it('includes portfolio summary', () => {
+  it('includes compact position ratings on one line', () => {
     const result = formatInsight(report);
-    expect(result).toContain('Portfolio is well positioned.');
+    expect(result).toContain('AAPL BULLISH');
+    expect(result).toContain('MSFT NEUTRAL');
   });
 
   it('includes position symbols and ratings', () => {
@@ -295,12 +297,12 @@ describe('formatInsight', () => {
     expect(result).toContain('NEUTRAL');
   });
 
-  it('includes position thesis', () => {
+  it('includes open Yojin CTA', () => {
     const result = formatInsight(report);
-    expect(result).toContain('Strong earnings momentum');
+    expect(result).toContain('_Open Yojin for full report_');
   });
 
-  it('limits to 5 positions and shows overflow count', () => {
+  it('includes all positions in compact format', () => {
     const manyPositions = Array.from({ length: 7 }, (_, i) => ({
       symbol: `SYM${i}`,
       name: `Company ${i}`,
@@ -317,9 +319,8 @@ describe('formatInsight', () => {
 
     const bigReport = { ...report, positions: manyPositions } as InsightReport;
     const result = formatInsight(bigReport);
-    expect(result).toContain('...and 2 more positions');
-    expect(result).not.toContain('SYM5');
-    expect(result).not.toContain('SYM6');
+    expect(result).toContain('SYM0 NEUTRAL');
+    expect(result).toContain('SYM6 NEUTRAL');
   });
 
   it('does not use HTML tags', () => {
