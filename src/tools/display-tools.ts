@@ -10,20 +10,29 @@
  * The plain-text tool result gives the LLM real data to reference in its response.
  */
 
+import type { JintelClient } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
 import type { AllocationData, MorningBriefingData, PortfolioOverviewData, PositionsListData } from './display-data.js';
 import type { Position } from '../api/graphql/types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
+import { enrichPortfolioSnapshotWithLiveQuotes } from '../portfolio/live-enrichment.js';
 import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
 import { balanceToRange } from '../trust/pii/patterns.js';
 
 export interface DisplayToolsDeps {
   snapshotStore: PortfolioSnapshotStore;
+  getJintelClient?: () => JintelClient | undefined;
 }
 
 export function createDisplayTools(deps: DisplayToolsDeps): ToolDefinition[] {
-  const { snapshotStore } = deps;
+  const { snapshotStore, getJintelClient } = deps;
+
+  async function getDisplaySnapshot() {
+    const snapshot = await snapshotStore.getLatest();
+    if (!snapshot) return null;
+    return enrichPortfolioSnapshotWithLiveQuotes(snapshot, getJintelClient?.());
+  }
 
   const displayPortfolioOverview: ToolDefinition = {
     name: 'display_portfolio_overview',
@@ -35,7 +44,7 @@ export function createDisplayTools(deps: DisplayToolsDeps): ToolDefinition[] {
         .describe('Time period for the overview: today, this week, or year-to-date'),
     }),
     async execute(params: { period: 'today' | 'week' | 'ytd' }): Promise<ToolResult> {
-      const snapshot = await snapshotStore.getLatest();
+      const snapshot = await getDisplaySnapshot();
       if (!snapshot || snapshot.positions.length === 0) {
         return { content: 'No portfolio data available. The user needs to add positions first.' };
       }
@@ -80,7 +89,7 @@ export function createDisplayTools(deps: DisplayToolsDeps): ToolDefinition[] {
         .describe('Which positions to show: top performers, worst performers, biggest movers, or all positions'),
     }),
     async execute(params: { variant: 'top' | 'worst' | 'movers' | 'all' }): Promise<ToolResult> {
-      const snapshot = await snapshotStore.getLatest();
+      const snapshot = await getDisplaySnapshot();
       if (!snapshot || snapshot.positions.length === 0) {
         return { content: 'No portfolio data available. The user needs to add positions first.' };
       }
@@ -123,7 +132,7 @@ export function createDisplayTools(deps: DisplayToolsDeps): ToolDefinition[] {
       'Display a visual portfolio allocation card to the user. Shows allocation breakdown by asset class and sector with progress bars. Call this when the user asks about their portfolio allocation, diversification, or sector breakdown.',
     parameters: z.object({}),
     async execute(): Promise<ToolResult> {
-      const snapshot = await snapshotStore.getLatest();
+      const snapshot = await getDisplaySnapshot();
       if (!snapshot || snapshot.positions.length === 0) {
         return { content: 'No portfolio data available. The user needs to add positions first.' };
       }
@@ -189,7 +198,7 @@ export function createDisplayTools(deps: DisplayToolsDeps): ToolDefinition[] {
       'Display a visual morning briefing card to the user. Shows a daily summary with portfolio stats, active alerts, recent news headlines, and suggested actions. ALWAYS call this when the user asks for their morning briefing, daily summary, or daily digest.',
     parameters: z.object({}),
     async execute(): Promise<ToolResult> {
-      const snapshot = await snapshotStore.getLatest();
+      const snapshot = await getDisplaySnapshot();
       if (!snapshot || snapshot.positions.length === 0) {
         return { content: 'No portfolio data available. The user needs to add positions first.' };
       }

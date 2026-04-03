@@ -603,7 +603,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
 
   // Display tools — trigger rich card rendering on the frontend
   // and return structured data for non-web channels (Slack, Telegram, etc.)
-  for (const tool of createDisplayTools({ snapshotStore })) {
+  for (const tool of createDisplayTools({ snapshotStore, getJintelClient: () => jintelClient })) {
     toolRegistry.register(tool);
   }
 
