@@ -301,18 +301,20 @@ export default function PositionsPreview() {
                 >
                   {/* Asset: logo + symbol (name on hover) */}
                   <td className="px-3 py-2">
-                    <div className="group/asset relative flex min-w-0 items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
                       <SymbolLogo
                         symbol={pos.symbol}
                         assetClass={pos.assetClass.toLowerCase() as 'equity' | 'crypto'}
                         size="sm"
                       />
-                      <span className="text-xs font-semibold text-text-primary">{pos.symbol}</span>
-                      {pos.name && pos.name !== pos.symbol && (
-                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden rounded-md bg-bg-tertiary px-2.5 py-1.5 shadow-lg ring-1 ring-border group-hover/asset:block">
-                          <span className="whitespace-nowrap text-2xs text-text-secondary">{pos.name}</span>
-                        </div>
-                      )}
+                      <span className="group/asset relative text-xs font-semibold text-text-primary">
+                        {pos.symbol}
+                        {pos.name && pos.name !== pos.symbol && (
+                          <div className="pointer-events-none absolute left-0 bottom-full z-20 mb-0.5 hidden rounded-md bg-bg-tertiary px-2 py-1 shadow-md ring-1 ring-border group-hover/asset:block">
+                            <span className="whitespace-nowrap text-2xs text-text-secondary">{pos.name}</span>
+                          </div>
+                        )}
+                      </span>
                     </div>
                   </td>
 
