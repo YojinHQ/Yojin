@@ -11,6 +11,7 @@
 import { z } from 'zod';
 
 import { InsightRatingSchema } from '../insights/types.js';
+import { DateTimeField, IdField, ScoreRange } from '../types/base.js';
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -31,23 +32,23 @@ export type ProfileEntryCategory = z.infer<typeof ProfileEntryCategorySchema>;
 // ---------------------------------------------------------------------------
 
 export const TickerProfileEntrySchema = z.object({
-  id: z.string().min(1),
-  ticker: z.string().min(1),
+  id: IdField,
+  ticker: IdField,
   category: ProfileEntryCategorySchema,
   observation: z.string().min(1),
   evidence: z.string().min(1),
   // Source provenance
-  insightReportId: z.string().min(1),
+  insightReportId: IdField,
   insightDate: z.string(),
   // Optional context
   rating: InsightRatingSchema.nullable().default(null),
-  conviction: z.number().min(0).max(1).nullable().default(null),
+  conviction: ScoreRange.nullable().default(null),
   priceAtObservation: z.number().nullable().default(null),
   // For LESSON entries: grading data
   grade: z.string().nullable().default(null),
   actualReturn: z.number().nullable().default(null),
   // Timestamps
-  createdAt: z.string().datetime(),
+  createdAt: DateTimeField,
 });
 export type TickerProfileEntry = z.infer<typeof TickerProfileEntrySchema>;
 

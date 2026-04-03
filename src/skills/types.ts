@@ -7,6 +7,8 @@
 
 import { z } from 'zod';
 
+import { DateTimeField, IdField } from '../types/base.js';
+
 // ---------------------------------------------------------------------------
 // Skill category — aligned with strategic decision domains
 // ---------------------------------------------------------------------------
@@ -42,21 +44,21 @@ export type SkillTrigger = z.infer<typeof SkillTriggerSchema>;
 // ---------------------------------------------------------------------------
 
 export const SkillSchema = z.object({
-  id: z.string().min(1),
+  id: IdField,
   name: z.string().min(1),
   description: z.string().min(1),
   category: SkillCategorySchema,
   active: z.boolean().default(false),
   source: z.enum(['built-in', 'custom']),
   createdBy: z.string().min(1),
-  createdAt: z.string().datetime(),
+  createdAt: DateTimeField,
   /** The Markdown strategy content — what the Strategist reads. */
   content: z.string().min(1),
   triggers: z.array(SkillTriggerSchema).min(1),
   /** Max position size as fraction of portfolio (0-1). Guard enforced. */
   maxPositionSize: z.number().min(0).max(1).optional(),
   /** Tickers this skill applies to. Empty = all portfolio tickers. */
-  tickers: z.array(z.string().min(1)).default([]),
+  tickers: z.array(IdField).default([]),
 });
 export type Skill = z.infer<typeof SkillSchema>;
 
@@ -65,14 +67,14 @@ export type Skill = z.infer<typeof SkillSchema>;
 // ---------------------------------------------------------------------------
 
 export const SkillEvaluationSchema = z.object({
-  skillId: z.string().min(1),
+  skillId: IdField,
   skillName: z.string().min(1),
-  triggerId: z.string().min(1),
+  triggerId: IdField,
   triggerType: TriggerTypeSchema,
   /** Context data that caused the trigger to fire. */
   context: z.record(z.unknown()),
   /** The Markdown content to inject into the Strategist prompt. */
   skillContent: z.string().min(1),
-  evaluatedAt: z.string().datetime(),
+  evaluatedAt: DateTimeField,
 });
 export type SkillEvaluation = z.infer<typeof SkillEvaluationSchema>;

@@ -12,6 +12,7 @@
 import { z } from 'zod';
 
 import { SignalOutputTypeSchema } from '../signals/types.js';
+import { DateTimeField, IdField, ScoreRange } from '../types/base.js';
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -35,7 +36,7 @@ export const SignalSummarySchema = z.object({
   type: z.string().min(1),
   title: z.string().min(1),
   impact: SignalImpactSchema,
-  confidence: z.number().min(0).max(1),
+  confidence: ScoreRange,
   url: z.string().nullable().optional(),
   sourceCount: z.number().int().min(1).default(1),
   detail: z.string().nullable().optional(),
@@ -51,7 +52,7 @@ export const PositionInsightSchema = z.object({
   symbol: z.string().min(1),
   name: z.string(),
   rating: InsightRatingSchema,
-  conviction: z.number().min(0).max(1),
+  conviction: ScoreRange,
   thesis: z.string().min(1),
   keySignals: z.array(SignalSummarySchema),
   /** ALL signal IDs for this ticker from the archive (7-day window).
@@ -105,8 +106,8 @@ export type PortfolioInsight = z.infer<typeof PortfolioInsightSchema>;
 // ---------------------------------------------------------------------------
 
 export const InsightReportSchema = z.object({
-  id: z.string().min(1),
-  snapshotId: z.string().min(1),
+  id: IdField,
+  snapshotId: IdField,
   positions: z.array(PositionInsightSchema),
   portfolio: PortfolioInsightSchema,
   agentOutputs: z.object({
@@ -115,11 +116,11 @@ export const InsightReportSchema = z.object({
     strategist: z.string(),
   }),
   emotionState: z.object({
-    confidence: z.number().min(0).max(1),
-    riskAppetite: z.number().min(0).max(1),
+    confidence: ScoreRange,
+    riskAppetite: ScoreRange,
     reason: z.string(),
   }),
-  createdAt: z.string().datetime(),
+  createdAt: DateTimeField,
   durationMs: z.number(),
 });
 export type InsightReport = z.infer<typeof InsightReportSchema>;

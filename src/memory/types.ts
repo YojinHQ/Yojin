@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { DateTimeField, IdField, ScoreRange } from '../types/base.js';
+
 /** Memory-enabled agent roles (Trader excluded in V1). */
 export const MemoryAgentRoleSchema = z.enum(['analyst', 'strategist', 'risk-manager']);
 export type MemoryAgentRole = z.infer<typeof MemoryAgentRoleSchema>;
@@ -10,27 +12,27 @@ export type Grade = z.infer<typeof GradeSchema>;
 
 /** A single memory entry — born unreflected, updated after reflection. */
 export const MemoryEntrySchema = z.object({
-  id: z.string().min(1),
+  id: IdField,
   agentRole: MemoryAgentRoleSchema,
-  tickers: z.array(z.string().min(1)).min(1),
+  tickers: z.array(IdField).min(1),
   situation: z.string().min(1),
   recommendation: z.string().min(1),
-  confidence: z.number().min(0).max(1),
-  createdAt: z.string().datetime(),
+  confidence: ScoreRange,
+  createdAt: DateTimeField,
   outcome: z.string().nullable(),
   lesson: z.string().nullable(),
   actualReturn: z.number().nullable(),
   grade: GradeSchema.nullable(),
-  reflectedAt: z.string().datetime().nullable(),
+  reflectedAt: DateTimeField.nullable(),
 });
 export type MemoryEntry = z.infer<typeof MemoryEntrySchema>;
 
 /** Input for creating a new (unreflected) memory entry. */
 export const NewMemoryInputSchema = z.object({
-  tickers: z.array(z.string().min(1)).min(1),
+  tickers: z.array(IdField).min(1),
   situation: z.string().min(1),
   recommendation: z.string().min(1),
-  confidence: z.number().min(0).max(1),
+  confidence: ScoreRange,
 });
 export type NewMemoryInput = z.infer<typeof NewMemoryInputSchema>;
 

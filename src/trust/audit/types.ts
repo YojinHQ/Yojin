@@ -7,6 +7,8 @@
 
 import { z } from 'zod';
 
+import { DateTimeField } from '../../types/base.js';
+
 // ---------------------------------------------------------------------------
 // Event types
 // ---------------------------------------------------------------------------
@@ -105,7 +107,7 @@ export type PostureChangeDetails = z.infer<typeof PostureChangeDetailsSchema>;
 export const AuditEventSchema = z.object({
   id: z.string().uuid(),
   type: AuditEventTypeSchema,
-  timestamp: z.string().datetime(),
+  timestamp: DateTimeField,
   agentId: z.string().optional(),
   sessionId: z.string().optional(),
   details: z.record(z.unknown()),
