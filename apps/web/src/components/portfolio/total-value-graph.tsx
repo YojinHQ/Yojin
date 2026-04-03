@@ -1,5 +1,5 @@
 import { useEffect, useRef, useMemo } from 'react';
-import { createChart, AreaSeries, type IChartApi, type ISeriesApi, type Time, ColorType } from 'lightweight-charts';
+import { createChart, AreaSeries, type IChartApi, type Time, ColorType } from 'lightweight-charts';
 import { CardEmptyState } from '../common/card-empty-state';
 import type { PortfolioHistoryPoint } from '../../api/types';
 
@@ -7,24 +7,26 @@ interface TotalValueGraphProps {
   history: PortfolioHistoryPoint[];
 }
 
-/** Convert history points to chart-ready { date, value } using UTC dates from the backend history ordering. */
+/** Convert history points to chart-ready { date, value } using UTC dates.
+ *  Deduplicates by date (keeps last entry per day) because the backend returns
+ *  multiple intraday snapshots and lightweight-charts requires unique time values. */
 function toChartData(history: PortfolioHistoryPoint[]): { date: string; value: number }[] {
-  return history.map((p) => ({
-    date: new Date(p.timestamp).toISOString().slice(0, 10),
-    value: p.totalValue,
-  }));
+  const byDate = new Map<string, number>();
+  for (const p of history) {
+    byDate.set(new Date(p.timestamp).toISOString().slice(0, 10), p.totalValue);
+  }
+  return Array.from(byDate, ([date, value]) => ({ date, value }));
 }
 
 export function TotalValueGraph({ history }: TotalValueGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<'Area'> | null>(null);
   const chartData = useMemo(() => toChartData(history), [history]);
 
-  // Create chart on first non-zero dimensions, resize thereafter
+  // Create chart + apply data in same ResizeObserver callback to avoid race condition.
+  // When chartData changes the effect re-runs: tears down old chart, observer recreates with fresh data.
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container || chartData.length === 0) return;
 
     let chart: IChartApi | null = null;
 
@@ -56,9 +58,7 @@ export function TotalValueGraph({ history }: TotalValueGraphProps) {
           handleScroll: { vertTouchDrag: false },
         });
 
-        chartRef.current = chart;
-
-        seriesRef.current = chart.addSeries(AreaSeries, {
+        const series = chart.addSeries(AreaSeries, {
           priceScaleId: 'left',
           lineWidth: 2,
           crosshairMarkerRadius: 4,
@@ -67,6 +67,18 @@ export function TotalValueGraph({ history }: TotalValueGraphProps) {
             formatter: (p: number) => `$${p.toLocaleString('en-US', { minimumFractionDigits: 0 })}`,
           },
         });
+
+        const isUp = chartData.length >= 2 && chartData[chartData.length - 1].value >= chartData[0].value;
+        const lineColor = isUp ? '#5bb98c' : '#ff5a5e';
+
+        series.applyOptions({
+          lineColor,
+          topColor: isUp ? 'rgba(91, 185, 140, 0.3)' : 'rgba(255, 90, 94, 0.3)',
+          bottomColor: isUp ? 'rgba(91, 185, 140, 0)' : 'rgba(255, 90, 94, 0)',
+        });
+
+        series.setData(chartData.map((d) => ({ time: d.date as Time, value: d.value })));
+        chart.timeScale().fitContent();
       } else {
         chart.applyOptions({ width: w, height: h });
       }
@@ -76,28 +88,7 @@ export function TotalValueGraph({ history }: TotalValueGraphProps) {
     return () => {
       observer.disconnect();
       chart?.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
     };
-  }, []);
-
-  // Update series data when chartData changes
-  useEffect(() => {
-    const series = seriesRef.current;
-    const chart = chartRef.current;
-    if (!series || !chart || chartData.length === 0) return;
-
-    const isUp = chartData.length >= 2 && chartData[chartData.length - 1].value >= chartData[0].value;
-    const lineColor = isUp ? '#5bb98c' : '#ff5a5e';
-
-    series.applyOptions({
-      lineColor,
-      topColor: isUp ? 'rgba(91, 185, 140, 0.3)' : 'rgba(255, 90, 94, 0.3)',
-      bottomColor: isUp ? 'rgba(91, 185, 140, 0)' : 'rgba(255, 90, 94, 0)',
-    });
-
-    series.setData(chartData.map((d) => ({ time: d.date as Time, value: d.value })));
-    chart.timeScale().fitContent();
   }, [chartData]);
 
   if (chartData.length === 0) {

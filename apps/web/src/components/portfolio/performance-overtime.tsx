@@ -1,12 +1,5 @@
 import { useEffect, useRef, useMemo } from 'react';
-import {
-  createChart,
-  HistogramSeries,
-  type IChartApi,
-  type ISeriesApi,
-  type Time,
-  ColorType,
-} from 'lightweight-charts';
+import { createChart, HistogramSeries, type IChartApi, type Time, ColorType } from 'lightweight-charts';
 import type { PortfolioHistoryPoint } from '../../api/types';
 
 interface PerformanceOvertimeProps {
@@ -14,23 +7,25 @@ interface PerformanceOvertimeProps {
 }
 
 /** Convert history points to chart-ready { date, pnl } using UTC dates from the backend history ordering. */
+/** Deduplicates by date (keeps last entry per day) because the backend returns
+ *  multiple intraday snapshots and lightweight-charts requires unique time values. */
 function toChartData(history: PortfolioHistoryPoint[]): { date: string; pnl: number }[] {
-  return history.map((h) => ({
-    date: new Date(h.timestamp).toISOString().slice(0, 10),
-    pnl: h.periodPnl,
-  }));
+  const byDate = new Map<string, number>();
+  for (const h of history) {
+    byDate.set(new Date(h.timestamp).toISOString().slice(0, 10), h.periodPnl);
+  }
+  return Array.from(byDate, ([date, pnl]) => ({ date, pnl }));
 }
 
 export function PerformanceOvertime({ history }: PerformanceOvertimeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const data = useMemo(() => toChartData(history), [history]);
 
-  // Create chart on first non-zero dimensions, resize thereafter
+  // Create chart + apply data in same ResizeObserver callback to avoid race condition.
+  // When data changes the effect re-runs: tears down old chart, observer recreates with fresh data.
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container || data.length === 0) return;
 
     let chart: IChartApi | null = null;
 
@@ -66,9 +61,7 @@ export function PerformanceOvertime({ history }: PerformanceOvertimeProps) {
           handleScroll: { vertTouchDrag: false },
         });
 
-        chartRef.current = chart;
-
-        seriesRef.current = chart.addSeries(HistogramSeries, {
+        const series = chart.addSeries(HistogramSeries, {
           priceScaleId: 'left',
           priceFormat: {
             type: 'custom',
@@ -78,6 +71,16 @@ export function PerformanceOvertime({ history }: PerformanceOvertimeProps) {
             },
           },
         });
+
+        series.setData(
+          data.map((d) => ({
+            time: d.date as Time,
+            value: d.pnl,
+            color: d.pnl >= 0 ? 'rgba(91, 185, 140, 0.85)' : 'rgba(255, 90, 94, 0.85)',
+          })),
+        );
+
+        chart.timeScale().fitContent();
       } else {
         chart.applyOptions({ width: w, height: h });
       }
@@ -87,26 +90,7 @@ export function PerformanceOvertime({ history }: PerformanceOvertimeProps) {
     return () => {
       observer.disconnect();
       chart?.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
     };
-  }, []);
-
-  // Update series data when data changes
-  useEffect(() => {
-    const series = seriesRef.current;
-    const chart = chartRef.current;
-    if (!series || !chart || data.length === 0) return;
-
-    series.setData(
-      data.map((d) => ({
-        time: d.date as Time,
-        value: d.pnl,
-        color: d.pnl >= 0 ? 'rgba(91, 185, 140, 0.85)' : 'rgba(255, 90, 94, 0.85)',
-      })),
-    );
-
-    chart.timeScale().fitContent();
   }, [data]);
 
   if (data.length === 0) {
