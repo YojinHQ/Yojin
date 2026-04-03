@@ -33,7 +33,7 @@ export default function Toggle({ checked, onChange, size = 'md', disabled = fals
       />
       <div
         className={cn(
-          'rounded-full bg-bg-tertiary peer-checked:bg-accent-primary peer-focus:ring-2 peer-focus:ring-accent-primary/20 after:absolute after:left-[2px] after:top-[2px] after:rounded-full after:bg-text-primary after:transition-all peer-checked:after:translate-x-full',
+          'rounded-full bg-bg-tertiary peer-checked:bg-accent-primary peer-focus:ring-2 peer-focus:ring-accent-primary/20 after:absolute after:left-[2px] after:top-[2px] after:rounded-full after:bg-bg-secondary after:transition-all peer-checked:after:translate-x-full',
           trackSize[size],
           thumbSize[size],
         )}

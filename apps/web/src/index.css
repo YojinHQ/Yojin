@@ -317,16 +317,16 @@
 
   /* Light theme overrides */
   [data-theme='light'] {
-    --color-bg-primary: #f8f8f7;
-    --color-bg-secondary: #ffffff;
-    --color-bg-tertiary: #f0f0ee;
-    --color-bg-hover: #e8e8e6;
-    --color-bg-card: #ffffff;
-    --color-border: #d8d8d6;
-    --color-border-light: #e4e4e2;
+    --color-bg-primary: #f7f0e5;
+    --color-bg-secondary: #f2ece0;
+    --color-bg-tertiary: #e5ded2;
+    --color-bg-hover: #e3ddd3;
+    --color-bg-card: #f2ece0;
+    --color-border: #d5cfc5;
+    --color-border-light: #e1dbd1;
     --color-text-primary: #1a1a1a;
-    --color-text-secondary: #5c5c5c;
-    --color-text-muted: #999999;
+    --color-text-secondary: #3d3d3d;
+    --color-text-muted: #6b6b6b;
     --color-accent-primary: #e5484d;
     --color-accent-secondary: #cd2b31;
     --color-accent-glow: rgba(229, 72, 77, 0.08);

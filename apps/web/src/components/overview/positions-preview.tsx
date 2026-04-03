@@ -218,7 +218,10 @@ export default function PositionsPreview() {
   }
 
   const viewAllLink = (
-    <Link to="/portfolio" className="text-2xs text-accent-primary transition-colors hover:text-accent-primary/80">
+    <Link
+      to="/portfolio"
+      className="text-2xs font-semibold text-accent-primary transition-colors hover:text-accent-primary/80"
+    >
       View All
     </Link>
   );

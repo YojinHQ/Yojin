@@ -68,7 +68,7 @@ export default function ConnectedAccountsCard() {
   const addButton = (
     <button
       onClick={() => setModalOpen(true)}
-      className="cursor-pointer text-2xs font-medium text-accent-primary transition-colors hover:text-accent-primary/80"
+      className="cursor-pointer text-2xs font-semibold text-accent-primary transition-colors hover:text-accent-primary/80"
     >
       +Add Account
     </button>
