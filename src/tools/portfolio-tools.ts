@@ -29,10 +29,11 @@ const PositionInputSchema = z.object({
 
 export interface PortfolioToolsOptions {
   snapshotStore: PortfolioSnapshotStore;
+  onPortfolioSaved?: (snapshot: import('../api/graphql/types.js').PortfolioSnapshot) => void;
 }
 
 export function createPortfolioTools(options: PortfolioToolsOptions): ToolDefinition[] {
-  const { snapshotStore } = options;
+  const { snapshotStore, onPortfolioSaved } = options;
 
   const savePositions: ToolDefinition = {
     name: 'save_portfolio_positions',
@@ -67,6 +68,8 @@ export function createPortfolioTools(options: PortfolioToolsOptions): ToolDefini
         positions,
         platform: params.platform,
       });
+
+      onPortfolioSaved?.(snapshot);
 
       // Redact exact values — the LLM should not see real balances.
       // The UI reads exact values directly from the snapshot store via GraphQL.

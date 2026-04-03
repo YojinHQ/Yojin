@@ -275,7 +275,7 @@ export default function PositionsPreview() {
             <tr className="border-b border-border">
               <th className={TH}>Asset</th>
               <th className={cn(TH, 'w-[80px]')} />
-              <th className={cn(TH, 'text-right')}>Price Today</th>
+              <th className={cn(TH, 'text-right')}>Price $</th>
               <th className={cn(TH, 'text-right')}>Change %</th>
             </tr>
           </thead>
@@ -299,7 +299,7 @@ export default function PositionsPreview() {
                   )}
                   onClick={() => openAssetDetail(pos.symbol)}
                 >
-                  {/* Asset: logo + symbol + name */}
+                  {/* Asset: logo + symbol (name on hover) */}
                   <td className="px-3 py-2">
                     <div className="flex min-w-0 items-center gap-2">
                       <SymbolLogo
@@ -307,10 +307,14 @@ export default function PositionsPreview() {
                         assetClass={pos.assetClass.toLowerCase() as 'equity' | 'crypto'}
                         size="sm"
                       />
-                      <div className="flex min-w-0 flex-col">
-                        <span className="text-xs font-semibold leading-tight text-text-primary">{pos.symbol}</span>
-                        <span className="truncate text-2xs leading-tight text-text-muted">{pos.name}</span>
-                      </div>
+                      <span className="group/asset relative text-xs font-semibold text-text-primary">
+                        {pos.symbol}
+                        {pos.name && pos.name !== pos.symbol && (
+                          <div className="pointer-events-none absolute left-0 bottom-full z-20 mb-0.5 hidden rounded-md bg-bg-tertiary px-2 py-1 shadow-md ring-1 ring-border group-hover/asset:block">
+                            <span className="whitespace-nowrap text-2xs text-text-secondary">{pos.name}</span>
+                          </div>
+                        )}
+                      </span>
                     </div>
                   </td>
 
@@ -330,7 +334,7 @@ export default function PositionsPreview() {
                     )}
                   </td>
 
-                  {/* Price Today */}
+                  {/* Price $ */}
                   <td className="whitespace-nowrap px-3 py-2 text-right text-xs font-medium tabular-nums text-text-primary">
                     {formatCurrency(pos.currentPrice)}
                   </td>
@@ -418,7 +422,7 @@ function MockPositions() {
           <tr className="border-b border-border">
             <th className={TH}>Asset</th>
             <th className={cn(TH, 'w-[80px]')} />
-            <th className={cn(TH, 'text-right')}>Price Today</th>
+            <th className={cn(TH, 'text-right')}>Price $</th>
             <th className={cn(TH, 'text-right')}>Change %</th>
           </tr>
         </thead>
@@ -431,10 +435,7 @@ function MockPositions() {
                 <td className="px-3 py-2">
                   <div className="flex min-w-0 items-center gap-2">
                     <div className="h-6 w-6 flex-shrink-0 rounded-full bg-bg-tertiary" />
-                    <div className="flex min-w-0 flex-col">
-                      <span className="text-xs font-semibold leading-tight text-text-primary">{pos.symbol}</span>
-                      <span className="truncate text-2xs leading-tight text-text-muted">{pos.name}</span>
-                    </div>
+                    <span className="text-xs font-semibold text-text-primary">{pos.symbol}</span>
                   </div>
                 </td>
                 <td className="px-3 py-2">

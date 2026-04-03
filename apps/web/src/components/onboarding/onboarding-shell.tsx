@@ -1,5 +1,7 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
+import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useOnboarding } from '../../lib/onboarding-context';
 import { ProgressBar } from './progress-bar';
 
 interface OnboardingShellProps {
@@ -10,6 +12,17 @@ interface OnboardingShellProps {
 }
 
 export function OnboardingShell({ currentStep, showProgress = true, children, className }: OnboardingShellProps) {
+  const { skipOnboarding } = useOnboarding();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || e.repeat) return;
+      skipOnboarding();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [skipOnboarding]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop overlay */}
@@ -22,6 +35,16 @@ export function OnboardingShell({ currentStep, showProgress = true, children, cl
           <div className="absolute -top-1/4 left-1/2 h-[600px] w-[800px] -translate-x-1/2 rounded-full bg-accent-primary/[0.03] blur-[120px]" />
           <div className="absolute -bottom-1/4 right-0 h-[400px] w-[600px] rounded-full bg-accent-primary/[0.02] blur-[100px]" />
         </div>
+
+        {/* Close button */}
+        <button
+          type="button"
+          onClick={skipOnboarding}
+          aria-label="Close"
+          className="absolute right-4 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+        >
+          <X className="h-4 w-4" />
+        </button>
 
         {/* Progress bar */}
         {showProgress && (

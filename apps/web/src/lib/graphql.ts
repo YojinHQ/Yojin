@@ -37,6 +37,7 @@ const cache = cacheExchange({
     CuratedSignalAssessment: () => null, // embedded — nested under CuratedSignal
     PortfolioRelevanceScore: () => null, // embedded
     AiConfig: () => null, // singleton — no id field
+    SaveAiCredentialResult: () => null, // mutation response — no id field
     OnboardingStatusResult: () => null, // singleton — no id field
     WorkflowStatus: () => null, // embedded — singleton status object
     PositionInsight: () => null, // embedded — nested under InsightReport
@@ -61,6 +62,8 @@ const cache = cacheExchange({
     PairingEvent: () => null,
     SessionSummary: (data) => data.id as string,
     SessionDetail: (data) => data.id as string,
+    Skill: (data) => data.id as string,
+    SkillTrigger: () => null, // embedded — nested under Skill
   },
   updates: {
     Mutation: {

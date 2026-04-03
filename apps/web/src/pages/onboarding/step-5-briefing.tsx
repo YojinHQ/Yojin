@@ -156,7 +156,7 @@ export function Step5Briefing() {
           {/* Section 3: Notification Channels */}
           <div className="space-y-3">
             <p className="text-sm font-medium text-text-secondary">Connect channels for notifications</p>
-            <div className="flex gap-3">
+            <div className="grid grid-cols-2 gap-3">
               {channels.map((ch) => {
                 const meta = getChannelMeta(ch.id);
                 const connected = ch.status === 'CONNECTED';
@@ -171,7 +171,7 @@ export function Step5Briefing() {
                       }
                     }}
                     className={cn(
-                      'flex flex-1 items-center gap-3 rounded-xl border p-4 transition-all duration-200',
+                      'flex items-center gap-3 rounded-xl border p-4 transition-all duration-200',
                       connected
                         ? 'border-success/40 bg-success/5'
                         : 'border-border bg-bg-card hover:border-accent-primary/30 cursor-pointer',
@@ -183,7 +183,11 @@ export function Step5Briefing() {
                         meta.color,
                       )}
                     >
-                      {meta.initials}
+                      {meta.logo ? (
+                        <img src={meta.logo} alt={meta.label} className="h-6 w-6 object-contain" />
+                      ) : (
+                        meta.initials
+                      )}
                     </div>
                     <div className="text-left">
                       <p className="text-sm font-medium text-text-primary">

@@ -55,9 +55,9 @@ export function formatSnap(snap: Snap): string {
 }
 
 export function formatAction(action: Action): string {
-  return ['\u{26A1} *New Action*', '', action.what, '', `_Why:_ ${action.why}`, `_Source:_ ${action.source}`].join(
-    '\n',
-  );
+  const ticker = action.source?.match(/micro-observation:\s*(\S+)/)?.[1];
+  const header = ticker ? `\u{26A1} *${ticker}*` : '\u{26A1} *New Action*';
+  return [header, action.what].join('\n');
 }
 
 export function formatInsight(report: InsightReport): string {
@@ -65,16 +65,25 @@ export function formatInsight(report: InsightReport): string {
 
   if (report.portfolio) {
     lines.push(`*Health:* ${report.portfolio.overallHealth}`);
-    lines.push(report.portfolio.summary);
-    lines.push('');
   }
 
-  for (const pos of report.positions.slice(0, 5)) {
-    lines.push(`\`\`\`${pos.symbol}\`\`\`: ${pos.rating} — ${pos.thesis}`);
+  // Compact position ratings — one line per position, symbol + rating only
+  if (report.positions.length > 0) {
+    const ratings = report.positions.map((p) => `${p.symbol} ${p.rating}`).join(' \u{2022} ');
+    lines.push(ratings);
   }
-  if (report.positions.length > 5) {
-    lines.push(`...and ${report.positions.length - 5} more positions`);
+
+  // Top actions as short bullets (max 3)
+  const actions = report.portfolio?.actionItems ?? [];
+  if (actions.length > 0) {
+    lines.push('');
+    for (const item of actions.slice(0, 3)) {
+      const text = typeof item === 'string' ? item : item.text;
+      lines.push(`\u{2022} ${text}`);
+    }
   }
+
+  lines.push('', '_Open Yojin for full report_');
 
   return lines.join('\n');
 }

@@ -48,14 +48,21 @@ function getAuthDir(oauthDir?: string): string {
   return join(base, 'whatsapp');
 }
 
-/** Read self JID from Baileys creds.json, stripping the device suffix from `me.id`. */
-async function readSelfJid(authDir: string): Promise<string | undefined> {
+/** Strip the device suffix from a JID: `123:45@domain` → `123@domain`. */
+function stripDeviceSuffix(jid: string): string {
+  return jid.replace(/:\d+@/, '@');
+}
+
+/** Read self JID + LID from Baileys creds.json. */
+async function readSelfJids(authDir: string): Promise<{ jid: string; lid?: string } | undefined> {
   try {
     const raw = await readFile(join(authDir, 'creds.json'), 'utf-8');
-    const parsed = JSON.parse(raw) as { me?: { id?: string } };
+    const parsed = JSON.parse(raw) as { me?: { id?: string; lid?: string } };
     const rawJid = parsed?.me?.id;
     if (!rawJid) return undefined;
-    return rawJid.replace(/:\d+@/, '@');
+    const jid = stripDeviceSuffix(rawJid);
+    const lid = parsed.me?.lid ? stripDeviceSuffix(parsed.me.lid) : undefined;
+    return { jid, lid };
   } catch (err) {
     logger.debug('Failed to read self JID from creds.json', { error: err });
     return undefined;
@@ -89,7 +96,17 @@ interface SelfChatSocket {
   onSelfChatMessage(handler: (msg: WAMessage) => void): () => void;
 }
 
-function createSelfChatProxy(sock: WASocket, selfJid: string, recentOutbound: Set<string>): SelfChatSocket {
+function createSelfChatProxy(
+  sock: WASocket,
+  selfJid: string,
+  recentOutbound: Set<string>,
+  selfLid?: string,
+): SelfChatSocket {
+  // Match against both the phone-number JID and the LID — WhatsApp may
+  // deliver self-chat messages under either format depending on version.
+  const selfJids = new Set([selfJid]);
+  if (selfLid) selfJids.add(selfLid);
+
   return {
     async sendMessage(text: string): Promise<string | undefined> {
       const sent = await sock.sendMessage(selfJid, { text });
@@ -108,7 +125,7 @@ function createSelfChatProxy(sock: WASocket, selfJid: string, recentOutbound: Se
       const listener = ({ messages }: { messages: WAMessage[] }) => {
         for (const msg of messages) {
           const jid = msg.key.remoteJid;
-          if (!jid || jid !== selfJid) continue;
+          if (!jid || !selfJids.has(jid)) continue;
           if (msg.key.id && recentOutbound.has(msg.key.id)) continue;
           handler(msg);
         }
@@ -124,6 +141,7 @@ function createSelfChatProxy(sock: WASocket, selfJid: string, recentOutbound: Se
 export function buildWhatsAppChannel(deps: WhatsAppChannelDeps = {}): ChannelPlugin {
   let session: WhatsAppSession | undefined;
   let selfJid: string | undefined;
+  let selfLid: string | undefined;
   let proxy: SelfChatSocket | undefined;
   let messageListenerCleanup: (() => void) | undefined;
   const messageHandlers: MessageHandler[] = [];
@@ -190,12 +208,14 @@ export function buildWhatsAppChannel(deps: WhatsAppChannelDeps = {}): ChannelPlu
         return;
       }
 
-      selfJid = await readSelfJid(authDir);
-      if (!selfJid) {
+      const selfIds = await readSelfJids(authDir);
+      if (!selfIds) {
         logger.warn('Could not resolve self JID from creds.json — WhatsApp channel disabled');
         return;
       }
-      logger.info('WhatsApp self-chat mode', { selfJid });
+      selfJid = selfIds.jid;
+      selfLid = selfIds.lid;
+      logger.info('WhatsApp self-chat mode', { selfJid, selfLid });
 
       await chmod(authDir, 0o700).catch((e) => logger.debug('chmod authDir failed', { error: e }));
       await chmod(join(authDir, 'creds.json'), 0o600).catch((e) => logger.debug('chmod creds failed', { error: e }));
@@ -279,7 +299,7 @@ export function buildWhatsAppChannel(deps: WhatsAppChannelDeps = {}): ChannelPlu
       messageListenerCleanup = undefined;
     }
 
-    proxy = createSelfChatProxy(sock, selfJid, recentOutbound);
+    proxy = createSelfChatProxy(sock, selfJid, recentOutbound, selfLid);
     messageListenerCleanup = wireMessageHandler(proxy);
   }
 

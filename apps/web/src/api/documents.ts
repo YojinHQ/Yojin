@@ -455,6 +455,8 @@ export const AI_CONFIG_QUERY = gql`
     aiConfig {
       defaultModel
       defaultProvider
+      hasAnthropicKey
+      hasOpenaiKey
     }
   }
 `;
@@ -464,6 +466,26 @@ export const SAVE_AI_CONFIG_MUTATION = gql`
     saveAiConfig(input: $input) {
       defaultModel
       defaultProvider
+      hasAnthropicKey
+      hasOpenaiKey
+    }
+  }
+`;
+
+export const SAVE_AI_CREDENTIAL_MUTATION = gql`
+  mutation SaveAiCredential($provider: String!, $apiKey: String!) {
+    saveAiCredential(provider: $provider, apiKey: $apiKey) {
+      success
+      error
+    }
+  }
+`;
+
+export const REMOVE_AI_CREDENTIAL_MUTATION = gql`
+  mutation RemoveAiCredential($provider: String!) {
+    removeAiCredential(provider: $provider) {
+      success
+      error
     }
   }
 `;
@@ -1050,6 +1072,7 @@ export const MICRO_INSIGHT_QUERY = gql`
       opportunities
       sentiment
       signalCount
+      topSignalIds
       assetSnap
       assetActions
       generatedAt
@@ -1073,6 +1096,7 @@ export const MICRO_INSIGHTS_QUERY = gql`
       opportunities
       sentiment
       signalCount
+      topSignalIds
       assetSnap
       assetActions
       generatedAt

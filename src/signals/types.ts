@@ -14,6 +14,7 @@
 import { z } from 'zod';
 
 import { AssetClassSchema } from '../api/graphql/types.js';
+import { DateTimeField, IdField, ScoreRange } from '../types/base.js';
 
 // ---------------------------------------------------------------------------
 // Enums (SCREAMING_CASE to match GraphQL convention)
@@ -52,10 +53,10 @@ export type SignalOutputType = z.infer<typeof SignalOutputTypeSchema>;
 // ---------------------------------------------------------------------------
 
 export const SignalDataSourceSchema = z.object({
-  id: z.string().min(1), // e.g. 'jintel', 'rss-reuters'
+  id: IdField, // e.g. 'jintel', 'rss-reuters'
   name: z.string().min(1),
   type: SourceTypeSchema,
-  reliability: z.number().min(0).max(1),
+  reliability: ScoreRange,
 });
 export type SignalDataSource = z.infer<typeof SignalDataSourceSchema>;
 
@@ -64,7 +65,7 @@ export type SignalDataSource = z.infer<typeof SignalDataSourceSchema>;
 // ---------------------------------------------------------------------------
 
 export const AssetSchema = z.object({
-  ticker: z.string().min(1), // e.g. 'AAPL', 'BTC-USD'
+  ticker: IdField, // e.g. 'AAPL', 'BTC-USD'
   name: z.string().optional(),
   assetClass: AssetClassSchema,
   exchange: z.string().optional(),
@@ -78,8 +79,8 @@ export type Asset = z.infer<typeof AssetSchema>;
 // ---------------------------------------------------------------------------
 
 export const SignalAssetLinkSchema = z.object({
-  ticker: z.string().min(1),
-  relevance: z.number().min(0).max(1), // how relevant this signal is to this asset
+  ticker: IdField,
+  relevance: ScoreRange, // how relevant this signal is to this asset
   linkType: LinkTypeSchema,
 });
 export type SignalAssetLink = z.infer<typeof SignalAssetLinkSchema>;
@@ -89,16 +90,16 @@ export type SignalAssetLink = z.infer<typeof SignalAssetLinkSchema>;
 // ---------------------------------------------------------------------------
 
 export const SignalSchema = z.object({
-  id: z.string().min(1), // nanoid
-  contentHash: z.string().min(1), // SHA-256 for dedup across sources
+  id: IdField, // nanoid
+  contentHash: IdField, // SHA-256 for dedup across sources
   type: SignalTypeSchema,
   title: z.string().min(1),
   content: z.string().optional(), // raw content or structured payload
   assets: z.array(SignalAssetLinkSchema), // many-to-many links
   sources: z.array(SignalDataSourceSchema).min(1), // which providers contributed
-  publishedAt: z.string().datetime(), // when the data point was produced
-  ingestedAt: z.string().datetime(), // when Yojin captured it
-  confidence: z.number().min(0).max(1), // source confidence
+  publishedAt: DateTimeField, // when the data point was produced
+  ingestedAt: DateTimeField, // when Yojin captured it
+  confidence: ScoreRange, // source confidence
   metadata: z.record(z.unknown()).optional(), // extensible domain-specific fields
   // Tiered summaries (LLM-generated at ingest/merge time)
   tier1: z.string().optional(),
@@ -125,11 +126,11 @@ export type Signal = z.infer<typeof SignalSchema>;
 // ---------------------------------------------------------------------------
 
 export const PortfolioRelevanceScoreSchema = z.object({
-  signalId: z.string().min(1),
-  ticker: z.string().min(1), // which position this score applies to
-  exposureWeight: z.number().min(0).max(1), // position size as % of portfolio
-  typeRelevance: z.number().min(0).max(1), // how much this signal type matters
-  compositeScore: z.number().min(0).max(1), // final ranked score
+  signalId: IdField,
+  ticker: IdField, // which position this score applies to
+  exposureWeight: ScoreRange, // position size as % of portfolio
+  typeRelevance: ScoreRange, // how much this signal type matters
+  compositeScore: ScoreRange, // final ranked score
 });
 export type PortfolioRelevanceScore = z.infer<typeof PortfolioRelevanceScoreSchema>;
 
@@ -138,18 +139,18 @@ export type PortfolioRelevanceScore = z.infer<typeof PortfolioRelevanceScoreSche
 // ---------------------------------------------------------------------------
 
 export const SignalIndexEntrySchema = z.object({
-  id: z.string().min(1),
-  contentHash: z.string().min(1),
+  id: IdField,
+  contentHash: IdField,
   type: SignalTypeSchema,
-  tickers: z.array(z.string().min(1)), // denormalized from assets for fast lookup
-  portfolioScore: z.number().min(0).max(1).optional(),
-  publishedAt: z.string().datetime(),
-  ingestedAt: z.string().datetime(),
+  tickers: z.array(IdField), // denormalized from assets for fast lookup
+  portfolioScore: ScoreRange.optional(),
+  publishedAt: DateTimeField,
+  ingestedAt: DateTimeField,
 });
 export type SignalIndexEntry = z.infer<typeof SignalIndexEntrySchema>;
 
 export const SignalIndexSchema = z.object({
   entries: z.array(SignalIndexEntrySchema),
-  lastUpdated: z.string().datetime(),
+  lastUpdated: DateTimeField,
 });
 export type SignalIndex = z.infer<typeof SignalIndexSchema>;

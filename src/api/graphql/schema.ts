@@ -243,7 +243,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type TickerPriceHistory {
-    ticker: String!
+    ticker: ID!
     history: [PricePoint!]!
   }
 
@@ -296,7 +296,7 @@ export const typeDefs = /* GraphQL */ `
 
   type ChatMessage {
     id: ID!
-    threadId: String!
+    threadId: ID!
     role: ChatRole!
     content: String!
     timestamp: String!
@@ -305,9 +305,9 @@ export const typeDefs = /* GraphQL */ `
 
   type ChatEvent {
     type: ChatEventType!
-    threadId: String!
+    threadId: ID!
     delta: String
-    messageId: String
+    messageId: ID
     content: String
     error: String
     toolName: String
@@ -316,13 +316,13 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type SendMessagePayload {
-    threadId: String!
-    messageId: String!
+    threadId: ID!
+    messageId: ID!
   }
 
   type SessionSummary {
     id: ID!
-    threadId: String!
+    threadId: ID!
     title: String!
     createdAt: String!
     lastMessageAt: String
@@ -331,7 +331,7 @@ export const typeDefs = /* GraphQL */ `
 
   type SessionDetail {
     id: ID!
-    threadId: String!
+    threadId: ID!
     title: String!
     createdAt: String!
     lastMessageAt: String
@@ -512,7 +512,7 @@ export const typeDefs = /* GraphQL */ `
     publishedAt: String!
     ingestedAt: String!
     confidence: Float!
-    contentHash: String!
+    contentHash: ID!
     tickers: [String!]!
     sources: [SignalSource!]!
     sourceCount: Int!
@@ -521,7 +521,7 @@ export const typeDefs = /* GraphQL */ `
     tier2: String
     sentiment: SignalSentiment
     outputType: SignalOutputType!
-    groupId: String
+    groupId: ID
     version: Int!
   }
 
@@ -548,8 +548,8 @@ export const typeDefs = /* GraphQL */ `
 
   type Action {
     id: ID!
-    signalId: String
-    skillId: String
+    signalId: ID
+    skillId: ID
     what: String!
     why: String!
     source: String!
@@ -735,6 +735,12 @@ export const typeDefs = /* GraphQL */ `
   # Insights
   # ---------------------------------------------------------------------------
 
+  enum SignalImpact {
+    POSITIVE
+    NEGATIVE
+    NEUTRAL
+  }
+
   enum InsightRating {
     VERY_BULLISH
     BULLISH
@@ -752,10 +758,10 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type SignalSummary {
-    signalId: String!
+    signalId: ID!
     type: SignalType!
     title: String!
-    impact: String!
+    impact: SignalImpact!
     confidence: Float!
     url: String
     sourceCount: Int!
@@ -804,7 +810,7 @@ export const typeDefs = /* GraphQL */ `
 
   type InsightReport {
     id: ID!
-    snapshotId: String!
+    snapshotId: ID!
     positions: [PositionInsight!]!
     portfolio: PortfolioInsight!
     emotionState: EmotionState!
@@ -853,6 +859,7 @@ export const typeDefs = /* GraphQL */ `
     opportunities: [String!]!
     sentiment: SignalSentiment!
     signalCount: Int!
+    topSignalIds: [String!]!
     assetSnap: String!
     assetActions: [String!]!
     generatedAt: String!
@@ -865,11 +872,11 @@ export const typeDefs = /* GraphQL */ `
 
   type TickerProfileEntry {
     id: ID!
-    ticker: String!
+    ticker: ID!
     category: String!
     observation: String!
     evidence: String!
-    insightReportId: String!
+    insightReportId: ID!
     insightDate: String!
     rating: String
     conviction: Float
@@ -894,7 +901,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type TickerProfile {
-    ticker: String!
+    ticker: ID!
     entryCount: Int!
     entries: [TickerProfileEntry!]!
     brief: TickerProfileBrief!
@@ -950,7 +957,7 @@ export const typeDefs = /* GraphQL */ `
   # ---------------------------------------------------------------------------
 
   type PortfolioRelevanceScore {
-    ticker: String!
+    ticker: ID!
     compositeScore: Float!
   }
 
@@ -981,8 +988,8 @@ export const typeDefs = /* GraphQL */ `
   # ---------------------------------------------------------------------------
 
   type SignalAssessment {
-    signalId: String!
-    ticker: String!
+    signalId: ID!
+    ticker: ID!
     verdict: SignalVerdict!
     relevanceScore: Float!
     reasoning: String!
@@ -1021,6 +1028,7 @@ export const typeDefs = /* GraphQL */ `
   type SkillTrigger {
     type: String!
     description: String!
+    params: String
   }
 
   type Skill {
@@ -1032,7 +1040,9 @@ export const typeDefs = /* GraphQL */ `
     source: String!
     createdBy: String!
     createdAt: String!
+    content: String!
     triggers: [SkillTrigger!]!
+    maxPositionSize: Float
     tickers: [String!]!
   }
 
@@ -1122,11 +1132,18 @@ export const typeDefs = /* GraphQL */ `
   type AiConfig {
     defaultModel: String!
     defaultProvider: String!
+    hasAnthropicKey: Boolean!
+    hasOpenaiKey: Boolean!
   }
 
   input AiConfigInput {
     defaultModel: String!
     defaultProvider: String
+  }
+
+  type SaveAiCredentialResult {
+    success: Boolean!
+    error: String
   }
 
   type Mutation {
@@ -1180,6 +1197,8 @@ export const typeDefs = /* GraphQL */ `
     toggleSkill(id: ID!, active: Boolean!): Skill!
     clearAppData: Boolean!
     saveAiConfig(input: AiConfigInput!): AiConfig!
+    saveAiCredential(provider: String!, apiKey: String!): SaveAiCredentialResult!
+    removeAiCredential(provider: String!): SaveAiCredentialResult!
   }
 
   # ---------------------------------------------------------------------------
@@ -1192,7 +1211,7 @@ export const typeDefs = /* GraphQL */ `
   }
 
   type WorkflowProgressEvent {
-    workflowId: String!
+    workflowId: ID!
     stage: String!
     stageIndex: Int
     totalStages: Int
