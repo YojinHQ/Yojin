@@ -17,7 +17,7 @@ import { createSubsystemLogger } from '../../../logging/logger.js';
 import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { SignalArchive } from '../../../signals/archive.js';
 import type { AssessmentStore } from '../../../signals/curation/assessment-store.js';
-import type { SignalAssessment } from '../../../signals/curation/assessment-types.js';
+import type { SignalAssessment, SignalVerdict, ThesisAlignment } from '../../../signals/curation/assessment-types.js';
 import type { CurationConfig, FeedTarget } from '../../../signals/curation/types.js';
 import { DEFAULT_SPAM_PATTERNS, deduplicateByTitle, filterSignals } from '../../../signals/signal-filter.js';
 import type { Signal, SignalOutputType } from '../../../signals/types.js';
@@ -74,8 +74,8 @@ interface CuratedSignalGql {
   feedTarget: FeedTarget;
   severity: SignalSeverity;
   assessment: {
-    verdict: string;
-    thesisAlignment: string;
+    verdict: SignalVerdict;
+    thesisAlignment: ThesisAlignment;
     actionability: number;
   } | null;
 }

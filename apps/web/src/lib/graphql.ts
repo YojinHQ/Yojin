@@ -34,6 +34,7 @@ const cache = cacheExchange({
     PriceEvent: () => null,
     SignalSource: () => null, // embedded — same source id appears on many signals
     CuratedSignal: () => null, // embedded — wraps Signal with scores
+    CuratedSignalAssessment: () => null, // embedded — nested under CuratedSignal
     PortfolioRelevanceScore: () => null, // embedded
     AiConfig: () => null, // singleton — no id field
     OnboardingStatusResult: () => null, // singleton — no id field
