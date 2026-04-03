@@ -94,6 +94,9 @@ export interface IngestorOptions {
 /** Provider that returns the current set of portfolio tickers. */
 export type PortfolioTickerProvider = () => Promise<Set<string> | null>;
 
+/** Provider that returns the current set of watchlist tickers. */
+export type WatchlistTickerProvider = () => Promise<Set<string> | null>;
+
 /** Hook called after signals are written to the archive. */
 export type PostIngestHook = (ingested: number) => Promise<void>;
 
@@ -103,6 +106,7 @@ export class SignalIngestor {
   private clustering?: SignalClustering;
   private qualityAgent?: QualityAgent;
   private portfolioTickerProvider?: PortfolioTickerProvider;
+  private watchlistTickerProvider?: WatchlistTickerProvider;
   private postIngestHook?: PostIngestHook;
   private knownHashes = new Map<string, string>(); // contentHash → signalId
   private initialized = false;
@@ -116,6 +120,11 @@ export class SignalIngestor {
   /** Wire portfolio ticker filter — signals with no portfolio ticker are dropped at ingestion. */
   setPortfolioTickerProvider(provider: PortfolioTickerProvider): void {
     this.portfolioTickerProvider = provider;
+  }
+
+  /** Wire watchlist ticker filter — watchlist assets are included alongside portfolio assets. */
+  setWatchlistTickerProvider(provider: WatchlistTickerProvider): void {
+    this.watchlistTickerProvider = provider;
   }
 
   /** Wire auto-curation — runs deterministic curation after every ingestion. */
@@ -165,8 +174,18 @@ export class SignalIngestor {
       logger.debug(`Pre-filter dropped ${items.length - preFiltered.length}/${items.length} items`);
     }
 
-    // Load portfolio tickers once for the entire batch
+    // Load portfolio + watchlist tickers once for the entire batch
     const portfolioTickers = this.portfolioTickerProvider ? await this.portfolioTickerProvider() : null;
+    const watchlistTickers = this.watchlistTickerProvider ? await this.watchlistTickerProvider() : null;
+
+    // Merge into one Set for the filter — a signal is relevant if it matches portfolio OR watchlist
+    const relevantTickers: Set<string> | null = (() => {
+      if (!portfolioTickers && !watchlistTickers) return null;
+      const combined = new Set<string>();
+      for (const t of portfolioTickers ?? []) combined.add(t);
+      for (const t of watchlistTickers ?? []) combined.add(t);
+      return combined;
+    })();
 
     const result: IngestResult = { ingested: 0, duplicates: 0, errors: [] };
     // Pending signals not yet flushed to archive (keyed by id for fast lookup during same-batch merges)
@@ -179,13 +198,13 @@ export class SignalIngestor {
         const signal = this.toSignal(item);
         if (!signal) continue;
 
-        // Drop signals that have explicit tickers but none match the portfolio.
+        // Drop signals that have explicit tickers but none match the portfolio or watchlist.
         // Signals with zero extracted tickers are kept — they may be relevant
         // macro/market news that the curation pipeline will score later.
         if (
-          portfolioTickers &&
+          relevantTickers &&
           signal.assets.length > 0 &&
-          !signal.assets.some((a) => portfolioTickers.has(a.ticker.toUpperCase()))
+          !signal.assets.some((a) => relevantTickers.has(a.ticker.toUpperCase()))
         ) {
           dropped++;
           continue;
@@ -242,7 +261,9 @@ export class SignalIngestor {
         const enriched = await this.evaluateQuality(signals);
         await this.archive.appendBatch(enriched);
       }
-      logger.info(`Ingested ${signals.length} signals${dropped > 0 ? `, ${dropped} dropped (not in portfolio)` : ''}`);
+      logger.info(
+        `Ingested ${signals.length} signals${dropped > 0 ? `, ${dropped} dropped (not in portfolio or watchlist)` : ''}`,
+      );
 
       // Auto-curate: run deterministic curation immediately after ingestion
       if (this.postIngestHook) {

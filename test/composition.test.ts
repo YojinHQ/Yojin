@@ -19,14 +19,15 @@ describe('buildContext', () => {
     expect(services.vault).toBeUndefined();
   });
 
-  it('registers 51 tools (with vault-locked stubs)', async () => {
+  it('registers 54 tools (with vault-locked stubs)', async () => {
     const services = await buildContext({ skipVault: true });
     const schemas = services.toolRegistry.toSchemas();
 
     // 2 starter + 4 credential stubs + 8 brain + 1 security audit
-    // + 15 jintel tools (search, enrich, batch_enrich, quotes, sanctions, run_technical,
-    //     price_history, get_news, get_research, get_sentiment, get_derivatives,
-    //     gdp, inflation, interest_rates, sp500_multiples)
+    // + 18 jintel tools (search, jintel_query, enrich_entity, enrich_position, enrich_snapshot,
+    //     batch_enrich, quotes, sanctions, run_technical, price_history, get_news,
+    //     get_research, get_sentiment, get_derivatives, gdp, inflation, interest_rates,
+    //     sp500_multiples)
     // + 3 watchlist tools + 3 signal tools
     // + 1 error analysis + 1 api health + 1 portfolio reasoning
     // + 2 portfolio tools (save_portfolio_positions, get_portfolio)
@@ -35,8 +36,8 @@ describe('buildContext', () => {
     // + 2 data source query tools (query_data_source, list_data_sources)
     // + 2 memory tools (store_signal_memory, recall_signal_memories)
     // + 4 display tools (display_portfolio_overview, display_positions_list, display_allocation, display_morning_briefing)
-    // = 51
-    expect(schemas.length).toBe(51);
+    // = 54
+    expect(schemas.length).toBe(54);
 
     const names = schemas.map((s) => s.name).sort();
     expect(names).toContain('get_current_time');
@@ -61,7 +62,10 @@ describe('buildContext', () => {
     expect(names).toContain('recall_signal_memories');
     // Jintel tools
     expect(names).toContain('search_entities');
+    expect(names).toContain('jintel_query');
     expect(names).toContain('enrich_entity');
+    expect(names).toContain('enrich_position');
+    expect(names).toContain('enrich_snapshot');
     expect(names).toContain('batch_enrich');
     expect(names).toContain('market_quotes');
     expect(names).toContain('sanctions_screen');

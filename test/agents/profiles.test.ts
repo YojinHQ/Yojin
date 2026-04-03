@@ -12,6 +12,9 @@ describe('Agent Profile Factories', () => {
     expect(profile.id).toBe('research-analyst');
     expect(profile.role).toBe('analyst');
     expect(profile.tools.length).toBeGreaterThan(0);
+    expect(profile.tools).toContain('jintel_query');
+    expect(profile.tools).toContain('enrich_snapshot');
+    expect(profile.tools).not.toContain('query_data_source');
     expect(profile.allowedActions).toContain('tool_call');
     expect(profile.capabilities.length).toBeGreaterThan(0);
     AgentProfileSchema.parse(profile);

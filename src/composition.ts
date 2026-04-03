@@ -512,8 +512,12 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     toolRegistry.register(tool);
   }
 
-  // Jintel tools (10 tools — always registered; return config error if client unavailable)
-  const jintelToolOptions: JintelToolOptions = { client: jintelClient, ingestor: signalIngestor };
+  // Jintel tools (18 tools — always registered; return config error if client unavailable)
+  const jintelToolOptions: JintelToolOptions = {
+    client: jintelClient,
+    ingestor: signalIngestor,
+    snapshotStore,
+  };
   for (const tool of createJintelTools(jintelToolOptions)) {
     toolRegistry.register(tool);
   }
@@ -533,6 +537,11 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   setWatchlistEnrichment(watchlistEnrichment);
   setWatchlistSnapshotStore(snapshotStore);
   setPortfolioWatchlistStore(watchlistStore);
+  signalIngestor.setWatchlistTickerProvider(async () => {
+    const entries = watchlistStore.list();
+    if (entries.length === 0) return null;
+    return new Set(entries.map((e) => e.symbol.toUpperCase()));
+  });
   for (const tool of watchlistTools) {
     toolRegistry.register(tool);
   }

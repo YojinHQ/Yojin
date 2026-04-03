@@ -24,9 +24,9 @@ const SignalType = SignalTypeSchema.enum;
 
 const logger = createSubsystemLogger('jintel-signal-fetcher');
 
-// Only request fields that produce signals — risk and regulatory add load without signal output
-const ENRICHMENT_FIELDS = ['market', 'technicals', 'news', 'research', 'sentiment'] as const;
-const CHUNK_SIZE = 5;
+// Request all fields that produce signals — regulatory enables SEC filing signals
+const ENRICHMENT_FIELDS = ['market', 'technicals', 'news', 'research', 'sentiment', 'regulatory'] as const;
+const DEFAULT_CHUNK_SIZE = 10;
 
 export interface JintelFetchResult {
   ingested: number;
@@ -37,6 +37,8 @@ export interface JintelFetchResult {
 export interface JintelFetchOptions {
   /** Only fetch array sub-graph items (news, research) published after this ISO timestamp. */
   since?: string;
+  /** Number of tickers to fetch per Jintel API call (default: 10). */
+  chunkSize?: number;
 }
 
 /**
@@ -57,8 +59,9 @@ export async function fetchJintelSignals(
   let totalIngested = 0;
   let totalDuplicates = 0;
 
-  for (let i = 0; i < tickers.length; i += CHUNK_SIZE) {
-    const chunk = tickers.slice(i, i + CHUNK_SIZE);
+  const chunkSize = options?.chunkSize ?? DEFAULT_CHUNK_SIZE;
+  for (let i = 0; i < tickers.length; i += chunkSize) {
+    const chunk = tickers.slice(i, i + chunkSize);
     try {
       const entities = await client.request<Entity[]>(query, { tickers: chunk });
 

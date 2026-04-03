@@ -1,8 +1,13 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import type { Entity, JintelClient, JintelResult, MarketQuote, SanctionsMatch } from '@yojinhq/jintel-client';
 import { JintelAuthError } from '@yojinhq/jintel-client';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createJintelTools } from '../../src/jintel/tools.js';
+import { PortfolioSnapshotStore } from '../../src/portfolio/snapshot-store.js';
 import type { RawSignalInput, SignalIngestor } from '../../src/signals/ingestor.js';
 
 // ── Mock Helpers ─────────────────────────────────────────────────────────
@@ -100,6 +105,16 @@ const MOCK_QUOTES: MarketQuote[] = [
   },
 ];
 
+const MOCK_PRICE_HISTORY = [
+  {
+    ticker: 'AAPL',
+    history: [
+      { date: '2024-01-10', open: 175, high: 180, low: 174, close: 178, volume: 10_000_000 },
+      { date: '2024-01-11', open: 178, high: 181, low: 177, close: 180, volume: 12_000_000 },
+    ],
+  },
+];
+
 const MOCK_SANCTIONS: SanctionsMatch[] = [
   {
     listName: 'OFAC SDN',
@@ -115,6 +130,7 @@ function createMockClient(overrides: Partial<JintelClient> = {}): JintelClient {
     enrichEntity: vi.fn().mockResolvedValue(ok(MOCK_ENRICHED_ENTITY)),
     batchEnrich: vi.fn().mockResolvedValue(ok([MOCK_ENRICHED_ENTITY])),
     quotes: vi.fn().mockResolvedValue(ok(MOCK_QUOTES)),
+    priceHistory: vi.fn().mockResolvedValue(ok(MOCK_PRICE_HISTORY)),
     sanctionsScreen: vi.fn().mockResolvedValue(ok(MOCK_SANCTIONS)),
     healthCheck: vi.fn().mockResolvedValue({ healthy: true, latencyMs: 50 }),
     request: vi.fn().mockResolvedValue([]),
@@ -129,11 +145,21 @@ function createMockIngestor(): SignalIngestor & { ingest: ReturnType<typeof vi.f
   } as unknown as SignalIngestor & { ingest: ReturnType<typeof vi.fn> };
 }
 
-function findTool(name: string, client?: JintelClient, ingestor?: SignalIngestor) {
-  const tools = createJintelTools({ client, ingestor });
+function findTool(
+  name: string,
+  client?: JintelClient,
+  ingestor?: SignalIngestor,
+  snapshotStore?: PortfolioSnapshotStore,
+) {
+  const tools = createJintelTools({ client, ingestor, snapshotStore });
   const tool = tools.find((t) => t.name === name);
   if (!tool) throw new Error(`Tool not found: ${name}`);
   return tool;
+}
+
+function createSnapshotStore() {
+  const dir = mkdtempSync(join(tmpdir(), 'yojin-jintel-tools-'));
+  return { dir, store: new PortfolioSnapshotStore(dir) };
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────
@@ -228,6 +254,31 @@ describe('jintel tools', () => {
     });
   });
 
+  describe('jintel_query', () => {
+    it('routes quote queries through Jintel quotes', async () => {
+      const client = createMockClient();
+      const tool = findTool('jintel_query', client);
+
+      const result = await tool.execute({ kind: 'quote', tickers: ['AAPL', 'GOOG'] });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toContain('AAPL: $178.50');
+      expect(client.quotes).toHaveBeenCalledWith(['AAPL', 'GOOG']);
+    });
+
+    it('routes history queries through Jintel price history', async () => {
+      const client = createMockClient();
+      const tool = findTool('jintel_query', client);
+
+      const result = await tool.execute({ kind: 'history', ticker: 'AAPL', range: '1m', interval: '1d' });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toContain('## AAPL (2 candles)');
+      expect(result.content).toContain('Period change');
+      expect(client.priceHistory).toHaveBeenCalledWith(['AAPL'], '1m', '1d');
+    });
+  });
+
   describe('sanctions_screen', () => {
     it('returns formatted sanctions matches', async () => {
       const client = createMockClient();
@@ -312,8 +363,8 @@ describe('jintel tools', () => {
 
       expect(result.isError).toBe(true);
       expect(result.content).toContain('Connection timeout');
-      expect(result.content).toContain('query_data_source');
       expect(result.content).toContain('fallback');
+      expect(result.content).toContain('connected source');
     });
 
     it('quotes failure returns error with fallback', async () => {
@@ -326,7 +377,7 @@ describe('jintel tools', () => {
 
       expect(result.isError).toBe(true);
       expect(result.content).toContain('Rate limit exceeded');
-      expect(result.content).toContain('query_data_source');
+      expect(result.content).toContain('connected source');
     });
 
     it('auth error returns re-onboarding guidance', async () => {
@@ -375,6 +426,114 @@ describe('jintel tools', () => {
 
       expect(result.isError).toBeUndefined();
       expect(result.content).toContain('Apple Inc.');
+    });
+  });
+
+  describe('portfolio enrichment tools', () => {
+    it('enrich_position adds redacted portfolio context', async () => {
+      const { dir, store } = createSnapshotStore();
+      try {
+        await store.save({
+          platform: 'MANUAL',
+          positions: [
+            {
+              symbol: 'AAPL',
+              name: 'Apple Inc.',
+              quantity: 25,
+              costBasis: 150,
+              currentPrice: 180,
+              marketValue: 4500,
+              unrealizedPnl: 750,
+              unrealizedPnlPercent: 20,
+              assetClass: 'EQUITY',
+              platform: 'MANUAL',
+            },
+          ],
+        });
+
+        const client = createMockClient();
+        const tool = findTool('enrich_position', client, undefined, store);
+        const result = await tool.execute({ symbol: 'AAPL' });
+
+        expect(result.isError).toBeUndefined();
+        expect(result.content).toContain('## Portfolio Context');
+        expect(result.content).toContain('Quantity: 10-100 units');
+        expect(result.content).toContain('Position Value: $1k-$10k');
+        expect(result.content).toContain('# Apple Inc. (COMPANY)');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('enrich_snapshot batch enriches portfolio symbols', async () => {
+      const { dir, store } = createSnapshotStore();
+      try {
+        await store.save({
+          platform: 'MANUAL',
+          positions: [
+            {
+              symbol: 'AAPL',
+              name: 'Apple Inc.',
+              quantity: 25,
+              costBasis: 150,
+              currentPrice: 180,
+              marketValue: 4500,
+              unrealizedPnl: 750,
+              unrealizedPnlPercent: 20,
+              assetClass: 'EQUITY',
+              platform: 'MANUAL',
+            },
+            {
+              symbol: 'MSFT',
+              name: 'Microsoft Corp.',
+              quantity: 12,
+              costBasis: 300,
+              currentPrice: 420,
+              marketValue: 5040,
+              unrealizedPnl: 1440,
+              unrealizedPnlPercent: 40,
+              assetClass: 'EQUITY',
+              platform: 'MANUAL',
+            },
+          ],
+        });
+
+        const client = createMockClient({
+          batchEnrich: vi.fn().mockResolvedValue(
+            ok([
+              MOCK_ENRICHED_ENTITY,
+              {
+                ...MOCK_ENRICHED_ENTITY,
+                id: 'msft',
+                name: 'Microsoft Corp.',
+                tickers: ['MSFT'],
+                market: {
+                  ...MOCK_ENRICHED_ENTITY.market,
+                  quote: {
+                    ...MOCK_ENRICHED_ENTITY.market!.quote!,
+                    ticker: 'MSFT',
+                    price: 420,
+                    change: 3.2,
+                    changePercent: 0.77,
+                  },
+                },
+              },
+            ]),
+          ),
+        });
+
+        const tool = findTool('enrich_snapshot', client, undefined, store);
+        const result = await tool.execute({});
+
+        expect(result.isError).toBeUndefined();
+        expect(result.content).toContain('# Portfolio Snapshot Enrichment');
+        expect(result.content).toContain('Symbol: AAPL');
+        expect(result.content).toContain('Symbol: MSFT');
+        expect(result.content).toContain('Microsoft Corp.');
+        expect(client.batchEnrich).toHaveBeenCalledWith(['AAPL', 'MSFT'], ['market', 'risk']);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
   });
 });

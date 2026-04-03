@@ -5,34 +5,31 @@ export function createResearchAnalystProfile(): AgentProfile {
     id: 'research-analyst',
     name: 'Research Analyst',
     role: 'analyst',
-    description: 'Market intelligence — gathers, validates, and structures data from connected sources.',
+    description: 'Jintel-backed market intelligence — gathers, validates, and structures data for downstream agents.',
     tools: [
       // Jintel tools
       'search_entities',
+      'jintel_query',
       'enrich_entity',
+      'enrich_position',
+      'enrich_snapshot',
       'batch_enrich',
       'market_quotes',
-      'news_search',
+      'price_history',
+      'run_technical',
       'sanctions_screen',
-      'web_search',
       'get_news',
       'get_research',
       'get_sentiment',
       'get_derivatives',
-      'price_history',
+      'get_gdp',
+      'get_inflation',
+      'get_interest_rates',
+      'get_sp500_multiples',
       // Signal tools
       'glob_signals',
       'grep_signals',
       'read_signal',
-      // Enrichment (future — wired in FE integration story)
-      'enrich_position',
-      'enrich_snapshot',
-      // Research / technicals
-      'run_technical',
-      'resolve_symbol',
-      // Data source
-      'query_data_source',
-      'list_data_sources',
       // Health
       'check_api_health',
       // Memory tools

@@ -275,7 +275,7 @@ export function registerBuiltinWorkflows(
         {
           agentId: 'research-analyst',
           buildMessage: (prev) =>
-            `Enrich these positions with latest market data:\n\n${prev.get('trader')?.text ?? 'No positions available.'}`,
+            `Enrich these positions with the latest Jintel market data. Prefer enrich_snapshot for portfolio-wide work, or batch_enrich / market_quotes if you only need quotes and risk.\n\n${prev.get('trader')?.text ?? 'No positions available.'}`,
         },
         {
           agentId: 'risk-manager',
@@ -298,7 +298,7 @@ export function registerBuiltinWorkflows(
       {
         agentId: 'research-analyst',
         buildMessage: (_prev, trigger) =>
-          `Analyze: ${trigger ?? 'the requested symbol'} — fundamentals, technicals, news, sentiment.`,
+          `Analyze ${trigger ?? 'the requested symbol'} using Jintel-backed fundamentals, technicals, news, research, sentiment, and price history. Prefer jintel_query for quote/fundamentals/history, then use get_news / get_research / get_sentiment / run_technical as needed.`,
       },
       {
         agentId: 'risk-manager',
@@ -319,7 +319,8 @@ export function registerBuiltinWorkflows(
     stages: [
       {
         agentId: 'research-analyst',
-        buildMessage: () => 'Enrich the full portfolio with latest data.',
+        buildMessage: () =>
+          'Enrich the full portfolio with the latest Jintel data. Prefer enrich_snapshot for the full book, then drill down only where needed.',
       },
       {
         agentId: 'risk-manager',

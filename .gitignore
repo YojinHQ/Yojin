@@ -43,6 +43,7 @@ data/*
 
 # Test artifacts (buildContext with dataRoot: '.' creates these)
 /config/
+.yojin/
 
 .claude/worktrees/
 .env.docker

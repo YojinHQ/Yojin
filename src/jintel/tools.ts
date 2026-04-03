@@ -35,14 +35,18 @@ import {
 } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
+import type { Position } from '../api/graphql/types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
+import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
+import { balanceToRange, quantityToRange } from '../trust/pii/patterns.js';
 
 // ── Options ──────────────────────────────────────────────────────────────
 
 export interface JintelToolOptions {
   client?: JintelClient;
   ingestor?: SignalIngestor;
+  snapshotStore?: PortfolioSnapshotStore;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────
@@ -53,7 +57,24 @@ const NOT_CONFIGURED_MSG =
 const AUTH_ERROR_MSG =
   'Jintel rejected the API key (401 Unauthorized). The stored key may be revoked or mistyped — delete and re-add "jintel-api-key" in Settings → Vault.';
 
-const FALLBACK_SUFFIX = '\n\nJintel unavailable. Use query_data_source with configured sources for fallback data.';
+const FALLBACK_SUFFIX =
+  '\n\nJintel unavailable. Use cached signals or another connected source if fallback data is explicitly needed.';
+
+const JINTEL_QUERY_KIND = z.enum([
+  'quote',
+  'market',
+  'fundamentals',
+  'history',
+  'news',
+  'research',
+  'sentiment',
+  'technicals',
+  'derivatives',
+  'risk',
+  'regulatory',
+]);
+
+type JintelQueryKind = z.infer<typeof JINTEL_QUERY_KIND>;
 
 const ENRICHMENT_FIELDS = z.enum([
   'market',
@@ -73,6 +94,8 @@ const SEVERITY_CONFIDENCE: Record<string, number> = {
   LOW: 0.5,
 };
 
+const DEFAULT_PORTFOLIO_FIELDS: EnrichmentField[] = ['market', 'risk'];
+
 // ── Helpers ──────────────────────────────────────────────────────────────
 
 function notConfigured(): ToolResult {
@@ -85,6 +108,10 @@ function authError(): ToolResult {
 
 function failureResult(error: string): ToolResult {
   return { content: error + FALLBACK_SUFFIX, isError: true };
+}
+
+function snapshotStoreUnavailable(): ToolResult {
+  return { content: 'Portfolio snapshot store is not configured.', isError: true };
 }
 
 type HandleResult<T> = { ok: true; data: T } | { ok: false; toolResult: ToolResult };
@@ -393,6 +420,30 @@ export function formatNumber(n: number): string {
   if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
   if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
   return n.toString();
+}
+
+function formatPositionContext(position: Position, snapshotTimestamp: string): string {
+  const lines = [
+    '## Portfolio Context',
+    `Symbol: ${position.symbol}`,
+    `Name: ${position.name || position.symbol}`,
+    `Asset Class: ${position.assetClass}`,
+    `Platform: ${position.platform}`,
+    `Quantity: ${quantityToRange(position.quantity)}`,
+    `Position Value: ${balanceToRange(position.marketValue)}`,
+    `Unrealized P&L: ${position.unrealizedPnlPercent >= 0 ? '+' : ''}${position.unrealizedPnlPercent.toFixed(1)}%`,
+    `Snapshot Time: ${snapshotTimestamp}`,
+  ];
+  if (position.sector) lines.push(`Sector: ${position.sector}`);
+  return lines.join('\n');
+}
+
+function findEntityForSymbol(entities: Entity[], symbol: string): Entity | undefined {
+  const upper = symbol.toUpperCase();
+  return entities.find(
+    (entity) =>
+      entity.id.toUpperCase() === upper || entity.tickers?.some((ticker) => ticker.toUpperCase() === upper) === true,
+  );
 }
 
 // ── Tool Factory ─────────────────────────────────────────────────────────
@@ -836,9 +887,195 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     },
   };
 
+  const jintelQuery: ToolDefinition = {
+    name: 'jintel_query',
+    description:
+      'Generic Jintel query tool for quotes, fundamentals, market data, history, news, research, sentiment, ' +
+      'technicals, derivatives, risk, or regulatory data. Use this when you want one Jintel-backed entry point ' +
+      'instead of choosing a more specialized tool.',
+    parameters: z.object({
+      kind: JINTEL_QUERY_KIND.describe(
+        'What to fetch: quote, market, fundamentals, history, news, research, sentiment, technicals, derivatives, risk, or regulatory',
+      ),
+      ticker: z.string().optional().describe('Single ticker symbol (e.g. AAPL, BTC, NVDA)'),
+      tickers: z.array(z.string()).optional().describe('Ticker batch for quote/history queries'),
+      range: z.string().optional().describe('History range for history queries (default "1y")'),
+      interval: z.string().optional().describe('History interval for history queries (default "1d")'),
+    }),
+    async execute(params: {
+      kind: JintelQueryKind;
+      ticker?: string;
+      tickers?: string[];
+      range?: string;
+      interval?: string;
+    }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+
+      const normalizedTickers =
+        params.tickers?.map((ticker) => ticker.toUpperCase()) ?? (params.ticker ? [params.ticker.toUpperCase()] : []);
+      const singleTicker = normalizedTickers[0];
+
+      if ((params.kind === 'quote' || params.kind === 'history') && normalizedTickers.length === 0) {
+        return { content: `jintel_query kind "${params.kind}" requires "ticker" or "tickers".`, isError: true };
+      }
+
+      if (params.kind !== 'quote' && params.kind !== 'history' && (!singleTicker || normalizedTickers.length !== 1)) {
+        return { content: `jintel_query kind "${params.kind}" requires exactly one ticker.`, isError: true };
+      }
+
+      switch (params.kind) {
+        case 'quote':
+          return marketQuotes.execute({ tickers: normalizedTickers });
+        case 'history':
+          return priceHistory.execute({
+            tickers: normalizedTickers,
+            range: params.range,
+            interval: params.interval,
+          });
+        case 'market':
+        case 'fundamentals':
+          return enrichEntity.execute({ ticker: singleTicker, fields: ['market'] });
+        case 'risk':
+          return enrichEntity.execute({ ticker: singleTicker, fields: ['risk'] });
+        case 'regulatory':
+          return enrichEntity.execute({ ticker: singleTicker, fields: ['regulatory'] });
+        case 'news':
+          return getNews.execute({ ticker: singleTicker });
+        case 'research':
+          return getResearch.execute({ ticker: singleTicker });
+        case 'sentiment':
+          return getSentiment.execute({ ticker: singleTicker });
+        case 'technicals':
+          return runTechnical.execute({ ticker: singleTicker });
+        case 'derivatives':
+          return getDerivatives.execute({ ticker: singleTicker });
+      }
+
+      return { content: `Unsupported Jintel query kind: ${params.kind}`, isError: true };
+    },
+  };
+
+  const enrichPosition: ToolDefinition = {
+    name: 'enrich_position',
+    description:
+      'Enrich a current portfolio position with Jintel market and risk data. Uses the latest portfolio snapshot ' +
+      'to attach redacted position context to the Jintel enrichment.',
+    parameters: z.object({
+      symbol: z.string().min(1).describe('Portfolio symbol to enrich (e.g. AAPL, BTC)'),
+      fields: z
+        .array(ENRICHMENT_FIELDS)
+        .optional()
+        .describe("Specific enrichment fields to fetch (default: ['market', 'risk'])"),
+    }),
+    async execute(params: { symbol: string; fields?: EnrichmentField[] }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      if (!options.snapshotStore) return snapshotStoreUnavailable();
+
+      const symbol = params.symbol.toUpperCase();
+      const snapshot = await options.snapshotStore.getLatest();
+      if (!snapshot) {
+        return {
+          content: 'No portfolio snapshot found. Save portfolio positions before calling enrich_position.',
+          isError: true,
+        };
+      }
+
+      const position = snapshot.positions.find((item) => item.symbol.toUpperCase() === symbol);
+      if (!position) {
+        return {
+          content: `Position "${symbol}" was not found in the latest portfolio snapshot.`,
+          isError: true,
+        };
+      }
+
+      const result = await options.client.enrichEntity(symbol, params.fields ?? DEFAULT_PORTFOLIO_FIELDS);
+      const handled = handleResult(result);
+      if (!handled.ok) return handled.toolResult;
+
+      const entity = handled.data as Entity;
+      if (entity.risk?.signals?.length) {
+        const tickers = entity.tickers ?? [symbol];
+        await bestEffortIngest(options.ingestor, riskSignalsToRaw(entity.risk.signals, tickers));
+      }
+
+      return {
+        content: `${formatPositionContext(position, snapshot.timestamp)}\n\n${formatEnrichment(entity)}`,
+      };
+    },
+  };
+
+  const enrichSnapshot: ToolDefinition = {
+    name: 'enrich_snapshot',
+    description:
+      'Enrich the latest portfolio snapshot with Jintel in one batch. Uses batch enrichment for the portfolio ' +
+      'symbols and returns each position with redacted holdings context plus Jintel output.',
+    parameters: z.object({
+      symbols: z.array(z.string()).optional().describe('Optional subset of portfolio symbols to enrich'),
+      fields: z
+        .array(ENRICHMENT_FIELDS)
+        .optional()
+        .describe("Specific enrichment fields to fetch for each symbol (default: ['market', 'risk'])"),
+    }),
+    async execute(params: { symbols?: string[]; fields?: EnrichmentField[] }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      if (!options.snapshotStore) return snapshotStoreUnavailable();
+
+      const snapshot = await options.snapshotStore.getLatest();
+      if (!snapshot || snapshot.positions.length === 0) {
+        return {
+          content: 'No portfolio snapshot found. Save portfolio positions before calling enrich_snapshot.',
+          isError: true,
+        };
+      }
+
+      const requestedSymbols = new Set(params.symbols?.map((symbol) => symbol.toUpperCase()) ?? []);
+      const positions =
+        requestedSymbols.size === 0
+          ? snapshot.positions
+          : snapshot.positions.filter((position) => requestedSymbols.has(position.symbol.toUpperCase()));
+
+      if (positions.length === 0) {
+        return {
+          content: 'None of the requested symbols were found in the latest portfolio snapshot.',
+          isError: true,
+        };
+      }
+
+      const tickers = [...new Set(positions.map((position) => position.symbol.toUpperCase()))];
+      const result = await options.client.batchEnrich(tickers, params.fields ?? DEFAULT_PORTFOLIO_FIELDS);
+      const handled = handleResult(result);
+      if (!handled.ok) return handled.toolResult;
+
+      const entities = handled.data as Entity[];
+      const sections = positions.map((position) => {
+        const entity = findEntityForSymbol(entities, position.symbol);
+        const context = formatPositionContext(position, snapshot.timestamp);
+        if (!entity) {
+          return `${context}\n\nNo Jintel enrichment returned for ${position.symbol}.`;
+        }
+
+        return `${context}\n\n${formatEnrichment(entity)}`;
+      });
+
+      for (const entity of entities) {
+        if (entity.risk?.signals?.length) {
+          const tickers = entity.tickers ?? [];
+          await bestEffortIngest(options.ingestor, riskSignalsToRaw(entity.risk.signals, tickers));
+        }
+      }
+
+      return {
+        content: `# Portfolio Snapshot Enrichment\n\n${sections.join('\n\n---\n\n')}`,
+      };
+    },
+  };
+
   return [
     searchEntities,
+    jintelQuery,
     enrichEntity,
+    enrichPosition,
+    enrichSnapshot,
     batchEnrich,
     marketQuotes,
     sanctionsScreen,
