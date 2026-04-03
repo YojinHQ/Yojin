@@ -12,11 +12,13 @@ export function setMicroInsightStore(s: MicroInsightStore): void {
 
 export async function microInsightQuery(_: unknown, args: { symbol: string }) {
   if (!store) return null;
-  return store.getLatest(args.symbol);
+  const insight = await store.getLatest(args.symbol);
+  if (!insight) return null;
+  return { ...insight, topSignalIds: insight.topSignalIds ?? [] };
 }
 
 export async function microInsightsQuery() {
   if (!store) return [];
   const map = await store.getAllLatest();
-  return [...map.values()];
+  return [...map.values()].map((i) => ({ ...i, topSignalIds: i.topSignalIds ?? [] }));
 }

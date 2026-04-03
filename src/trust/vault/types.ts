@@ -4,6 +4,8 @@
 
 import { z } from 'zod';
 
+import { DateTimeField } from '../../types/base.js';
+
 // ---------------------------------------------------------------------------
 // Vault file structure
 // ---------------------------------------------------------------------------
@@ -15,8 +17,8 @@ export const VaultEntrySchema = z.object({
   iv: z.string(),
   /** GCM auth tag (base64). */
   tag: z.string(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  createdAt: DateTimeField,
+  updatedAt: DateTimeField,
 });
 const CanarySchema = z.object({
   /** Encrypted canary value (base64). */

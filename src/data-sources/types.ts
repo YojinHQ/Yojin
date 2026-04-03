@@ -15,6 +15,8 @@
 
 import { z } from 'zod';
 
+import { DateTimeField } from '../types/base.js';
+
 // ---------------------------------------------------------------------------
 // Data source type
 // ---------------------------------------------------------------------------
@@ -52,7 +54,7 @@ export interface DataQuery {
 // ---------------------------------------------------------------------------
 
 export const DataResultMetadataSchema = z.object({
-  fetchedAt: z.string().datetime(),
+  fetchedAt: DateTimeField,
   latencyMs: z.number(),
   cached: z.boolean(),
   cost: z.number().optional(),

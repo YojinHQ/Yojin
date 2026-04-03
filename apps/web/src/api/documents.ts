@@ -1050,6 +1050,7 @@ export const MICRO_INSIGHT_QUERY = gql`
       opportunities
       sentiment
       signalCount
+      topSignalIds
       assetSnap
       assetActions
       generatedAt
@@ -1073,6 +1074,7 @@ export const MICRO_INSIGHTS_QUERY = gql`
       opportunities
       sentiment
       signalCount
+      topSignalIds
       assetSnap
       assetActions
       generatedAt
