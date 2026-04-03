@@ -2,6 +2,7 @@ import { App, type SlackEventMiddlewareArgs } from '@slack/bolt';
 
 import type { ActionStore } from '../../../src/actions/action-store.js';
 import { isNotificationEnabled } from '../../../src/api/graphql/resolvers/channels.js';
+import { QUICK_ACTIONS } from '../../../src/channels/quick-actions.js';
 import type { NotificationBus } from '../../../src/core/notification-bus.js';
 import type { InsightStore } from '../../../src/insights/insight-store.js';
 import type { InsightReport } from '../../../src/insights/types.js';
@@ -72,6 +73,28 @@ function formatInsight(report: InsightReport): string {
   }
   lines.push('', '_Open Yojin for full report_');
   return lines.join('\n');
+}
+
+type SlackBlock = { type: string; [key: string]: unknown };
+
+/** Returns Slack Block Kit blocks for the App Home quick-action menu. */
+function buildQuickActionsBlocks(): SlackBlock[] {
+  return [
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: ":sparkles: *Let's knock something off your list*" },
+    },
+    {
+      type: 'actions',
+      block_id: 'quick_actions',
+      elements: QUICK_ACTIONS.map((action) => ({
+        type: 'button',
+        text: { type: 'plain_text', text: action.label, emoji: false },
+        action_id: 'quick_action',
+        value: action.prompt,
+      })),
+    },
+  ];
 }
 
 export function buildSlackChannel(deps: SlackChannelDeps = {}): ChannelPlugin {
@@ -157,6 +180,39 @@ export function buildSlackChannel(deps: SlackChannelDeps = {}): ChannelPlugin {
           text: event.text,
           timestamp: event.ts,
           raw: event,
+        };
+
+        for (const handler of messageHandlers) {
+          await handler(incoming);
+        }
+      });
+
+      app.event('app_home_opened', async ({ event, client }) => {
+        await client.views.publish({
+          user_id: event.user,
+          view: {
+            type: 'home',
+            blocks: buildQuickActionsBlocks(),
+          },
+        });
+      });
+
+      app.action('quick_action', async ({ body, ack, client }) => {
+        await ack();
+        const action = (body as { actions?: Array<{ value?: string }> }).actions?.[0];
+        const prompt = action?.value;
+        if (!prompt) return;
+
+        const userId = body.user?.id ?? 'unknown';
+        const dmResult = await client.conversations.open({ users: userId });
+        const channelId = dmResult.channel?.id;
+        if (!channelId) return;
+
+        const incoming: IncomingMessage = {
+          channelId,
+          userId,
+          text: prompt,
+          timestamp: new Date().toISOString(),
         };
 
         for (const handler of messageHandlers) {
