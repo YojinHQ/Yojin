@@ -1132,11 +1132,18 @@ export const typeDefs = /* GraphQL */ `
   type AiConfig {
     defaultModel: String!
     defaultProvider: String!
+    hasAnthropicKey: Boolean!
+    hasOpenaiKey: Boolean!
   }
 
   input AiConfigInput {
     defaultModel: String!
     defaultProvider: String
+  }
+
+  type SaveAiCredentialResult {
+    success: Boolean!
+    error: String
   }
 
   type Mutation {
@@ -1190,6 +1197,8 @@ export const typeDefs = /* GraphQL */ `
     toggleSkill(id: ID!, active: Boolean!): Skill!
     clearAppData: Boolean!
     saveAiConfig(input: AiConfigInput!): AiConfig!
+    saveAiCredential(provider: String!, apiKey: String!): SaveAiCredentialResult!
+    removeAiCredential(provider: String!): SaveAiCredentialResult!
   }
 
   # ---------------------------------------------------------------------------

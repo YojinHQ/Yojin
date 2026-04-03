@@ -1,4 +1,6 @@
-import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import type { AgentSideConnection } from '@agentclientprotocol/sdk';
 
@@ -7,8 +9,8 @@ import type { RuntimeBridge } from './runtime-bridge.js';
 import type { AcpSessionStore } from './session-store.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 
-const require = createRequire(import.meta.url);
-const { version: PKG_VERSION } = require('../../package.json') as { version: string };
+const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../package.json');
+const { version: PKG_VERSION } = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version: string };
 
 const PROTOCOL_VERSION = 1;
 const logger = createSubsystemLogger('acp');

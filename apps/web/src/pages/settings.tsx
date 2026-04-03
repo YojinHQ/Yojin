@@ -21,6 +21,8 @@ import {
   BRIEFING_CONFIG_QUERY,
   ONBOARDING_STATUS_QUERY,
   SAVE_AI_CONFIG_MUTATION,
+  SAVE_AI_CREDENTIAL_MUTATION,
+  REMOVE_AI_CREDENTIAL_MUTATION,
   SAVE_BRIEFING_CONFIG_MUTATION,
 } from '../api/documents';
 import type {
@@ -28,6 +30,10 @@ import type {
   OnboardingStatusQueryResult,
   SaveAiConfigMutationResult,
   SaveAiConfigVariables,
+  SaveAiCredentialMutationResult,
+  SaveAiCredentialVariables,
+  RemoveAiCredentialMutationResult,
+  RemoveAiCredentialVariables,
 } from '../api/types';
 
 interface BriefingConfig {
@@ -246,15 +252,35 @@ function resolveProvider(provider: string): AiProviderId {
   return 'claude-code';
 }
 
+const PROVIDER_KEY_INFO: Record<
+  AiProviderId,
+  { placeholder: string; prefix: string; configField: 'hasAnthropicKey' | 'hasOpenaiKey' }
+> = {
+  'claude-code': { placeholder: 'sk-ant-...', prefix: 'sk-ant-', configField: 'hasAnthropicKey' },
+  codex: { placeholder: 'sk-...', prefix: 'sk-', configField: 'hasOpenaiKey' },
+};
+
 function ModelPicker() {
-  const [result] = useQuery<AiConfigQueryResult>({ query: AI_CONFIG_QUERY });
+  const [result, reexecuteConfig] = useQuery<AiConfigQueryResult>({ query: AI_CONFIG_QUERY });
   const [, saveAiConfig] = useMutation<SaveAiConfigMutationResult, SaveAiConfigVariables>(SAVE_AI_CONFIG_MUTATION);
+  const [, saveCredential] = useMutation<SaveAiCredentialMutationResult, SaveAiCredentialVariables>(
+    SAVE_AI_CREDENTIAL_MUTATION,
+  );
+  const [, removeCredential] = useMutation<RemoveAiCredentialMutationResult, RemoveAiCredentialVariables>(
+    REMOVE_AI_CREDENTIAL_MUTATION,
+  );
 
   const [provider, setProvider] = useState<AiProviderId>('claude-code');
   const [selected, setSelected] = useState('claude-opus-4-6');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+
+  // API key state
+  const [apiKey, setApiKey] = useState('');
+  const [savingKey, setSavingKey] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
+  const [keySuccess, setKeySuccess] = useState(false);
 
   useEffect(() => {
     if (result.data?.aiConfig) {
@@ -268,13 +294,17 @@ function ModelPicker() {
     }
   }, [result.data]);
 
+  const hasKey = result.data?.aiConfig?.[PROVIDER_KEY_INFO[provider].configField] ?? false;
+
   const handleSelectProvider = (p: AiProviderId) => {
     if (p === provider) return;
     setProvider(p);
-    // Auto-select the first model of the new provider
     setSelected(PROVIDER_MODELS[p][0].id);
     setDirty(true);
     setSaveError(null);
+    setApiKey('');
+    setKeyError(null);
+    setKeySuccess(false);
   };
 
   const handleSelectModel = (modelId: string) => {
@@ -298,11 +328,58 @@ function ModelPicker() {
     }
   }, [saveAiConfig, selected, provider]);
 
+  const handleSaveKey = useCallback(async () => {
+    setSavingKey(true);
+    setKeyError(null);
+    setKeySuccess(false);
+    try {
+      const trimmedKey = apiKey.trim();
+      if (!trimmedKey) {
+        setKeyError('API key cannot be empty');
+        return;
+      }
+      const res = await saveCredential({ provider, apiKey: trimmedKey });
+      if (res.error) {
+        setKeyError(res.error.message || 'Failed to save');
+        return;
+      }
+      if (!res.data?.saveAiCredential.success) {
+        setKeyError(res.data?.saveAiCredential.error || 'Failed to save');
+        return;
+      }
+      setApiKey('');
+      setKeySuccess(true);
+      reexecuteConfig({ requestPolicy: 'network-only' });
+    } finally {
+      setSavingKey(false);
+    }
+  }, [saveCredential, provider, apiKey, reexecuteConfig]);
+
+  const handleRemoveKey = useCallback(async () => {
+    setSavingKey(true);
+    setKeyError(null);
+    try {
+      const res = await removeCredential({ provider });
+      if (res.error) {
+        setKeyError(res.error.message || 'Failed to remove');
+        return;
+      }
+      if (!res.data?.removeAiCredential.success) {
+        setKeyError(res.data?.removeAiCredential.error || 'Failed to remove');
+        return;
+      }
+      reexecuteConfig({ requestPolicy: 'network-only' });
+    } finally {
+      setSavingKey(false);
+    }
+  }, [removeCredential, provider, reexecuteConfig]);
+
   if (result.fetching) {
     return <p className="text-sm text-text-muted">Loading...</p>;
   }
 
   const models = PROVIDER_MODELS[provider];
+  const keyInfo = PROVIDER_KEY_INFO[provider];
 
   return (
     <div className="space-y-5">
@@ -312,6 +389,7 @@ function ModelPicker() {
         <div className="grid grid-cols-2 gap-3">
           {PROVIDERS.map((p) => {
             const active = provider === p.id;
+            const connected = result.data?.aiConfig?.[PROVIDER_KEY_INFO[p.id].configField] ?? false;
             return (
               <button
                 key={p.id}
@@ -325,9 +403,12 @@ function ModelPicker() {
                 )}
               >
                 <img src={p.logo} alt={p.name} className="h-8 w-8 rounded-lg" />
-                <span className={cn('text-sm font-medium', active ? 'text-text-primary' : 'text-text-secondary')}>
-                  {p.name}
-                </span>
+                <div className="flex flex-col items-start">
+                  <span className={cn('text-sm font-medium', active ? 'text-text-primary' : 'text-text-secondary')}>
+                    {p.name}
+                  </span>
+                  {connected && <span className="text-[10px] font-medium text-success">Connected</span>}
+                </div>
                 {active && (
                   <div className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent-primary">
                     <svg
@@ -345,6 +426,43 @@ function ModelPicker() {
             );
           })}
         </div>
+      </div>
+
+      {/* API Key */}
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wider text-text-muted mb-2">API Key</p>
+        {hasKey ? (
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-bg-card px-4 py-3">
+            <div className="flex-1">
+              <p className="text-sm text-text-primary">API key configured</p>
+              <p className="text-xs text-text-muted">Stored securely in the encrypted vault</p>
+            </div>
+            <Button variant="ghost" size="sm" loading={savingKey} onClick={handleRemoveKey}>
+              Remove
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  setKeyError(null);
+                  setKeySuccess(false);
+                }}
+                placeholder={keyInfo.placeholder}
+                className="flex-1 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary/50 focus:outline-none"
+              />
+              <Button variant="primary" size="sm" loading={savingKey} disabled={!apiKey.trim()} onClick={handleSaveKey}>
+                Save key
+              </Button>
+            </div>
+            {keyError && <p className="text-xs text-error">{keyError}</p>}
+            {keySuccess && <p className="text-xs text-success">API key saved</p>}
+          </div>
+        )}
       </div>
 
       {/* Model selector */}

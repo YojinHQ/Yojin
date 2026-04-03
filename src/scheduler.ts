@@ -436,6 +436,7 @@ export class Scheduler {
             },
             actionStore: this.actionStore,
             eventLog: this.eventLog,
+            notificationBus: this.notificationBus,
           }),
         ),
       );

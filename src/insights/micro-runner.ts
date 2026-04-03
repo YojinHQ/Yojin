@@ -21,6 +21,7 @@ import type { MicroInsight, MicroInsightSource } from './micro-types.js';
 import type { ActionStore } from '../actions/action-store.js';
 import type { ProviderRouter } from '../ai-providers/router.js';
 import type { EventLog } from '../core/event-log.js';
+import type { NotificationBus } from '../core/notification-bus.js';
 import { fetchJintelSignals } from '../jintel/signal-fetcher.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { SignalIngestor } from '../signals/ingestor.js';
@@ -37,6 +38,7 @@ export interface MicroRunnerDeps {
   signalIngestor?: SignalIngestor;
   actionStore?: ActionStore;
   eventLog?: EventLog;
+  notificationBus?: NotificationBus;
 }
 
 export interface MicroRunResult {
@@ -85,6 +87,13 @@ export async function runMicroResearch(
     const expiresAt = new Date(Date.now() + ACTION_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
     const now = new Date().toISOString();
 
+    // Only push channel notifications for critical insights — extreme ratings
+    // or high-conviction directional signals. All actions are still visible in the web UI.
+    const isCritical =
+      insight.rating === 'VERY_BULLISH' ||
+      insight.rating === 'VERY_BEARISH' ||
+      (insight.conviction >= 0.8 && insight.rating !== 'NEUTRAL');
+
     for (const actionText of insight.assetActions.filter((t) => t.trim().length > 0)) {
       const result = await deps.actionStore.create({
         id: randomUUID(),
@@ -95,7 +104,11 @@ export async function runMicroResearch(
         expiresAt,
         createdAt: now,
       });
-      if (!result.success) {
+      if (result.success) {
+        if (isCritical) {
+          deps.notificationBus?.publish({ type: 'action.created', actionId: result.data.id, ticker });
+        }
+      } else {
         logger.warn('Failed to create action from micro observation', { symbol: ticker, error: result.error });
       }
     }

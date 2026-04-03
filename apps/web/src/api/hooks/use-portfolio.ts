@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useQuery, useMutation } from 'urql';
+import { useQuery, useMutation, useSubscription } from 'urql';
 
 import {
   PORTFOLIO_QUERY,
@@ -7,6 +7,7 @@ import {
   ADD_MANUAL_POSITION_MUTATION,
   EDIT_POSITION_MUTATION,
   REMOVE_POSITION_MUTATION,
+  ON_PORTFOLIO_UPDATE_SUBSCRIPTION,
 } from '../documents.js';
 import type {
   PortfolioQueryResult,
@@ -27,6 +28,14 @@ export function usePortfolio(variables?: PortfolioQueryVariables, opts?: { pollI
     query: PORTFOLIO_QUERY,
     variables,
   });
+
+  // Re-fetch when portfolio is updated from any source (chat, scraper, etc.)
+  const [subResult] = useSubscription({ query: ON_PORTFOLIO_UPDATE_SUBSCRIPTION });
+  useEffect(() => {
+    if (subResult.data) {
+      reexecute({ requestPolicy: 'network-only' });
+    }
+  }, [subResult.data, reexecute]);
 
   useEffect(() => {
     if (!opts?.pollInterval) return;

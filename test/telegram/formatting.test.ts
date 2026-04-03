@@ -93,7 +93,22 @@ describe('formatAction', () => {
     const result = formatAction(action);
     expect(result).toContain('<b>New Action</b>');
     expect(result).toContain('Review AAPL');
-    expect(result).toContain('<i>Why:</i>');
+    expect(result).not.toContain('<i>Why:</i>');
+  });
+
+  it('uses ticker as header for micro-observation actions', () => {
+    const microAction: Action = {
+      id: 'act-2',
+      what: 'Rocket Lab completes Mynaric acquisition',
+      why: 'Observation from RKLB research',
+      source: 'micro-observation: RKLB',
+      status: 'PENDING',
+      expiresAt: '2026-03-31T08:00:00Z',
+      createdAt: '2026-03-30T08:00:00Z',
+    };
+    const result = formatAction(microAction);
+    expect(result).toContain('<b>RKLB</b>');
+    expect(result).not.toContain('New Action');
   });
 });
 
@@ -148,7 +163,6 @@ describe('formatInsight', () => {
     const result = formatInsight(report);
     expect(result).toContain('<b>Daily Insights Report</b>');
     expect(result).toContain('HEALTHY');
-    expect(result).toContain('<code>AAPL</code>');
-    expect(result).toContain('BULLISH');
+    expect(result).toContain('AAPL BULLISH');
   });
 });

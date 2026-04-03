@@ -30,7 +30,7 @@ Output ONLY valid JSON matching this schema:
   "opportunities": ["up to 3 observed positive factors"],
   "sentiment": "BULLISH" | "BEARISH" | "MIXED" | "NEUTRAL",
   "assetSnap": "1 sentence: the single most notable observation about this asset right now",
-  "assetActions": ["0-2 observations that ONLY deserve attention if they represent a material change or catalyst — frame as 'X is happening' not 'do Y'. Return empty array if nothing is truly noteworthy."]
+  "assetActions": ["1-3 bullet-point summaries of the key NEWS and EVENTS for this asset. Focus on real-world catalysts: earnings, analyst actions, deals, regulatory moves, corporate developments. NEVER include technical indicators (RSI, MACD, Bollinger Bands, moving averages) — those belong in the analysis, not in actions. NEVER include meta-commentary about data quality or dataset gaps. If there are no real events, return a single item summarizing the most notable factual observation. Always include at least 1 item."]
 }
 
 Rules:
@@ -53,8 +53,9 @@ Materiality — size matters:
 
 Content priorities:
 - Lead with the most impactful narrative — real events, earnings, analyst actions, corporate developments, macro shifts. Use technicals as supporting context, not the headline.
-- assetActions should surface the underlying catalyst, not the indicator. Say "Truist cuts price target to $323 amid macro headwinds" not "RSI at 38.5 approaching oversold".
-- If all available data is low-quality promotional content, say so and lower conviction accordingly.
+- assetActions must be NEWS and EVENTS only. Say "Truist cuts price target to $323 amid macro headwinds" not "RSI at 38.5 approaching oversold". Never put technical indicators, Bollinger Bands, MACD, RSI, or moving averages in assetActions.
+- Never put meta-commentary about data quality in assetActions. "No fund-level catalyst in dataset" is not an action — skip it.
+- If all available data is low-quality promotional content, say so in the thesis and lower conviction accordingly.
 - Be concise. Every field should be information-dense.`;
 
 interface AnalyzeTickerOptions {

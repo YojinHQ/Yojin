@@ -25,7 +25,7 @@ describe('AgentProfileSchema', () => {
       tools: [],
       allowedActions: ['tool_call'],
       capabilities: ['reasoning'],
-      provider: 'vercel-ai',
+      provider: 'codex',
       model: 'gpt-4o',
     };
     expect(AgentProfileSchema.parse(profile)).toEqual(profile);

@@ -13,6 +13,78 @@ A local-first AI agent that connects to your investment accounts, delivers perso
 | **Personalized intelligence** | News, sentiment, technical analysis, and macro events based on your actual positions.                |
 | **Explainable finance**       | Before every action, Yojin thinks, explores, reasons, tests, calculates, and asks for your approval. |
 
+## Getting Started
+
+### Docker (recommended)
+
+One command gives you the web UI, API, and channel integrations (Slack, etc.):
+
+```bash
+./docker-setup.sh
+```
+
+The setup script prompts for your API keys, builds the image, and starts everything. Once running:
+
+| Service | URL                            |
+|---------|--------------------------------|
+| Web UI  | `http://localhost:8080`        |
+| API     | `http://localhost:3000`        |
+| Health  | `http://localhost:3000/health` |
+
+Or run manually:
+
+```bash
+cp .env.example .env.docker        # Edit with your keys
+docker compose --env-file .env.docker up -d
+```
+
+Stop with `docker compose down`. Data persists in Docker volumes (`yojin_data`, `yojin_vault`).
+
+### CLI
+
+Prerequisites: Node.js >= 22.12, pnpm 10+
+
+```bash
+git clone https://github.com/YojinHQ/Yojin.git
+cd Yojin
+pnpm install
+pnpm chat
+```
+
+On first launch, Yojin bootstraps itself: connects an LLM provider (paste an Anthropic API key or run the OAuth flow) and generates a personalized Strategist persona based on your investment style. No manual config files needed.
+
+```text
+yojin                Start the backend server (API + GraphQL)
+yojin chat           Chat with Yojin in your terminal
+yojin setup          Connect your Claude account (OAuth flow)
+yojin web            Start the web dashboard only
+yojin secret <cmd>   Manage encrypted credentials
+yojin acp            Start ACP (Agent Client Protocol) server
+yojin version        Print version
+yojin help           Show help
+```
+
+### Dev Commands
+
+```bash
+pnpm chat          # Interactive chat REPL (start here)
+pnpm dev           # Backend + web dashboard (concurrent)
+pnpm dev:be        # Backend only
+pnpm dev:fe        # Web app only (Vite dev server)
+pnpm build         # Compile TypeScript
+pnpm start         # Run compiled output
+pnpm test          # Run tests (vitest)
+pnpm typecheck     # TypeScript type checking (tsc --noEmit)
+pnpm lint          # ESLint (src/, providers/, channels/, test/)
+pnpm format        # Prettier format all files
+pnpm ci            # Full CI check (format, typecheck, lint, test)
+pnpm build:all     # Build all workspace packages
+pnpm test:all      # Run tests across all packages
+pnpm ci:all        # Full CI check across all packages
+pnpm setup         # OAuth setup flow (Claude)
+pnpm storybook     # Start Storybook for web components
+```
+
 ## Architecture
 
 Yojin is a multi-agent system built around a central **Orchestrator** that coordinates specialized agents. Each agent has its own role, tool set, and allowed actions — but they share state through a common interoperability layer.
@@ -295,87 +367,6 @@ Raw Snapshot                    Redacted Snapshot
 Approval requests are routed to the user's active channel (Web, Telegram, WhatsApp, MCP) and carry a configurable timeout — unanswered requests auto-deny.
 
 Agents have read access to observe and analyze. They have no write access until you explicitly approve an action. Irreversible operations — executing a trade, adding a new connection — require a confirmation step through your active channel.
-
-## Quick Start
-
-Yojin runs locally on your computer. Interactive install walks you through the initial steps. One command, no account needed.
-
-### Prerequisites
-
-- Node.js >= 22.12
-- pnpm 10+
-
-### Install
-
-```bash
-git clone https://github.com/YojinHQ/Yojin.git
-cd Yojin
-pnpm install
-pnpm chat
-```
-
-On first launch, Yojin bootstraps itself: connects an LLM provider (paste an Anthropic API key or run the OAuth flow) and generates a personalized Strategist persona based on your investment style. No manual config files needed.
-
-### CLI Usage
-
-Yojin ships a CLI entry point (`yojin`) with the following commands:
-
-```text
-yojin                Start the backend server (API + GraphQL)
-yojin chat           Chat with Yojin in your terminal
-yojin setup          Connect your Claude account (OAuth flow)
-yojin web            Start the web dashboard only
-yojin secret <cmd>   Manage encrypted credentials
-yojin acp            Start ACP (Agent Client Protocol) server
-yojin version        Print version
-yojin help           Show help
-```
-
-### Docker
-
-Run Yojin in Docker — one command gives you the web UI, API, and channel integrations (Slack, etc.):
-
-```bash
-./docker-setup.sh
-```
-
-The setup script prompts for your API keys, builds the image, and starts everything. Once running:
-
-| Service | URL                            |
-|---------|--------------------------------|
-| Web UI  | `http://localhost:8080`        |
-| API     | `http://localhost:3000`        |
-| Health  | `http://localhost:3000/health` |
-
-Or run manually:
-
-```bash
-cp .env.example .env.docker        # Edit with your keys
-docker compose --env-file .env.docker up -d
-```
-
-Stop with `docker compose down`. Data persists in Docker volumes (`yojin_data`, `yojin_vault`).
-
-### Dev Commands
-
-```bash
-pnpm chat          # Interactive chat REPL (start here)
-pnpm dev           # Backend + web dashboard (concurrent)
-pnpm dev:be        # Backend only
-pnpm dev:fe        # Web app only (Vite dev server)
-pnpm build         # Compile TypeScript
-pnpm start         # Run compiled output
-pnpm test          # Run tests (vitest)
-pnpm typecheck     # TypeScript type checking (tsc --noEmit)
-pnpm lint          # ESLint (src/, providers/, channels/, test/)
-pnpm format        # Prettier format all files
-pnpm ci            # Full CI check (format, typecheck, lint, test)
-pnpm build:all     # Build all workspace packages
-pnpm test:all      # Run tests across all packages
-pnpm ci:all        # Full CI check across all packages
-pnpm setup         # OAuth setup flow (Claude)
-pnpm storybook     # Start Storybook for web components
-```
 
 ## Project Structure
 

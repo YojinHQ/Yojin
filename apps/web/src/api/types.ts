@@ -1124,6 +1124,8 @@ export interface OnPriceMoveVariables {
 export interface AiConfig {
   defaultModel: string;
   defaultProvider: string;
+  hasAnthropicKey: boolean;
+  hasOpenaiKey: boolean;
 }
 
 export interface AiConfigQueryResult {
@@ -1136,6 +1138,28 @@ export interface SaveAiConfigMutationResult {
 
 export interface SaveAiConfigVariables {
   input: { defaultModel: string; defaultProvider?: string };
+}
+
+export interface SaveAiCredentialResult {
+  success: boolean;
+  error?: string;
+}
+
+export interface SaveAiCredentialMutationResult {
+  saveAiCredential: SaveAiCredentialResult;
+}
+
+export interface SaveAiCredentialVariables {
+  provider: string;
+  apiKey: string;
+}
+
+export interface RemoveAiCredentialMutationResult {
+  removeAiCredential: SaveAiCredentialResult;
+}
+
+export interface RemoveAiCredentialVariables {
+  provider: string;
 }
 
 // ---------------------------------------------------------------------------
