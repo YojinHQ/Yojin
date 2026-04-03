@@ -61,6 +61,8 @@ const cache = cacheExchange({
     PairingEvent: () => null,
     SessionSummary: (data) => data.id as string,
     SessionDetail: (data) => data.id as string,
+    Skill: (data) => data.id as string,
+    SkillTrigger: () => null, // embedded — nested under Skill
   },
   updates: {
     Mutation: {

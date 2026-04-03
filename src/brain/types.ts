@@ -4,6 +4,8 @@
 
 import { z } from 'zod';
 
+import { DateTimeField, ScoreRange } from '../types/base.js';
+
 // ---------------------------------------------------------------------------
 // Commit (versioned state snapshot)
 // ---------------------------------------------------------------------------
@@ -11,7 +13,7 @@ import { z } from 'zod';
 export const BrainCommitSchema = z.object({
   hash: z.string(),
   message: z.string(),
-  timestamp: z.string().datetime(),
+  timestamp: DateTimeField,
   type: z.enum(['frontal-lobe', 'emotion', 'persona', 'manual']),
   snapshot: z.record(z.unknown()),
 });
@@ -23,10 +25,10 @@ export type BrainCommit = z.infer<typeof BrainCommitSchema>;
 // ---------------------------------------------------------------------------
 
 export const EmotionStateSchema = z.object({
-  confidence: z.number().min(0).max(1),
-  riskAppetite: z.number().min(0).max(1),
+  confidence: ScoreRange,
+  riskAppetite: ScoreRange,
   reason: z.string(),
-  updatedAt: z.string().datetime(),
+  updatedAt: DateTimeField,
 });
 
 export type EmotionState = z.infer<typeof EmotionStateSchema>;

@@ -13,6 +13,8 @@
 
 import { z } from 'zod';
 
+import { DateTimeField, IdField } from '../types/base.js';
+
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
@@ -25,7 +27,7 @@ export type ActionStatus = z.infer<typeof ActionStatusSchema>;
 // ---------------------------------------------------------------------------
 
 export const ActionSchema = z.object({
-  id: z.string().min(1),
+  id: IdField,
   signalId: z.string().optional(), // originating signal, if any
   skillId: z.string().optional(), // originating skill, if any
   what: z.string().min(1), // plain English: "Review AAPL — bearish divergence detected"
@@ -33,9 +35,9 @@ export const ActionSchema = z.object({
   source: z.string().min(1), // skill name or "rule: ..." or "agent: strategist"
   riskContext: z.string().optional(), // guard checks summary
   status: ActionStatusSchema.default('PENDING'),
-  expiresAt: z.string().datetime(), // auto-reject after this
-  createdAt: z.string().datetime(),
-  resolvedAt: z.string().datetime().optional(),
+  expiresAt: DateTimeField, // auto-reject after this
+  createdAt: DateTimeField,
+  resolvedAt: DateTimeField.optional(),
   resolvedBy: z.string().optional(), // 'user' | 'timeout'
 });
 export type Action = z.infer<typeof ActionSchema>;

@@ -142,7 +142,7 @@ function recordSuccess(): void {
   lockoutUntil = 0;
 }
 
-interface CredentialInput {
+interface KeyValueInput {
   key: string;
   value: string;
 }
@@ -174,7 +174,7 @@ function invalidateValidationCache(channelId: string): void {
   validationCache.delete(channelId);
 }
 
-function toCredMap(credentials: CredentialInput[]): Record<string, string> {
+function toCredMap(credentials: KeyValueInput[]): Record<string, string> {
   const map: Record<string, string> = {};
   for (const c of credentials) map[c.key] = c.value;
   return map;
@@ -266,7 +266,7 @@ export async function listChannelsQuery(): Promise<
 
 export async function connectChannelMutation(
   _parent: unknown,
-  args: { id: string; credentials: CredentialInput[] },
+  args: { id: string; credentials: KeyValueInput[] },
 ): Promise<ChannelResult> {
   if (!vault) return { success: false, error: 'Vault not configured' };
 
@@ -327,7 +327,7 @@ export async function disconnectChannelMutation(_parent: unknown, args: { id: st
 
 export async function validateChannelTokenMutation(
   _parent: unknown,
-  args: { id: string; credentials: CredentialInput[] },
+  args: { id: string; credentials: KeyValueInput[] },
 ): Promise<ChannelResult> {
   const blocked = checkRateLimit();
   if (blocked) return blocked;

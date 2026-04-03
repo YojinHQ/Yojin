@@ -62,10 +62,13 @@ function toGraphQL(skill: ReturnType<SkillStore['getAll']>[number]): unknown {
     source: skill.source,
     createdBy: skill.createdBy,
     createdAt: skill.createdAt,
+    content: skill.content,
     triggers: skill.triggers.map((t) => ({
       type: t.type,
       description: t.description,
+      params: t.params ? JSON.stringify(t.params) : null,
     })),
+    maxPositionSize: skill.maxPositionSize ?? null,
     tickers: skill.tickers,
   };
 }
