@@ -16,7 +16,8 @@ export function OnboardingShell({ currentStep, showProgress = true, children, cl
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') skipOnboarding();
+      if (e.key !== 'Escape' || e.defaultPrevented || e.repeat) return;
+      skipOnboarding();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
