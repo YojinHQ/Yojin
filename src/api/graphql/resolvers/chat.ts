@@ -6,7 +6,7 @@
  * SessionStore is injected via setSessionStore().
  */
 
-import type { AgentRuntime } from '../../../core/agent-runtime.js';
+import { type AgentRuntime, DEFAULT_MODEL } from '../../../core/agent-runtime.js';
 import type { AgentLoopEvent, AgentMessage, ContentBlock, ImageMediaType, ToolUseBlock } from '../../../core/types.js';
 import type { SessionStore } from '../../../sessions/types.js';
 import { pubsub } from '../pubsub.js';
@@ -108,13 +108,6 @@ export function sendMessageMutation(
       }
       const validatedImageType = imageBase64 ? (imageMediaType as ImageMediaType) : undefined;
 
-      // Track whether any tool call has been seen in this handleMessage invocation.
-      // Pre-tool thinking text is buffered and discarded when an action arrives.
-      // Post-tool text (the final response) is streamed live so the user sees it
-      // incrementally: thinking → tool indicators → streamed final response.
-      let textBuffer = '';
-      let toolCallSeen = false;
-
       // runtime is guaranteed non-null — checked above before the void IIFE
       await (runtime as AgentRuntime).handleMessage({
         message,
@@ -124,21 +117,12 @@ export function sendMessageMutation(
         ...(imageBase64 && validatedImageType ? { imageBase64, imageMediaType: validatedImageType } : {}),
         onEvent: (event: AgentLoopEvent) => {
           if (event.type === 'text_delta') {
-            if (toolCallSeen) {
-              // Post-tool text = final response — stream it live
-              pubsub.publish(`chat:${threadId}`, {
-                type: 'TEXT_DELTA',
-                threadId,
-                delta: event.text,
-              } satisfies ChatEvent);
-            } else {
-              // Pre-tool text = thinking — buffer (discarded on action)
-              textBuffer += event.text;
-            }
+            pubsub.publish(`chat:${threadId}`, {
+              type: 'TEXT_DELTA',
+              threadId,
+              delta: event.text,
+            } satisfies ChatEvent);
           } else if (event.type === 'action') {
-            // Tool calls follow this text — discard the thinking buffer
-            toolCallSeen = true;
-            textBuffer = '';
             for (const call of event.toolCalls) {
               // Display tools emit a TOOL_CARD event for frontend rendering
               if (call.name.startsWith(DISPLAY_TOOL_PREFIX)) {
@@ -164,16 +148,6 @@ export function sendMessageMutation(
               piiTypesFound: event.typesFound,
             } satisfies ChatEvent);
           } else if (event.type === 'done') {
-            // Flush buffered text for simple responses (no tool calls).
-            // Post-tool text was already streamed live above.
-            if (textBuffer && !toolCallSeen) {
-              pubsub.publish(`chat:${threadId}`, {
-                type: 'TEXT_DELTA',
-                threadId,
-                delta: textBuffer,
-              } satisfies ChatEvent);
-              textBuffer = '';
-            }
             pubsub.publish(`chat:${threadId}`, {
               type: 'MESSAGE_COMPLETE',
               threadId,
@@ -254,12 +228,11 @@ export async function sessionsQuery(): Promise<SessionSummaryGql[]> {
   const summaries: SessionSummaryGql[] = [];
 
   for (const id of ids) {
-    const meta = await sessionStore.get(id);
+    const [meta, history] = await Promise.all([sessionStore.get(id), sessionStore.getHistory(id)]);
     if (!meta) continue;
     // Only show web channel sessions in the sidebar
     if (meta.channelId !== 'web') continue;
 
-    const history = await sessionStore.getHistory(id);
     const messages = history.map((e) => e.message);
     const lastEntry = history[history.length - 1];
 
@@ -365,7 +338,7 @@ export async function createSessionMutation(): Promise<SessionSummaryGql> {
     threadId,
     userId: 'web-user',
     providerId: 'agent-runtime',
-    model: 'claude-sonnet-4-6',
+    model: DEFAULT_MODEL,
   });
 
   activeThreadId = threadId;

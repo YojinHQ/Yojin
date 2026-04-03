@@ -31,7 +31,7 @@ import type { ApprovalGate } from '../trust/approval/approval-gate.js';
 import { GuardedToolRegistry } from '../trust/guarded-tool-registry.js';
 import type { ChatPiiScanner } from '../trust/pii/chat-scanner.js';
 
-const DEFAULT_MODEL = 'claude-sonnet-4-6';
+export const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
 const logger = createSubsystemLogger('agent-runtime');
 
