@@ -8,6 +8,7 @@ import { createWhatsAppSession } from './session.js';
 import type { WhatsAppSession } from './session.js';
 import type { ActionStore } from '../../../src/actions/action-store.js';
 import { isNotificationEnabled } from '../../../src/api/graphql/resolvers/channels.js';
+import { QUICK_ACTIONS } from '../../../src/channels/quick-actions.js';
 import type { NotificationBus } from '../../../src/core/notification-bus.js';
 import type { InsightStore } from '../../../src/insights/insight-store.js';
 import { createSubsystemLogger } from '../../../src/logging/logger.js';
@@ -67,6 +68,20 @@ async function readSelfJids(authDir: string): Promise<{ jid: string; lid?: strin
     logger.debug('Failed to read self JID from creds.json', { error: err });
     return undefined;
   }
+}
+
+const GREETING_RE = /^\s*(?:hi|hey|hello|start|yo|sup)\s*[!.]*\s*$/i;
+
+const QUICK_ACTION_KEYWORDS = new Map(QUICK_ACTIONS.map((a) => [a.id.toLowerCase(), a.prompt]));
+
+function buildQuickActionsMenu(): string {
+  const items = QUICK_ACTIONS.map((a) => `• *${a.id}* — ${a.label}`).join('\n');
+  return `\u{2728} *What can I help you with?*\n\n${items}\n\nJust type one of the keywords above, or ask me anything.`;
+}
+
+function expandQuickActionKeyword(text: string): string | undefined {
+  const normalized = text.trim().toLowerCase();
+  return QUICK_ACTION_KEYWORDS.get(normalized);
 }
 
 /** Scrub dollar amounts ($1,234.56), percentages with dollar context, and exact share counts from text. */
@@ -316,11 +331,17 @@ export function buildWhatsAppChannel(deps: WhatsAppChannelDeps = {}): ChannelPlu
           return;
         }
 
+        if (GREETING_RE.test(text)) {
+          await sendToSelf(buildQuickActionsMenu());
+          return;
+        }
+
+        const expandedPrompt = expandQuickActionKeyword(text);
         const incoming: IncomingMessage = {
           channelId: 'whatsapp',
           threadId: selfJid,
           userId: selfJid.replace(/@s\.whatsapp\.net$/, ''),
-          text,
+          text: expandedPrompt ?? text,
           timestamp: new Date().toISOString(),
         };
 
