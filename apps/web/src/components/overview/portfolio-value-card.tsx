@@ -1,4 +1,5 @@
 import { cn } from '../../lib/utils';
+import { formatPrice } from '../../lib/format';
 import { useFeatureStatus } from '../../lib/feature-status';
 import { usePortfolio } from '../../api';
 import { CardEmptyState } from '../common/card-empty-state';
@@ -8,10 +9,6 @@ import Spinner from '../common/spinner';
 import Button from '../common/button';
 import { DashboardCard } from '../common/dashboard-card';
 import { useAddPositionModal } from '../../lib/add-position-modal-context';
-
-function formatCurrency(n: number): string {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-}
 
 function formatChange(n: number): string {
   const sign = n > 0 ? '+' : '';
@@ -95,7 +92,7 @@ export default function PortfolioValueCard() {
   return (
     <DashboardCard title="Portfolio Value">
       <div className="px-4 pb-4 pt-2">
-        <p className="text-3xl font-bold text-text-primary">{formatCurrency(totalValue)}</p>
+        <p className="text-3xl font-bold text-text-primary">{formatPrice(totalValue)}</p>
         <div
           className={cn(
             'mt-1.5 flex items-center gap-1.5 text-xs',

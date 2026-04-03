@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import type { KnownPlatform, Position } from '../../api';
 import { isKnownPlatform, useEditPosition, useRemovePosition } from '../../api';
 import { cn } from '../../lib/utils';
+import { formatPrice } from '../../lib/format';
 import { useAssetDetailModal } from '../../lib/asset-detail-modal-context';
 import Button from '../common/button';
 import EmptyState from '../common/empty-state';
@@ -249,10 +250,10 @@ export default function PositionTable({ positions, onAdd }: { positions: Positio
                     {formatQuantity(pos.quantity)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
-                    {formatCurrency(pos.costBasis)}
+                    {formatPrice(pos.costBasis)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums font-medium text-text-primary">
-                    {formatCurrency(pos.currentPrice)}
+                    {formatPrice(pos.currentPrice)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums font-medium text-text-primary">
                     {formatCurrency(pos.marketValue)}
@@ -266,7 +267,7 @@ export default function PositionTable({ positions, onAdd }: { positions: Positio
                     {formatPercent(pos.unrealizedPnlPercent)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums font-medium text-text-primary">
-                    {weight.toFixed(1)}%
+                    {parseFloat(weight.toFixed(1))}%
                   </td>
                   <td className="px-2 py-3">
                     <div

@@ -14,10 +14,7 @@ import { useAddPositionModal } from '../../lib/add-position-modal-context';
 import { useAssetDetailModal } from '../../lib/asset-detail-modal-context';
 import { useMarketStatus, getMarketElapsedMinutes } from '../../hooks/use-market-status';
 import type { Position } from '../../api/types';
-
-function formatCurrency(n: number): string {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-}
+import { formatPrice } from '../../lib/format';
 
 function formatChange(n: number): string {
   const abs = Math.abs(n);
@@ -336,7 +333,7 @@ export default function PositionsPreview() {
 
                   {/* Price $ */}
                   <td className="whitespace-nowrap px-3 py-2 text-right text-xs font-medium tabular-nums text-text-primary">
-                    {formatCurrency(pos.currentPrice)}
+                    {formatPrice(pos.currentPrice)}
                   </td>
 
                   {/* Change % + extended-hours percent + hover tooltip for $ values */}
