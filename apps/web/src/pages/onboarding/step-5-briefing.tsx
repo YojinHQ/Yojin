@@ -183,7 +183,11 @@ export function Step5Briefing() {
                         meta.color,
                       )}
                     >
-                      {meta.initials}
+                      {meta.logo ? (
+                        <img src={meta.logo} alt={meta.label} className="h-6 w-6 object-contain" />
+                      ) : (
+                        meta.initials
+                      )}
                     </div>
                     <div className="text-left">
                       <p className="text-sm font-medium text-text-primary">

@@ -25,7 +25,7 @@ RUN pnpm build
 RUN pnpm build:web
 
 # Prune dev dependencies
-RUN pnpm prune --prod
+RUN CI=true pnpm prune --prod --ignore-scripts
 
 # ── Stage 2: Runtime ──────────────────────────────────────────
 FROM node:22-slim AS runtime

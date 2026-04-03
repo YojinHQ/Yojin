@@ -116,16 +116,6 @@ elif auth.get('auth_mode') == 'chatgpt' and auth.get('tokens', {}).get('access_t
   fi
   echo ""
 
-  # Slack (optional)
-  read -rp "  Slack Bot Token (xoxb-..., or press Enter to skip): " SLACK_BOT_TOKEN
-  SLACK_APP_TOKEN=""
-  SLACK_SIGNING_SECRET=""
-  if [ -n "$SLACK_BOT_TOKEN" ]; then
-    read -rp "  Slack App Token (xapp-...): " SLACK_APP_TOKEN
-    read -rp "  Slack Signing Secret: " SLACK_SIGNING_SECRET
-  fi
-  echo ""
-
   # Web port
   read -rp "  Web UI port [8080]: " WEB_PORT
   WEB_PORT="${WEB_PORT:-8080}"
@@ -150,11 +140,6 @@ elif auth.get('auth_mode') == 'chatgpt' and auth.get('tokens', {}).get('access_t
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}"
 CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}"
 OPENAI_API_KEY="${OPENAI_API_KEY}"
-
-# ── Slack Channel (optional) ─────────────────────
-SLACK_BOT_TOKEN="${SLACK_BOT_TOKEN}"
-SLACK_APP_TOKEN="${SLACK_APP_TOKEN}"
-SLACK_SIGNING_SECRET="${SLACK_SIGNING_SECRET}"
 
 # ── Ports ────────────────────────────────────────
 WEB_PORT="${WEB_PORT}"
@@ -208,9 +193,5 @@ echo "  │  Logs:    docker compose logs -f      │"
 echo "  │  Stop:    docker compose down         │"
 echo "  ╰──────────────────────────────────────╯"
 echo ""
-
-if [ -n "${SLACK_BOT_TOKEN:-}" ]; then
-  echo "  Slack bot is enabled — invite @Yojin to a channel."
-fi
 
 echo ""
