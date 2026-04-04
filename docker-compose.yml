@@ -8,12 +8,19 @@ services:
     ports:
       - '${YOJIN_PORT:-3000}:3000'
     volumes:
-      - yojin_data:/home/node/.yojin
-      - yojin_vault:/home/node/.yojin-vault
+      # Bind-mount ~/.yojin from the host so the container can read the
+      # Keychain token written by the launchd bridge (docker/refresh-token.sh).
+      # This also shares portfolio data, signals, and brain state with local dev.
+      - ${HOME}/.yojin:/home/node/.yojin
+      - ${HOME}/.yojin-vault:/home/node/.yojin-vault
+      # Isolated named volumes (no Keychain bridge, no shared data):
+      # - yojin_data:/home/node/.yojin
+      # - yojin_vault:/home/node/.yojin-vault
     environment:
       # ── AI Provider (required — at least one) ──
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      - CLAUDE_CODE_OAUTH_REFRESH_TOKEN=${CLAUDE_CODE_OAUTH_REFRESH_TOKEN:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       # ── Slack Channel (optional) ──
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}

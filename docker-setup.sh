@@ -43,6 +43,7 @@ if [ ! -f "$ENV_FILE" ]; then
   # AI credentials — try local Keychain / Codex before prompting
   ANTHROPIC_API_KEY=""
   CLAUDE_CODE_OAUTH_TOKEN=""
+  CLAUDE_CODE_OAUTH_REFRESH_TOKEN=""
   OPENAI_API_KEY=""
   CREDENTIAL_FOUND=""
 
@@ -56,6 +57,7 @@ if [ ! -f "$ENV_FILE" ]; then
         read -rp "  Use Keychain token? [Y/n]: " USE_KEYCHAIN
         if [[ "${USE_KEYCHAIN:-Y}" =~ ^[Yy]?$ ]]; then
           CLAUDE_CODE_OAUTH_TOKEN="$KEYCHAIN_TOKEN"
+          CLAUDE_CODE_OAUTH_REFRESH_TOKEN=$(echo "$KEYCHAIN_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('claudeAiOauth',{}).get('refreshToken',''))" 2>/dev/null || true)
           CREDENTIAL_FOUND="claude-keychain"
           echo "  ✓ Using Claude Code Keychain token"
           echo ""
@@ -139,6 +141,7 @@ elif auth.get('auth_mode') == 'chatgpt' and auth.get('tokens', {}).get('access_t
 # ── AI Provider (required — at least one) ────────
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}"
 CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}"
+CLAUDE_CODE_OAUTH_REFRESH_TOKEN="${CLAUDE_CODE_OAUTH_REFRESH_TOKEN}"
 OPENAI_API_KEY="${OPENAI_API_KEY}"
 
 # ── Ports ────────────────────────────────────────
@@ -161,6 +164,38 @@ EOF
   echo "  (edit this file anytime to update settings)"
 else
   echo "✓ Using existing .env.docker"
+fi
+
+# ── Step 2b: Install Keychain Bridge (macOS only) ────────────────────────────
+# A launchd agent runs every 4 hours on the host, reads the Claude Code token
+# from the macOS Keychain, and writes it to ~/.yojin/.keychain-token.
+# The Docker container mounts ~/.yojin and reads the token from this file —
+# no env vars, no Anthropic OAuth dance.
+if [[ "$(uname)" == "Darwin" ]]; then
+  SCRIPT_SRC="$ROOT_DIR/docker/refresh-token.sh"
+  PLIST_SRC="$ROOT_DIR/docker/dev.yojin.token-refresh.plist"
+  PLIST_DEST="$HOME/Library/LaunchAgents/dev.yojin.token-refresh.plist"
+  YOJIN_HOME="${YOJIN_HOME:-$HOME/.yojin}"
+
+  chmod +x "$SCRIPT_SRC"
+  mkdir -p "$YOJIN_HOME/logs"
+
+  # Stamp real paths into the plist
+  sed \
+    -e "s|SCRIPT_PATH_PLACEHOLDER|${SCRIPT_SRC}|g" \
+    -e "s|YOJIN_HOME_PLACEHOLDER|${YOJIN_HOME}|g" \
+    "$PLIST_SRC" > "$PLIST_DEST"
+
+  # Unload first (no-op if not loaded), then load
+  launchctl unload "$PLIST_DEST" 2>/dev/null || true
+  launchctl load "$PLIST_DEST"
+
+  echo "✓ Keychain bridge installed (runs every 4 hours)"
+  echo "  Writing token to $YOJIN_HOME/.keychain-token"
+
+  # Run immediately so Docker has a token right away
+  bash "$SCRIPT_SRC"
+  echo "✓ Initial Keychain token written"
 fi
 
 # ── Step 3: Build the image ──────────────────────────────────

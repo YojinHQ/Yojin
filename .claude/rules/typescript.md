@@ -1,6 +1,6 @@
 ---
 description: TypeScript coding conventions for Yojin
-globs: ["**/*.ts"]
+globs: ["**/*.{ts,tsx}"]
 ---
 
 # TypeScript Conventions
@@ -54,6 +54,9 @@ globs: ["**/*.ts"]
 - **Store `setTimeout` handles for cancelable timers.** When a `setTimeout` clears temporary UI state (glow animations, toast dismissals), store the handle in a `useRef` and `clearTimeout` the previous handle before scheduling a new one. Bare `setTimeout` causes race conditions when the event fires again within the timer window — the first timer clears state while the second batch is still active.
 - **Deduplicate identical polling queries.** When two mounted components poll the same GraphQL query with `network-only`, urql sends two network requests per cycle. Use `cache-and-network` so urql deduplicates the request — only one component needs a `setInterval` poll, the other reads from cache updates.
 - **Detect value changes in `useEffect`, not render phase.** To detect when a query result value changes (e.g. `snap.generatedAt`), use a `useEffect` with the value as dependency and a `useRef` for the previous value. Avoid render-phase `setState` (the "getDerivedStateFromProps" pattern) — it causes extra re-renders in Strict Mode and is harder to reason about. When the ESLint rule `react-hooks/set-state-in-effect` blocks synchronous `setState` in the effect, defer with `setTimeout(fn, 0)`.
+- **Sort by the field you display.** If a list renders `publishedAt` timestamps, sort by `publishedAt`. Sorting by a different field (e.g. `ingestedAt`) makes the visual order disagree with the shown dates. Check: the `sort()` key must match the field the user sees.
+- **Sentinel fallbacks must not leak into display data.** Internal sentinel strings (e.g. `'MACRO'`, `'UNKNOWN'`) used as fallbacks when real data is absent must be filtered out before passing to display components. A sentinel in `relatedTickers` or a chip renders as a fake tradeable symbol. Strip sentinels at the mapping layer, not in the component.
+- **Clickable divs must use `<button>`.** Any `<div onClick>` that acts as a button is keyboard-inaccessible. Replace with `<button type="button">` and add `aria-expanded` when it controls a collapsible region. Add `w-full text-left` to preserve the full-width layout in flex/grid contexts.
 
 ## Imports
 - Group imports: node builtins, external packages, internal modules.
