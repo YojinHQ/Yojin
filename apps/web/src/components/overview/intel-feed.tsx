@@ -61,11 +61,6 @@ function classifySignal(signal: { outputType?: string | null; severity: IntelFee
   return 'insight';
 }
 
-const dataAccentBorder: Record<ItemType, string> = {
-  alert: 'border-warning/30',
-  insight: 'border-success/30',
-};
-
 const categoryIconBg: Record<ItemType, { default: string; expanded: string }> = {
   alert: { default: 'bg-warning/10', expanded: 'bg-warning/20' },
   insight: { default: 'bg-success/10', expanded: 'bg-success/20' },
