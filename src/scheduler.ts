@@ -136,10 +136,26 @@ export interface SchedulerOptions {
   signalArchive?: SignalArchive;
   /** Micro research interval in ms (default: 5 * 60_000 = 5 minutes). */
   microIntervalMs?: number;
+  /**
+   * Max LLM agent runs per calendar day (UTC). When the budget is exhausted,
+   * the scheduler stops firing new workflows until midnight UTC.
+   * Default: 50. Set to 0 to disable the cap.
+   */
+  dailyRunBudget?: number;
 }
 
 /** Minimum interval between macro flow runs (2 hours). */
 const MACRO_INTERVAL_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Minimum interval before micro research can re-trigger a macro flow after
+ * one just completed. Prevents the reset-flags → micro-completes → trigger
+ * loop that would otherwise fire a macro every ~5 minutes.
+ */
+const MICRO_TRIGGER_MACRO_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+
+/** Max LLM agent runs per calendar day. Exceeding this stops the scheduler for the day. */
+const DEFAULT_DAILY_RUN_BUDGET = 50;
 
 /** Default expiry window for actions created from skill triggers. */
 const ACTION_EXPIRY_HOURS = 24;
@@ -211,6 +227,14 @@ export class Scheduler {
   private lastSnapContentHash: string | undefined;
   private lastSnapNotifiedAt = 0;
 
+  // Daily LLM run budget — resets at midnight UTC
+  private dailyRunCount = 0;
+  private dailyRunBudgetDate = ''; // YYYY-MM-DD the count belongs to
+  private readonly dailyRunBudget: number;
+
+  // Timestamp of last macro flow completion — used to gate micro→macro re-triggers
+  private lastMacroCompletedAt = 0;
+
   constructor(options: SchedulerOptions) {
     this.orchestrator = options.orchestrator;
     this.dataRoot = options.dataRoot;
@@ -234,6 +258,34 @@ export class Scheduler {
     this.profileStore = options.profileStore;
     this.signalArchive = options.signalArchive;
     this.microIntervalMs = options.microIntervalMs ?? DEFAULT_MICRO_INTERVAL_MS;
+    this.dailyRunBudget = options.dailyRunBudget ?? DEFAULT_DAILY_RUN_BUDGET;
+  }
+
+  /**
+   * Check and increment the daily run budget.
+   * Returns true if a run is allowed, false if the daily cap is exhausted.
+   * The counter resets at midnight UTC.
+   */
+  private checkDailyBudget(runsToConsume = 1): boolean {
+    if (this.dailyRunBudget === 0) return true; // disabled
+
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
+    if (this.dailyRunBudgetDate !== today) {
+      this.dailyRunCount = 0;
+      this.dailyRunBudgetDate = today;
+    }
+
+    if (this.dailyRunCount + runsToConsume > this.dailyRunBudget) {
+      logger.warn('Daily LLM run budget exhausted — skipping workflow', {
+        dailyRunCount: this.dailyRunCount,
+        dailyRunBudget: this.dailyRunBudget,
+        date: today,
+      });
+      return false;
+    }
+
+    this.dailyRunCount += runsToConsume;
+    return true;
   }
 
   /** Start the scheduler. Checks once per minute + micro tick every 30s. */
@@ -395,6 +447,9 @@ export class Scheduler {
       return;
     }
 
+    // Each asset = 1 LLM run. Gate against daily budget.
+    if (!this.checkDailyBudget(assets.length)) return;
+
     this.microRunning = true;
     const gen = this.resetGeneration;
     const symbols = assets.map((a) => a.symbol);
@@ -474,12 +529,22 @@ export class Scheduler {
       // Regenerate snap from micro insights (immediate feedback before macro)
       await this.regenerateSnapFromMicro();
 
-      // Trigger macro when all registered assets have completed micro today
+      // Trigger macro when all registered assets have completed micro today,
+      // but only if the 2-hour cooldown since the last macro has passed.
+      // This prevents the reset-flags → micro-completes → immediate-macro loop.
       if (this.allMicrosCompletedToday()) {
-        logger.info('All micro flows completed for all assets — triggering macro flow', {
-          assets: this.microRegistry.size,
-        });
-        void this.runMacroFlow();
+        const timeSinceLastMacro = Date.now() - this.lastMacroCompletedAt;
+        if (timeSinceLastMacro >= MICRO_TRIGGER_MACRO_COOLDOWN_MS) {
+          logger.info('All micro flows completed for all assets — triggering macro flow', {
+            assets: this.microRegistry.size,
+          });
+          void this.runMacroFlow();
+        } else {
+          const waitMins = Math.ceil((MICRO_TRIGGER_MACRO_COOLDOWN_MS - timeSinceLastMacro) / 60_000);
+          logger.debug('All micros done but macro cooldown not elapsed — skipping trigger', {
+            waitMins,
+          });
+        }
       }
     } catch (err) {
       logger.error('Micro research batch failed', { error: err, symbols });
@@ -528,6 +593,10 @@ export class Scheduler {
       return;
     }
 
+    // A macro flow consumes ~6 agent runs (RA×2, strategist, risk-mgr, bull, bear).
+    // Gate against the daily budget before committing.
+    if (!this.checkDailyBudget(6)) return;
+
     logger.info('Macro flow started — portfolio-wide analysis');
     this.running = true;
 
@@ -572,6 +641,7 @@ export class Scheduler {
       logger.error('Macro flow failed', { error: err });
     } finally {
       this.running = false;
+      this.lastMacroCompletedAt = Date.now();
     }
   }
 
