@@ -1,4 +1,7 @@
 import { execFile, spawn } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -9,6 +12,21 @@ import { readTokenFromKeychain } from '../auth/keychain.js';
 import { getTokenManager } from '../auth/token-manager.js';
 import type { AgentMessage, ContentBlock, ToolSchema } from '../core/types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
+
+/**
+ * Read the Claude Code token from the keychain bridge file.
+ * docker/refresh-token.sh writes this file every 4 hours on the host.
+ * The Docker container reads it via the ~/.yojin bind mount.
+ */
+async function readTokenFromKeychainFile(): Promise<string | null> {
+  const yojinHome = process.env.YOJIN_HOME ?? join(homedir(), '.yojin');
+  try {
+    const token = (await readFile(join(yojinHome, '.keychain-token'), 'utf-8')).trim();
+    return token.startsWith('sk-ant-oat') ? token : null;
+  } catch {
+    return null;
+  }
+}
 
 const execFileAsync = promisify(execFile);
 const logger = createSubsystemLogger('claude-code-provider');
@@ -96,6 +114,9 @@ interface StreamEvent {
  *  - "cli":     Spawns `claude -p` subprocess. Text-only — no images, no tool_use.
  *               Supports streaming via `--output-format stream-json`.
  */
+/** How often to proactively re-read the macOS Keychain token (8 hours). */
+const KEYCHAIN_REFRESH_INTERVAL_MS = 8 * 60 * 60 * 1000;
+
 export class ClaudeCodeProvider implements AIProvider {
   readonly id = 'claude-code';
   readonly name = 'Claude Code';
@@ -104,6 +125,7 @@ export class ClaudeCodeProvider implements AIProvider {
   private authMode: 'api_key' | 'oauth' | 'cli' = 'cli';
   /** Tracks where the OAuth token was sourced so refresh only retries viable paths. */
   private oauthSource: 'env' | 'keychain' | null = null;
+  private tokenRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
@@ -122,6 +144,24 @@ export class ClaudeCodeProvider implements AIProvider {
     // Already have an SDK client (api_key mode) — nothing to upgrade
     if (this.client) return;
 
+    // Try keychain bridge file (~/.yojin/.keychain-token) — written by the
+    // host-side launchd agent (docker/refresh-token.sh). This is the primary
+    // token source in Docker, giving the container direct Keychain access via
+    // the ~/.yojin bind mount without any Anthropic OAuth complexity.
+    const fileToken = await readTokenFromKeychainFile();
+    if (fileToken) {
+      this.authMode = 'oauth';
+      this.oauthSource = 'keychain';
+      this.client = new Anthropic({
+        apiKey: null,
+        authToken: fileToken,
+        defaultHeaders: OAUTH_HEADERS,
+      });
+      logger.info('Upgraded to OAuth SDK mode (keychain bridge file)');
+      this.startTokenRefreshTimer();
+      return;
+    }
+
     // Try OAuth token from env var
     const envToken = process.env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
     if (envToken && isOAuthToken(envToken)) {
@@ -133,6 +173,7 @@ export class ClaudeCodeProvider implements AIProvider {
         defaultHeaders: OAUTH_HEADERS,
       });
       logger.info('Upgraded to OAuth SDK mode (env var)');
+      this.startTokenRefreshTimer();
       return;
     }
 
@@ -147,6 +188,7 @@ export class ClaudeCodeProvider implements AIProvider {
         defaultHeaders: OAUTH_HEADERS,
       });
       logger.info('Upgraded to OAuth SDK mode (macOS Keychain)');
+      this.startTokenRefreshTimer();
       return;
     }
 
@@ -457,16 +499,73 @@ export class ClaudeCodeProvider implements AIProvider {
   }
 
   /**
+   * Start a background timer that proactively refreshes the OAuth token every
+   * 8 hours — matching the behavior of local dev on both Keychain and Docker.
+   *
+   * - Keychain (local dev): re-reads the Keychain directly (Claude Code CLI
+   *   silently rotates the token there).
+   * - Env var (Docker): uses TokenManager to call the OAuth refresh endpoint
+   *   (requires CLAUDE_CODE_OAUTH_REFRESH_TOKEN to be set in .env.docker).
+   */
+  private startTokenRefreshTimer(): void {
+    if (this.tokenRefreshTimer) return;
+    this.tokenRefreshTimer = setInterval(() => {
+      void (async () => {
+        if (this.oauthSource === 'keychain') {
+          // Try keychain bridge file first (Docker), then fall back to macOS Keychain (local dev)
+          const token = (await readTokenFromKeychainFile()) ?? (await readTokenFromKeychain());
+          if (token) {
+            this.client = new Anthropic({ apiKey: null, authToken: token, defaultHeaders: OAUTH_HEADERS });
+            logger.info('Proactively refreshed OAuth client (Keychain)');
+          } else {
+            logger.warn('Keychain proactive refresh: no token found, keeping existing client');
+          }
+        } else if (this.oauthSource === 'env') {
+          const tokenManager = getTokenManager();
+          if (!tokenManager.hasRefreshToken()) {
+            logger.debug('Proactive token refresh skipped — no refresh token in env');
+            return;
+          }
+          try {
+            const newToken = await tokenManager.refresh();
+            this.client = new Anthropic({ apiKey: null, authToken: newToken, defaultHeaders: OAUTH_HEADERS });
+            logger.info('Proactively refreshed OAuth client (TokenManager)');
+          } catch (err) {
+            logger.warn('Proactive token refresh failed, keeping existing client', { err });
+          }
+        }
+      })();
+    }, KEYCHAIN_REFRESH_INTERVAL_MS);
+  }
+
+  /**
    * Re-read the OAuth token and rebuild the SDK client.
-   * Only Keychain tokens can be refreshed (Claude Code CLI may have renewed them).
-   * Env-var tokens are static for the process lifetime — retrying would be a no-op.
+   *
+   * For env-var tokens (Docker): use TokenManager's OAuth refresh flow
+   * (requires CLAUDE_CODE_OAUTH_REFRESH_TOKEN to be set).
+   * For Keychain tokens: re-read directly from Keychain (Claude Code CLI may
+   * have renewed the token since startup).
    */
   private async refreshOAuthToken(): Promise<boolean> {
     if (this.oauthSource === 'env') {
-      logger.warn('OAuth token from env var expired — cannot refresh a static env var');
-      return false;
+      const tokenManager = getTokenManager();
+      if (!tokenManager.hasRefreshToken()) {
+        logger.warn('OAuth token from env var expired — no refresh token available');
+        return false;
+      }
+      try {
+        const newToken = await tokenManager.refresh();
+        this.client = new Anthropic({ apiKey: null, authToken: newToken, defaultHeaders: OAUTH_HEADERS });
+        logger.info('Refreshed OAuth client (TokenManager)');
+        return true;
+      } catch (err) {
+        logger.error('OAuth token refresh via TokenManager failed', { err });
+        return false;
+      }
     }
-    const keychainToken = await readTokenFromKeychain();
+
+    // Try keychain bridge file first (Docker), then macOS Keychain (local dev)
+    const keychainToken = (await readTokenFromKeychainFile()) ?? (await readTokenFromKeychain());
     if (keychainToken) {
       this.client = new Anthropic({ apiKey: null, authToken: keychainToken, defaultHeaders: OAUTH_HEADERS });
       logger.info('Refreshed OAuth client (macOS Keychain)');

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Yojin Keychain Bridge — launchd agent
+  Installed to ~/Library/LaunchAgents/ by docker-setup.sh.
+  Reads the Claude Code OAuth token from the macOS Keychain every 4 hours
+  and writes it to ~/.yojin/.keychain-token for the Docker container.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.yojin.token-refresh</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>SCRIPT_PATH_PLACEHOLDER</string>
+  </array>
+
+  <!-- Run immediately on load and every 4 hours after that -->
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>14400</integer>
+
+  <key>StandardOutPath</key>
+  <string>YOJIN_HOME_PLACEHOLDER/logs/keychain-bridge.log</string>
+  <key>StandardErrorPath</key>
+  <string>YOJIN_HOME_PLACEHOLDER/logs/keychain-bridge.log</string>
+</dict>
+</plist>
