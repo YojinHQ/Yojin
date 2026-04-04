@@ -1,6 +1,3 @@
-import { useNavigate } from 'react-router';
-
-import { safeHref } from '../../lib/utils';
 import Modal from '../common/modal';
 import Badge from '../common/badge';
 import type { BadgeVariant } from '../common/badge';
@@ -58,7 +55,6 @@ function SectionRule({ label }: { label: string }) {
 }
 
 export default function FeedDetailModal({ open, onClose, data }: FeedDetailModalProps) {
-  const navigate = useNavigate();
   if (!data) return null;
 
   return (
@@ -131,66 +127,6 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
           <SectionRule label="Recommendation" />
           <div className="rounded-lg border border-accent-primary/20 bg-accent-glow p-3">
             <p className="text-xs leading-relaxed text-text-primary">{data.recommendation}</p>
-          </div>
-        </>
-      )}
-
-      {/* Signals */}
-      {data.signals && data.signals.length > 0 && (
-        <>
-          <SectionRule label="Signals" />
-          <div className="space-y-1.5">
-            {data.signals.map((sig) => {
-              const fallback = `/signals?highlight=${sig.signalId}`;
-              const href = safeHref(sig.url, fallback);
-              const isExternal = href !== fallback;
-              return (
-                <a
-                  key={sig.signalId}
-                  href={href}
-                  target={isExternal ? '_blank' : undefined}
-                  rel={isExternal ? 'noopener noreferrer' : undefined}
-                  onClick={(e) => {
-                    if (!isExternal) {
-                      e.preventDefault();
-                      onClose();
-                      navigate(fallback);
-                    }
-                  }}
-                  className="flex items-center gap-2 rounded-lg border border-border-light bg-bg-tertiary px-3 py-2 text-xs text-text-secondary transition-colors hover:bg-bg-hover hover:text-accent-primary"
-                >
-                  <svg
-                    className="h-3.5 w-3.5 flex-shrink-0 text-accent-primary"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"
-                    />
-                  </svg>
-                  <span className="min-w-0 flex-1">{sig.title}</span>
-                  {isExternal && (
-                    <svg
-                      className="h-3 w-3 flex-shrink-0 text-text-muted"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
-                      />
-                    </svg>
-                  )}
-                </a>
-              );
-            })}
           </div>
         </>
       )}

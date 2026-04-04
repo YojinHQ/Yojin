@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { useMutation, useQuery } from 'urql';
 import { DISMISS_SIGNAL_MUTATION, INTEL_FEED_QUERY } from '../../api/documents';
-import type { FeedTarget, IntelFeedQueryResult, IntelFeedQueryVariables } from '../../api/types';
-import { cn, safeHref, timeAgo } from '../../lib/utils';
+import type { IntelFeedQueryResult, IntelFeedQueryVariables } from '../../api/types';
+import { cn, timeAgo } from '../../lib/utils';
 import { useFeatureStatus } from '../../lib/feature-status';
+import Button from '../common/button';
 import { CardBlurGate } from '../common/card-blur-gate';
 import { FeatureCardGate } from '../common/feature-gate';
+import FeedDetailModal from './feed-detail-modal';
+import type { FeedDetailData } from './feed-detail-modal';
 import Spinner from '../common/spinner';
 
 type ItemType = 'alert' | 'insight';
-type FilterTab = 'all' | 'alerts' | 'insights';
+type FilterTab = 'alerts' | 'insights';
 type IconName = 'rebalance' | 'dollar' | 'box' | 'warehouse' | 'clock' | 'trending' | 'bubble' | 'trending-up';
 
 interface DataRow {
@@ -24,7 +28,7 @@ interface IntelFeedItem {
   severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   signalType: string;
   ticker: string;
-  feedTarget: FeedTarget;
+  tickers: string[];
   sentiment: string | null;
   title: string;
   time: string;
@@ -36,7 +40,6 @@ interface IntelFeedItem {
   source: string | null;
   link: string | null;
   data?: DataRow[];
-  verdict: 'CRITICAL' | 'IMPORTANT' | 'NOISE' | null;
 }
 
 /** Map signal type to an icon name. */
@@ -51,30 +54,6 @@ const signalTypeIcon: Record<string, IconName> = {
   TRADING_LOGIC_TRIGGER: 'clock',
 };
 
-/** Human-readable label for each signal type. */
-const signalTypeLabel: Record<string, string> = {
-  NEWS: 'News',
-  FUNDAMENTAL: 'Fundamental',
-  TECHNICAL: 'Technical',
-  MACRO: 'Macro',
-  SENTIMENT: 'Sentiment',
-  FILINGS: 'Filing',
-  SOCIALS: 'Social',
-  TRADING_LOGIC_TRIGGER: 'Trigger',
-};
-
-/** Tailwind color class for each signal type badge. */
-const signalTypeBadgeColor: Record<string, string> = {
-  NEWS: 'bg-text-muted/10 text-text-muted',
-  FUNDAMENTAL: 'bg-info/10 text-info',
-  TECHNICAL: 'bg-accent-primary/10 text-accent-primary',
-  MACRO: 'bg-warning/10 text-warning',
-  SENTIMENT: 'bg-success/10 text-success',
-  FILINGS: 'bg-info/10 text-info',
-  SOCIALS: 'bg-accent-primary/10 text-accent-primary',
-  TRADING_LOGIC_TRIGGER: 'bg-warning/10 text-warning',
-};
-
 /** Promote higher-severity items into the alerts lane. */
 function classifySignal(signal: { outputType?: string | null; severity: IntelFeedItem['severity'] }): ItemType {
   if (signal.severity === 'CRITICAL' || signal.severity === 'HIGH') return 'alert';
@@ -87,41 +66,31 @@ const dataAccentBorder: Record<ItemType, string> = {
   insight: 'border-success/30',
 };
 
-const severityBadgeColor: Record<IntelFeedItem['severity'], string> = {
-  CRITICAL: 'bg-error/20 text-error',
-  HIGH: 'bg-warning/20 text-warning',
-  MEDIUM: 'bg-info/15 text-info',
-  LOW: 'bg-text-muted/10 text-text-muted',
+const categoryIconBg: Record<ItemType, { default: string; expanded: string }> = {
+  alert: { default: 'bg-warning/10', expanded: 'bg-warning/20' },
+  insight: { default: 'bg-success/10', expanded: 'bg-success/20' },
+};
+
+const categoryIconText: Record<ItemType, string> = {
+  alert: 'text-warning',
+  insight: 'text-success',
+};
+
+const categoryLabel: Record<ItemType, string> = {
+  alert: 'ALERT',
+  insight: 'INSIGHT',
 };
 
 const filterTabs: { key: FilterTab; label: string }[] = [
-  { key: 'all', label: 'All' },
   { key: 'alerts', label: 'Alerts' },
   { key: 'insights', label: 'Insights' },
 ];
 
-const filterMap: Record<FilterTab, ItemType | null> = {
-  all: null,
-  alerts: 'alert',
-  insights: 'insight',
-};
+/* ── Icons ──────────────────────────────────────────────────────────── */
 
-const sentimentIconColor: Record<string, string> = {
-  BULLISH: 'text-success',
-  BEARISH: 'text-error',
-  MIXED: 'text-warning',
-  NEUTRAL: 'text-text-muted',
-};
-
-const sentimentIconBg: Record<string, string> = {
-  BULLISH: 'bg-success/10',
-  BEARISH: 'bg-error/10',
-  MIXED: 'bg-warning/10',
-  NEUTRAL: 'bg-bg-hover',
-};
-
-function ItemIcon({ icon, sentiment }: { icon: IconName; sentiment: string | null }) {
-  const svgClass = cn('h-3.5 w-3.5', sentimentIconColor[sentiment ?? 'NEUTRAL'] ?? 'text-text-muted');
+function ItemIcon({ icon, type, expanded }: { icon: IconName; type: ItemType; expanded: boolean }) {
+  const strokeWidth = expanded ? '2.5' : '2';
+  const svgClass = cn('h-3.5 w-3.5', categoryIconText[type]);
 
   const icons: Record<IconName, React.ReactNode> = {
     rebalance: (
@@ -130,7 +99,7 @@ function ItemIcon({ icon, sentiment }: { icon: IconName; sentiment: string | nul
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
       >
@@ -146,7 +115,7 @@ function ItemIcon({ icon, sentiment }: { icon: IconName; sentiment: string | nul
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
       >
@@ -160,7 +129,7 @@ function ItemIcon({ icon, sentiment }: { icon: IconName; sentiment: string | nul
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
       >
@@ -175,7 +144,7 @@ function ItemIcon({ icon, sentiment }: { icon: IconName; sentiment: string | nul
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
       >
@@ -191,7 +160,7 @@ function ItemIcon({ icon, sentiment }: { icon: IconName; sentiment: string | nul
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
       >
@@ -205,7 +174,7 @@ function ItemIcon({ icon, sentiment }: { icon: IconName; sentiment: string | nul
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
       >
@@ -219,7 +188,7 @@ function ItemIcon({ icon, sentiment }: { icon: IconName; sentiment: string | nul
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
       >
@@ -235,7 +204,7 @@ function ItemIcon({ icon, sentiment }: { icon: IconName; sentiment: string | nul
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
       >
@@ -248,8 +217,8 @@ function ItemIcon({ icon, sentiment }: { icon: IconName; sentiment: string | nul
   return (
     <div
       className={cn(
-        'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg',
-        sentimentIconBg[sentiment ?? 'NEUTRAL'] ?? 'bg-bg-hover',
+        'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors',
+        expanded ? categoryIconBg[type].expanded : categoryIconBg[type].default,
       )}
     >
       {icons[icon]}
@@ -257,205 +226,87 @@ function ItemIcon({ icon, sentiment }: { icon: IconName; sentiment: string | nul
   );
 }
 
-type Sentiment = 'BULLISH' | 'BEARISH' | 'MIXED' | 'NEUTRAL';
-
-const sentimentColor: Record<Sentiment, string> = {
-  BULLISH: 'text-success',
-  BEARISH: 'text-error',
-  MIXED: 'text-warning',
-  NEUTRAL: 'text-text-secondary',
-};
-
-const sentimentLineColor: Record<Sentiment, string> = {
-  BULLISH: 'bg-success/20',
-  BEARISH: 'bg-error/20',
-  MIXED: 'bg-warning/20',
-  NEUTRAL: 'bg-border',
-};
-
-const sentimentIcon: Record<Sentiment, React.ReactNode> = {
-  BULLISH: (
-    <svg
-      className="h-3 w-3"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-      <polyline points="16 7 22 7 22 13" />
-    </svg>
-  ),
-  BEARISH: (
-    <svg
-      className="h-3 w-3"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="22 17 13.5 8.5 8.5 13.5 2 7" />
-      <polyline points="16 17 22 17 22 11" />
-    </svg>
-  ),
-  MIXED: (
-    <svg
-      className="h-3 w-3"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  ),
-  NEUTRAL: (
-    <svg
-      className="h-3 w-3"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <line x1="8" y1="12" x2="16" y2="12" />
-    </svg>
-  ),
-};
-
-/** Determine the dominant sentiment from a group of items. */
-function dominantSentiment(items: IntelFeedItem[]): Sentiment {
-  const counts: Record<string, number> = {};
-  for (const item of items) {
-    const s = item.sentiment ?? 'NEUTRAL';
-    counts[s] = (counts[s] ?? 0) + 1;
-  }
-  let best = 'NEUTRAL';
-  let bestCount = 0;
-  for (const [key, count] of Object.entries(counts)) {
-    if (count > bestCount) {
-      best = key;
-      bestCount = count;
-    }
-  }
-  return best as Sentiment;
-}
-
-function TickerSectionHeader({
-  ticker,
-  alertCount,
-  itemCount,
-  sentiment,
-  collapsed,
-  onToggle,
-}: {
-  ticker: string;
-  alertCount: number;
-  itemCount: number;
-  sentiment: Sentiment;
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
+function AgentIcon() {
   return (
-    <button onClick={onToggle} className="flex w-full cursor-pointer items-center gap-2.5 px-1 pt-4 pb-2 text-left">
-      <svg
-        className={cn('h-3 w-3 transition-transform', sentimentColor[sentiment], collapsed ? '-rotate-90' : 'rotate-0')}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
+    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <path
         strokeLinecap="round"
         strokeLinejoin="round"
-      >
-        <polyline points="6 9 12 15 18 9" />
-      </svg>
-      <span className={cn('text-2xs font-semibold tracking-[0.1em] uppercase', sentimentColor[sentiment])}>
-        {ticker}
-      </span>
-      <span className={cn('flex items-center', sentimentColor[sentiment])}>{sentimentIcon[sentiment]}</span>
-      {alertCount > 0 && (
-        <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">
-          {alertCount} {alertCount === 1 ? 'alert' : 'alerts'}
-        </span>
-      )}
-      <span className="text-[10px] tabular-nums text-text-muted">{itemCount}</span>
-      <div className={cn('h-px flex-1', sentimentLineColor[sentiment])} />
-    </button>
+        d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"
+      />
+    </svg>
   );
 }
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <div className="mb-2.5 flex items-center gap-2.5 px-1 pt-4">
+      <span className="whitespace-nowrap text-2xs font-semibold uppercase tracking-[0.12em] text-text-muted">
+        {label}
+      </span>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+/* ── Card ──────────────────────────────────────────────────────────── */
 
 function IntelFeedCard({
   item,
   expanded,
-  isNew,
   onToggle,
   onDismiss,
+  onViewDetails,
+  onAskYojin,
 }: {
   item: IntelFeedItem;
   expanded: boolean;
-  isNew?: boolean;
   onToggle: () => void;
   onDismiss: () => void;
+  onViewDetails: () => void;
+  onAskYojin: () => void;
 }) {
   return (
     <div
       className={cn(
-        'rounded-xl bg-bg-tertiary/60 transition-colors cursor-pointer',
+        'relative rounded-xl border border-border-light bg-bg-tertiary/60 transition-colors',
         expanded ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary',
-        isNew && 'animate-new-item',
       )}
     >
       {/* Collapsed header — always visible */}
-      <div className="flex items-center gap-3 px-3 py-2.5" onClick={onToggle}>
-        <ItemIcon icon={item.icon} sentiment={item.sentiment} />
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+      >
+        <ItemIcon icon={item.icon} type={item.type} expanded={expanded} />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span
-              className={cn(
-                'rounded-full px-1.5 py-0.5 text-[9px] font-semibold leading-none uppercase tracking-wide',
-                signalTypeBadgeColor[item.signalType] ?? 'bg-text-muted/10 text-text-muted',
-              )}
-            >
-              {signalTypeLabel[item.signalType] ?? item.signalType}
-            </span>
-            {item.type === 'alert' && (
-              <span className="text-2xs font-semibold tracking-wide uppercase text-warning">ALERT</span>
-            )}
-            <span
-              className={cn(
-                'rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none',
-                severityBadgeColor[item.severity],
-              )}
-            >
-              {item.severity}
-            </span>
-            {item.verdict && (
-              <span
-                className={cn(
-                  'rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none',
-                  item.verdict === 'CRITICAL' && 'bg-error/20 text-error',
-                  item.verdict === 'IMPORTANT' && 'bg-warning/20 text-warning',
-                  item.verdict === 'NOISE' && 'bg-text-muted/10 text-text-muted',
-                )}
-              >
-                {item.verdict}
-              </span>
-            )}
-          </div>
-          <p className="text-xs font-medium leading-tight text-text-primary line-clamp-2">{item.title}</p>
+          <span className={cn('text-2xs font-semibold uppercase tracking-[0.1em]', categoryIconText[item.type])}>
+            {categoryLabel[item.type]}
+          </span>
+          <p className="truncate text-sm font-medium leading-snug text-text-primary">{item.title}</p>
         </div>
         <span className="flex-shrink-0 text-2xs text-text-muted">{item.publishedTime}</span>
-      </div>
+      </button>
 
-      {/* Expanded content — show both dates */}
+      {/* X dismiss — top-right, only when expanded */}
+      {expanded && (
+        <button
+          aria-label="Dismiss"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDismiss();
+          }}
+          className="absolute right-2 top-2 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+        >
+          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+
+      {/* Expanded content */}
       <div
         className={cn(
           'grid transition-[grid-template-rows] duration-200 ease-out',
@@ -464,16 +315,13 @@ function IntelFeedCard({
       >
         <div className="overflow-hidden">
           <div className="px-3 pb-3 pt-0.5">
-            {/* Description */}
-            {item.description && <p className="text-xs leading-relaxed text-text-secondary">{item.description}</p>}
-            {item.source && <p className="mt-1 text-[10px] text-text-muted">via {item.source}</p>}
-            <p className="mt-1 text-[10px] text-text-muted">
-              Published {item.publishedTime} · Updated {item.time}
-            </p>
+            {item.description && (
+              <p className="line-clamp-3 text-xs leading-relaxed text-text-secondary">{item.description}</p>
+            )}
 
             {/* Data table */}
             {item.data && (
-              <div className={cn('mt-2.5 border-l-2 pl-3 py-1.5', dataAccentBorder[item.type])}>
+              <div className={cn('mt-2.5 border-l-2 py-1.5 pl-3', dataAccentBorder[item.type])}>
                 {item.data.map((row) => (
                   <div key={row.label} className="flex items-center justify-between py-0.5">
                     <span className="text-xs text-text-muted">{row.label}</span>
@@ -487,35 +335,29 @@ function IntelFeedCard({
               </div>
             )}
 
-            {/* Actions row */}
+            {/* CTA buttons */}
             <div className="mt-3 flex items-center gap-2">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDismiss();
+                  onViewDetails();
                 }}
-                className="cursor-pointer rounded-lg border border-border bg-transparent px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
               >
-                Dismiss
-              </button>
-              {item.link && (
-                <a
-                  href={safeHref(item.link, '#')}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="ml-auto flex items-center gap-1 text-xs text-accent-primary transition-colors hover:text-accent-primary/80"
-                >
-                  View source
-                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
-                    />
-                  </svg>
-                </a>
-              )}
+                View details
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAskYojin();
+                }}
+              >
+                <AgentIcon />
+                Ask Yojin
+              </Button>
             </div>
           </div>
         </div>
@@ -523,6 +365,8 @@ function IntelFeedCard({
     </div>
   );
 }
+
+/* ── Gate wrapper ───────────────────────────────────────────────────── */
 
 export default function IntelFeed() {
   const { jintelConfigured, aiConfigured } = useFeatureStatus();
@@ -544,70 +388,16 @@ export default function IntelFeed() {
   return <IntelFeedContent />;
 }
 
+/* ── Content ────────────────────────────────────────────────────────── */
+
 const POLL_INTERVAL_MS = 30_000;
-const NEW_ITEM_GLOW_MS = 3_000;
-
-function groupByTicker(items: IntelFeedItem[]): { ticker: string; items: IntelFeedItem[] }[] {
-  const sections: { ticker: string; items: IntelFeedItem[] }[] = [];
-  const map = new Map<string, IntelFeedItem[]>();
-  for (const item of items) {
-    const group = map.get(item.ticker);
-    if (group) {
-      group.push(item);
-    } else {
-      const newGroup = [item];
-      map.set(item.ticker, newGroup);
-      sections.push({ ticker: item.ticker, items: newGroup });
-    }
-  }
-  return sections;
-}
-
-function FeedSection({
-  label,
-  count,
-  collapsed,
-  onToggle,
-  children,
-}: {
-  label: string;
-  count: number;
-  collapsed: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="mt-1">
-      <button onClick={onToggle} className="flex w-full cursor-pointer items-center gap-2 px-1 pt-3 pb-1 text-left">
-        <svg
-          className={cn('h-2.5 w-2.5 text-text-muted transition-transform', collapsed ? '-rotate-90' : 'rotate-0')}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-        <span className="text-[10px] font-semibold tracking-[0.12em] text-text-muted uppercase">{label}</span>
-        <span className="text-[10px] tabular-nums text-text-muted/60">{count}</span>
-        <div className="h-px flex-1 bg-border/50" />
-      </button>
-      {!collapsed && children}
-    </div>
-  );
-}
 
 function IntelFeedContent() {
-  const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
+  const navigate = useNavigate();
+  const [activeFilter, setActiveFilter] = useState<FilterTab>('alerts');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [collapsedTickers, setCollapsedTickers] = useState<Set<string>>(new Set());
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [modalData, setModalData] = useState<FeedDetailData | null>(null);
   const [, dismissSignal] = useMutation(DISMISS_SIGNAL_MUTATION);
-  const [newItemIds, setNewItemIds] = useState<Set<string>>(new Set());
-  const knownIdsRef = useRef<Set<string>>(new Set());
-  const glowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [{ data, fetching, error }, reexecute] = useQuery<IntelFeedQueryResult, IntelFeedQueryVariables>({
     query: INTEL_FEED_QUERY,
@@ -620,25 +410,6 @@ function IntelFeedContent() {
     const id = setInterval(() => reexecute({ requestPolicy: 'network-only' }), POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [reexecute]);
-
-  // Detect new items and trigger glow animation
-  const detectNewItems = useCallback((currentIds: string[]) => {
-    if (knownIdsRef.current.size === 0) {
-      // First load — seed known IDs without animation
-      knownIdsRef.current = new Set(currentIds);
-      return;
-    }
-
-    const fresh = currentIds.filter((id) => !knownIdsRef.current.has(id));
-    if (fresh.length === 0) return;
-
-    knownIdsRef.current = new Set(currentIds);
-    setNewItemIds(new Set(fresh));
-
-    // Clear glow after animation — cancel previous timer to avoid race condition
-    if (glowTimerRef.current) clearTimeout(glowTimerRef.current);
-    glowTimerRef.current = setTimeout(() => setNewItemIds(new Set()), NEW_ITEM_GLOW_MS);
-  }, []);
 
   // Map API data into IntelFeedItem[]
   const items: IntelFeedItem[] = useMemo(() => {
@@ -654,7 +425,6 @@ function IntelFeedContent() {
           : null;
       const sourceName = s.sources?.[0]?.name;
       const ticker = topScore?.ticker ?? s.tickers[0] ?? 'MACRO';
-      // Prefer LLM summaries; fall back to raw title (which is unique per signal)
       const headline = s.tier1 ?? s.title;
       const detail = s.tier2 ?? (s.tier1 ? s.title : '');
       return {
@@ -663,6 +433,7 @@ function IntelFeedContent() {
         severity,
         signalType: s.type,
         ticker,
+        tickers: s.tickers,
         sentiment: s.sentiment ?? null,
         title: headline,
         time: timeAgo(s.ingestedAt),
@@ -688,298 +459,224 @@ function IntelFeedContent() {
                   : []),
               ]
             : undefined,
-        feedTarget: cs.feedTarget ?? 'PORTFOLIO',
-        verdict: cs.assessment?.verdict ?? null,
       };
     });
 
-    // Sort by newest ingested date first
-    signalItems.sort((a, b) => new Date(b.ingestedAt).getTime() - new Date(a.ingestedAt).getTime());
+    // Sort newest first
+    signalItems.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     return signalItems;
   }, [data]);
 
-  // Detect new items for glow animation
-  useEffect(() => {
-    if (items.length > 0) detectNewItems(items.map((i) => i.id));
-  }, [items, detectNewItems]);
-
-  const filteredItems = filterMap[activeFilter] ? items.filter((item) => item.type === filterMap[activeFilter]) : items;
-
+  const filteredItems = useMemo(
+    () => items.filter((item) => item.type === (activeFilter === 'alerts' ? 'alert' : 'insight')),
+    [items, activeFilter],
+  );
   const totalCount = filteredItems.length;
 
-  // Split items by feed target, then group by ticker within each
-  const { portfolioItems, watchlistItems, portfolioSections, watchlistSections } = useMemo(() => {
-    const portfolio = filteredItems.filter((i) => i.feedTarget === 'PORTFOLIO');
-    const watchlist = filteredItems.filter((i) => i.feedTarget === 'WATCHLIST');
-    return {
-      portfolioItems: portfolio,
-      watchlistItems: watchlist,
-      portfolioSections: groupByTicker(portfolio),
-      watchlistSections: groupByTicker(watchlist),
-    };
-  }, [filteredItems]);
-
-  function renderTickerSections(sections: { ticker: string; items: IntelFeedItem[] }[]) {
-    return sections.map((section) => {
-      const isCollapsed = collapsedTickers.has(section.ticker);
-      return (
-        <div key={section.ticker}>
-          <TickerSectionHeader
-            ticker={section.ticker}
-            alertCount={section.items.filter((i) => i.type === 'alert').length}
-            itemCount={section.items.length}
-            sentiment={dominantSentiment(section.items)}
-            collapsed={isCollapsed}
-            onToggle={() => {
-              setCollapsedTickers((prev) => {
-                const next = new Set(prev);
-                if (next.has(section.ticker)) next.delete(section.ticker);
-                else next.add(section.ticker);
-                return next;
-              });
-            }}
-          />
-          {!isCollapsed && (
-            <div className="space-y-1.5">
-              {section.items.map((item) => (
-                <IntelFeedCard
-                  key={item.id}
-                  item={item}
-                  expanded={expandedId === item.id}
-                  isNew={newItemIds.has(item.id)}
-                  onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                  onDismiss={() => {
-                    if (expandedId === item.id) setExpandedId(null);
-                    void dismissSignal({ signalId: item.id }).then(() => reexecute({ requestPolicy: 'network-only' }));
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      );
+  function openModal(item: IntelFeedItem) {
+    setModalData({
+      title: item.title,
+      source: item.source ?? item.signalType,
+      time: item.publishedTime,
+      tag: categoryLabel[item.type],
+      tagVariant: item.type === 'alert' ? 'warning' : 'success',
+      keyPoints: item.data?.map((r) => `${r.label}: ${r.value}`) ?? (item.description ? [item.description] : []),
+      analysis: item.description || item.title,
+      relatedTickers: item.tickers,
     });
   }
 
-  // Determine content state
   const isLoading = fetching && !data;
   const hasError = !!error;
-  const isEmpty = !fetching && !error && items.length === 0;
+  const isEmpty = !fetching && !error && filteredItems.length === 0;
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Header */}
-      <div className="px-4 pt-3.5 pb-1">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xs font-medium tracking-wide text-text-secondary uppercase">Intel Feed</h2>
-          <span className="text-2xs tabular-nums text-text-muted">{totalCount} items</span>
+    <>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Sticky header */}
+        <div className="sticky top-0 z-10 bg-bg-secondary">
+          <div className="flex items-center gap-2.5 px-4 pt-4 pb-1.5">
+            <h2 className="font-headline text-base text-text-primary">Intel Feed</h2>
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-tertiary px-1.5 text-[10px] font-bold text-text-secondary">
+              {totalCount}
+            </span>
+          </div>
+
+          <div className="flex gap-5 border-b border-border px-4">
+            {filterTabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => {
+                  setActiveFilter(tab.key);
+                  setExpandedId(null);
+                }}
+                className={cn(
+                  'relative cursor-pointer pb-2.5 pt-1.5 text-xs font-medium transition-colors',
+                  activeFilter === tab.key ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary',
+                )}
+              >
+                {tab.label}
+                {activeFilter === tab.key && (
+                  <span className="absolute inset-x-0 bottom-0 h-[2px] rounded-full bg-accent-primary" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-auto px-3 pb-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center pt-12">
+              <Spinner size="md" label="Loading intel..." />
+            </div>
+          ) : hasError ? (
+            <div className="flex flex-col items-center justify-center gap-3 pt-12 text-center">
+              <svg
+                className="h-7 w-7 text-text-muted"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+                />
+              </svg>
+              <div>
+                <p className="text-sm text-text-muted">Failed to load intel</p>
+                <p className="mt-1 text-xs text-text-muted">{error.message}</p>
+              </div>
+              <button
+                onClick={() => reexecute({ requestPolicy: 'network-only' })}
+                className="mt-1 cursor-pointer rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+              >
+                Retry
+              </button>
+            </div>
+          ) : isEmpty ? (
+            <div className="flex flex-col items-center justify-center gap-3 pt-12 text-center">
+              <svg
+                className="h-7 w-7 text-text-muted"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"
+                />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-text-secondary">No {activeFilter} yet</p>
+                <p className="mt-1 text-xs leading-relaxed text-text-muted">
+                  Intel signals will appear here once your data sources are configured and the curation pipeline runs.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <SectionHeader label={activeFilter === 'alerts' ? 'Alerts' : 'Insights'} />
+              <div className="space-y-2">
+                {filteredItems.map((item) => (
+                  <IntelFeedCard
+                    key={item.id}
+                    item={item}
+                    expanded={expandedId === item.id}
+                    onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                    onDismiss={() => {
+                      if (expandedId === item.id) setExpandedId(null);
+                      void dismissSignal({ signalId: item.id }).then((result) => {
+                        if (result.error) {
+                          console.error('Dismiss failed', result.error.message);
+                          return;
+                        }
+                        reexecute({ requestPolicy: 'network-only' });
+                      });
+                    }}
+                    onViewDetails={() => openModal(item)}
+                    onAskYojin={() =>
+                      navigate('/chat', {
+                        state: {
+                          preset: `Analyze this ${categoryLabel[item.type].toLowerCase()}: "${item.title}"${item.description ? ` — ${item.description}` : ''}`,
+                        },
+                      })
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex gap-0.5 border-b border-border px-4 pt-2">
-        {filterTabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveFilter(tab.key)}
-            className={cn(
-              'relative px-2 pb-2 text-2xs font-medium transition-colors',
-              activeFilter === tab.key ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary',
-            )}
-          >
-            {tab.label}
-            {activeFilter === tab.key && (
-              <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-text-primary" />
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-auto px-3 pb-4">
-        {isLoading ? (
-          <div className="flex items-center justify-center pt-12">
-            <Spinner size="md" label="Loading intel..." />
-          </div>
-        ) : hasError ? (
-          <div className="flex flex-col items-center justify-center gap-3 pt-12 text-center">
-            <svg
-              className="h-7 w-7 text-text-muted"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-              />
-            </svg>
-            <div>
-              <p className="text-sm text-text-muted">Failed to load intel</p>
-              <p className="mt-1 text-xs text-text-muted">{error.message}</p>
-            </div>
-            <button
-              onClick={() => reexecute({ requestPolicy: 'network-only' })}
-              className="mt-1 cursor-pointer rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-            >
-              Retry
-            </button>
-          </div>
-        ) : isEmpty ? (
-          <div className="flex flex-col items-center justify-center gap-3 pt-12 text-center">
-            <svg
-              className="h-7 w-7 text-text-muted"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"
-              />
-            </svg>
-            <div>
-              <p className="text-sm font-medium text-text-secondary">No intel yet</p>
-              <p className="mt-1 text-xs leading-relaxed text-text-muted">
-                Intel signals will appear here once your data sources are configured and the curation pipeline runs.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <>
-            {portfolioSections.length > 0 && (
-              <FeedSection
-                label="Portfolio"
-                count={portfolioItems.length}
-                collapsed={collapsedSections.has('PORTFOLIO')}
-                onToggle={() => {
-                  setCollapsedSections((prev) => {
-                    const next = new Set(prev);
-                    if (next.has('PORTFOLIO')) next.delete('PORTFOLIO');
-                    else next.add('PORTFOLIO');
-                    return next;
-                  });
-                }}
-              >
-                {renderTickerSections(portfolioSections)}
-              </FeedSection>
-            )}
-            {watchlistSections.length > 0 && (
-              <FeedSection
-                label="Watchlist"
-                count={watchlistItems.length}
-                collapsed={collapsedSections.has('WATCHLIST')}
-                onToggle={() => {
-                  setCollapsedSections((prev) => {
-                    const next = new Set(prev);
-                    if (next.has('WATCHLIST')) next.delete('WATCHLIST');
-                    else next.add('WATCHLIST');
-                    return next;
-                  });
-                }}
-              >
-                {renderTickerSections(watchlistSections)}
-              </FeedSection>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+      <FeedDetailModal open={modalData !== null} onClose={() => setModalData(null)} data={modalData} />
+    </>
   );
 }
 
-// ─── Mock Intel Feed ────────────────────────────────────────
+/* ── Mock Intel Feed (blur gate preview) ────────────────────────────── */
 
-const MOCK_INTEL = [
-  {
-    ticker: 'NVDA',
-    sentiment: 'BULLISH',
-    items: [
-      { type: 'alert' as const, signal: 'News', title: 'NVDA beats Q4 earnings estimates by 12%', time: '2h ago' },
-      {
-        type: 'insight' as const,
-        signal: 'Technical',
-        title: 'RSI breakout above 70, momentum strong',
-        time: '4h ago',
-      },
-    ],
-  },
-  {
-    ticker: 'AAPL',
-    sentiment: 'BEARISH',
-    items: [
-      { type: 'alert' as const, signal: 'News', title: 'Supply chain delays in China operations', time: '3h ago' },
-      { type: 'insight' as const, signal: 'Fundamental', title: 'Revenue growth slowing vs consensus', time: '6h ago' },
-    ],
-  },
-  {
-    ticker: 'BTC',
-    sentiment: 'BULLISH',
-    items: [
-      { type: 'insight' as const, signal: 'Sentiment', title: 'Social volume spike: +340% in 24h', time: '1h ago' },
-    ],
-  },
+const MOCK_ALERTS = [
+  { icon: 'trending' as IconName, title: 'NVDA beats Q4 earnings estimates by 12%', time: '2h ago' },
+  { icon: 'dollar' as IconName, title: 'Supply chain delays in China operations', time: '3h ago' },
 ];
 
 function MockIntelFeed() {
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Filter tabs */}
-      <div className="flex gap-0.5 border-b border-border px-4 pt-2">
-        {['All', 'Alerts', 'Insights'].map((tab, i) => (
-          <div
-            key={tab}
-            className={cn('relative px-2 pb-2 text-2xs font-medium', i === 0 ? 'text-text-primary' : 'text-text-muted')}
-          >
-            {tab}
-            {i === 0 && <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-text-primary" />}
-          </div>
-        ))}
+    <div aria-hidden="true" className="pointer-events-none select-none flex flex-1 flex-col overflow-hidden">
+      {/* Mock header */}
+      <div className="sticky top-0 z-10 bg-bg-secondary">
+        <div className="flex items-center gap-2.5 px-4 pt-4 pb-1.5">
+          <span className="font-headline text-base text-text-primary">Intel Feed</span>
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-tertiary px-1.5 text-[10px] font-bold text-text-secondary">
+            {MOCK_ALERTS.length}
+          </span>
+        </div>
+        <div className="flex gap-5 border-b border-border px-4">
+          {(['Alerts', 'Insights'] as const).map((tab, i) => (
+            <div
+              key={tab}
+              className={cn(
+                'relative pb-2.5 pt-1.5 text-xs font-medium',
+                i === 0 ? 'text-text-primary' : 'text-text-muted',
+              )}
+            >
+              {tab}
+              {i === 0 && <span className="absolute inset-x-0 bottom-0 h-[2px] rounded-full bg-accent-primary" />}
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Mock items */}
+      {/* Mock alerts */}
       <div className="flex-1 overflow-hidden px-3 pb-4">
-        {MOCK_INTEL.map((section) => (
-          <div key={section.ticker}>
-            <div className="flex items-center gap-2.5 px-1 pt-4 pb-2">
-              <span
-                className={cn(
-                  'text-2xs font-semibold tracking-[0.1em] uppercase',
-                  section.sentiment === 'BULLISH' ? 'text-success' : 'text-error',
-                )}
-              >
-                {section.ticker}
-              </span>
-              <span className="text-[10px] tabular-nums text-text-muted">{section.items.length}</span>
-              <div className={cn('h-px flex-1', section.sentiment === 'BULLISH' ? 'bg-success/20' : 'bg-error/20')} />
-            </div>
-            <div className="space-y-1.5">
-              {section.items.map((item, i) => (
-                <div key={i} className="rounded-xl bg-bg-tertiary/60 px-3 py-2.5">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={cn(
-                        'text-2xs font-semibold tracking-wide uppercase',
-                        item.type === 'alert' ? 'text-warning' : 'text-success',
-                      )}
-                    >
-                      {item.type === 'alert' ? 'ALERT' : 'INSIGHT'}
-                    </span>
-                    <span className="rounded-full bg-text-muted/10 px-1.5 py-0.5 text-[9px] font-medium text-text-muted">
-                      {item.signal}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-xs font-medium leading-tight text-text-primary">{item.title}</p>
-                  <span className="text-2xs text-text-muted">{item.time}</span>
+        <div className="mb-2.5 flex items-center gap-2.5 px-1 pt-4">
+          <span className="whitespace-nowrap text-2xs font-semibold uppercase tracking-[0.12em] text-text-muted">
+            Alerts
+          </span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+        <div className="space-y-2">
+          {MOCK_ALERTS.map((item, i) => (
+            <div key={i} className="rounded-xl border border-border-light bg-bg-tertiary/60 px-3 py-2.5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-warning/10">
+                  <div className="h-3 w-3 rounded-sm bg-warning/30" />
                 </div>
-              ))}
+                <div className="min-w-0 flex-1">
+                  <span className="text-2xs font-semibold uppercase tracking-[0.1em] text-warning">ALERT</span>
+                  <p className="truncate text-sm font-medium leading-snug text-text-primary">{item.title}</p>
+                </div>
+                <span className="flex-shrink-0 text-2xs text-text-muted">{item.time}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );
