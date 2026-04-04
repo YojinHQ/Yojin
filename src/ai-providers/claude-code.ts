@@ -28,6 +28,23 @@ async function readTokenFromKeychainFile(): Promise<string | null> {
   }
 }
 
+/**
+ * Seed CLAUDE_CODE_OAUTH_REFRESH_TOKEN from the keychain bridge file if the
+ * env var isn't already set. Called once during initialize() so TokenManager
+ * picks up the refresh token written by docker/refresh-token.sh without
+ * requiring it to be manually added to .env.docker.
+ */
+async function seedRefreshTokenFromFile(): Promise<void> {
+  if (process.env.CLAUDE_CODE_OAUTH_REFRESH_TOKEN) return;
+  const yojinHome = process.env.YOJIN_HOME ?? join(homedir(), '.yojin');
+  try {
+    const token = (await readFile(join(yojinHome, '.keychain-refresh-token'), 'utf-8')).trim();
+    if (token) process.env.CLAUDE_CODE_OAUTH_REFRESH_TOKEN = token;
+  } catch {
+    // File absent — no-op
+  }
+}
+
 const execFileAsync = promisify(execFile);
 const logger = createSubsystemLogger('claude-code-provider');
 
@@ -150,6 +167,9 @@ export class ClaudeCodeProvider implements AIProvider {
     // the ~/.yojin bind mount without any Anthropic OAuth complexity.
     const fileToken = await readTokenFromKeychainFile();
     if (fileToken) {
+      // Seed TokenManager's refresh token from the bridge file so it can
+      // auto-refresh without requiring CLAUDE_CODE_OAUTH_REFRESH_TOKEN in .env.docker.
+      await seedRefreshTokenFromFile();
       this.authMode = 'oauth';
       this.oauthSource = 'keychain';
       this.client = new Anthropic({

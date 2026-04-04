@@ -178,6 +178,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
   YOJIN_HOME="${YOJIN_HOME:-$HOME/.yojin}"
 
   chmod +x "$SCRIPT_SRC"
+  mkdir -p "$YOJIN_HOME/logs"
 
   # Stamp real paths into the plist
   sed \

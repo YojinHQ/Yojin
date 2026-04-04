@@ -35,12 +35,18 @@ fi
 
 mkdir -p "$(dirname "$TOKEN_FILE")"
 
-echo -n "$ACCESS_TOKEN" > "$TOKEN_FILE"
-chmod 600 "$TOKEN_FILE"
+# Atomic write — write to a temp file then rename so the container never
+# reads a partially-written or truncated token.
+TMP_TOKEN="$(mktemp "${TOKEN_FILE}.XXXXXX")"
+echo -n "$ACCESS_TOKEN" > "$TMP_TOKEN"
+chmod 600 "$TMP_TOKEN"
+mv "$TMP_TOKEN" "$TOKEN_FILE"
 
 if [ -n "$REFRESH_TOKEN" ]; then
-  echo -n "$REFRESH_TOKEN" > "$REFRESH_FILE"
-  chmod 600 "$REFRESH_FILE"
+  TMP_REFRESH="$(mktemp "${REFRESH_FILE}.XXXXXX")"
+  echo -n "$REFRESH_TOKEN" > "$TMP_REFRESH"
+  chmod 600 "$TMP_REFRESH"
+  mv "$TMP_REFRESH" "$REFRESH_FILE"
 fi
 
 echo "$(date): Keychain token written to $TOKEN_FILE"

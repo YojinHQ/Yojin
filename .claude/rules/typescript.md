@@ -1,6 +1,6 @@
 ---
 description: TypeScript coding conventions for Yojin
-globs: ["**/*.ts"]
+globs: ["**/*.{ts,tsx}"]
 ---
 
 # TypeScript Conventions
