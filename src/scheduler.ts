@@ -155,7 +155,7 @@ const MACRO_INTERVAL_MS = 2 * 60 * 60 * 1000;
 const MICRO_TRIGGER_MACRO_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 
 /** Max LLM agent runs per calendar day. Exceeding this stops the scheduler for the day. */
-const DEFAULT_DAILY_RUN_BUDGET = 50;
+const DEFAULT_DAILY_RUN_BUDGET = 20;
 
 /** Default expiry window for actions created from skill triggers. */
 const ACTION_EXPIRY_HOURS = 24;
