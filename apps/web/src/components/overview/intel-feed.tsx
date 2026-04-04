@@ -13,7 +13,7 @@ import type { FeedDetailData } from './feed-detail-modal';
 import Spinner from '../common/spinner';
 
 type ItemType = 'alert' | 'insight';
-type FilterTab = 'alerts' | 'insights';
+type FilterTab = 'all' | 'alerts' | 'insights';
 type IconName = 'rebalance' | 'dollar' | 'box' | 'warehouse' | 'clock' | 'trending' | 'bubble' | 'trending-up';
 
 interface DataRow {
@@ -61,11 +61,6 @@ function classifySignal(signal: { outputType?: string | null; severity: IntelFee
   return 'insight';
 }
 
-const dataAccentBorder: Record<ItemType, string> = {
-  alert: 'border-warning/30',
-  insight: 'border-success/30',
-};
-
 const categoryIconBg: Record<ItemType, { default: string; expanded: string }> = {
   alert: { default: 'bg-warning/10', expanded: 'bg-warning/20' },
   insight: { default: 'bg-success/10', expanded: 'bg-success/20' },
@@ -82,6 +77,7 @@ const categoryLabel: Record<ItemType, string> = {
 };
 
 const filterTabs: { key: FilterTab; label: string }[] = [
+  { key: 'all', label: 'All' },
   { key: 'alerts', label: 'Alerts' },
   { key: 'insights', label: 'Insights' },
 ];
@@ -278,33 +274,17 @@ function IntelFeedCard({
         type="button"
         aria-expanded={expanded}
         onClick={onToggle}
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+        className="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left"
       >
         <ItemIcon icon={item.icon} type={item.type} expanded={expanded} />
         <div className="min-w-0 flex-1">
-          <span className={cn('text-2xs font-semibold uppercase tracking-[0.1em]', categoryIconText[item.type])}>
+          <span className={cn('text-[9px] font-semibold uppercase tracking-[0.08em]', categoryIconText[item.type])}>
             {categoryLabel[item.type]}
           </span>
           <p className="truncate text-sm font-medium leading-snug text-text-primary">{item.title}</p>
         </div>
         <span className="flex-shrink-0 text-2xs text-text-muted">{item.publishedTime}</span>
       </button>
-
-      {/* X dismiss — top-right, only when expanded */}
-      {expanded && (
-        <button
-          aria-label="Dismiss"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDismiss();
-          }}
-          className="absolute right-2 top-2 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
-        >
-          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-          </svg>
-        </button>
-      )}
 
       {/* Expanded content */}
       <div
@@ -316,23 +296,7 @@ function IntelFeedCard({
         <div className="overflow-hidden">
           <div className="px-3 pb-3 pt-0.5">
             {item.description && (
-              <p className="line-clamp-3 text-xs leading-relaxed text-text-secondary">{item.description}</p>
-            )}
-
-            {/* Data table */}
-            {item.data && (
-              <div className={cn('mt-2.5 border-l-2 py-1.5 pl-3', dataAccentBorder[item.type])}>
-                {item.data.map((row) => (
-                  <div key={row.label} className="flex items-center justify-between py-0.5">
-                    <span className="text-xs text-text-muted">{row.label}</span>
-                    <span
-                      className={cn('text-xs font-medium', row.highlight ? 'text-accent-primary' : 'text-text-primary')}
-                    >
-                      {row.value}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <p className="line-clamp-5 text-xs leading-relaxed text-text-secondary">{item.description}</p>
             )}
 
             {/* CTA buttons */}
@@ -345,7 +309,18 @@ function IntelFeedCard({
                   onViewDetails();
                 }}
               >
-                View details
+                <svg
+                  className="h-3.5 w-3.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M7 17 17 7M7 7h10v10" />
+                </svg>
+                View
               </Button>
               <Button
                 variant="secondary"
@@ -356,8 +331,19 @@ function IntelFeedCard({
                 }}
               >
                 <AgentIcon />
-                Ask Yojin
+                Chat
               </Button>
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDismiss();
+                }}
+                className="ml-auto cursor-pointer rounded-lg border border-error/30 bg-error/10 px-2.5 py-1 text-xs font-medium text-error transition-colors hover:bg-error/20"
+              >
+                Dismiss
+              </button>
             </div>
           </div>
         </div>
@@ -394,7 +380,7 @@ const POLL_INTERVAL_MS = 30_000;
 
 function IntelFeedContent() {
   const navigate = useNavigate();
-  const [activeFilter, setActiveFilter] = useState<FilterTab>('alerts');
+  const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [modalData, setModalData] = useState<FeedDetailData | null>(null);
   const [, dismissSignal] = useMutation(DISMISS_SIGNAL_MUTATION);
@@ -467,10 +453,10 @@ function IntelFeedContent() {
     return signalItems;
   }, [data]);
 
-  const filteredItems = useMemo(
-    () => items.filter((item) => item.type === (activeFilter === 'alerts' ? 'alert' : 'insight')),
-    [items, activeFilter],
-  );
+  const filteredItems = useMemo(() => {
+    if (activeFilter === 'all') return items;
+    return items.filter((item) => item.type === (activeFilter === 'alerts' ? 'alert' : 'insight'));
+  }, [items, activeFilter]);
   const totalCount = filteredItems.length;
 
   function openModal(item: IntelFeedItem) {
@@ -480,7 +466,14 @@ function IntelFeedContent() {
       time: item.publishedTime,
       tag: categoryLabel[item.type],
       tagVariant: item.type === 'alert' ? 'warning' : 'success',
-      keyPoints: item.data?.map((r) => `${r.label}: ${r.value}`) ?? (item.description ? [item.description] : []),
+      sentiment:
+        item.sentiment === 'bullish' || item.sentiment === 'bearish' || item.sentiment === 'neutral'
+          ? item.sentiment
+          : undefined,
+      confidence: item.data?.find((r) => r.label === 'Confidence')
+        ? Math.round(parseFloat(item.data.find((r) => r.label === 'Confidence')!.value))
+        : undefined,
+      keyPoints: item.description ? [item.description] : [],
       analysis: item.description || item.title,
       relatedTickers: item.tickers,
     });
@@ -572,7 +565,9 @@ function IntelFeedContent() {
                 />
               </svg>
               <div>
-                <p className="text-sm font-medium text-text-secondary">No {activeFilter} yet</p>
+                <p className="text-sm font-medium text-text-secondary">
+                  {activeFilter === 'all' ? 'No intel yet' : `No ${activeFilter} yet`}
+                </p>
                 <p className="mt-1 text-xs leading-relaxed text-text-muted">
                   Intel signals will appear here once your data sources are configured and the curation pipeline runs.
                 </p>
@@ -580,7 +575,9 @@ function IntelFeedContent() {
             </div>
           ) : (
             <div>
-              <SectionHeader label={activeFilter === 'alerts' ? 'Alerts' : 'Insights'} />
+              <SectionHeader
+                label={activeFilter === 'all' ? 'All' : activeFilter === 'alerts' ? 'Alerts' : 'Insights'}
+              />
               <div className="space-y-2">
                 {filteredItems.map((item) => (
                   <IntelFeedCard
@@ -602,6 +599,7 @@ function IntelFeedContent() {
                     onAskYojin={() =>
                       navigate('/chat', {
                         state: {
+                          newSession: true,
                           preset: `Analyze this ${categoryLabel[item.type].toLowerCase()}: "${item.title}"${item.description ? ` — ${item.description}` : ''}`,
                         },
                       })
@@ -638,7 +636,7 @@ function MockIntelFeed() {
           </span>
         </div>
         <div className="flex gap-5 border-b border-border px-4">
-          {(['Alerts', 'Insights'] as const).map((tab, i) => (
+          {(['All', 'Alerts', 'Insights'] as const).map((tab, i) => (
             <div
               key={tab}
               className={cn(
@@ -657,7 +655,7 @@ function MockIntelFeed() {
       <div className="flex-1 overflow-hidden px-3 pb-4">
         <div className="mb-2.5 flex items-center gap-2.5 px-1 pt-4">
           <span className="whitespace-nowrap text-2xs font-semibold uppercase tracking-[0.12em] text-text-muted">
-            Alerts
+            All
           </span>
           <div className="h-px flex-1 bg-border" />
         </div>

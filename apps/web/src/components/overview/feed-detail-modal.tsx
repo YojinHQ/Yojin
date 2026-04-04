@@ -66,7 +66,7 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
           <span className="text-2xs text-text-muted">{data.time}</span>
           <button
             onClick={onClose}
-            className="text-text-muted transition-colors hover:text-text-primary"
+            className="cursor-pointer text-text-muted transition-colors hover:text-text-primary"
             aria-label="Close"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

@@ -66,8 +66,16 @@ function ChatSetupBanner() {
 }
 
 function ChatContent() {
-  const { messages, pendingMessages, streamingContent, isLoading, pendingToolCards, sendMessage, activeSession } =
-    useChatContext();
+  const {
+    messages,
+    pendingMessages,
+    streamingContent,
+    isLoading,
+    pendingToolCards,
+    sendMessage,
+    activeSession,
+    switchSession,
+  } = useChatContext();
   const { openModal: openAddPosition } = useAddPositionModal();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -75,15 +83,27 @@ function ChatContent() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Read preset message from location state (e.g. from "Add to Chat" on intel cards)
-  const [presetMessage] = useState<string | undefined>(() => (location.state as { preset?: string } | null)?.preset);
+  // Read preset message and newSession flag from location state (e.g. from "Ask Yojin" on intel cards)
+  const [presetMessage] = useState<string | undefined>(
+    () => (location.state as { preset?: string; newSession?: boolean } | null)?.preset,
+  );
+  const [shouldStartNewSession] = useState<boolean>(
+    () => (location.state as { newSession?: boolean } | null)?.newSession === true,
+  );
+
+  // If navigated with newSession flag, start a fresh session before the preset populates
+  useEffect(() => {
+    if (shouldStartNewSession) {
+      switchSession(null);
+    }
+  }, [shouldStartNewSession, switchSession]);
 
   // Clear location state so refreshing doesn't re-populate
   useEffect(() => {
-    if (presetMessage) {
+    if (presetMessage || shouldStartNewSession) {
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [presetMessage, navigate, location.pathname]);
+  }, [presetMessage, shouldStartNewSession, navigate, location.pathname]);
 
   useEffect(() => {
     if (scrollRef.current) {
