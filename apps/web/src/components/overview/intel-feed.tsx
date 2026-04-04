@@ -28,6 +28,7 @@ interface IntelFeedItem {
   severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   signalType: string;
   ticker: string;
+  tickers: string[];
   sentiment: string | null;
   title: string;
   time: string;
@@ -273,7 +274,12 @@ function IntelFeedCard({
       )}
     >
       {/* Collapsed header — always visible */}
-      <div className="flex cursor-pointer items-center gap-3 px-3 py-2.5" onClick={onToggle}>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+      >
         <ItemIcon icon={item.icon} type={item.type} expanded={expanded} />
         <div className="min-w-0 flex-1">
           <span className={cn('text-2xs font-semibold uppercase tracking-[0.1em]', categoryIconText[item.type])}>
@@ -282,7 +288,7 @@ function IntelFeedCard({
           <p className="truncate text-sm font-medium leading-snug text-text-primary">{item.title}</p>
         </div>
         <span className="flex-shrink-0 text-2xs text-text-muted">{item.publishedTime}</span>
-      </div>
+      </button>
 
       {/* X dismiss — top-right, only when expanded */}
       {expanded && (
@@ -427,6 +433,7 @@ function IntelFeedContent() {
         severity,
         signalType: s.type,
         ticker,
+        tickers: s.tickers,
         sentiment: s.sentiment ?? null,
         title: headline,
         time: timeAgo(s.ingestedAt),
@@ -456,11 +463,14 @@ function IntelFeedContent() {
     });
 
     // Sort newest first
-    signalItems.sort((a, b) => new Date(b.ingestedAt).getTime() - new Date(a.ingestedAt).getTime());
+    signalItems.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     return signalItems;
   }, [data]);
 
-  const filteredItems = items.filter((item) => item.type === (activeFilter === 'alerts' ? 'alert' : 'insight'));
+  const filteredItems = useMemo(
+    () => items.filter((item) => item.type === (activeFilter === 'alerts' ? 'alert' : 'insight')),
+    [items, activeFilter],
+  );
   const totalCount = filteredItems.length;
 
   function openModal(item: IntelFeedItem) {
@@ -472,7 +482,7 @@ function IntelFeedContent() {
       tagVariant: item.type === 'alert' ? 'warning' : 'success',
       keyPoints: item.data?.map((r) => `${r.label}: ${r.value}`) ?? (item.description ? [item.description] : []),
       analysis: item.description || item.title,
-      relatedTickers: [item.ticker],
+      relatedTickers: item.tickers,
     });
   }
 
@@ -580,15 +590,19 @@ function IntelFeedContent() {
                     onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
                     onDismiss={() => {
                       if (expandedId === item.id) setExpandedId(null);
-                      void dismissSignal({ signalId: item.id }).then(() =>
-                        reexecute({ requestPolicy: 'network-only' }),
-                      );
+                      void dismissSignal({ signalId: item.id }).then((result) => {
+                        if (result.error) {
+                          console.error('Dismiss failed', result.error.message);
+                          return;
+                        }
+                        reexecute({ requestPolicy: 'network-only' });
+                      });
                     }}
                     onViewDetails={() => openModal(item)}
                     onAskYojin={() =>
                       navigate('/chat', {
                         state: {
-                          preset: `Analyze this ${categoryLabel[item.type].toLowerCase()}: "${item.title}" — ${item.description}`,
+                          preset: `Analyze this ${categoryLabel[item.type].toLowerCase()}: "${item.title}"${item.description ? ` — ${item.description}` : ''}`,
                         },
                       })
                     }
@@ -612,20 +626,15 @@ const MOCK_ALERTS = [
   { icon: 'dollar' as IconName, title: 'Supply chain delays in China operations', time: '3h ago' },
 ];
 
-const MOCK_INSIGHTS = [
-  { icon: 'trending-up' as IconName, title: 'RSI breakout above 70, momentum strong', time: '4h ago' },
-  { icon: 'bubble' as IconName, title: 'Social volume spike: +340% in 24h', time: '1h ago' },
-];
-
 function MockIntelFeed() {
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div aria-hidden="true" className="pointer-events-none select-none flex flex-1 flex-col overflow-hidden">
       {/* Mock header */}
       <div className="sticky top-0 z-10 bg-bg-secondary">
         <div className="flex items-center gap-2.5 px-4 pt-4 pb-1.5">
           <span className="font-headline text-base text-text-primary">Intel Feed</span>
           <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-tertiary px-1.5 text-[10px] font-bold text-text-secondary">
-            {MOCK_ALERTS.length + MOCK_INSIGHTS.length}
+            {MOCK_ALERTS.length}
           </span>
         </div>
         <div className="flex gap-5 border-b border-border px-4">
