@@ -179,12 +179,12 @@ export function Step5Briefing() {
                   >
                     <div
                       className={cn(
-                        'flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold',
-                        meta.color,
+                        'flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold',
+                        !meta.logo && meta.color,
                       )}
                     >
                       {meta.logo ? (
-                        <img src={meta.logo} alt={meta.label} className="h-6 w-6 object-contain" />
+                        <img src={meta.logo} alt={meta.label} className="h-8 object-contain" />
                       ) : (
                         meta.initials
                       )}

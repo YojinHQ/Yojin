@@ -41,7 +41,7 @@ export function ChannelCard({ channel, onConnect, onDisconnect, disconnecting = 
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 whitespace-nowrap">
             <span className="text-sm font-medium text-text-primary">{meta.label}</span>
             <Badge variant={variant} size="xs">
               {label}
