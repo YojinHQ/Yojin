@@ -14,6 +14,7 @@ export interface FeedDetailData {
   time: string;
   tag: string;
   tagVariant: BadgeVariant;
+  link?: string | null;
   sentiment?: 'bullish' | 'bearish' | 'neutral';
   impact?: 'high' | 'medium' | 'low';
   urgency?: 'high' | 'medium' | 'low';
@@ -143,6 +144,31 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
             ))}
           </div>
         </>
+      )}
+
+      {/* View Source */}
+      {data.link && (
+        <div className="mt-5">
+          <a
+            href={data.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-accent-primary transition-colors hover:text-accent-primary/80"
+          >
+            <svg
+              className="h-3.5 w-3.5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M7 17 17 7M7 7h10v10" />
+            </svg>
+            View Source
+          </a>
+        </div>
       )}
     </Modal>
   );
