@@ -136,7 +136,7 @@ function WatchlistContent() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
       {/* Left column: watchlist cards */}
-      <div className="flex-1 overflow-auto p-6 space-y-6">
+      <div className="flex-1 overflow-auto p-6 space-y-6 max-w-5xl mx-auto w-full">
         <PageHeader onAdd={openModal} />
 
         {isLoading ? (
@@ -234,7 +234,7 @@ function MockWatchlistPage() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden lg:flex-row w-full">
       {/* Mock cards column */}
-      <div className="flex-1 overflow-hidden p-6 space-y-6">
+      <div className="flex-1 overflow-hidden p-6 space-y-6 max-w-5xl mx-auto w-full">
         <div className="flex items-center justify-between">
           <h1 className="font-headline text-xl text-text-primary">Watchlist</h1>
           <div className="rounded-lg bg-accent-primary/30 px-3 py-1.5 text-xs font-medium text-accent-primary">
