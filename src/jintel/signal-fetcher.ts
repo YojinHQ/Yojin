@@ -241,11 +241,16 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       reliability: 0.95,
       title: `${entity.name ?? tickers[0]}: ${event.type.replace(/_/g, ' ')} on ${event.date}`,
       content: `${event.description} | Close: $${event.close.toFixed(2)} (${event.changePercent >= 0 ? '+' : ''}${event.changePercent.toFixed(1)}%)${event.volume != null ? ` | Volume: ${event.volume.toLocaleString()}` : ''}`,
-      publishedAt: event.date.includes('T') ? event.date : `${event.date}T00:00:00Z`,
+      publishedAt: now,
       type: SignalType.TECHNICAL,
       tickers,
       confidence: 0.9,
-      metadata: { eventType: event.type, priceChange: event.priceChange, changePercent: event.changePercent },
+      metadata: {
+        eventType: event.type,
+        priceChange: event.priceChange,
+        changePercent: event.changePercent,
+        eventDate: event.date,
+      },
     });
   }
 
@@ -485,7 +490,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
         sourceName: 'Jintel Social (LinkedIn)',
         sourceType: 'API',
         reliability: 0.7,
-        title: `${entity.name ?? tickers[0]}: LinkedIn post`,
+        title: `${entity.name ?? tickers[0]}: LinkedIn — ${linkedinText.slice(0, 60).trim()}`,
         content: linkedinText.length > 500 ? linkedinText.slice(0, 497) + '…' : linkedinText,
         link: post.url ?? undefined,
         publishedAt: post.date ?? now,

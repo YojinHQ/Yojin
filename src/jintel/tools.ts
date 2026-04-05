@@ -1030,7 +1030,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     name: 'get_short_interest',
     description:
       'Get short interest data for a ticker. Returns shares short, days-to-cover ratio, and change since last report.\n\n' +
-      'High short interest + low days-to-cover = potential short squeeze setup. ' +
+      'High short interest + high days-to-cover = potential short squeeze setup. ' +
       'Use when the user asks about short sellers, bearish positioning, or squeeze potential.',
     parameters: z.object({
       ticker: z.string().min(1).describe('Ticker symbol (e.g. GME, TSLA, AMC)'),
