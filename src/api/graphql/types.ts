@@ -152,6 +152,7 @@ export interface Alert {
 
 export interface Quote {
   symbol: string;
+  name?: string;
   price: number;
   change: number;
   changePercent: number;
@@ -161,6 +162,12 @@ export interface Quote {
   open: number;
   previousClose: number;
   timestamp: string;
+}
+
+export interface SymbolSearchResult {
+  symbol: string;
+  name: string;
+  assetClass: string;
 }
 
 export interface Article {

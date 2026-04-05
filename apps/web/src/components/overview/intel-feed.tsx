@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery } from 'urql';
 import { DISMISS_SIGNAL_MUTATION, INTEL_FEED_QUERY } from '../../api/documents';
-import type { IntelFeedQueryResult, IntelFeedQueryVariables } from '../../api/types';
+import type { FeedTarget, IntelFeedQueryResult, IntelFeedQueryVariables } from '../../api/types';
 import { cn, timeAgo } from '../../lib/utils';
 import { useFeatureStatus } from '../../lib/feature-status';
 import Button from '../common/button';
@@ -368,7 +368,7 @@ function IntelFeedCard({
 
 /* ── Gate wrapper ───────────────────────────────────────────────────── */
 
-export default function IntelFeed() {
+export default function IntelFeed({ feedTarget }: { feedTarget?: FeedTarget } = {}) {
   const { jintelConfigured, aiConfigured } = useFeatureStatus();
 
   if (!jintelConfigured || !aiConfigured) {
@@ -385,14 +385,14 @@ export default function IntelFeed() {
     );
   }
 
-  return <IntelFeedContent />;
+  return <IntelFeedContent feedTarget={feedTarget} />;
 }
 
 /* ── Content ────────────────────────────────────────────────────────── */
 
 const POLL_INTERVAL_MS = 30_000;
 
-function IntelFeedContent() {
+function IntelFeedContent({ feedTarget }: { feedTarget?: FeedTarget }) {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -401,7 +401,7 @@ function IntelFeedContent() {
 
   const [{ data, fetching, error }, reexecute] = useQuery<IntelFeedQueryResult, IntelFeedQueryVariables>({
     query: INTEL_FEED_QUERY,
-    variables: { limit: 20 },
+    variables: { limit: 20, feedTarget },
     requestPolicy: 'network-only',
   });
 

@@ -97,7 +97,7 @@ export default function AddPositionModal({ onOpenAddAccount }: AddPositionModalP
   const [quoteResult] = useQuote(symbol || undefined);
   const marketPrice = quoteResult.data?.quote?.price;
 
-  const resolvedName = lookupName(formData.symbol);
+  const resolvedName = lookupName(formData.symbol) || quoteResult.data?.quote?.name || '';
   const qty = parseFloat(formData.quantity);
   const price = parseFloat(formData.costBasis);
   const hasMarketPrice = !isNaN(qty) && marketPrice != null;

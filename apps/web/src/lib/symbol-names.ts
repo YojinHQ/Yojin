@@ -370,3 +370,27 @@ const SYMBOL_NAMES: Record<string, string> = {
 export function lookupSymbolName(symbol: string): string {
   return SYMBOL_NAMES[symbol.toUpperCase().trim()] ?? '';
 }
+
+/**
+ * Resolve a symbol name via the QUOTE_QUERY (which includes a `name` field
+ * resolved by Jintel on the backend). Returns the name or empty string.
+ *
+ * This is for imperative (non-hook) contexts — components with multi-row
+ * inputs where `useQuote` can't be used per-row.
+ */
+export async function resolveSymbolNameFromApi(
+  urqlClient: {
+    query: (q: unknown, v: unknown) => { toPromise: () => Promise<{ data?: { quote?: { name?: string } | null } }> };
+  },
+  quoteQuery: unknown,
+  symbol: string,
+): Promise<string> {
+  const sym = symbol.trim().toUpperCase();
+  if (!sym) return '';
+  // Fast path — static lookup
+  const local = SYMBOL_NAMES[sym];
+  if (local) return local;
+  // Slow path — API
+  const result = await urqlClient.query(quoteQuery, { symbol: sym }).toPromise();
+  return result.data?.quote?.name ?? '';
+}

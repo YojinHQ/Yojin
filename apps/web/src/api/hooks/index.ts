@@ -7,7 +7,7 @@ export {
 } from './use-portfolio.js';
 export { useRiskReport } from './use-risk.js';
 export { useAlerts, useCreateAlert, useDismissAlert, useOnAlert } from './use-alerts.js';
-export { useQuote, useNews, useOnPriceMove } from './use-market.js';
+export { useQuote, useSearchSymbols, useNews, useOnPriceMove } from './use-market.js';
 export { useDeviceInfo, useClearAppData } from './use-profile.js';
 export {
   useListConnections,

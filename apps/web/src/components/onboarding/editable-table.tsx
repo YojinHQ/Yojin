@@ -1,7 +1,10 @@
 import { useState, useCallback } from 'react';
+import { useClient } from 'urql';
 import { cn } from '../../lib/utils';
 import { SymbolLogo } from '../common/symbol-logo';
 import { lookupSymbolName } from '../../lib/symbol-names';
+import { QUOTE_QUERY } from '../../api/documents';
+import type { QuoteQueryResult, QuoteQueryVariables } from '../../api/types';
 
 export interface ExtractedPosition {
   symbol: string;
@@ -46,6 +49,7 @@ export function EditableTable({ positions, onChange, assetClass = 'equity', clas
   const [editing, setEditing] = useState<EditingCell | null>(null);
   const [editValue, setEditValue] = useState('');
   const [page, setPage] = useState(0);
+  const urqlClient = useClient();
 
   const totalPages = Math.max(1, Math.ceil(positions.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages - 1);
@@ -69,13 +73,29 @@ export function EditableTable({ positions, onChange, assetClass = 'equity', clas
     if (field === 'symbol') {
       const resolved = lookupSymbolName(editValue);
       updated[row] = { ...updated[row], symbol: editValue, name: resolved || updated[row].name };
+
+      // Resolve name via API when static lookup misses
+      if (!resolved && editValue.trim()) {
+        const sym = editValue.trim().toUpperCase();
+        const rowIdx = row;
+        urqlClient
+          .query<QuoteQueryResult, QuoteQueryVariables>(QUOTE_QUERY, { symbol: sym })
+          .toPromise()
+          .then((result) => {
+            const name = result.data?.quote?.name;
+            if (name) {
+              // Re-read positions from the committed update (updated array)
+              onChange(updated.map((p, i) => (i === rowIdx && p.symbol.toUpperCase() === sym ? { ...p, name } : p)));
+            }
+          });
+      }
     } else {
       const num = parseFloat(editValue);
       updated[row] = { ...updated[row], [field]: Number.isNaN(num) ? null : num };
     }
     onChange(updated);
     setEditing(null);
-  }, [editing, editValue, positions, onChange]);
+  }, [editing, editValue, positions, onChange, urqlClient]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

@@ -1,9 +1,11 @@
 import { useQuery, useSubscription } from 'urql';
 
-import { QUOTE_QUERY, NEWS_QUERY, ON_PRICE_MOVE_SUBSCRIPTION } from '../documents.js';
+import { QUOTE_QUERY, NEWS_QUERY, SEARCH_SYMBOLS_QUERY, ON_PRICE_MOVE_SUBSCRIPTION } from '../documents.js';
 import type {
   QuoteQueryResult,
   QuoteQueryVariables,
+  SearchSymbolsQueryResult,
+  SearchSymbolsQueryVariables,
   NewsQueryResult,
   NewsQueryVariables,
   OnPriceMoveSubscriptionResult,
@@ -17,6 +19,15 @@ export function useQuote(symbol: string | undefined) {
     query: QUOTE_QUERY,
     variables: { symbol: symbol ?? '' },
     pause: !symbol,
+  });
+}
+
+/** Search symbols via Jintel. Pauses when query is empty. */
+export function useSearchSymbols(query: string, limit?: number) {
+  return useQuery<SearchSymbolsQueryResult, SearchSymbolsQueryVariables>({
+    query: SEARCH_SYMBOLS_QUERY,
+    variables: { query, limit },
+    pause: !query.trim(),
   });
 }
 

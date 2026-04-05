@@ -3,11 +3,11 @@ import Modal from '../common/modal';
 import Button from '../common/button';
 import { SymbolLogo } from '../common/symbol-logo';
 import Badge from '../common/badge';
-import { useAddToWatchlist } from '../../api';
-import type { AssetClass } from '../../api';
+import { useAddToWatchlist, useSearchSymbols } from '../../api';
+import type { AssetClass, SymbolSearchResult } from '../../api';
 
 // ---------------------------------------------------------------------------
-// Static symbol catalog — same pattern as add-position-modal
+// Static recommendations — shown when search is empty
 // ---------------------------------------------------------------------------
 
 interface SymbolEntry {
@@ -16,69 +16,16 @@ interface SymbolEntry {
   assetClass: AssetClass;
 }
 
-const SYMBOL_CATALOG: SymbolEntry[] = [
+const RECOMMENDED: SymbolEntry[] = [
   { symbol: 'AAPL', name: 'Apple Inc.', assetClass: 'EQUITY' },
-  { symbol: 'MSFT', name: 'Microsoft Corp.', assetClass: 'EQUITY' },
-  { symbol: 'GOOGL', name: 'Alphabet Inc.', assetClass: 'EQUITY' },
-  { symbol: 'AMZN', name: 'Amazon.com Inc.', assetClass: 'EQUITY' },
-  { symbol: 'META', name: 'Meta Platforms Inc.', assetClass: 'EQUITY' },
   { symbol: 'NVDA', name: 'NVIDIA Corp.', assetClass: 'EQUITY' },
   { symbol: 'TSLA', name: 'Tesla Inc.', assetClass: 'EQUITY' },
-  { symbol: 'JPM', name: 'JPMorgan Chase', assetClass: 'EQUITY' },
-  { symbol: 'V', name: 'Visa Inc.', assetClass: 'EQUITY' },
-  { symbol: 'JNJ', name: 'Johnson & Johnson', assetClass: 'EQUITY' },
-  { symbol: 'WMT', name: 'Walmart Inc.', assetClass: 'EQUITY' },
-  { symbol: 'PG', name: 'Procter & Gamble', assetClass: 'EQUITY' },
-  { symbol: 'MA', name: 'Mastercard Inc.', assetClass: 'EQUITY' },
-  { symbol: 'UNH', name: 'UnitedHealth Group', assetClass: 'EQUITY' },
-  { symbol: 'HD', name: 'Home Depot Inc.', assetClass: 'EQUITY' },
-  { symbol: 'DIS', name: 'Walt Disney Co.', assetClass: 'EQUITY' },
-  { symbol: 'NFLX', name: 'Netflix Inc.', assetClass: 'EQUITY' },
-  { symbol: 'ADBE', name: 'Adobe Inc.', assetClass: 'EQUITY' },
-  { symbol: 'CRM', name: 'Salesforce Inc.', assetClass: 'EQUITY' },
-  { symbol: 'AMD', name: 'Advanced Micro Devices', assetClass: 'EQUITY' },
-  { symbol: 'INTC', name: 'Intel Corp.', assetClass: 'EQUITY' },
-  { symbol: 'PYPL', name: 'PayPal Holdings', assetClass: 'EQUITY' },
-  { symbol: 'BA', name: 'Boeing Co.', assetClass: 'EQUITY' },
-  { symbol: 'SPY', name: 'SPDR S&P 500 ETF', assetClass: 'EQUITY' },
-  { symbol: 'QQQ', name: 'Invesco QQQ Trust', assetClass: 'EQUITY' },
-  { symbol: 'VOO', name: 'Vanguard S&P 500', assetClass: 'EQUITY' },
+  { symbol: 'AMZN', name: 'Amazon.com Inc.', assetClass: 'EQUITY' },
+  { symbol: 'MSFT', name: 'Microsoft Corp.', assetClass: 'EQUITY' },
   { symbol: 'BTC', name: 'Bitcoin', assetClass: 'CRYPTO' },
   { symbol: 'ETH', name: 'Ethereum', assetClass: 'CRYPTO' },
   { symbol: 'SOL', name: 'Solana', assetClass: 'CRYPTO' },
-  { symbol: 'ADA', name: 'Cardano', assetClass: 'CRYPTO' },
-  { symbol: 'XRP', name: 'Ripple', assetClass: 'CRYPTO' },
-  { symbol: 'DOGE', name: 'Dogecoin', assetClass: 'CRYPTO' },
-  { symbol: 'DOT', name: 'Polkadot', assetClass: 'CRYPTO' },
-  { symbol: 'AVAX', name: 'Avalanche', assetClass: 'CRYPTO' },
-  { symbol: 'LINK', name: 'Chainlink', assetClass: 'CRYPTO' },
-  { symbol: 'UNI', name: 'Uniswap', assetClass: 'CRYPTO' },
-  { symbol: 'AAVE', name: 'Aave Protocol', assetClass: 'CRYPTO' },
-  { symbol: 'ATOM', name: 'Cosmos', assetClass: 'CRYPTO' },
-  { symbol: 'NEAR', name: 'NEAR Protocol', assetClass: 'CRYPTO' },
-  { symbol: 'ARB', name: 'Arbitrum', assetClass: 'CRYPTO' },
-  { symbol: 'OP', name: 'Optimism', assetClass: 'CRYPTO' },
 ];
-
-/** Default recommendations — mix of popular equities and crypto. */
-const RECOMMENDED_SYMBOLS = ['AAPL', 'NVDA', 'TSLA', 'AMZN', 'MSFT', 'BTC', 'ETH', 'SOL'];
-
-function getRecommended(existingSymbols: Set<string>): SymbolEntry[] {
-  return SYMBOL_CATALOG.filter(
-    (entry) => RECOMMENDED_SYMBOLS.includes(entry.symbol) && !existingSymbols.has(entry.symbol),
-  );
-}
-
-function searchSymbols(query: string, existingSymbols: Set<string>): SymbolEntry[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-
-  return SYMBOL_CATALOG.filter(
-    (entry) =>
-      !existingSymbols.has(entry.symbol) &&
-      (entry.symbol.toLowerCase().includes(q) || entry.name.toLowerCase().includes(q)),
-  ).slice(0, 8);
-}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -122,8 +69,17 @@ export function AddSymbolModal({ open, onClose, existingSymbols, onAdded }: AddS
     return () => clearTimeout(timer);
   }, [toast]);
 
+  // Live search via Jintel
   const isSearching = debouncedSearch.trim().length > 0;
-  const results = isSearching ? searchSymbols(debouncedSearch, existingSymbols) : getRecommended(existingSymbols);
+  const [searchResult] = useSearchSymbols(debouncedSearch.trim(), 10);
+  const apiResults: SymbolEntry[] = (searchResult.data?.searchSymbols ?? [])
+    .filter((r: SymbolSearchResult) => !existingSymbols.has(r.symbol))
+    .map((r: SymbolSearchResult) => ({ symbol: r.symbol, name: r.name, assetClass: r.assetClass }));
+
+  // When not searching, show static recommendations (filtered by existing)
+  const recommendations = RECOMMENDED.filter((e) => !existingSymbols.has(e.symbol));
+  const results = isSearching ? apiResults : recommendations;
+  const isLoading = isSearching && searchResult.fetching;
 
   const handleAdd = useCallback(
     async (entry: SymbolEntry) => {
@@ -144,8 +100,7 @@ export function AddSymbolModal({ open, onClose, existingSymbols, onAdded }: AddS
 
       if (result.data && !result.data.addToWatchlist.success) {
         const errMsg = result.data.addToWatchlist.error ?? 'Failed to add';
-        const displayMsg = errMsg.includes('already') ? `Already in watchlist` : errMsg;
-        setToast({ message: displayMsg, variant: 'error' });
+        setToast({ message: errMsg, variant: 'error' });
         return;
       }
 
@@ -199,8 +154,14 @@ export function AddSymbolModal({ open, onClose, existingSymbols, onAdded }: AddS
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">Popular</p>
           )}
           <div className="h-72 overflow-auto">
-            {results.length === 0 ? (
-              <p className="flex h-full items-center justify-center text-sm text-text-muted">No results found</p>
+            {isLoading ? (
+              <div className="flex h-full items-center justify-center">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent-primary border-t-transparent" />
+              </div>
+            ) : results.length === 0 ? (
+              <p className="flex h-full items-center justify-center text-sm text-text-muted">
+                {isSearching ? 'No results found' : 'All popular symbols already added'}
+              </p>
             ) : (
               <div className="divide-y divide-border/40">
                 {results.map((entry) => (

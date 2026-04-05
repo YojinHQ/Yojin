@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { useMutation } from 'urql';
+import { useMutation, useClient } from 'urql';
 import { useOnboarding } from '../../lib/onboarding-context';
 import { OnboardingShell } from '../../components/onboarding/onboarding-shell';
 import { PlatformTile, PLATFORMS } from '../../components/onboarding/platform-tile';
@@ -8,7 +8,8 @@ import { EditableTable } from '../../components/onboarding/editable-table';
 import type { ExtractedPosition } from '../../components/onboarding/editable-table';
 import Button from '../../components/common/button';
 import Input from '../../components/common/input';
-import { CONFIRM_POSITIONS_MUTATION, PARSE_PORTFOLIO_SCREENSHOT_MUTATION } from '../../api/documents';
+import { CONFIRM_POSITIONS_MUTATION, PARSE_PORTFOLIO_SCREENSHOT_MUTATION, QUOTE_QUERY } from '../../api/documents';
+import type { QuoteQueryResult, QuoteQueryVariables } from '../../api/types';
 import {
   sanitizeSymbol,
   sanitizeNumeric,
@@ -44,6 +45,7 @@ export function Step4Platforms() {
   const { state, updateState, nextStep, prevStep } = useOnboarding();
   const [, executeConfirmPositions] = useMutation(CONFIRM_POSITIONS_MUTATION);
   const [, executeParseScreenshot] = useMutation(PARSE_PORTFOLIO_SCREENSHOT_MUTATION);
+  const urqlClient = useClient();
 
   const [screen, setScreen] = useState<Screen>('grid');
   const [selectedPlatformId, setSelectedPlatformId] = useState<string | null>(null);
@@ -214,6 +216,22 @@ export function Step4Platforms() {
         return updated;
       }),
     );
+
+    // Resolve name via API when static lookup misses
+    if (field === 'symbol' && sanitized.length >= 1 && !lookupSymbolName(sanitized)) {
+      const sym = sanitized.toUpperCase();
+      urqlClient
+        .query<QuoteQueryResult, QuoteQueryVariables>(QUOTE_QUERY, { symbol: sym })
+        .toPromise()
+        .then((result) => {
+          const name = result.data?.quote?.name;
+          if (name) {
+            setManualEntries((prev) =>
+              prev.map((e, i) => (i === idx && e.symbol.toUpperCase() === sym ? { ...e, name } : e)),
+            );
+          }
+        });
+    }
 
     // Clear error for the field being edited
     setEntryErrors((prev) => {

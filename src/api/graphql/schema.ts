@@ -222,6 +222,7 @@ export const typeDefs = /* GraphQL */ `
 
   type Quote {
     symbol: String!
+    name: String
     price: Float!
     change: Float!
     changePercent: Float!
@@ -231,6 +232,12 @@ export const typeDefs = /* GraphQL */ `
     open: Float!
     previousClose: Float!
     timestamp: String!
+  }
+
+  type SymbolSearchResult {
+    symbol: String!
+    name: String!
+    assetClass: AssetClass!
   }
 
   type PricePoint {
@@ -1089,6 +1096,7 @@ export const typeDefs = /* GraphQL */ `
     alerts(status: AlertStatus): [Alert!]!
     news(symbol: String, limit: Int): [Article!]!
     quote(symbol: String!): Quote
+    searchSymbols(query: String!, limit: Int): [SymbolSearchResult!]!
     priceHistory(tickers: [String!]!, range: String, interval: String): [TickerPriceHistory!]!
     marketStatus: USMarketStatus!
     listConnections: [Connection!]!

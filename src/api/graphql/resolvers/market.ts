@@ -8,7 +8,7 @@
 import type { JintelClient } from '@yojinhq/jintel-client';
 
 import { createSubsystemLogger } from '../../../logging/logger.js';
-import type { Article, Quote } from '../types.js';
+import type { Article, Quote, SymbolSearchResult } from '../types.js';
 
 const log = createSubsystemLogger('market-resolver');
 
@@ -106,15 +106,24 @@ export async function quoteQuery(_parent: unknown, args: { symbol: string }): Pr
   const sym = args.symbol.toUpperCase();
 
   if (jintelClient) {
-    const result = await jintelClient.quotes([sym]).catch(() => ({
-      success: false as const,
-      error: 'quotes threw',
-      data: [] as never[],
-    }));
+    const [result, entityResult] = await Promise.all([
+      jintelClient.quotes([sym]).catch(() => ({
+        success: false as const,
+        error: 'quotes threw',
+        data: [] as never[],
+      })),
+      jintelClient.searchEntities(sym, { limit: 1 }).catch(() => ({
+        success: false as const,
+        error: 'searchEntities threw',
+        data: [] as never[],
+      })),
+    ]);
+    const entityName = entityResult.success && entityResult.data[0] ? entityResult.data[0].name : undefined;
     if (result.success && result.data[0]) {
       const q = result.data[0];
       return {
         symbol: q.ticker,
+        name: entityName,
         price: q.price,
         change: q.change,
         changePercent: q.changePercent,
@@ -237,4 +246,39 @@ export function newsQuery(_parent: unknown, args: { symbol?: string; limit?: num
     articles = articles.slice(0, args.limit);
   }
   return articles;
+}
+
+// ---------------------------------------------------------------------------
+// Symbol search (backed by Jintel searchEntities)
+// ---------------------------------------------------------------------------
+
+/** Map Jintel entity type to our AssetClass enum. */
+function entityTypeToAssetClass(type: string): string {
+  if (type === 'CRYPTO') return 'CRYPTO';
+  return 'EQUITY';
+}
+
+export async function searchSymbolsQuery(
+  _parent: unknown,
+  args: { query: string; limit?: number },
+): Promise<SymbolSearchResult[]> {
+  const q = args.query.trim();
+  if (!q || !jintelClient) return [];
+
+  const result = await jintelClient.searchEntities(q, { limit: args.limit ?? 10 }).catch(() => ({
+    success: false as const,
+    error: 'searchEntities threw',
+    data: [] as never[],
+  }));
+
+  if (!result.success) {
+    log.warn('Jintel searchEntities failed', { query: q, error: result.error });
+    return [];
+  }
+
+  return result.data.map((entity) => ({
+    symbol: entity.tickers?.[0] ?? q.toUpperCase(),
+    name: entity.name,
+    assetClass: entityTypeToAssetClass(entity.type),
+  }));
 }

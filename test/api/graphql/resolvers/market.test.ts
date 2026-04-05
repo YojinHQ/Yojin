@@ -28,7 +28,7 @@ function createMockJintelClient(overrides: Partial<JintelClient> = {}): JintelCl
         },
       ],
     }),
-    searchEntities: vi.fn(),
+    searchEntities: vi.fn().mockResolvedValue({ success: true, data: [] }),
     enrichEntity: vi.fn(),
     sanctionsScreen: vi.fn(),
     healthCheck: vi.fn(),

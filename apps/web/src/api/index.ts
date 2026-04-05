@@ -11,6 +11,7 @@ export {
   useDismissAlert,
   useOnAlert,
   useQuote,
+  useSearchSymbols,
   useNews,
   useOnPriceMove,
   useWatchlist,
@@ -42,6 +43,7 @@ export type {
   Direction,
   WatchlistEntry,
   WatchlistResult,
+  SymbolSearchResult,
 } from './types.js';
 
 export { KNOWN_PLATFORMS, isKnownPlatform } from './types.js';
@@ -52,6 +54,7 @@ export {
   RISK_REPORT_QUERY,
   ALERTS_QUERY,
   QUOTE_QUERY,
+  SEARCH_SYMBOLS_QUERY,
   NEWS_QUERY,
   REFRESH_POSITIONS_MUTATION,
   ADD_MANUAL_POSITION_MUTATION,

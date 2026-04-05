@@ -244,6 +244,7 @@ export interface AlertRuleInput {
 
 export interface Quote {
   symbol: string;
+  name?: string;
   price: number;
   change: number;
   changePercent: number;
@@ -253,6 +254,21 @@ export interface Quote {
   open: number;
   previousClose: number;
   timestamp: string;
+}
+
+export interface SymbolSearchResult {
+  symbol: string;
+  name: string;
+  assetClass: AssetClass;
+}
+
+export interface SearchSymbolsQueryResult {
+  searchSymbols: SymbolSearchResult[];
+}
+
+export interface SearchSymbolsQueryVariables {
+  query: string;
+  limit?: number;
 }
 
 export interface PricePoint {

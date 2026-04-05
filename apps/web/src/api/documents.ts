@@ -141,6 +141,7 @@ export const QUOTE_QUERY = gql`
   query Quote($symbol: String!) {
     quote(symbol: $symbol) {
       symbol
+      name
       price
       change
       changePercent
@@ -150,6 +151,16 @@ export const QUOTE_QUERY = gql`
       open
       previousClose
       timestamp
+    }
+  }
+`;
+
+export const SEARCH_SYMBOLS_QUERY = gql`
+  query SearchSymbols($query: String!, $limit: Int) {
+    searchSymbols(query: $query, limit: $limit) {
+      symbol
+      name
+      assetClass
     }
   }
 `;

@@ -64,6 +64,7 @@ const cache = cacheExchange({
     SessionDetail: (data) => data.id as string,
     Skill: (data) => data.id as string,
     SkillTrigger: () => null, // embedded — nested under Skill
+    SymbolSearchResult: () => null, // embedded — search result, no stable identity
   },
   updates: {
     Mutation: {
@@ -130,6 +131,14 @@ const cache = cacheExchange({
       },
       dismissAlert(_result, _args, cache) {
         cache.invalidate('Query', 'alerts');
+      },
+      addToWatchlist(_result, _args, cache) {
+        cache.invalidate('Query', 'watchlist');
+        cache.invalidate('Query', 'curatedSignals');
+      },
+      removeFromWatchlist(_result, _args, cache) {
+        cache.invalidate('Query', 'watchlist');
+        cache.invalidate('Query', 'curatedSignals');
       },
       createSession(_result, _args, cache) {
         cache.invalidate('Query', 'sessions');

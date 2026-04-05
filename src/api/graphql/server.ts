@@ -73,7 +73,7 @@ import {
   onPriceMoveSubscription,
   onWorkflowProgressSubscription,
 } from './resolvers/live.js';
-import { marketStatusQuery, newsQuery, priceHistoryQuery, quoteQuery } from './resolvers/market.js';
+import { marketStatusQuery, newsQuery, priceHistoryQuery, quoteQuery, searchSymbolsQuery } from './resolvers/market.js';
 import { microInsightQuery, microInsightsQuery } from './resolvers/micro-insights.js';
 import {
   briefingConfigQuery,
@@ -133,6 +133,7 @@ const schema = createSchema({
       alerts: alertsQuery,
       news: newsQuery,
       quote: quoteQuery,
+      searchSymbols: searchSymbolsQuery,
       priceHistory: priceHistoryQuery,
       marketStatus: marketStatusQuery,
       listDataSources: listDataSourcesResolver,
