@@ -818,8 +818,8 @@ export async function buildSingleBrief(symbol: string, options: SingleBriefOptio
         platform: 'WATCHLIST' as Platform,
       };
 
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const signalsSince = options.signalsSince ?? sevenDaysAgo;
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const signalsSince = options.signalsSince ?? oneDayAgo;
 
   // Parallel lookups for this single ticker
   const [quotes, enrichmentMap, curatedSignals, memories] = await Promise.all([

@@ -511,7 +511,7 @@ export class Scheduler {
       // Note: getJintelClient/signalIngestor are omitted here because the batch
       // already fetched + curated Jintel signals above — no need to re-fetch per ticker.
       const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const results = await Promise.allSettled(
         assets.map((asset) => {
           const isFirstRun = this.microRegistry.get(asset.symbol)?.lastMicroAt === null;
@@ -524,7 +524,7 @@ export class Scheduler {
               getJintelClient: this.getJintelClient,
               memoryStores: this.memoryStores ?? new Map(),
               profileStore: this.profileStore,
-              signalsSince: isFirstRun ? fourDaysAgo : sevenDaysAgo,
+              signalsSince: isFirstRun ? fourDaysAgo : oneDayAgo,
             },
             actionStore: this.actionStore,
             eventLog: this.eventLog,
