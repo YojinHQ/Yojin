@@ -5,7 +5,7 @@
  * stubs on failure. Without a client, stubs are returned directly.
  */
 
-import type { JintelClient } from '@yojinhq/jintel-client';
+import type { JintelClient, USMarketStatus } from '@yojinhq/jintel-client';
 
 import { createSubsystemLogger } from '../../../logging/logger.js';
 import type { Article, Quote, SymbolSearchResult } from '../types.js';
@@ -184,29 +184,12 @@ export async function priceHistoryQuery(
 // Market status (NYSE holiday-aware, proxied from Jintel)
 // ---------------------------------------------------------------------------
 
-const MARKET_STATUS_QUERY = `{
-  marketStatus {
-    isOpen
-    isTradingDay
-    session
-    holiday
-    date
-  }
-}`;
-
-interface USMarketStatus {
-  isOpen: boolean;
-  isTradingDay: boolean;
-  session: 'PRE_MARKET' | 'OPEN' | 'AFTER_HOURS' | 'CLOSED';
-  holiday: string | null;
-  date: string;
-}
-
 export async function marketStatusQuery(): Promise<USMarketStatus> {
   if (jintelClient) {
     try {
-      const data = await jintelClient.request<{ marketStatus: USMarketStatus }>(MARKET_STATUS_QUERY);
-      return data.marketStatus;
+      const result = await jintelClient.marketStatus();
+      if (result.success) return result.data;
+      log.warn('Jintel marketStatus returned error, falling back to local', { error: result.error });
     } catch (err) {
       log.warn('Jintel marketStatus failed, falling back to local', { error: String(err) });
     }

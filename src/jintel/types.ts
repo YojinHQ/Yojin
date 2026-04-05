@@ -9,4 +9,18 @@
  * upstream types for any remaining internal consumers.
  */
 
-export type { Entity, EnrichmentField, SocialSentiment, TechnicalIndicators } from '@yojinhq/jintel-client';
+export type {
+  Entity,
+  EnrichmentField,
+  FamaFrenchSeries,
+  FactorDataPoint,
+  HackerNewsStory,
+  PredictionMarket,
+  PriceEvent,
+  PriceEventType,
+  ShortInterestReport,
+  Social,
+  SocialSentiment,
+  TechnicalIndicators,
+  USMarketStatus,
+} from '@yojinhq/jintel-client';

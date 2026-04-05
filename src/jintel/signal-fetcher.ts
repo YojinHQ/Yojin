@@ -214,7 +214,53 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     });
   }
 
-  // 3. SEC filings (Jintel returns newest-first, limited by ArraySubGraphOptions)
+  // 3. Key price events — 52-week highs/lows, volume spikes, gap moves (included in market field)
+  for (const event of entity.market?.keyEvents ?? []) {
+    signals.push({
+      sourceId: 'jintel-key-event',
+      sourceName: 'Jintel Market Events',
+      sourceType: 'ENRICHMENT',
+      reliability: 0.95,
+      title: `${entity.name ?? tickers[0]}: ${event.type.replace(/_/g, ' ')} on ${event.date}`,
+      content: `${event.description} | Close: $${event.close.toFixed(2)} (${event.changePercent >= 0 ? '+' : ''}${event.changePercent.toFixed(1)}%)${event.volume != null ? ` | Volume: ${event.volume.toLocaleString()}` : ''}`,
+      publishedAt: event.date.includes('T') ? event.date : `${event.date}T00:00:00Z`,
+      type: SignalType.TECHNICAL,
+      tickers,
+      confidence: 0.9,
+      metadata: { eventType: event.type, priceChange: event.priceChange, changePercent: event.changePercent },
+    });
+  }
+
+  // 4. Short interest snapshot — included in market field, only emit when meaningful
+  const shortInterestReports = entity.market?.shortInterest;
+  if (shortInterestReports?.length) {
+    // Use most recent report (server returns newest-first)
+    const si = shortInterestReports[0];
+    if (si.shortInterest != null || si.daysToCover != null) {
+      const parts: string[] = [];
+      if (si.shortInterest != null) parts.push(`Short interest: ${formatNumber(si.shortInterest)} shares`);
+      if (si.daysToCover != null) parts.push(`Days to cover: ${si.daysToCover.toFixed(1)}`);
+      if (si.change != null) {
+        const dir = si.change >= 0 ? '+' : '';
+        parts.push(`Change: ${dir}${formatNumber(si.change)}`);
+      }
+      signals.push({
+        sourceId: 'jintel-short-interest',
+        sourceName: 'Jintel Short Interest',
+        sourceType: 'ENRICHMENT',
+        reliability: 0.9,
+        title: `${entity.name ?? tickers[0]} Short Interest`,
+        content: parts.join(' | '),
+        publishedAt: si.reportDate.includes('T') ? si.reportDate : `${si.reportDate}T00:00:00Z`,
+        type: SignalType.FUNDAMENTAL,
+        tickers,
+        confidence: 0.85,
+        metadata: { reportDate: si.reportDate, source: si.source },
+      });
+    }
+  }
+
+  // 5. SEC filings (Jintel returns newest-first, limited by ArraySubGraphOptions)
   for (const filing of entity.regulatory?.filings ?? []) {
     signals.push({
       sourceId: 'jintel-sec',
@@ -231,7 +277,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     });
   }
 
-  // 4. Significant price moves (>=8%) — only flag outliers worth investigating
+  // 6. Significant price moves (>=8%) — only flag outliers worth investigating
   if (quote && Math.abs(quote.changePercent) >= 8) {
     const direction = quote.changePercent > 0 ? 'up' : 'down';
     signals.push({
@@ -248,7 +294,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     });
   }
 
-  // 5. News articles — only keep articles that actually mention the entity
+  // 7. News articles — only keep articles that actually mention the entity
   const entityName = entity.name;
   for (const article of entity.news ?? []) {
     if (!article.title) continue;
@@ -273,7 +319,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     });
   }
 
-  // 6. Research articles — skip junk page titles and irrelevant articles
+  // 8. Research articles — skip junk page titles and irrelevant articles
   for (const article of entity.research ?? []) {
     if (!article.title) continue;
     if (JUNK_TITLE_RE.test(article.title)) continue;
@@ -297,7 +343,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     });
   }
 
-  // 7. Technicals summary — only emit when there's data beyond RSI (RSI is in the snapshot)
+  // 9. Technicals summary — only emit when there's data beyond RSI (RSI is in the snapshot)
   if (tech) {
     const parts: string[] = [];
     if (tech.macd) parts.push(`MACD histogram: ${tech.macd.histogram.toFixed(3)}`);
@@ -327,7 +373,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     }
   }
 
-  // 8. Social sentiment — title must be stable per-day for content-hash dedup.
+  // 10. Social sentiment — title must be stable per-day for content-hash dedup.
   // Live-changing values (rank, mention counts) go in content only.
   if (entity.sentiment) {
     const s = entity.sentiment;

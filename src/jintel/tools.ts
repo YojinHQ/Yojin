@@ -13,9 +13,13 @@ import {
   type Entity,
   type EntityType,
   EntityTypeSchema,
+  type FactorDataPoint,
+  type FamaFrenchSeries,
+  FamaFrenchSeriesSchema,
   GDP,
   type GdpType,
   GdpTypeSchema,
+  type HackerNewsStory,
   INFLATION,
   INTEREST_RATES,
   JintelAuthError,
@@ -23,6 +27,7 @@ import {
   type JintelResult,
   type MarketQuote,
   type NewsArticle,
+  type PredictionMarket,
   type ResearchResult,
   type RiskSignal,
   type SP500DataPoint,
@@ -30,6 +35,8 @@ import {
   SP500SeriesSchema,
   SP500_MULTIPLES,
   type SanctionsMatch,
+  type ShortInterestReport,
+  type Social,
   type SocialSentiment,
   type TickerPriceHistory,
 } from '@yojinhq/jintel-client';
@@ -72,6 +79,8 @@ const JINTEL_QUERY_KIND = z.enum([
   'derivatives',
   'risk',
   'regulatory',
+  'short_interest',
+  'fama_french',
 ]);
 
 type JintelQueryKind = z.infer<typeof JINTEL_QUERY_KIND>;
@@ -85,6 +94,10 @@ const ENRICHMENT_FIELDS = z.enum([
   'news',
   'research',
   'sentiment',
+  // Costly fields — only request when explicitly needed
+  'social',
+  'predictions',
+  'discussions',
 ]);
 
 const SEVERITY_CONFIDENCE: Record<string, number> = {
@@ -257,6 +270,35 @@ function formatEnrichment(entity: Entity): string {
     );
   }
 
+  if (entity.market?.keyEvents?.length) {
+    const lines = entity.market.keyEvents.map(
+      (e) =>
+        `- [${e.type}] ${e.date}: ${e.description} (${e.changePercent >= 0 ? '+' : ''}${e.changePercent.toFixed(1)}%, close $${e.close.toFixed(2)})`,
+    );
+    sections.push(`## Key Price Events\n${lines.join('\n')}`);
+  }
+
+  if (entity.market?.shortInterest?.length) {
+    const si = entity.market.shortInterest[0];
+    const parts: string[] = [];
+    if (si.shortInterest != null) parts.push(`Shares short: ${formatNumber(si.shortInterest)}`);
+    if (si.daysToCover != null) parts.push(`Days to cover: ${si.daysToCover.toFixed(1)}`);
+    if (si.change != null) parts.push(`Change: ${si.change >= 0 ? '+' : ''}${formatNumber(si.change)}`);
+    if (parts.length) sections.push(`## Short Interest (${si.reportDate})\n${parts.join(' | ')}`);
+  }
+
+  if (entity.social) {
+    sections.push(`## Social Posts\n${formatSocial(entity.social)}`);
+  }
+
+  if (entity.predictions?.length) {
+    sections.push(`## Prediction Markets\n${formatPredictions(entity.predictions)}`);
+  }
+
+  if (entity.discussions?.length) {
+    sections.push(`## Discussions\n${formatDiscussions(entity.discussions)}`);
+  }
+
   return sections.join('\n\n');
 }
 
@@ -373,6 +415,103 @@ function formatSentiment(s: SocialSentiment): string {
   else if (rankDelta < 0) lines.push('\n📉 Slight decline in social attention');
 
   return lines.join('\n');
+}
+
+function formatShortInterest(reports: ShortInterestReport[]): string {
+  if (reports.length === 0) return 'No short interest data available.';
+  return reports
+    .map((r) => {
+      const parts = [`${r.ticker} (${r.reportDate})`];
+      if (r.shortInterest != null) parts.push(`Shares short: ${formatNumber(r.shortInterest)}`);
+      if (r.daysToCover != null) parts.push(`Days to cover: ${r.daysToCover.toFixed(1)}`);
+      if (r.change != null) parts.push(`Change: ${r.change >= 0 ? '+' : ''}${formatNumber(r.change)}`);
+      return parts.join(' | ');
+    })
+    .join('\n');
+}
+
+function formatFactorData(data: FactorDataPoint[], series: string): string {
+  if (data.length === 0) return 'No factor data available.';
+  const sorted = [...data].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const recent = sorted.slice(0, 20);
+  const lines = recent.map((d) => {
+    const parts = [d.date];
+    if (d.mktRf != null) parts.push(`Mkt-RF: ${(d.mktRf * 100).toFixed(3)}%`);
+    if (d.smb != null) parts.push(`SMB: ${(d.smb * 100).toFixed(3)}%`);
+    if (d.hml != null) parts.push(`HML: ${(d.hml * 100).toFixed(3)}%`);
+    if (d.rmw != null) parts.push(`RMW: ${(d.rmw * 100).toFixed(3)}%`);
+    if (d.cma != null) parts.push(`CMA: ${(d.cma * 100).toFixed(3)}%`);
+    if (d.rf != null) parts.push(`RF: ${(d.rf * 100).toFixed(3)}%`);
+    return parts.join(' | ');
+  });
+  return `# Fama-French Factors — ${series}\n${lines.join('\n')}${sorted.length > 20 ? `\n\n... and ${sorted.length - 20} more data points` : ''}`;
+}
+
+function formatSocial(s: Social): string {
+  const sections: string[] = [];
+  if (s.twitter?.length) {
+    const lines = s.twitter.map(
+      (t) =>
+        `@${t.author}${t.authorFollowers != null ? ` (${formatNumber(t.authorFollowers)} followers)` : ''}: ${t.text.slice(0, 200)}${t.text.length > 200 ? '…' : ''}\n  ❤ ${t.likes} | 🔁 ${t.retweets}${t.url ? `\n  ${t.url}` : ''}`,
+    );
+    sections.push(`### Twitter (${s.twitter.length})\n${lines.join('\n')}`);
+  }
+  if (s.reddit?.length) {
+    const lines = s.reddit.map(
+      (r) =>
+        `r/${r.subreddit} — ${r.title}\n  Score: ${r.score} | ${r.numComments} comments${r.url ? `\n  ${r.url}` : ''}`,
+    );
+    sections.push(`### Reddit (${s.reddit.length})\n${lines.join('\n')}`);
+  }
+  if (s.youtube?.length) {
+    const lines = s.youtube.map(
+      (v) =>
+        `${v.channelName}: ${v.title}${v.viewCount != null ? ` (${formatNumber(v.viewCount)} views)` : ''}\n  ${v.url}`,
+    );
+    sections.push(`### YouTube (${s.youtube.length})\n${lines.join('\n')}`);
+  }
+  if (s.linkedin?.length) {
+    const lines = s.linkedin.map(
+      (p) => `${p.text.slice(0, 200)}${p.text.length > 200 ? '…' : ''}\n  ❤ ${p.likes} | 💬 ${p.comments}`,
+    );
+    sections.push(`### LinkedIn (${s.linkedin.length})\n${lines.join('\n')}`);
+  }
+  return sections.length > 0 ? sections.join('\n\n') : 'No social posts found.';
+}
+
+function formatPredictions(markets: PredictionMarket[]): string {
+  if (markets.length === 0) return 'No prediction markets found.';
+  return markets
+    .map((m) => {
+      const parts = [`**${m.title}**`];
+      if (m.outcomes?.length) {
+        const outcomeLines = m.outcomes.map((o) => `  ${o.name}: ${(o.probability * 100).toFixed(1)}%`);
+        parts.push(outcomeLines.join('\n'));
+      }
+      if (m.volume24hr != null) parts.push(`  24h volume: $${formatNumber(m.volume24hr)}`);
+      if (m.endDate) parts.push(`  Ends: ${m.endDate}`);
+      if (m.url) parts.push(`  ${m.url}`);
+      return parts.join('\n');
+    })
+    .join('\n\n');
+}
+
+function formatDiscussions(stories: HackerNewsStory[]): string {
+  if (stories.length === 0) return 'No discussions found.';
+  return stories
+    .map((s) => {
+      const parts = [`**${s.title}** (${s.points} pts, ${s.numComments} comments)`];
+      if (s.url) parts.push(`  ${s.url}`);
+      if (s.hnUrl) parts.push(`  HN: ${s.hnUrl}`);
+      if (s.topComments?.length) {
+        const commentLines = s.topComments
+          .slice(0, 2)
+          .map((c) => `  > ${c.text.slice(0, 150)}${c.text.length > 150 ? '…' : ''}`);
+        parts.push(commentLines.join('\n'));
+      }
+      return parts.join('\n');
+    })
+    .join('\n\n');
 }
 
 function formatDerivatives(d: DerivativesData, ticker: string): string {
@@ -887,6 +1026,136 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     },
   };
 
+  const getShortInterest: ToolDefinition = {
+    name: 'get_short_interest',
+    description:
+      'Get short interest data for a ticker. Returns shares short, days-to-cover ratio, and change since last report.\n\n' +
+      'High short interest + low days-to-cover = potential short squeeze setup. ' +
+      'Use when the user asks about short sellers, bearish positioning, or squeeze potential.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Ticker symbol (e.g. GME, TSLA, AMC)'),
+    }),
+    async execute(params: { ticker: string }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const result = await safeCall(() => client.shortInterest(params.ticker.toUpperCase()));
+      if (!result.ok) return result.toolResult;
+      const handled = handleResult(result.data);
+      if (!handled.ok) return handled.toolResult;
+      const reports = handled.data as ShortInterestReport[];
+      return { content: `# ${params.ticker.toUpperCase()} — Short Interest\n\n${formatShortInterest(reports)}` };
+    },
+  };
+
+  const getFamaFrench: ToolDefinition = {
+    name: 'get_fama_french',
+    description:
+      'Get Fama-French factor data for risk decomposition and asset pricing analysis.\n\n' +
+      'Available series:\n' +
+      '- THREE_FACTOR_DAILY / THREE_FACTOR_MONTHLY: market risk premium (Mkt-RF), size (SMB), value (HML)\n' +
+      '- FIVE_FACTOR_DAILY / FIVE_FACTOR_MONTHLY: adds profitability (RMW) and investment (CMA)\n\n' +
+      'Use when the user asks about factor exposure, risk decomposition, value vs growth tilt, or ' +
+      'academic factor-based analysis of a portfolio.',
+    parameters: z.object({
+      series: FamaFrenchSeriesSchema.describe('Factor series to fetch'),
+      range: z.string().optional().describe('Date range filter (e.g. "1y", "6m"). Leave empty for full history.'),
+    }),
+    async execute(params: { series: FamaFrenchSeries; range?: string }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const result = await safeCall(() => client.famaFrenchFactors(params.series, params.range));
+      if (!result.ok) return result.toolResult;
+      const handled = handleResult(result.data);
+      if (!handled.ok) return handled.toolResult;
+      return { content: formatFactorData(handled.data as FactorDataPoint[], params.series) };
+    },
+  };
+
+  const getSocial: ToolDefinition = {
+    name: 'get_social',
+    description:
+      'Get social media posts (Twitter, Reddit, YouTube, LinkedIn) mentioning a ticker. ' +
+      'Returns recent posts with engagement metrics.\n\n' +
+      'NOTE: This is a costly query — only use when the user explicitly asks about social media ' +
+      'posts, viral content, influencer opinions, or social chatter for a specific asset.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Ticker symbol (e.g. TSLA, BTC, NVDA)'),
+    }),
+    async execute(params: { ticker: string }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const result = await safeCall(() =>
+        client.enrichEntity(params.ticker.toUpperCase(), ['social'] as EnrichmentField[]),
+      );
+      if (!result.ok) return result.toolResult;
+      const handled = handleResult(result.data);
+      if (!handled.ok) return handled.toolResult;
+      const entity = handled.data as Entity;
+      if (!entity.social) {
+        return { content: `No social media data available for ${params.ticker}.` };
+      }
+      return { content: `# ${entity.name ?? params.ticker} — Social Posts\n\n${formatSocial(entity.social)}` };
+    },
+  };
+
+  const getPredictions: ToolDefinition = {
+    name: 'get_predictions',
+    description:
+      'Get prediction market data related to a ticker (e.g. Polymarket contracts on earnings outcomes, ' +
+      'regulatory decisions, price targets).\n\n' +
+      'NOTE: This is a costly query — only use when the user explicitly asks about prediction ' +
+      'markets, event probabilities, or market-implied odds for a specific asset.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, BTC)'),
+    }),
+    async execute(params: { ticker: string }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const result = await safeCall(() =>
+        client.enrichEntity(params.ticker.toUpperCase(), ['predictions'] as EnrichmentField[]),
+      );
+      if (!result.ok) return result.toolResult;
+      const handled = handleResult(result.data);
+      if (!handled.ok) return handled.toolResult;
+      const entity = handled.data as Entity;
+      if (!entity.predictions?.length) {
+        return { content: `No prediction markets found for ${params.ticker}.` };
+      }
+      return {
+        content: `# ${entity.name ?? params.ticker} — Prediction Markets\n\n${formatPredictions(entity.predictions as PredictionMarket[])}`,
+      };
+    },
+  };
+
+  const getDiscussions: ToolDefinition = {
+    name: 'get_discussions',
+    description:
+      'Get Hacker News discussions related to a ticker or company. Returns top stories with ' +
+      'points, comment count, and top comments.\n\n' +
+      'NOTE: This is a costly query — only use when the user explicitly asks about tech community ' +
+      'discussion, HN sentiment, or developer/investor commentary for a specific asset.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Ticker symbol (e.g. NVDA, MSFT, AAPL)'),
+    }),
+    async execute(params: { ticker: string }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const result = await safeCall(() =>
+        client.enrichEntity(params.ticker.toUpperCase(), ['discussions'] as EnrichmentField[]),
+      );
+      if (!result.ok) return result.toolResult;
+      const handled = handleResult(result.data);
+      if (!handled.ok) return handled.toolResult;
+      const entity = handled.data as Entity;
+      if (!entity.discussions?.length) {
+        return { content: `No Hacker News discussions found for ${params.ticker}.` };
+      }
+      return {
+        content: `# ${entity.name ?? params.ticker} — Discussions\n\n${formatDiscussions(entity.discussions as HackerNewsStory[])}`,
+      };
+    },
+  };
+
   const jintelQuery: ToolDefinition = {
     name: 'jintel_query',
     description:
@@ -1089,5 +1358,10 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     getInflation,
     getInterestRates,
     getSP500Multiples,
+    getShortInterest,
+    getFamaFrench,
+    getSocial,
+    getPredictions,
+    getDiscussions,
   ];
 }
