@@ -38,6 +38,56 @@ const COLORS = {
   volumeDown: 'rgba(255, 90, 94, 0.25)',
 } as const;
 
+function isValidOHLC(c: PriceChartDatum): boolean {
+  return (
+    Number.isFinite(c.open) &&
+    Number.isFinite(c.high) &&
+    Number.isFinite(c.low) &&
+    Number.isFinite(c.close) &&
+    c.open > 0 &&
+    c.high > 0 &&
+    c.low > 0 &&
+    c.close > 0 &&
+    c.high >= c.low
+  );
+}
+
+/**
+ * Filter out bad data points: invalid OHLC values and zero-volume spike candles.
+ * Zero-volume spikes are a common Yahoo Finance artifact during extended-hours
+ * and session boundaries — no real trades happened, so the OHLC is unreliable.
+ */
+function sanitize(data: PriceChartDatum[]): PriceChartDatum[] {
+  if (data.length < 3) return data.filter(isValidOHLC);
+
+  const NEIGHBOR_WINDOW = 5;
+  const SPIKE_FACTOR = 2;
+
+  return data.filter((candle, i) => {
+    if (!isValidOHLC(candle)) return false;
+    if (candle.volume > 0) return true;
+
+    // Zero-volume candle — check if it's a spike relative to neighbors
+    const start = Math.max(0, i - NEIGHBOR_WINDOW);
+    const end = Math.min(data.length, i + NEIGHBOR_WINDOW + 1);
+    const neighborRanges: number[] = [];
+
+    for (let j = start; j < end; j++) {
+      if (j !== i && isValidOHLC(data[j]) && data[j].volume > 0) {
+        neighborRanges.push(data[j].high - data[j].low);
+      }
+    }
+
+    if (neighborRanges.length < 2) return true;
+
+    neighborRanges.sort((a, b) => a - b);
+    const medianRange = neighborRanges[Math.floor(neighborRanges.length / 2)];
+    const candleRange = candle.high - candle.low;
+
+    return candleRange <= medianRange * SPIKE_FACTOR;
+  });
+}
+
 /** Deduplicate by date key (keep last occurrence), sort chronologically. */
 function dedup(data: PriceChartDatum[], intraday: boolean): PriceChartDatum[] {
   const map = new Map<string, PriceChartDatum>();
@@ -123,7 +173,7 @@ export function PriceChart({ data, intraday = false }: PriceChartProps) {
 
         chartRef.current = chart;
 
-        const clean = dedup(data, intraday);
+        const clean = sanitize(dedup(data, intraday));
 
         const candleSeries = chart.addSeries(CandlestickSeries, {
           upColor: COLORS.up,
