@@ -781,6 +781,8 @@ export interface SingleBriefOptions {
   getJintelClient?: () => JintelClient | undefined;
   memoryStores: Map<string, SignalMemoryStore>;
   profileStore?: TickerProfileStore;
+  /** Override the signal lookback window (ISO date string, e.g. first-run backfill). Defaults to 7 days. */
+  signalsSince?: string;
 }
 
 /**
@@ -817,6 +819,7 @@ export async function buildSingleBrief(symbol: string, options: SingleBriefOptio
       };
 
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const signalsSince = options.signalsSince ?? sevenDaysAgo;
 
   // Parallel lookups for this single ticker
   const [quotes, enrichmentMap, curatedSignals, memories] = await Promise.all([
@@ -825,7 +828,7 @@ export async function buildSingleBrief(symbol: string, options: SingleBriefOptio
       : Promise.resolve(null),
     jintelClient ? batchEnrichAllChunked(jintelClient, [ticker]) : Promise.resolve(new Map<string, Entity>()),
     signalArchive
-      .query({ tickers: [ticker], since: sevenDaysAgo, limit: 100 })
+      .query({ tickers: [ticker], since: signalsSince, limit: 100 })
       .then((raw) => filterSignals(raw, { relevantTickers: new Set([ticker]), spamPatterns: DEFAULT_SPAM_PATTERNS })),
     recallAllMemories(memoryStores, [ticker]),
   ]);

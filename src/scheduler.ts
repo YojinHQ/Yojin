@@ -510,9 +510,12 @@ export class Scheduler {
       // Run micro research in parallel (up to MAX_MICRO_CONCURRENCY)
       // Note: getJintelClient/signalIngestor are omitted here because the batch
       // already fetched + curated Jintel signals above — no need to re-fetch per ticker.
+      const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const results = await Promise.allSettled(
-        assets.map((asset) =>
-          runMicroResearch(asset.symbol, asset.source, {
+        assets.map((asset) => {
+          const isFirstRun = this.microRegistry.get(asset.symbol)?.lastMicroAt === null;
+          return runMicroResearch(asset.symbol, asset.source, {
             providerRouter,
             microInsightStore,
             briefOptions: {
@@ -521,12 +524,13 @@ export class Scheduler {
               getJintelClient: this.getJintelClient,
               memoryStores: this.memoryStores ?? new Map(),
               profileStore: this.profileStore,
+              signalsSince: isFirstRun ? fourDaysAgo : sevenDaysAgo,
             },
             actionStore: this.actionStore,
             eventLog: this.eventLog,
             notificationBus: this.notificationBus,
-          }),
-        ),
+          });
+        }),
       );
 
       // Abort if scheduler was reset mid-flight (clear app data)
