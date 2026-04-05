@@ -24,8 +24,26 @@ const SignalType = SignalTypeSchema.enum;
 
 const logger = createSubsystemLogger('jintel-signal-fetcher');
 
-// Request all fields that produce signals — regulatory enables SEC filing signals
-const ENRICHMENT_FIELDS = ['market', 'technicals', 'news', 'research', 'sentiment', 'regulatory'] as const;
+// Request all fields that produce signals — regulatory enables SEC filing signals.
+// social: Twitter/Reddit/YouTube/LinkedIn posts → SOCIALS signals (dedup by hash).
+// discussions: HN stories → NEWS signals (tech/investor community commentary).
+// predictions intentionally excluded — too niche for automated runs, agent-only.
+const ENRICHMENT_FIELDS = [
+  'market',
+  'technicals',
+  'news',
+  'research',
+  'sentiment',
+  'regulatory',
+  'social',
+  'discussions',
+] as const;
+
+// Quality thresholds — filter low-engagement social posts to keep signal-to-noise high
+const SOCIAL_MIN_TWITTER_LIKES = 10;
+const SOCIAL_MIN_REDDIT_SCORE = 5;
+const SOCIAL_MIN_YOUTUBE_VIEWS = 1000;
+const SOCIAL_MIN_HN_POINTS = 5;
 const DEFAULT_CHUNK_SIZE = 10;
 
 export interface JintelFetchResult {
@@ -392,6 +410,112 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       type: SignalType.SENTIMENT,
       tickers,
       confidence: 0.7,
+    });
+  }
+
+  // 11. Social media posts — Twitter, Reddit, YouTube, LinkedIn.
+  // Quality-filtered: only high-engagement posts to keep signal-to-noise high.
+  // Title uses post ID for stable content-hash dedup across runs.
+  const social = entity.social;
+  if (social) {
+    for (const tweet of social.twitter ?? []) {
+      if ((tweet.likes ?? 0) < SOCIAL_MIN_TWITTER_LIKES) continue;
+      if (!mentionsEntity(tweet.text, tickers, entityName)) continue;
+      signals.push({
+        sourceId: `jintel-social-twitter-${tweet.id}`,
+        sourceName: 'Jintel Social (Twitter)',
+        sourceType: 'API',
+        reliability: 0.65,
+        title: `${entity.name ?? tickers[0]}: @${tweet.author} tweet`,
+        content: `${tweet.text}\n❤ ${tweet.likes} likes | 🔁 ${tweet.retweets} RT${tweet.authorFollowers != null ? ` | ${formatNumber(tweet.authorFollowers)} followers` : ''}`,
+        link: tweet.url,
+        publishedAt: tweet.date ?? now,
+        type: SignalType.SOCIALS,
+        tickers,
+        confidence: 0.6,
+        metadata: { author: tweet.author, likes: tweet.likes, retweets: tweet.retweets },
+      });
+    }
+
+    for (const post of social.reddit ?? []) {
+      if (post.score < SOCIAL_MIN_REDDIT_SCORE) continue;
+      const text = `${post.title} ${post.text}`;
+      if (!mentionsEntity(text, tickers, entityName)) continue;
+      signals.push({
+        sourceId: `jintel-social-reddit-${post.id}`,
+        sourceName: `Jintel Social (r/${post.subreddit})`,
+        sourceType: 'API',
+        reliability: 0.6,
+        title: `${entity.name ?? tickers[0]}: r/${post.subreddit} — ${post.title}`,
+        content: post.text.length > 500 ? post.text.slice(0, 497) + '…' : post.text,
+        link: post.url,
+        publishedAt: post.date ?? now,
+        type: SignalType.SOCIALS,
+        tickers,
+        confidence: Math.min(0.85, 0.5 + post.score / 1000),
+        metadata: { subreddit: post.subreddit, score: post.score, numComments: post.numComments },
+      });
+    }
+
+    for (const video of social.youtube ?? []) {
+      if ((video.viewCount ?? 0) < SOCIAL_MIN_YOUTUBE_VIEWS) continue;
+      signals.push({
+        sourceId: `jintel-social-youtube-${video.videoId}`,
+        sourceName: `Jintel Social (YouTube: ${video.channelName})`,
+        sourceType: 'API',
+        reliability: 0.65,
+        title: `${entity.name ?? tickers[0]}: ${video.title}`,
+        content: video.transcript
+          ? video.transcript.slice(0, 500) + (video.transcript.length > 500 ? '…' : '')
+          : `${video.channelName} — ${formatNumber(video.viewCount ?? 0)} views`,
+        link: video.url,
+        publishedAt: video.publishedAt ?? now,
+        type: SignalType.SOCIALS,
+        tickers,
+        confidence: 0.65,
+        metadata: { channelName: video.channelName, viewCount: video.viewCount },
+      });
+    }
+
+    for (const post of social.linkedin ?? []) {
+      const linkedinText = post.text;
+      if (!mentionsEntity(linkedinText, tickers, entityName)) continue;
+      signals.push({
+        sourceId: `jintel-social-linkedin-${linkedinText.slice(0, 40).replace(/\W+/g, '-')}`,
+        sourceName: 'Jintel Social (LinkedIn)',
+        sourceType: 'API',
+        reliability: 0.7,
+        title: `${entity.name ?? tickers[0]}: LinkedIn post`,
+        content: linkedinText.length > 500 ? linkedinText.slice(0, 497) + '…' : linkedinText,
+        link: post.url ?? undefined,
+        publishedAt: post.date ?? now,
+        type: SignalType.SOCIALS,
+        tickers,
+        confidence: 0.65,
+        metadata: { likes: post.likes, comments: post.comments },
+      });
+    }
+  }
+
+  // 12. Hacker News discussions — tech/investor community commentary.
+  // Only high-points stories to avoid noise.
+  for (const story of entity.discussions ?? []) {
+    if (story.points < SOCIAL_MIN_HN_POINTS) continue;
+    signals.push({
+      sourceId: `jintel-discussions-hn-${story.objectId}`,
+      sourceName: 'Jintel Discussions (HN)',
+      sourceType: 'API',
+      reliability: 0.7,
+      title: story.title,
+      content: story.topComments?.length
+        ? `${story.topComments[0].text.slice(0, 400)}${story.topComments[0].text.length > 400 ? '…' : ''}`
+        : `${story.points} pts | ${story.numComments} comments`,
+      link: story.url ?? story.hnUrl ?? undefined,
+      publishedAt: story.date ?? now,
+      type: SignalType.NEWS,
+      tickers,
+      confidence: Math.min(0.85, 0.5 + story.points / 200),
+      metadata: { hnUrl: story.hnUrl, points: story.points, numComments: story.numComments },
     });
   }
 
