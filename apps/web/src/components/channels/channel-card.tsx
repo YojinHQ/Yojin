@@ -31,12 +31,17 @@ export function ChannelCard({ channel, onConnect, onDisconnect, disconnecting = 
   return (
     <>
       <div className="flex items-center gap-4 rounded-xl border border-border bg-bg-card p-4">
-        <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold', meta.color)}>
-          {meta.logo ? <img src={meta.logo} alt={meta.label} className="h-6 w-6 object-contain" /> : meta.initials}
+        <div
+          className={cn(
+            'flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold',
+            !meta.logo && meta.color,
+          )}
+        >
+          {meta.logo ? <img src={meta.logo} alt={meta.label} className="h-8 object-contain" /> : meta.initials}
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 whitespace-nowrap">
             <span className="text-sm font-medium text-text-primary">{meta.label}</span>
             <Badge variant={variant} size="xs">
               {label}

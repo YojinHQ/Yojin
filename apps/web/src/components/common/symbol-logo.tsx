@@ -37,18 +37,13 @@ function getColor(symbol: string): string {
 }
 
 function getLogoUrls(symbol: string, assetClass: AssetClass): string[] {
-  const urls: string[] = [];
+  const primary = assetClass === 'crypto' ? 'crypto' : 'symbol';
+  const fallback = assetClass === 'crypto' ? 'symbol' : 'crypto';
 
-  // 1. Parqet (works well for equities and some crypto)
-  const parqetPath = assetClass === 'crypto' ? 'crypto' : 'symbol';
-  urls.push(`https://assets.parqet.com/logos/${parqetPath}/${symbol}`);
-
-  // 2. Also try Parqet crypto path if asset class is equity (might be misclassified)
-  if (assetClass !== 'crypto') {
-    urls.push(`https://assets.parqet.com/logos/crypto/${symbol}`);
-  }
-
-  return urls;
+  return [
+    `https://assets.parqet.com/logos/${primary}/${symbol}`,
+    `https://assets.parqet.com/logos/${fallback}/${symbol}`,
+  ];
 }
 
 interface SymbolCellProps {
