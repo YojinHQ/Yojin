@@ -131,6 +131,14 @@ const cache = cacheExchange({
       dismissAlert(_result, _args, cache) {
         cache.invalidate('Query', 'alerts');
       },
+      addToWatchlist(_result, _args, cache) {
+        cache.invalidate('Query', 'watchlist');
+        cache.invalidate('Query', 'curatedSignals');
+      },
+      removeFromWatchlist(_result, _args, cache) {
+        cache.invalidate('Query', 'watchlist');
+        cache.invalidate('Query', 'curatedSignals');
+      },
       createSession(_result, _args, cache) {
         cache.invalidate('Query', 'sessions');
       },

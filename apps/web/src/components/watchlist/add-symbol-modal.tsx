@@ -144,8 +144,7 @@ export function AddSymbolModal({ open, onClose, existingSymbols, onAdded }: AddS
 
       if (result.data && !result.data.addToWatchlist.success) {
         const errMsg = result.data.addToWatchlist.error ?? 'Failed to add';
-        const displayMsg = errMsg.includes('already') ? `Already in watchlist` : errMsg;
-        setToast({ message: displayMsg, variant: 'error' });
+        setToast({ message: errMsg, variant: 'error' });
         return;
       }
 
