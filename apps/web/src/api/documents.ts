@@ -1312,6 +1312,7 @@ export const INTEL_FEED_QUERY = gql`
           name
           reliability
         }
+        content
         tier1
         tier2
       }

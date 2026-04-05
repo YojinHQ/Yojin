@@ -67,7 +67,7 @@ export default function Dashboard() {
 
       {/* Right panel — unified feed */}
       <RightPanel>
-        <IntelFeed />
+        <IntelFeed feedTarget="PORTFOLIO" />
       </RightPanel>
     </div>
   );
