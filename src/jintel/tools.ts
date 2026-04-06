@@ -84,7 +84,6 @@ const JINTEL_QUERY_KIND = z.enum([
   'risk',
   'regulatory',
   'short_interest',
-  'fama_french',
   'financials',
   'executives',
 ]);
@@ -492,21 +491,30 @@ function formatSocial(s: Social): string {
 }
 
 function formatFinancials(f: FinancialStatements): string {
-  const stmt = f.income[0] ?? f.balanceSheet[0] ?? f.cashFlow[0];
-  if (!stmt) return 'No financial statement data available.';
+  const inc = f.income[0];
+  const bs = f.balanceSheet[0];
+  const cf = f.cashFlow[0];
+  const periodSrc = inc ?? bs ?? cf;
+  if (!periodSrc) return 'No financial statement data available.';
   const lines: string[] = [];
-  const period = stmt.periodType ? `${stmt.periodType} ending ${stmt.periodEnding}` : stmt.periodEnding;
+  const period = periodSrc.periodType
+    ? `${periodSrc.periodType} ending ${periodSrc.periodEnding}`
+    : periodSrc.periodEnding;
   lines.push(`Period: ${period}`);
-  if (stmt.totalRevenue != null) lines.push(`Revenue: $${formatNumber(stmt.totalRevenue)}`);
-  if (stmt.grossProfit != null) lines.push(`Gross Profit: $${formatNumber(stmt.grossProfit)}`);
-  if (stmt.operatingIncome != null) lines.push(`Operating Income: $${formatNumber(stmt.operatingIncome)}`);
-  if (stmt.ebitda != null) lines.push(`EBITDA: $${formatNumber(stmt.ebitda)}`);
-  if (stmt.netIncome != null) lines.push(`Net Income: $${formatNumber(stmt.netIncome)}`);
-  if (stmt.dilutedEps != null) lines.push(`Diluted EPS: $${stmt.dilutedEps.toFixed(2)}`);
-  if (stmt.freeCashFlow != null) lines.push(`Free Cash Flow: $${formatNumber(stmt.freeCashFlow)}`);
-  if (stmt.totalDebt != null) lines.push(`Total Debt: $${formatNumber(stmt.totalDebt)}`);
-  if (stmt.cashAndEquivalents != null) lines.push(`Cash & Equivalents: $${formatNumber(stmt.cashAndEquivalents)}`);
-  if (stmt.totalEquity != null) lines.push(`Total Equity: $${formatNumber(stmt.totalEquity)}`);
+  // Income statement
+  if (inc?.totalRevenue != null) lines.push(`Revenue: $${formatNumber(inc.totalRevenue)}`);
+  if (inc?.grossProfit != null) lines.push(`Gross Profit: $${formatNumber(inc.grossProfit)}`);
+  if (inc?.operatingIncome != null) lines.push(`Operating Income: $${formatNumber(inc.operatingIncome)}`);
+  if (inc?.ebitda != null) lines.push(`EBITDA: $${formatNumber(inc.ebitda)}`);
+  if (inc?.netIncome != null) lines.push(`Net Income: $${formatNumber(inc.netIncome)}`);
+  if (inc?.dilutedEps != null) lines.push(`Diluted EPS: $${inc.dilutedEps.toFixed(2)}`);
+  // Cash flow
+  if (cf?.freeCashFlow != null) lines.push(`Free Cash Flow: $${formatNumber(cf.freeCashFlow)}`);
+  if (cf?.operatingCashFlow != null) lines.push(`Operating Cash Flow: $${formatNumber(cf.operatingCashFlow)}`);
+  // Balance sheet
+  if (bs?.totalDebt != null) lines.push(`Total Debt: $${formatNumber(bs.totalDebt)}`);
+  if (bs?.cashAndEquivalents != null) lines.push(`Cash & Equivalents: $${formatNumber(bs.cashAndEquivalents)}`);
+  if (bs?.totalEquity != null) lines.push(`Total Equity: $${formatNumber(bs.totalEquity)}`);
   return lines.join('\n');
 }
 
@@ -1283,11 +1291,11 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     name: 'jintel_query',
     description:
       'Generic Jintel query tool for quotes, fundamentals, market data, history, news, research, sentiment, ' +
-      'technicals, derivatives, risk, regulatory, financials, or executives. Use this when you want one ' +
-      'Jintel-backed entry point instead of choosing a more specialized tool.',
+      'technicals, derivatives, risk, regulatory, short_interest, financials, or executives. Use this when you want ' +
+      'one Jintel-backed entry point instead of choosing a more specialized tool.',
     parameters: z.object({
       kind: JINTEL_QUERY_KIND.describe(
-        'What to fetch: quote, market, fundamentals, history, news, research, sentiment, technicals, derivatives, risk, regulatory, financials, or executives',
+        'What to fetch: quote, market, fundamentals, history, news, research, sentiment, technicals, derivatives, risk, regulatory, short_interest, financials, or executives',
       ),
       ticker: z.string().optional().describe('Single ticker symbol (e.g. AAPL, BTC, NVDA)'),
       tickers: z.array(z.string()).optional().describe('Ticker batch for quote/history queries'),
@@ -1341,6 +1349,8 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
           return runTechnical.execute({ ticker: singleTicker });
         case 'derivatives':
           return getDerivatives.execute({ ticker: singleTicker });
+        case 'short_interest':
+          return getShortInterest.execute({ ticker: singleTicker });
         case 'financials':
           return getFinancials.execute({ ticker: singleTicker });
         case 'executives':

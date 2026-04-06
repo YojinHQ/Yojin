@@ -474,13 +474,9 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
   // Only high-points stories to avoid noise, and only if the story title
   // actually references the ticker — Jintel may return loosely related HN stories
   // that have nothing to do with the asset.
-  const tickerPattern = new RegExp(`(?<![A-Z0-9])${tickers[0]}(?![A-Z0-9])`, 'i');
   for (const story of entity.discussions ?? []) {
     if (story.points < SOCIAL_MIN_HN_POINTS) continue;
-    const titleRelevant =
-      tickerPattern.test(story.title) ||
-      (entity.name != null && story.title.toLowerCase().includes(entity.name.toLowerCase()));
-    if (!titleRelevant) continue;
+    if (!mentionsEntity(story.title, tickers, entityName)) continue;
     signals.push({
       sourceId: `jintel-discussions-hn-${story.objectId}`,
       sourceName: 'Jintel Discussions (HN)',
@@ -499,20 +495,32 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     });
   }
 
-  // 13. Financial statements — most recent income period (equity only; null for crypto/ETF).
+  // 13. Financial statements — most recent period across all three families (equity only; null for crypto/ETF).
   // Stable title for content-hash dedup; period context goes in content + metadata.
-  const financials = entity.financials;
-  if (financials?.income?.length) {
-    const latest = financials.income[0]; // server returns newest-first
+  // Reads income, balance sheet, and cash flow independently so no family is silently dropped.
+  const inc = entity.financials?.income?.[0];
+  const bs = entity.financials?.balanceSheet?.[0];
+  const cf = entity.financials?.cashFlow?.[0];
+  const periodSrc = inc ?? bs ?? cf;
+  if (periodSrc) {
     const parts: string[] = [];
-    const periodLabel = latest.periodType ? `${latest.periodType} ending ${latest.periodEnding}` : latest.periodEnding;
+    const periodLabel = periodSrc.periodType
+      ? `${periodSrc.periodType} ending ${periodSrc.periodEnding}`
+      : periodSrc.periodEnding;
     parts.push(`Period: ${periodLabel}`);
-    if (latest.totalRevenue != null) parts.push(`Revenue: $${formatNumber(latest.totalRevenue)}`);
-    if (latest.grossProfit != null) parts.push(`Gross Profit: $${formatNumber(latest.grossProfit)}`);
-    if (latest.netIncome != null) parts.push(`Net Income: $${formatNumber(latest.netIncome)}`);
-    if (latest.ebitda != null) parts.push(`EBITDA: $${formatNumber(latest.ebitda)}`);
-    if (latest.freeCashFlow != null) parts.push(`Free Cash Flow: $${formatNumber(latest.freeCashFlow)}`);
-    if (latest.dilutedEps != null) parts.push(`Diluted EPS: $${latest.dilutedEps.toFixed(2)}`);
+    // Income statement fields
+    if (inc?.totalRevenue != null) parts.push(`Revenue: $${formatNumber(inc.totalRevenue)}`);
+    if (inc?.grossProfit != null) parts.push(`Gross Profit: $${formatNumber(inc.grossProfit)}`);
+    if (inc?.netIncome != null) parts.push(`Net Income: $${formatNumber(inc.netIncome)}`);
+    if (inc?.ebitda != null) parts.push(`EBITDA: $${formatNumber(inc.ebitda)}`);
+    if (inc?.dilutedEps != null) parts.push(`Diluted EPS: $${inc.dilutedEps.toFixed(2)}`);
+    // Balance sheet fields
+    if (bs?.totalDebt != null) parts.push(`Total Debt: $${formatNumber(bs.totalDebt)}`);
+    if (bs?.cashAndEquivalents != null) parts.push(`Cash & Equivalents: $${formatNumber(bs.cashAndEquivalents)}`);
+    if (bs?.totalEquity != null) parts.push(`Total Equity: $${formatNumber(bs.totalEquity)}`);
+    // Cash flow fields
+    if (cf?.freeCashFlow != null) parts.push(`Free Cash Flow: $${formatNumber(cf.freeCashFlow)}`);
+    if (cf?.operatingCashFlow != null) parts.push(`Operating Cash Flow: $${formatNumber(cf.operatingCashFlow)}`);
     if (parts.length > 1) {
       signals.push({
         sourceId: 'jintel-financials',
@@ -525,7 +533,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
         type: SignalType.FUNDAMENTAL,
         tickers,
         confidence: 0.95,
-        metadata: { periodEnding: latest.periodEnding, periodType: latest.periodType ?? undefined },
+        metadata: { periodEnding: periodSrc.periodEnding, periodType: periodSrc.periodType ?? undefined },
       });
     }
   }
