@@ -11,10 +11,12 @@ import type {
   Entity,
   JintelClient,
   SP500DataPoint,
+  Social,
 } from '@yojinhq/jintel-client';
 import { GDP, INFLATION, INTEREST_RATES, SP500_MULTIPLES, buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
 import { formatNumber, riskSignalsToRaw } from './tools.js';
+import type { FinancialStatements, KeyExecutive, RedditComment } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
 import { JUNK_DOMAIN_RE, JUNK_TITLE_RE } from '../signals/quality-patterns.js';
@@ -39,8 +41,6 @@ const ENRICHMENT_FIELDS = [
   'regulatory',
   'social',
   'discussions',
-  'financials',
-  'executives',
 ] as const;
 
 // Quality thresholds — filter low-engagement social posts to keep signal-to-noise high
@@ -452,7 +452,9 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       });
     }
 
-    for (const comment of social.redditComments ?? []) {
+    // 'redditComments' is a planned jintel-client field — cast until client ships it.
+    const extSocial = social as Social & { redditComments?: RedditComment[] };
+    for (const comment of extSocial.redditComments ?? []) {
       if (comment.score < SOCIAL_MIN_REDDIT_COMMENT_SCORE) continue;
       if (!mentionsEntity(comment.body, tickers, entityName)) continue;
       signals.push({
@@ -499,9 +501,11 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
   // 13. Financial statements — most recent period across all three families (equity only; null for crypto/ETF).
   // Stable title for content-hash dedup; period context goes in content + metadata.
   // Reads income, balance sheet, and cash flow independently so no family is silently dropped.
-  const inc = entity.financials?.income?.[0];
-  const bs = entity.financials?.balanceSheet?.[0];
-  const cf = entity.financials?.cashFlow?.[0];
+  // 'financials' is a planned jintel-client field — cast until client ships it natively.
+  const extEntity = entity as Entity & { financials?: FinancialStatements; executives?: KeyExecutive[] };
+  const inc = extEntity.financials?.income?.[0];
+  const bs = extEntity.financials?.balanceSheet?.[0];
+  const cf = extEntity.financials?.cashFlow?.[0];
   const periodSrc = inc ?? bs ?? cf;
   if (periodSrc) {
     const parts: string[] = [];
@@ -541,7 +545,8 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
 
   // 14. Key executives (equity only; null for crypto/ETF).
   // Stable title for content-hash dedup. Executive roster changes infrequently.
-  const executives = entity.executives;
+  // 'executives' is a planned jintel-client field — using cast from section 13.
+  const executives = extEntity.executives;
   if (executives?.length) {
     const lines = executives.map((exec) => {
       let line = `${exec.title}: ${exec.name}`;

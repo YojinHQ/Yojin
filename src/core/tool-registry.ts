@@ -18,12 +18,18 @@ import type { ToolDefinition, ToolExecutor, ToolResult, ToolSchema } from './typ
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function schemaToJsonSchema(schema: any): Record<string, unknown> {
+  let result: Record<string, unknown>;
   try {
-    return schema.toJSONSchema() as Record<string, unknown>;
+    result = schema.toJSONSchema() as Record<string, unknown>;
   } catch {
     // Fall back to zod-to-json-schema for Zod v3 schemas or mixed compositions
-    return zodToJsonSchema(schema) as Record<string, unknown>;
+    result = zodToJsonSchema(schema) as Record<string, unknown>;
   }
+  // Anthropic API requires `type` at the top level of input_schema
+  if (!result.type) {
+    result.type = 'object';
+  }
+  return result;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

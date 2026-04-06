@@ -101,6 +101,10 @@ function cleanInputSchema(schema: Record<string, unknown>): Record<string, unkno
       ]),
     );
   }
+  // Anthropic API requires `type` at the top level of input_schema
+  if (!rest.type) {
+    rest.type = 'object';
+  }
   return rest;
 }
 
@@ -353,7 +357,7 @@ export class ClaudeCodeProvider implements AIProvider {
             tools: params.tools.map((t) => ({
               name: t.name,
               description: t.description,
-              input_schema: t.input_schema as Anthropic.Tool.InputSchema,
+              input_schema: cleanInputSchema(t.input_schema as Record<string, unknown>) as Anthropic.Tool.InputSchema,
             })),
           }
         : {}),
@@ -395,7 +399,7 @@ export class ClaudeCodeProvider implements AIProvider {
             tools: params.tools.map((t) => ({
               name: t.name,
               description: t.description,
-              input_schema: t.input_schema as Anthropic.Tool.InputSchema,
+              input_schema: cleanInputSchema(t.input_schema as Record<string, unknown>) as Anthropic.Tool.InputSchema,
             })),
           }
         : {}),

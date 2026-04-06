@@ -14,17 +14,54 @@ export type {
   EnrichmentField,
   FamaFrenchSeries,
   FactorDataPoint,
-  FinancialStatement,
-  FinancialStatements,
   HackerNewsStory,
-  KeyExecutive,
   PredictionMarket,
   PriceEvent,
   PriceEventType,
-  RedditComment,
   ShortInterestReport,
   Social,
   SocialSentiment,
   TechnicalIndicators,
   USMarketStatus,
 } from '@yojinhq/jintel-client';
+
+// Types for planned jintel-client fields (financials, executives, redditComments).
+// Defined locally until the client ships these as first-class enrichment fields.
+
+export interface FinancialStatement {
+  periodEnding: string;
+  periodType?: string;
+  totalRevenue?: number | null;
+  grossProfit?: number | null;
+  operatingIncome?: number | null;
+  ebitda?: number | null;
+  netIncome?: number | null;
+  dilutedEps?: number | null;
+  freeCashFlow?: number | null;
+  operatingCashFlow?: number | null;
+  totalDebt?: number | null;
+  cashAndEquivalents?: number | null;
+  totalEquity?: number | null;
+}
+
+export interface FinancialStatements {
+  income: FinancialStatement[];
+  balanceSheet: FinancialStatement[];
+  cashFlow: FinancialStatement[];
+}
+
+export interface KeyExecutive {
+  name: string;
+  title: string;
+  pay?: number | null;
+  age?: number | null;
+}
+
+export interface RedditComment {
+  id: string;
+  subreddit: string;
+  body: string;
+  score: number;
+  date?: string | null;
+  parentId?: string;
+}

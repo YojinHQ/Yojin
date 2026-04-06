@@ -507,8 +507,8 @@ function IntelFeedContent({
           : null;
       const sourceName = s.sources?.[0]?.name;
       const ticker = topScore?.ticker ?? s.tickers[0] ?? 'MACRO';
-      const headline = s.title ?? s.tier1;
-      const detail = s.content ?? s.tier2 ?? '';
+      const headline = s.tier1 ?? s.title;
+      const detail = s.tier2 ?? s.content ?? '';
       return {
         id: s.id,
         type: itemType,

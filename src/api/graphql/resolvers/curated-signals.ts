@@ -30,6 +30,22 @@ const log = createSubsystemLogger('curated-signals-resolver');
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const FOUR_DAYS_MS = 4 * 24 * 60 * 60 * 1000;
 
+/**
+ * Enrichment sourceIds that produce reference/snapshot data (not actionable intel).
+ * These belong in ticker profiles and dashboards, not the Intel Feed.
+ * Signals from these sources are still available in the archive for agent queries.
+ */
+const REFERENCE_DATA_SOURCE_IDS = new Set([
+  'jintel-snapshot',
+  'jintel-technicals',
+  'jintel-executives',
+  'jintel-financials',
+  'jintel-sentiment',
+  'jintel-short-interest',
+  'jintel-key-event',
+  'jintel-market',
+]);
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -299,6 +315,13 @@ export async function curatedSignalsResolver(
     excludeIds: dismissedIds,
   });
 
+  // Exclude enrichment reference data — snapshot/profile signals that aren't actionable intel.
+  // These are still queryable via the signal archive for agent tools and detail views.
+  const actionable = filtered.filter((s) => {
+    const sourceId = s.sources[0]?.id;
+    return !sourceId || !REFERENCE_DATA_SOURCE_IDS.has(sourceId);
+  });
+
   // Classify signals as portfolio or watchlist
   const portfolioTickerSet = new Set(portfolioTickers);
   const watchlistTickerSet = new Set(watchlistTickers.filter((t) => !portfolioTickerSet.has(t)));
@@ -306,7 +329,7 @@ export async function curatedSignalsResolver(
   type TaggedSignal = { signal: Signal; feedTarget: FeedTarget };
   const tagged: TaggedSignal[] = [];
 
-  for (const signal of filtered) {
+  for (const signal of actionable) {
     const isPortfolio = signal.assets.some((a) => portfolioTickerSet.has(a.ticker));
     const isWatchlist = signal.assets.some((a) => watchlistTickerSet.has(a.ticker));
 

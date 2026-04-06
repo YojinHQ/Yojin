@@ -137,6 +137,10 @@ async function readTokenFromKeychain(): Promise<string | null> {
  */
 function cleanInputSchema(schema: Record<string, unknown>): Record<string, unknown> {
   const { $schema: _schema, additionalProperties: _additionalProperties, ...rest } = schema;
+  // Anthropic API requires `type` at the top level of input_schema
+  if (!rest.type) {
+    rest.type = 'object';
+  }
   return rest;
 }
 
