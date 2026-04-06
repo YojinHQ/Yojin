@@ -56,7 +56,7 @@ export function OnboardingShell({ currentStep, showProgress = true, children, cl
         {/* Scrollable content area */}
         <main
           className={cn(
-            'relative z-10 flex flex-1 flex-col items-center overflow-y-auto px-8',
+            'relative z-10 flex flex-1 flex-col items-center justify-center overflow-y-auto px-8',
             showProgress ? 'pb-10 pt-4' : 'py-10',
             className,
           )}

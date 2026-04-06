@@ -4,6 +4,69 @@ import Button from '../common/button';
 import { cn } from '../../lib/utils';
 import { formatPrice } from '../../lib/format';
 import type { WatchlistEntry } from '../../api';
+import type { MarketStatus } from '../../hooks/use-market-status';
+
+// ---------------------------------------------------------------------------
+// Sparkline — SVG polyline matching positions-preview pattern
+// ---------------------------------------------------------------------------
+
+function WatchlistSparkline({ data, symbol }: { data: number[]; symbol: string }) {
+  if (data.length < 2) return null;
+
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+
+  const netChange = data[data.length - 1] - data[0];
+  const isPositive = netChange >= 0;
+  const color = isPositive ? 'var(--color-success)' : 'var(--color-error)';
+  const gradId = `wl-sparkline-${symbol}`;
+
+  const coords = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * 120;
+    const y = 32 - ((v - min) / range) * 24 - 4;
+    return { x, y };
+  });
+
+  const points = coords.map((c) => `${c.x},${c.y}`).join(' ');
+  const fillPoints = `0,32 ${points} 120,32`;
+
+  return (
+    <div className="pointer-events-none h-7 w-[72px]">
+      <svg viewBox="0 0 120 32" className="h-full w-full" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={isPositive ? 0.2 : 0} />
+            <stop offset="100%" stopColor={color} stopOpacity={isPositive ? 0 : 0.2} />
+          </linearGradient>
+        </defs>
+        <polygon points={fillPoints} fill={`url(#${gradId})`} />
+        <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+      </svg>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Extended Hours Badge
+// ---------------------------------------------------------------------------
+
+function getExtendedHoursInfo(
+  status: MarketStatus,
+  entry: WatchlistEntry,
+): { label: string; price: number; changePercent: number } | null {
+  if (status === 'pre-market' && entry.preMarketPrice != null && entry.preMarketChangePercent != null) {
+    return { label: 'PRE', price: entry.preMarketPrice, changePercent: entry.preMarketChangePercent };
+  }
+  if (
+    (status === 'after-hours' || status === 'closed') &&
+    entry.postMarketPrice != null &&
+    entry.postMarketChangePercent != null
+  ) {
+    return { label: 'AH', price: entry.postMarketPrice, changePercent: entry.postMarketChangePercent };
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Symbol Card
@@ -12,28 +75,54 @@ import type { WatchlistEntry } from '../../api';
 interface SymbolCardProps {
   entry: WatchlistEntry;
   onRemove: (symbol: string) => void;
+  onSelect: (symbol: string) => void;
   removing?: boolean;
+  marketStatus: MarketStatus;
 }
 
-export function SymbolCard({ entry, onRemove, removing }: SymbolCardProps) {
+export function SymbolCard({ entry, onRemove, onSelect, removing, marketStatus }: SymbolCardProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const hasQuote = entry.price != null;
   const isUp = (entry.changePercent ?? 0) > 0;
   const isDown = (entry.changePercent ?? 0) < 0;
 
-  const handleRemoveClick = useCallback(() => setConfirmOpen(true), []);
-  const handleCancel = useCallback(() => setConfirmOpen(false), []);
-  const handleConfirm = useCallback(() => {
+  const extended = entry.assetClass !== 'CRYPTO' ? getExtendedHoursInfo(marketStatus, entry) : null;
+
+  const handleRemoveClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirmOpen(true);
+  }, []);
+  const handleCancel = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
     setConfirmOpen(false);
-    onRemove(entry.symbol);
-  }, [onRemove, entry.symbol]);
+  }, []);
+  const handleConfirm = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setConfirmOpen(false);
+      onRemove(entry.symbol);
+    },
+    [onRemove, entry.symbol],
+  );
+
+  const handleCardClick = useCallback(() => {
+    if (!confirmOpen) onSelect(entry.symbol);
+  }, [confirmOpen, onSelect, entry.symbol]);
 
   return (
-    <div className="group/card relative rounded-xl border border-border bg-bg-card p-4 transition-colors hover:border-border-light">
+    <div className="group/card relative rounded-xl border border-border bg-bg-card transition-colors hover:border-border-light">
+      {/* Accessible clickable overlay for the entire card */}
+      <button
+        type="button"
+        className="absolute inset-0 z-0 cursor-pointer rounded-xl focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:outline-none"
+        onClick={handleCardClick}
+        aria-label={`View ${entry.symbol} ${entry.name} details`}
+      />
+
       {/* Remove confirm popover */}
       {confirmOpen && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-xl bg-bg-secondary/95 backdrop-blur-sm">
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-xl bg-bg-secondary/95 backdrop-blur-sm">
           <p className="text-sm text-text-secondary">
             Remove <span className="font-semibold text-text-primary">{entry.symbol}</span>?
           </p>
@@ -48,52 +137,94 @@ export function SymbolCard({ entry, onRemove, removing }: SymbolCardProps) {
         </div>
       )}
 
-      {/* Header: logo + symbol + name + remove button */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <SymbolLogo
-            symbol={entry.symbol}
-            assetClass={entry.assetClass === 'CRYPTO' ? 'crypto' : 'equity'}
-            size="md"
-          />
-          <div className="min-w-0">
-            <span className="text-sm font-semibold text-text-primary">{entry.symbol}</span>
-            <p className="truncate text-xs text-text-muted">{entry.name}</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleRemoveClick}
-          className="cursor-pointer flex-shrink-0 rounded-md p-1 text-text-muted opacity-0 transition-all hover:bg-error/10 hover:text-error group-hover/card:opacity-100"
-          aria-label={`Remove ${entry.symbol}`}
-          title="Remove from watchlist"
-        >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
+      <div className="relative z-[1] pointer-events-none p-4">
+        {/* Header: logo + symbol + name + remove button */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <SymbolLogo
+              symbol={entry.symbol}
+              assetClass={entry.assetClass === 'CRYPTO' ? 'crypto' : 'equity'}
+              size="md"
             />
-          </svg>
-        </button>
-      </div>
+            <div className="min-w-0">
+              <span className="text-sm font-semibold text-text-primary">{entry.symbol}</span>
+              <p className="truncate text-xs text-text-muted">{entry.name}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleRemoveClick}
+            className="pointer-events-auto relative z-10 cursor-pointer flex-shrink-0 rounded-md p-1 text-text-muted opacity-0 transition-all hover:bg-error/10 hover:text-error group-hover/card:opacity-100"
+            aria-label={`Remove ${entry.symbol}`}
+            title="Remove from watchlist"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
+              />
+            </svg>
+          </button>
+        </div>
 
-      {/* Price + Change */}
-      <div className="mt-3 flex items-end justify-between">
-        {hasQuote ? (
-          <>
-            <span className="text-lg font-semibold text-text-primary">{formatPrice(entry.price ?? 0)}</span>
-            <span
-              className={cn('text-sm font-medium', isUp ? 'text-success' : isDown ? 'text-error' : 'text-text-muted')}
-            >
-              {isUp ? '\u25B2' : isDown ? '\u25BC' : ''} {Math.abs(entry.changePercent ?? 0).toFixed(2)}%
+        {/* Sparkline + Price row */}
+        <div className="mt-3 flex items-end justify-between gap-2">
+          {/* Sparkline */}
+          <div className="flex-shrink-0">
+            {entry.sparkline && entry.sparkline.length >= 2 ? (
+              <WatchlistSparkline data={entry.sparkline} symbol={entry.symbol} />
+            ) : (
+              <div className="h-7 w-[72px]" />
+            )}
+          </div>
+
+          {/* Price + Change */}
+          {hasQuote ? (
+            <div className="text-right">
+              <span className="text-lg font-semibold tabular-nums text-text-primary">
+                {formatPrice(entry.price ?? 0)}
+              </span>
+              <div className="flex items-center justify-end gap-1">
+                <span
+                  className={cn(
+                    'text-xs font-medium tabular-nums',
+                    isUp ? 'text-success' : isDown ? 'text-error' : 'text-text-muted',
+                  )}
+                >
+                  {isUp ? '\u25B2' : isDown ? '\u25BC' : ''} {Math.abs(entry.changePercent ?? 0).toFixed(2)}%
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-right">
+              <span className="text-sm text-text-muted">&mdash;</span>
+              <p className="text-xs text-text-muted">No data</p>
+            </div>
+          )}
+        </div>
+
+        {/* Extended hours row */}
+        {extended && (
+          <div className="mt-2 flex items-center justify-end gap-1.5">
+            <span className="rounded bg-bg-tertiary px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wider text-text-muted">
+              {extended.label}
             </span>
-          </>
-        ) : (
-          <>
-            <span className="text-sm text-text-muted">—</span>
-            <span className="text-xs text-text-muted">No data</span>
-          </>
+            <span className="text-2xs font-medium tabular-nums text-text-secondary">{formatPrice(extended.price)}</span>
+            <span
+              className={cn(
+                'text-2xs font-medium tabular-nums',
+                extended.changePercent > 0
+                  ? 'text-success'
+                  : extended.changePercent < 0
+                    ? 'text-error'
+                    : 'text-text-muted',
+              )}
+            >
+              {extended.changePercent >= 0 ? '+' : ''}
+              {extended.changePercent.toFixed(2)}%
+            </span>
+          </div>
         )}
       </div>
     </div>
@@ -115,8 +246,11 @@ export function SymbolCardSkeleton() {
         </div>
       </div>
       <div className="mt-3 flex items-end justify-between">
-        <div className="h-5 w-20 rounded bg-bg-tertiary" />
-        <div className="h-4 w-14 rounded bg-bg-tertiary" />
+        <div className="h-7 w-[72px] rounded bg-bg-tertiary" />
+        <div className="space-y-1">
+          <div className="h-5 w-20 rounded bg-bg-tertiary" />
+          <div className="h-3 w-14 rounded bg-bg-tertiary ml-auto" />
+        </div>
       </div>
     </div>
   );

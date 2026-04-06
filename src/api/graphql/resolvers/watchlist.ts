@@ -40,19 +40,32 @@ export async function watchlistQuery() {
   const entries = store.list();
   if (entries.length === 0) return [];
 
-  // Best-effort enrichment — return cached data, don't block on stale refresh
-  const enriched = enrichment ? await enrichment.getEnrichedBatch(entries.map((e) => e.symbol)) : new Map();
+  const symbols = entries.map((e) => e.symbol);
+
+  // Best-effort enrichment + sparklines — fetch in parallel
+  const [enriched, sparklines] = await Promise.all([
+    enrichment ? enrichment.getEnrichedBatch(symbols) : new Map(),
+    enrichment ? enrichment.getSparklines(symbols) : new Map(),
+  ]);
 
   return entries.map((entry) => {
     const cache = enriched.get(entry.symbol) ?? null;
+    const quote = cache?.quote;
     return {
       symbol: entry.symbol,
       name: entry.name,
       assetClass: entry.assetClass,
       addedAt: entry.addedAt,
-      price: cache?.quote?.price ?? null,
-      change: cache?.quote?.change ?? null,
-      changePercent: cache?.quote?.changePercent ?? null,
+      price: quote?.price ?? null,
+      change: quote?.change ?? null,
+      changePercent: quote?.changePercent ?? null,
+      preMarketPrice: quote?.preMarketPrice ?? null,
+      preMarketChange: quote?.preMarketChange ?? null,
+      preMarketChangePercent: quote?.preMarketChangePercent ?? null,
+      postMarketPrice: quote?.postMarketPrice ?? null,
+      postMarketChange: quote?.postMarketChange ?? null,
+      postMarketChangePercent: quote?.postMarketChangePercent ?? null,
+      sparkline: sparklines.get(entry.symbol) ?? null,
       enrichedAt: cache?.enrichedAt ?? null,
     };
   });

@@ -8,6 +8,8 @@ import IntelFeed from '../components/overview/intel-feed';
 import type { FeedPendingUpdate } from '../components/overview/intel-feed';
 import { AddSymbolModal } from '../components/watchlist/add-symbol-modal';
 import { SymbolCard, SymbolCardSkeleton } from '../components/watchlist/symbol-card';
+import { useAssetDetailModal } from '../lib/asset-detail-modal-context';
+import { useMarketStatus } from '../hooks/use-market-status';
 import { cn } from '../lib/utils';
 
 // ---------------------------------------------------------------------------
@@ -39,6 +41,8 @@ export default function Watchlist() {
 function WatchlistContent() {
   const [{ data, fetching, error }, refetchWatchlist] = useWatchlist();
   const [, removeFromWatchlist] = useRemoveFromWatchlist();
+  const { openAssetDetail } = useAssetDetailModal();
+  const { status: marketStatus } = useMarketStatus();
   const [modalOpen, setModalOpen] = useState(false);
   const [optimisticEntries, setOptimisticEntries] = useState<WatchlistEntry[]>([]);
   const [removedSymbols, setRemovedSymbols] = useState<Set<string>>(new Set());
@@ -96,6 +100,13 @@ function WatchlistContent() {
           price: null,
           change: null,
           changePercent: null,
+          preMarketPrice: null,
+          preMarketChange: null,
+          preMarketChangePercent: null,
+          postMarketPrice: null,
+          postMarketChange: null,
+          postMarketChangePercent: null,
+          sparkline: null,
           enrichedAt: null,
         },
       ]);
@@ -186,7 +197,9 @@ function WatchlistContent() {
                   key={entry.symbol}
                   entry={entry}
                   onRemove={handleRemove}
+                  onSelect={openAssetDetail}
                   removing={removingSymbol === entry.symbol}
+                  marketStatus={marketStatus}
                 />
               ))}
             </div>
