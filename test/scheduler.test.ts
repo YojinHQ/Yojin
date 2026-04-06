@@ -6,6 +6,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Scheduler, cronMatchesNow, parseDailyCron } from '../src/scheduler.js';
 
+// Mock fetchMacroIndicators so we can verify it's called in the macro flow.
+// Initialize with fn() — vi.mock is hoisted above `const`, so the variable must have a value.
+const mockFetchMacroIndicators = vi.fn().mockResolvedValue({ ingested: 5, duplicates: 0 });
+vi.mock('../src/jintel/signal-fetcher.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../src/jintel/signal-fetcher.js')>();
+  return {
+    ...original,
+    fetchMacroIndicators: (...args: unknown[]) => mockFetchMacroIndicators(...args),
+  };
+});
+
 // ---------------------------------------------------------------------------
 // parseDailyCron
 // ---------------------------------------------------------------------------
@@ -141,6 +152,58 @@ describe('Scheduler', () => {
     const state = JSON.parse(stateRaw);
     expect(state.lastRuns['macro-flow']).toBeDefined();
     expect(new Date(state.lastRuns['macro-flow']).getTime()).toBeGreaterThan(0);
+  });
+
+  it('fetches macro indicators during macro flow when Jintel client is available', async () => {
+    // Pre-seed state with a macro run > 2 hours ago so the flow fires
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    await writeFile(
+      join(dataRoot, 'cron', 'state.json'),
+      JSON.stringify({ lastRuns: { 'macro-flow': threeHoursAgo } }),
+    );
+
+    mockFetchMacroIndicators.mockClear();
+
+    const execute = vi.fn().mockResolvedValue(new Map());
+    const fakeJintelClient = {} as import('@yojinhq/jintel-client').JintelClient;
+    const fakeIngestor = {} as import('../src/signals/ingestor.js').SignalIngestor;
+
+    const scheduler = new Scheduler({
+      orchestrator: makeOrchestrator(execute),
+      dataRoot,
+      checkIntervalMs: 100_000,
+      getJintelClient: () => fakeJintelClient,
+      signalIngestor: fakeIngestor,
+    });
+
+    await (scheduler as unknown as { tick: () => Promise<void> }).tick();
+
+    expect(mockFetchMacroIndicators).toHaveBeenCalledOnce();
+    expect(mockFetchMacroIndicators).toHaveBeenCalledWith(fakeJintelClient, fakeIngestor);
+  });
+
+  it('skips macro indicators when Jintel client is not available', async () => {
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    await writeFile(
+      join(dataRoot, 'cron', 'state.json'),
+      JSON.stringify({ lastRuns: { 'macro-flow': threeHoursAgo } }),
+    );
+
+    mockFetchMacroIndicators.mockClear();
+
+    const execute = vi.fn().mockResolvedValue(new Map());
+    const scheduler = new Scheduler({
+      orchestrator: makeOrchestrator(execute),
+      dataRoot,
+      checkIntervalMs: 100_000,
+      // No getJintelClient or signalIngestor
+    });
+
+    await (scheduler as unknown as { tick: () => Promise<void> }).tick();
+
+    expect(mockFetchMacroIndicators).not.toHaveBeenCalled();
+    // Macro flow should still run (signal assessment)
+    expect(execute).toHaveBeenCalledWith('full-curation', {});
   });
 
   it('start and stop manage the timer', async () => {
