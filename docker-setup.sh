@@ -204,7 +204,7 @@ echo "Building Yojin Docker image..."
 echo "(this may take a few minutes on first run)"
 echo ""
 
-docker compose --env-file "$ENV_FILE" build
+docker compose --env-file "$ENV_FILE" build --no-cache
 
 echo ""
 echo "✓ Image built successfully"
