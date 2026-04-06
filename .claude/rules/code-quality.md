@@ -61,6 +61,14 @@ Extend via interfaces, not modification:
 - **Shared data points need title-level dedup.** The signals resolver dedupes by normalized title, keeping the latest `publishedAt`. When adding a new signal source that produces recurring snapshots (like fundamentals), the same data point WILL appear across days — the resolver handles this, don't try to prevent it at the archive level.
 - **Respect the date-partition dimension.** Signal archive files are partitioned by `publishedAt` date. For reads: only use `publishedAt`-based bounds (e.g. `since`) as file-level hints — `sinceIngested` is a record-level filter, not a file-pruning hint. For writes: synthetic enrichment signals (snapshots, price moves) must use ingestion time (`now`), not the upstream data timestamp (e.g. `quote.timestamp`), which can be 1-3 days stale on weekends/after-hours and cause signals to vanish from recent-date UI filters.
 
+## Enum-Driven Switches
+
+- **Every enum value must have a switch case.** When a `z.enum()` drives a switch statement (e.g. `JINTEL_QUERY_KIND` → `jintel_query` switch), every enum member must have an explicit case. TypeScript won't catch the gap when there's a default/fallback branch — the call silently returns an error string at runtime. After adding a value to the enum, grep for every switch on that type and add the case. This also means: don't add a value to the enum if you can't wire it (remove `fama_french` rather than leaving it to fall through to "Unsupported").
+
+## Parallel-Family Data Structures
+
+- **Never use `a[0] ?? b[0] ?? c[0]` to read a multi-family struct.** When a type has parallel arrays holding domain-specific fields (e.g. `FinancialStatements.income`, `balanceSheet`, `cashFlow`), the `??` chain picks one winner and silently ignores the others. Read each family independently (`const inc = f.income[0]; const bs = f.balanceSheet[0]; ...`) and pull each metric from its correct source. The same rule applies to signal-fetcher sections that emit from structured sub-graphs — don't gate the signal on `income?.length` when `balanceSheet` or `cashFlow` alone would also be valuable.
+
 ## Refactoring — Ask First
 
 Before making breaking changes to:
