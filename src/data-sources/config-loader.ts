@@ -32,18 +32,18 @@ const FlatDataSourceSchema = z.object({
   authPrefix: z.string().optional(),
   rateLimitPerMinute: z.number().optional(),
   supportsAsync: z.boolean().optional(),
-  endpointMapping: z.record(z.unknown()).optional(),
+  endpointMapping: z.record(z.string(), z.unknown()).optional(),
   // CLI fields
   command: z.string().optional(),
   args: z.array(z.string()).optional(),
   outputFormat: z.enum(['json', 'csv', 'ndjson']).optional(),
   timeout: z.number().optional(),
-  env: z.record(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
   // MCP fields
   serverCommand: z.string().optional(),
   serverArgs: z.array(z.string()).optional(),
   transport: z.enum(['stdio', 'sse']).optional(),
-  capabilityMapping: z.record(z.string()).optional(),
+  capabilityMapping: z.record(z.string(), z.string()).optional(),
   // Extra fields (e.g. feeds) — passed through
   feeds: z.array(z.string()).optional(),
 });

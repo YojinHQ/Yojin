@@ -100,7 +100,7 @@ export const SignalSchema = z.object({
   publishedAt: DateTimeField, // when the data point was produced
   ingestedAt: DateTimeField, // when Yojin captured it
   confidence: ScoreRange, // source confidence
-  metadata: z.record(z.unknown()).optional(), // extensible domain-specific fields
+  metadata: z.record(z.string(), z.unknown()).optional(), // extensible domain-specific fields
   // Tiered summaries (LLM-generated at ingest/merge time)
   tier1: z.string().optional(),
   tier2: z.string().optional(),

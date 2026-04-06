@@ -53,6 +53,12 @@ export const CurationConfigSchema = z.object({
       '^is .+ (?:a buy|a sell|still a buy)\\??$',
     ]),
   /** Scoring weights (must sum to ~1.0). */
-  weights: CurationWeightsSchema.default({}),
+  weights: CurationWeightsSchema.default(() => ({
+    exposure: 0.25,
+    typeRelevance: 0.2,
+    recency: 0.2,
+    sourceReliability: 0.15,
+    contentQuality: 0.2,
+  })),
 });
 export type CurationConfig = z.infer<typeof CurationConfigSchema>;

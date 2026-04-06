@@ -110,7 +110,7 @@ export const AuditEventSchema = z.object({
   timestamp: DateTimeField,
   agentId: z.string().optional(),
   sessionId: z.string().optional(),
-  details: z.record(z.unknown()),
+  details: z.record(z.string(), z.unknown()),
   /** HMAC of the previous event in the chain (tamper detection). */
   prevHash: z.string().optional(),
   /** HMAC-SHA256 of this event including prevHash (tamper detection). */

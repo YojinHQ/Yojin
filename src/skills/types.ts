@@ -37,7 +37,7 @@ export const SkillTriggerSchema = z.object({
   type: TriggerTypeSchema,
   description: z.string().min(1),
   /** Structured condition params (e.g. { ticker: 'AAPL', threshold: -0.10 }) */
-  params: z.record(z.unknown()).optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
 });
 export type SkillTrigger = z.infer<typeof SkillTriggerSchema>;
 
@@ -76,7 +76,7 @@ export const SkillEvaluationSchema = z.object({
   triggerId: IdField,
   triggerType: TriggerTypeSchema,
   /** Context data that caused the trigger to fire. */
-  context: z.record(z.unknown()),
+  context: z.record(z.string(), z.unknown()),
   /** The Markdown content to inject into the Strategist prompt. */
   skillContent: z.string().min(1),
   evaluatedAt: DateTimeField,
