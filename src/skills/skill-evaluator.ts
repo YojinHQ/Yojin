@@ -13,13 +13,15 @@ import { createSubsystemLogger } from '../logging/logger.js';
 const logger = createSubsystemLogger('skill-evaluator');
 
 /** Portfolio context passed to the evaluator for condition checking. */
-interface PortfolioContext {
+export interface PortfolioContext {
   /** Position weights by ticker (0-1). */
   weights: Record<string, number>;
   /** Current prices by ticker. */
   prices: Record<string, number>;
-  /** Price changes (%) over the evaluation window. */
+  /** Price changes (%) over the evaluation window (daily). */
   priceChanges: Record<string, number>;
+  /** Multi-period returns by ticker, keyed as "TICKER:months" → return fraction. */
+  periodReturns?: Record<string, number>;
   /** Technical indicators by ticker. */
   indicators: Record<string, Record<string, number>>;
   /** Days until next earnings by ticker. */
@@ -103,7 +105,15 @@ ${sections.join('\n\n---\n\n')}`;
     switch (trigger.type) {
       case 'PRICE_MOVE': {
         const threshold = Number(params['threshold'] ?? 0);
-        const change = ctx.priceChanges[ticker];
+        const lookbackMonths = params['lookback_months'] != null ? Number(params['lookback_months']) : undefined;
+
+        let change: number | undefined;
+        if (lookbackMonths != null && ctx.periodReturns) {
+          change = ctx.periodReturns[`${ticker}:${lookbackMonths}`];
+        } else {
+          change = ctx.priceChanges[ticker];
+        }
+
         if (change === undefined) return null; // no data — don't fire
         if (threshold < 0 && change <= threshold) return { change, threshold };
         if (threshold > 0 && change >= threshold) return { change, threshold };
