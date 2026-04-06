@@ -12,13 +12,10 @@ import {
   type EnrichmentField,
   type Entity,
   type EntityType,
-  EntityTypeSchema,
   type FactorDataPoint,
   type FamaFrenchSeries,
-  FamaFrenchSeriesSchema,
   GDP,
   type GdpType,
-  GdpTypeSchema,
   type HackerNewsStory,
   INFLATION,
   INTEREST_RATES,
@@ -32,7 +29,6 @@ import {
   type RiskSignal,
   type SP500DataPoint,
   type SP500Series,
-  SP500SeriesSchema,
   SP500_MULTIPLES,
   type SanctionsMatch,
   type ShortInterestReport,
@@ -595,7 +591,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'Returns a list of matching entities with basic info.',
     parameters: z.object({
       query: z.string().describe('Search query (company name, ticker, person, etc.)'),
-      type: EntityTypeSchema.optional().describe('Filter by entity type'),
+      type: z.enum(['COMPANY', 'PERSON', 'CRYPTO', 'COMMODITY', 'INDEX']).optional().describe('Filter by entity type'),
       limit: z.number().int().min(1).max(50).optional().describe('Max results (default 10)'),
     }),
     async execute(params: { query: string; type?: EntityType; limit?: number }): Promise<ToolResult> {
@@ -784,7 +780,10 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'Useful for macro context when analyzing market conditions or country risk.',
     parameters: z.object({
       country: z.string().describe('Country name or ISO code (e.g. "United States", "US", "Germany")'),
-      type: GdpTypeSchema.optional().describe('GDP type: REAL, NOMINAL, or FORECAST (default: REAL)'),
+      type: z
+        .enum(['REAL', 'NOMINAL', 'FORECAST'])
+        .optional()
+        .describe('GDP type: REAL, NOMINAL, or FORECAST (default: REAL)'),
     }),
     async execute(params: { country: string; type?: GdpType }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
@@ -846,7 +845,9 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       '- EARNINGS_YIELD_MONTH: earnings yield (inverse of P/E)\n\n' +
       'Useful for gauging broad market valuation relative to historical norms.',
     parameters: z.object({
-      series: SP500SeriesSchema.describe('Which valuation series to fetch'),
+      series: z
+        .enum(['PE_MONTH', 'SHILLER_PE_MONTH', 'DIVIDEND_YIELD_MONTH', 'EARNINGS_YIELD_MONTH'])
+        .describe('Which valuation series to fetch'),
     }),
     async execute(params: { series: SP500Series }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
@@ -1057,7 +1058,9 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'Use when the user asks about factor exposure, risk decomposition, value vs growth tilt, or ' +
       'academic factor-based analysis of a portfolio.',
     parameters: z.object({
-      series: FamaFrenchSeriesSchema.describe('Factor series to fetch'),
+      series: z
+        .enum(['THREE_FACTOR_DAILY', 'THREE_FACTOR_MONTHLY', 'FIVE_FACTOR_DAILY', 'FIVE_FACTOR_MONTHLY'])
+        .describe('Factor series to fetch'),
       range: z.string().optional().describe('Date range filter (e.g. "1y", "6m"). Leave empty for full history.'),
     }),
     async execute(params: { series: FamaFrenchSeries; range?: string }): Promise<ToolResult> {
