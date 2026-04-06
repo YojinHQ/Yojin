@@ -166,6 +166,29 @@ export class WatchlistEnrichment {
     return new Map(results);
   }
 
+  /**
+   * Batch-fetch 7-day price history and build sparklines (closing prices).
+   * Best-effort — returns an empty map on failure.
+   */
+  async getSparklines(symbols: string[]): Promise<Map<string, number[]>> {
+    if (!this.jintelClient || symbols.length === 0) return new Map();
+    try {
+      const result = await this.jintelClient.priceHistory(symbols, '5d', '30m');
+      if (!result.success) return new Map();
+      const map = new Map<string, number[]>();
+      for (const ticker of result.data) {
+        const points = ticker.history.map((p: { close: number }) => p.close);
+        if (points.length > 0) {
+          map.set(ticker.ticker.toUpperCase(), points);
+        }
+      }
+      return map;
+    } catch {
+      log.warn('Failed to fetch sparkline price history', { symbols });
+      return new Map();
+    }
+  }
+
   getCached(symbol: string): EnrichmentCacheEntry | null {
     return this.cache.get(symbol.toUpperCase()) ?? null;
   }

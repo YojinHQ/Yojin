@@ -222,6 +222,13 @@ export const WATCHLIST_QUERY = gql`
       price
       change
       changePercent
+      preMarketPrice
+      preMarketChange
+      preMarketChangePercent
+      postMarketPrice
+      postMarketChange
+      postMarketChangePercent
+      sparkline
       enrichedAt
     }
   }

@@ -966,6 +966,13 @@ export const typeDefs = /* GraphQL */ `
     price: Float
     change: Float
     changePercent: Float
+    preMarketPrice: Float
+    preMarketChange: Float
+    preMarketChangePercent: Float
+    postMarketPrice: Float
+    postMarketChange: Float
+    postMarketChangePercent: Float
+    sparkline: [Float!]
     enrichedAt: String
   }
 
