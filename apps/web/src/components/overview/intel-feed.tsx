@@ -286,7 +286,7 @@ function IntelFeedCard({
           >
             {item.ticker}
           </span>
-          <p className="mt-0.5 line-clamp-2 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
+          <p className="mt-0.5 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
         </div>
         <span className="flex-shrink-0 text-2xs text-text-muted">{item.publishedTime}</span>
       </button>
@@ -425,7 +425,7 @@ function IntelFeedContent({ feedTarget }: { feedTarget?: FeedTarget }) {
           : null;
       const sourceName = s.sources?.[0]?.name;
       const ticker = topScore?.ticker ?? s.tickers[0] ?? 'MACRO';
-      const headline = s.tier1 ?? s.title;
+      const headline = s.title ?? s.tier1;
       const detail = s.content ?? s.tier2 ?? '';
       return {
         id: s.id,
@@ -686,7 +686,7 @@ function MockIntelFeed() {
                   <span className="inline-block rounded bg-warning/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.08em] text-warning">
                     {item.ticker}
                   </span>
-                  <p className="mt-0.5 line-clamp-2 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
+                  <p className="mt-0.5 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
                 </div>
                 <span className="flex-shrink-0 text-2xs text-text-muted">{item.time}</span>
               </div>

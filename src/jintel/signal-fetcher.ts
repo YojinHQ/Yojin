@@ -25,8 +25,9 @@ const SignalType = SignalTypeSchema.enum;
 const logger = createSubsystemLogger('jintel-signal-fetcher');
 
 // Request all fields that produce signals — regulatory enables SEC filing signals.
-// social: Twitter/Reddit/YouTube/LinkedIn posts → SOCIALS signals (dedup by hash).
+// social: Reddit posts + comments → SOCIALS signals (dedup by hash).
 // discussions: HN stories → NEWS signals (tech/investor community commentary).
+// financials/executives: equity-only; server returns null for crypto/ETF.
 // predictions intentionally excluded — too niche for automated runs, agent-only.
 const ENRICHMENT_FIELDS = [
   'market',
@@ -37,12 +38,13 @@ const ENRICHMENT_FIELDS = [
   'regulatory',
   'social',
   'discussions',
+  'financials',
+  'executives',
 ] as const;
 
 // Quality thresholds — filter low-engagement social posts to keep signal-to-noise high
-const SOCIAL_MIN_TWITTER_LIKES = 10;
 const SOCIAL_MIN_REDDIT_SCORE = 5;
-const SOCIAL_MIN_YOUTUBE_VIEWS = 1000;
+const SOCIAL_MIN_REDDIT_COMMENT_SCORE = 3;
 const SOCIAL_MIN_HN_POINTS = 5;
 const DEFAULT_CHUNK_SIZE = 10;
 
@@ -73,6 +75,9 @@ export async function fetchJintelSignals(
 
   const subGraphOpts: ArraySubGraphOptions = { sort: 'DESC', ...(options?.since ? { since: options.since } : {}) };
   const query = buildBatchEnrichQuery([...ENRICHMENT_FIELDS], subGraphOpts);
+  // Build filter variable to pass alongside the query — must match $filter: ArrayFilterInput declaration
+  const filter: Record<string, unknown> = { sort: subGraphOpts.sort };
+  if (subGraphOpts.since) filter.since = subGraphOpts.since;
 
   let totalIngested = 0;
   let totalDuplicates = 0;
@@ -81,7 +86,7 @@ export async function fetchJintelSignals(
   for (let i = 0; i < tickers.length; i += chunkSize) {
     const chunk = tickers.slice(i, i + chunkSize);
     try {
-      const entities = await client.request<Entity[]>(query, { tickers: chunk });
+      const entities = await client.request<Entity[]>(query, { tickers: chunk, filter });
 
       // Build ticker → entity map
       const entityByTicker = new Map<string, Entity>();
@@ -232,27 +237,9 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     });
   }
 
-  // 3. Key price events — 52-week highs/lows, volume spikes, gap moves (included in market field)
-  for (const event of entity.market?.keyEvents ?? []) {
-    signals.push({
-      sourceId: 'jintel-key-event',
-      sourceName: 'Jintel Market Events',
-      sourceType: 'ENRICHMENT',
-      reliability: 0.95,
-      title: `${entity.name ?? tickers[0]}: ${event.type.replace(/_/g, ' ')} on ${event.date}`,
-      content: `${event.description} | Close: $${event.close.toFixed(2)} (${event.changePercent >= 0 ? '+' : ''}${event.changePercent.toFixed(1)}%)${event.volume != null ? ` | Volume: ${event.volume.toLocaleString()}` : ''}`,
-      publishedAt: now,
-      type: SignalType.TECHNICAL,
-      tickers,
-      confidence: 0.9,
-      metadata: {
-        eventType: event.type,
-        priceChange: event.priceChange,
-        changePercent: event.changePercent,
-        eventDate: event.date,
-      },
-    });
-  }
+  // 3. Key price events — skipped. Raw "TICKER: SIGNIFICANT MOVE on DATE" signals
+  // are mechanical noise in the intel feed. Price move context is already captured
+  // in the fundamentals snapshot signal (section 2 above).
 
   // 4. Short interest snapshot — included in market field, only emit when meaningful
   const shortInterestReports = entity.market?.shortInterest;
@@ -418,30 +405,11 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     });
   }
 
-  // 11. Social media posts — Twitter, Reddit, YouTube, LinkedIn.
-  // Quality-filtered: only high-engagement posts to keep signal-to-noise high.
-  // Title uses post ID for stable content-hash dedup across runs.
+  // 11. Social media posts — Reddit posts and comments.
+  // Quality-filtered: only high-engagement posts/comments to keep signal-to-noise high.
+  // Title uses post/comment ID for stable content-hash dedup across runs.
   const social = entity.social;
   if (social) {
-    for (const tweet of social.twitter ?? []) {
-      if ((tweet.likes ?? 0) < SOCIAL_MIN_TWITTER_LIKES) continue;
-      if (!mentionsEntity(tweet.text, tickers, entityName)) continue;
-      signals.push({
-        sourceId: `jintel-social-twitter-${tweet.id}`,
-        sourceName: 'Jintel Social (Twitter)',
-        sourceType: 'API',
-        reliability: 0.65,
-        title: `${entity.name ?? tickers[0]}: @${tweet.author} tweet`,
-        content: `${tweet.text}\n❤ ${tweet.likes} likes | 🔁 ${tweet.retweets} RT${tweet.authorFollowers != null ? ` | ${formatNumber(tweet.authorFollowers)} followers` : ''}`,
-        link: tweet.url,
-        publishedAt: tweet.date ?? now,
-        type: SignalType.SOCIALS,
-        tickers,
-        confidence: 0.6,
-        metadata: { author: tweet.author, likes: tweet.likes, retweets: tweet.retweets },
-      });
-    }
-
     for (const post of social.reddit ?? []) {
       if (post.score < SOCIAL_MIN_REDDIT_SCORE) continue;
       const text = `${post.title} ${post.text}`;
@@ -462,50 +430,36 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       });
     }
 
-    for (const video of social.youtube ?? []) {
-      if ((video.viewCount ?? 0) < SOCIAL_MIN_YOUTUBE_VIEWS) continue;
+    for (const comment of social.redditComments ?? []) {
+      if (comment.score < SOCIAL_MIN_REDDIT_COMMENT_SCORE) continue;
+      if (!mentionsEntity(comment.body, tickers, entityName)) continue;
       signals.push({
-        sourceId: `jintel-social-youtube-${video.videoId}`,
-        sourceName: `Jintel Social (YouTube: ${video.channelName})`,
+        sourceId: `jintel-social-reddit-comment-${comment.id}`,
+        sourceName: `Jintel Social (r/${comment.subreddit} comment)`,
         sourceType: 'API',
-        reliability: 0.65,
-        title: `${entity.name ?? tickers[0]}: ${video.title}`,
-        content: video.transcript
-          ? video.transcript.slice(0, 500) + (video.transcript.length > 500 ? '…' : '')
-          : `${video.channelName} — ${formatNumber(video.viewCount ?? 0)} views`,
-        link: video.url,
-        publishedAt: video.publishedAt ?? now,
+        reliability: 0.55,
+        title: `${entity.name ?? tickers[0]}: r/${comment.subreddit} — ${comment.body.slice(0, 60).trim()}`,
+        content: comment.body.length > 500 ? comment.body.slice(0, 497) + '…' : comment.body,
+        publishedAt: comment.date ?? now,
         type: SignalType.SOCIALS,
         tickers,
-        confidence: 0.65,
-        metadata: { channelName: video.channelName, viewCount: video.viewCount },
-      });
-    }
-
-    for (const post of social.linkedin ?? []) {
-      const linkedinText = post.text;
-      if (!mentionsEntity(linkedinText, tickers, entityName)) continue;
-      signals.push({
-        sourceId: `jintel-social-linkedin-${linkedinText.slice(0, 40).replace(/\W+/g, '-')}`,
-        sourceName: 'Jintel Social (LinkedIn)',
-        sourceType: 'API',
-        reliability: 0.7,
-        title: `${entity.name ?? tickers[0]}: LinkedIn — ${linkedinText.slice(0, 60).trim()}`,
-        content: linkedinText.length > 500 ? linkedinText.slice(0, 497) + '…' : linkedinText,
-        link: post.url ?? undefined,
-        publishedAt: post.date ?? now,
-        type: SignalType.SOCIALS,
-        tickers,
-        confidence: 0.65,
-        metadata: { likes: post.likes, comments: post.comments },
+        confidence: Math.min(0.75, 0.4 + comment.score / 500),
+        metadata: { subreddit: comment.subreddit, score: comment.score, parentId: comment.parentId },
       });
     }
   }
 
   // 12. Hacker News discussions — tech/investor community commentary.
-  // Only high-points stories to avoid noise.
+  // Only high-points stories to avoid noise, and only if the story title
+  // actually references the ticker — Jintel may return loosely related HN stories
+  // that have nothing to do with the asset.
+  const tickerPattern = new RegExp(`(?<![A-Z0-9])${tickers[0]}(?![A-Z0-9])`, 'i');
   for (const story of entity.discussions ?? []) {
     if (story.points < SOCIAL_MIN_HN_POINTS) continue;
+    const titleRelevant =
+      tickerPattern.test(story.title) ||
+      (entity.name != null && story.title.toLowerCase().includes(entity.name.toLowerCase()));
+    if (!titleRelevant) continue;
     signals.push({
       sourceId: `jintel-discussions-hn-${story.objectId}`,
       sourceName: 'Jintel Discussions (HN)',
@@ -521,6 +475,60 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       tickers,
       confidence: Math.min(0.85, 0.5 + story.points / 200),
       metadata: { hnUrl: story.hnUrl, points: story.points, numComments: story.numComments },
+    });
+  }
+
+  // 13. Financial statements — most recent income period (equity only; null for crypto/ETF).
+  // Stable title for content-hash dedup; period context goes in content + metadata.
+  const financials = entity.financials;
+  if (financials?.income?.length) {
+    const latest = financials.income[0]; // server returns newest-first
+    const parts: string[] = [];
+    const periodLabel = latest.periodType ? `${latest.periodType} ending ${latest.periodEnding}` : latest.periodEnding;
+    parts.push(`Period: ${periodLabel}`);
+    if (latest.totalRevenue != null) parts.push(`Revenue: $${formatNumber(latest.totalRevenue)}`);
+    if (latest.grossProfit != null) parts.push(`Gross Profit: $${formatNumber(latest.grossProfit)}`);
+    if (latest.netIncome != null) parts.push(`Net Income: $${formatNumber(latest.netIncome)}`);
+    if (latest.ebitda != null) parts.push(`EBITDA: $${formatNumber(latest.ebitda)}`);
+    if (latest.freeCashFlow != null) parts.push(`Free Cash Flow: $${formatNumber(latest.freeCashFlow)}`);
+    if (latest.dilutedEps != null) parts.push(`Diluted EPS: $${latest.dilutedEps.toFixed(2)}`);
+    if (parts.length > 1) {
+      signals.push({
+        sourceId: 'jintel-financials',
+        sourceName: 'Jintel Financial Statements',
+        sourceType: 'ENRICHMENT',
+        reliability: 0.95,
+        title: `${entity.name ?? tickers[0]} Financial Statements`,
+        content: parts.join('\n'),
+        publishedAt: now,
+        type: SignalType.FUNDAMENTAL,
+        tickers,
+        confidence: 0.95,
+        metadata: { periodEnding: latest.periodEnding, periodType: latest.periodType ?? undefined },
+      });
+    }
+  }
+
+  // 14. Key executives (equity only; null for crypto/ETF).
+  // Stable title for content-hash dedup. Executive roster changes infrequently.
+  const executives = entity.executives;
+  if (executives?.length) {
+    const lines = executives.map((exec) => {
+      let line = `${exec.title}: ${exec.name}`;
+      if (exec.pay != null) line += ` (pay: $${formatNumber(exec.pay)})`;
+      return line;
+    });
+    signals.push({
+      sourceId: 'jintel-executives',
+      sourceName: 'Jintel Key Executives',
+      sourceType: 'ENRICHMENT',
+      reliability: 0.85,
+      title: `${entity.name ?? tickers[0]} Key Executives`,
+      content: lines.join('\n'),
+      publishedAt: now,
+      type: SignalType.FUNDAMENTAL,
+      tickers,
+      confidence: 0.8,
     });
   }
 

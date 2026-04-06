@@ -38,8 +38,9 @@ describe('buildContext', () => {
     // + 2 memory tools (store_signal_memory, recall_signal_memories)
     // + 4 display tools (display_portfolio_overview, display_positions_list, display_allocation, display_morning_briefing)
     // + 5 skill tools (list_skills, get_skill, activate_skill, deactivate_skill, get_skill_evaluations)
-    // = 64
-    expect(schemas.length).toBe(64);
+    // + 2 new Jintel tools (get_financials, get_executives)
+    // = 66
+    expect(schemas.length).toBe(66);
 
     const names = schemas.map((s) => s.name).sort();
     expect(names).toContain('get_current_time');
