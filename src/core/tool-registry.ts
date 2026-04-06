@@ -9,6 +9,24 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import type { ToolDefinition, ToolExecutor, ToolResult, ToolSchema } from './types.js';
 
+/**
+ * Convert a Zod schema to JSON Schema, supporting both Zod v3 (from third-party
+ * packages like @yojinhq/jintel-client) and Zod v4 (project-native schemas).
+ *
+ * Prefers Zod v4's built-in `toJSONSchema()`. Falls back to `zod-to-json-schema`
+ * for v3 schemas or mixed v3/v4 compositions that the built-in cannot handle.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function schemaToJsonSchema(schema: any): Record<string, unknown> {
+  try {
+    return schema.toJSONSchema() as Record<string, unknown>;
+  } catch {
+    // Fall back to zod-to-json-schema for Zod v3 schemas or mixed compositions
+    return zodToJsonSchema(schema) as Record<string, unknown>;
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 export class ToolRegistry implements ToolExecutor {
   private tools = new Map<string, ToolDefinition>();
 
@@ -79,7 +97,7 @@ export class ToolRegistry implements ToolExecutor {
     return list.map((tool) => ({
       name: tool.name,
       description: tool.description,
-      input_schema: zodToJsonSchema(tool.parameters) as Record<string, unknown>,
+      input_schema: schemaToJsonSchema(tool.parameters),
     }));
   }
 }

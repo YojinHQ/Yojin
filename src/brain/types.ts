@@ -15,7 +15,7 @@ export const BrainCommitSchema = z.object({
   message: z.string(),
   timestamp: DateTimeField,
   type: z.enum(['frontal-lobe', 'emotion', 'persona', 'manual']),
-  snapshot: z.record(z.unknown()),
+  snapshot: z.record(z.string(), z.unknown()),
 });
 
 export type BrainCommit = z.infer<typeof BrainCommitSchema>;

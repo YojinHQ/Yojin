@@ -17,13 +17,13 @@ const ProviderConfigSchema = z.object({
   oauthToken: z.string().optional(),
   authMode: z.enum(['oauth', 'api_key']).optional(),
   defaultModel: z.string().optional(),
-  options: z.record(z.unknown()).optional(),
+  options: z.record(z.string(), z.unknown()).optional(),
 });
 
 const ChannelConfigSchema = z.object({
   id: z.string(),
   enabled: z.boolean().default(true),
-  options: z.record(z.unknown()).optional(),
+  options: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const YojinConfigSchema = z.object({
@@ -36,7 +36,7 @@ export const YojinConfigSchema = z.object({
     .object({
       enrichmentTtlSeconds: z.number().default(3600),
     })
-    .default({}),
+    .default(() => ({ enrichmentTtlSeconds: 3600 })),
 });
 
 export type YojinConfig = z.infer<typeof YojinConfigSchema>;
@@ -150,7 +150,7 @@ export const AlertsConfigSchema = z.object({
         id: z.string(),
         type: z.string(),
         enabled: z.boolean().default(true),
-        params: z.record(z.unknown()).default({}),
+        params: z.record(z.string(), z.unknown()).default({}),
       }),
     )
     .default([]),
@@ -162,6 +162,7 @@ export type AlertsConfig = z.infer<typeof AlertsConfigSchema>;
 export const OpenBBConfigSchema = z.object({
   providers: z
     .record(
+      z.string(),
       z.object({
         apiKey: z.string().optional(),
         enabled: z.boolean().default(true),
@@ -186,7 +187,7 @@ export const GuardConfigSchema = z.object({
     .object({
       callsPerMinute: z.number().default(60),
     })
-    .default({}),
+    .default(() => ({ callsPerMinute: 60 })),
   symbolWhitelist: z.array(z.string()).default([]),
   cooldownSeconds: z.number().default(30),
 });
