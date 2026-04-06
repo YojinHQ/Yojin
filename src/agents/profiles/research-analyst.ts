@@ -27,6 +27,8 @@ export function createResearchAnalystProfile(): AgentProfile {
       'get_social',
       'get_predictions',
       'get_discussions',
+      'get_financials',
+      'get_executives',
       'get_gdp',
       'get_inflation',
       'get_interest_rates',

@@ -7,6 +7,7 @@
  */
 
 import {
+  type ArraySubGraphOptions,
   type DerivativesData,
   type EconomicDataPoint,
   type EnrichmentField,
@@ -16,6 +17,7 @@ import {
   type FactorDataPoint,
   type FamaFrenchSeries,
   FamaFrenchSeriesSchema,
+  type FinancialStatements,
   GDP,
   type GdpType,
   GdpTypeSchema,
@@ -25,6 +27,7 @@ import {
   JintelAuthError,
   type JintelClient,
   type JintelResult,
+  type KeyExecutive,
   type MarketQuote,
   type NewsArticle,
   type PredictionMarket,
@@ -39,6 +42,7 @@ import {
   type Social,
   type SocialSentiment,
   type TickerPriceHistory,
+  buildEnrichQuery,
 } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
@@ -46,6 +50,7 @@ import type { Position } from '../api/graphql/types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
+import { SignalTypeSchema, SourceTypeSchema } from '../signals/types.js';
 import { balanceToRange, quantityToRange } from '../trust/pii/patterns.js';
 
 // ── Options ──────────────────────────────────────────────────────────────
@@ -55,6 +60,11 @@ export interface JintelToolOptions {
   ingestor?: SignalIngestor;
   snapshotStore?: PortfolioSnapshotStore;
 }
+
+// ── Enum aliases ─────────────────────────────────────────────────────────
+
+const SignalType = SignalTypeSchema.enum;
+const SourceType = SourceTypeSchema.enum;
 
 // ── Constants ────────────────────────────────────────────────────────────
 
@@ -80,7 +90,8 @@ const JINTEL_QUERY_KIND = z.enum([
   'risk',
   'regulatory',
   'short_interest',
-  'fama_french',
+  'financials',
+  'executives',
 ]);
 
 type JintelQueryKind = z.infer<typeof JINTEL_QUERY_KIND>;
@@ -98,6 +109,9 @@ const ENRICHMENT_FIELDS = z.enum([
   'social',
   'predictions',
   'discussions',
+  // Equity-only; server returns null for crypto/ETF
+  'financials',
+  'executives',
 ]);
 
 const SEVERITY_CONFIDENCE: Record<string, number> = {
@@ -151,16 +165,25 @@ export function riskSignalsToRaw(signals: RiskSignal[], tickers: string[]): RawS
   return signals.map((s) => ({
     sourceId: 'jintel',
     sourceName: 'Jintel',
-    sourceType: 'API' as const,
+    sourceType: SourceType.API,
     reliability: 0.8,
     title: `[${s.severity}] ${s.type}: ${s.description}`,
     content: s.description,
     publishedAt: s.date ?? new Date().toISOString(),
-    type: 'SENTIMENT' as const,
+    type: SignalType.SENTIMENT,
     tickers,
     confidence: SEVERITY_CONFIDENCE[s.severity] ?? 0.7,
     metadata: { riskType: s.type, severity: s.severity, source: s.source },
   }));
+}
+
+/** Build ArraySubGraphOptions and the matching $filter variable from optional since/limit params. */
+function buildFilter(since?: string, limit?: number): { opts: ArraySubGraphOptions; vars: Record<string, unknown> } {
+  const opts: ArraySubGraphOptions = { sort: 'DESC', ...(since ? { since } : {}), ...(limit ? { limit } : {}) };
+  const vars: Record<string, unknown> = { sort: 'DESC' };
+  if (since) vars.since = since;
+  if (limit) vars.limit = limit;
+  return { opts, vars };
 }
 
 async function bestEffortIngest(ingestor: SignalIngestor | undefined, items: RawSignalInput[]): Promise<void> {
@@ -297,6 +320,14 @@ function formatEnrichment(entity: Entity): string {
 
   if (entity.discussions?.length) {
     sections.push(`## Discussions\n${formatDiscussions(entity.discussions)}`);
+  }
+
+  if (entity.financials) {
+    sections.push(`## Financial Statements\n${formatFinancials(entity.financials)}`);
+  }
+
+  if (entity.executives?.length) {
+    sections.push(`## Key Executives\n${formatExecutives(entity.executives)}`);
   }
 
   return sections.join('\n\n');
@@ -449,13 +480,6 @@ function formatFactorData(data: FactorDataPoint[], series: string): string {
 
 function formatSocial(s: Social): string {
   const sections: string[] = [];
-  if (s.twitter?.length) {
-    const lines = s.twitter.map(
-      (t) =>
-        `@${t.author}${t.authorFollowers != null ? ` (${formatNumber(t.authorFollowers)} followers)` : ''}: ${t.text.slice(0, 200)}${t.text.length > 200 ? '…' : ''}\n  ❤ ${t.likes} | 🔁 ${t.retweets}${t.url ? `\n  ${t.url}` : ''}`,
-    );
-    sections.push(`### Twitter (${s.twitter.length})\n${lines.join('\n')}`);
-  }
   if (s.reddit?.length) {
     const lines = s.reddit.map(
       (r) =>
@@ -463,20 +487,53 @@ function formatSocial(s: Social): string {
     );
     sections.push(`### Reddit (${s.reddit.length})\n${lines.join('\n')}`);
   }
-  if (s.youtube?.length) {
-    const lines = s.youtube.map(
-      (v) =>
-        `${v.channelName}: ${v.title}${v.viewCount != null ? ` (${formatNumber(v.viewCount)} views)` : ''}\n  ${v.url}`,
+  if (s.redditComments?.length) {
+    const lines = s.redditComments.map(
+      (c) => `r/${c.subreddit} — ${c.body.slice(0, 200)}${c.body.length > 200 ? '…' : ''}\n  Score: ${c.score}`,
     );
-    sections.push(`### YouTube (${s.youtube.length})\n${lines.join('\n')}`);
-  }
-  if (s.linkedin?.length) {
-    const lines = s.linkedin.map(
-      (p) => `${p.text.slice(0, 200)}${p.text.length > 200 ? '…' : ''}\n  ❤ ${p.likes} | 💬 ${p.comments}`,
-    );
-    sections.push(`### LinkedIn (${s.linkedin.length})\n${lines.join('\n')}`);
+    sections.push(`### Reddit Comments (${s.redditComments.length})\n${lines.join('\n')}`);
   }
   return sections.length > 0 ? sections.join('\n\n') : 'No social posts found.';
+}
+
+function formatFinancials(f: FinancialStatements): string {
+  const inc = f.income[0];
+  const bs = f.balanceSheet[0];
+  const cf = f.cashFlow[0];
+  const periodSrc = inc ?? bs ?? cf;
+  if (!periodSrc) return 'No financial statement data available.';
+  const lines: string[] = [];
+  const period = periodSrc.periodType
+    ? `${periodSrc.periodType} ending ${periodSrc.periodEnding}`
+    : periodSrc.periodEnding;
+  lines.push(`Period: ${period}`);
+  // Income statement
+  if (inc?.totalRevenue != null) lines.push(`Revenue: $${formatNumber(inc.totalRevenue)}`);
+  if (inc?.grossProfit != null) lines.push(`Gross Profit: $${formatNumber(inc.grossProfit)}`);
+  if (inc?.operatingIncome != null) lines.push(`Operating Income: $${formatNumber(inc.operatingIncome)}`);
+  if (inc?.ebitda != null) lines.push(`EBITDA: $${formatNumber(inc.ebitda)}`);
+  if (inc?.netIncome != null) lines.push(`Net Income: $${formatNumber(inc.netIncome)}`);
+  if (inc?.dilutedEps != null) lines.push(`Diluted EPS: $${inc.dilutedEps.toFixed(2)}`);
+  // Cash flow
+  if (cf?.freeCashFlow != null) lines.push(`Free Cash Flow: $${formatNumber(cf.freeCashFlow)}`);
+  if (cf?.operatingCashFlow != null) lines.push(`Operating Cash Flow: $${formatNumber(cf.operatingCashFlow)}`);
+  // Balance sheet
+  if (bs?.totalDebt != null) lines.push(`Total Debt: $${formatNumber(bs.totalDebt)}`);
+  if (bs?.cashAndEquivalents != null) lines.push(`Cash & Equivalents: $${formatNumber(bs.cashAndEquivalents)}`);
+  if (bs?.totalEquity != null) lines.push(`Total Equity: $${formatNumber(bs.totalEquity)}`);
+  return lines.join('\n');
+}
+
+function formatExecutives(executives: KeyExecutive[]): string {
+  if (executives.length === 0) return 'No executive data available.';
+  return executives
+    .map((e) => {
+      let line = `${e.title}: ${e.name}`;
+      if (e.age != null) line += ` (age ${e.age})`;
+      if (e.pay != null) line += ` | pay: $${formatNumber(e.pay)}`;
+      return line;
+    })
+    .join('\n');
 }
 
 function formatPredictions(markets: PredictionMarket[]): string {
@@ -901,18 +958,23 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'Use when the user asks about recent news, events, or headlines for a specific stock or crypto asset.',
     parameters: z.object({
       ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, BTC, TSLA)'),
+      since: z
+        .string()
+        .optional()
+        .describe('ISO timestamp — only return articles published after this date (e.g. "2026-04-01T00:00:00Z")'),
+      limit: z.number().int().min(1).max(50).optional().describe('Max articles to return (default 20)'),
     }),
-    async execute(params: { ticker: string }): Promise<ToolResult> {
+    async execute(params: { ticker: string; since?: string; limit?: number }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
+      const { opts, vars } = buildFilter(params.since, params.limit);
+      const query = buildEnrichQuery(['news'] as EnrichmentField[], opts);
       const result = await safeCall(() =>
-        client.enrichEntity(params.ticker.toUpperCase(), ['news'] as EnrichmentField[]),
+        client.request<Entity>(query, { id: params.ticker.toUpperCase(), filter: vars }),
       );
       if (!result.ok) return result.toolResult;
-      const handled = handleResult(result.data);
-      if (!handled.ok) return handled.toolResult;
 
-      const entity = handled.data as Entity;
+      const entity = result.data;
       if (!entity.news?.length) {
         return { content: `No recent news found for ${params.ticker}.` };
       }
@@ -922,12 +984,12 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         const rawSignals: RawSignalInput[] = entity.news.map((a) => ({
           sourceId: 'jintel',
           sourceName: a.source || 'Jintel',
-          sourceType: 'API' as const,
+          sourceType: SourceType.API,
           reliability: 0.75,
           title: a.title,
           content: a.snippet || a.title,
           publishedAt: a.date ?? new Date(new Date().toISOString().slice(0, 10)).toISOString(),
-          type: 'NEWS' as const,
+          type: SignalType.NEWS,
           tickers: entity.tickers ?? [params.ticker.toUpperCase()],
           confidence: 0.7,
           metadata: { source: a.source, link: a.link },
@@ -947,18 +1009,23 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'Use when the user asks about analyst opinions, research coverage, or deep-dive analysis for an asset.',
     parameters: z.object({
       ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, BTC, NVDA)'),
+      since: z
+        .string()
+        .optional()
+        .describe('ISO timestamp — only return reports published after this date (e.g. "2026-04-01T00:00:00Z")'),
+      limit: z.number().int().min(1).max(50).optional().describe('Max reports to return (default 20)'),
     }),
-    async execute(params: { ticker: string }): Promise<ToolResult> {
+    async execute(params: { ticker: string; since?: string; limit?: number }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
+      const { opts, vars } = buildFilter(params.since, params.limit);
+      const query = buildEnrichQuery(['research'] as EnrichmentField[], opts);
       const result = await safeCall(() =>
-        client.enrichEntity(params.ticker.toUpperCase(), ['research'] as EnrichmentField[]),
+        client.request<Entity>(query, { id: params.ticker.toUpperCase(), filter: vars }),
       );
       if (!result.ok) return result.toolResult;
-      const handled = handleResult(result.data);
-      if (!handled.ok) return handled.toolResult;
 
-      const entity = handled.data as Entity;
+      const entity = result.data;
       if (!entity.research?.length) {
         return { content: `No research reports found for ${params.ticker}.` };
       }
@@ -1074,23 +1141,27 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
   const getSocial: ToolDefinition = {
     name: 'get_social',
     description:
-      'Get social media posts (Twitter, Reddit, YouTube, LinkedIn) mentioning a ticker. ' +
-      'Returns recent posts with engagement metrics.\n\n' +
+      'Get Reddit posts and comments mentioning a ticker. Returns recent posts with engagement metrics.\n\n' +
       'NOTE: This is a costly query — only use when the user explicitly asks about social media ' +
-      'posts, viral content, influencer opinions, or social chatter for a specific asset.',
+      'posts, community discussion, or social chatter for a specific asset.',
     parameters: z.object({
       ticker: z.string().min(1).describe('Ticker symbol (e.g. TSLA, BTC, NVDA)'),
+      since: z
+        .string()
+        .optional()
+        .describe('ISO timestamp — only return posts published after this date (e.g. "2026-04-01T00:00:00Z")'),
+      limit: z.number().int().min(1).max(50).optional().describe('Max posts to return per sub-feed (default 20)'),
     }),
-    async execute(params: { ticker: string }): Promise<ToolResult> {
+    async execute(params: { ticker: string; since?: string; limit?: number }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
+      const { opts, vars } = buildFilter(params.since, params.limit);
+      const query = buildEnrichQuery(['social'] as EnrichmentField[], opts);
       const result = await safeCall(() =>
-        client.enrichEntity(params.ticker.toUpperCase(), ['social'] as EnrichmentField[]),
+        client.request<Entity>(query, { id: params.ticker.toUpperCase(), filter: vars }),
       );
       if (!result.ok) return result.toolResult;
-      const handled = handleResult(result.data);
-      if (!handled.ok) return handled.toolResult;
-      const entity = handled.data as Entity;
+      const entity = result.data;
       if (!entity.social) {
         return { content: `No social media data available for ${params.ticker}.` };
       }
@@ -1136,17 +1207,22 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'discussion, HN sentiment, or developer/investor commentary for a specific asset.',
     parameters: z.object({
       ticker: z.string().min(1).describe('Ticker symbol (e.g. NVDA, MSFT, AAPL)'),
+      since: z
+        .string()
+        .optional()
+        .describe('ISO timestamp — only return stories published after this date (e.g. "2026-04-01T00:00:00Z")'),
+      limit: z.number().int().min(1).max(50).optional().describe('Max stories to return (default 20)'),
     }),
-    async execute(params: { ticker: string }): Promise<ToolResult> {
+    async execute(params: { ticker: string; since?: string; limit?: number }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
+      const { opts, vars } = buildFilter(params.since, params.limit);
+      const query = buildEnrichQuery(['discussions'] as EnrichmentField[], opts);
       const result = await safeCall(() =>
-        client.enrichEntity(params.ticker.toUpperCase(), ['discussions'] as EnrichmentField[]),
+        client.request<Entity>(query, { id: params.ticker.toUpperCase(), filter: vars }),
       );
       if (!result.ok) return result.toolResult;
-      const handled = handleResult(result.data);
-      if (!handled.ok) return handled.toolResult;
-      const entity = handled.data as Entity;
+      const entity = result.data;
       if (!entity.discussions?.length) {
         return { content: `No Hacker News discussions found for ${params.ticker}.` };
       }
@@ -1156,15 +1232,76 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     },
   };
 
+  const getFinancials: ToolDefinition = {
+    name: 'get_financials',
+    description:
+      'Get financial statements for an equity ticker — income statement, balance sheet, and cash flow. ' +
+      'Returns revenue, net income, EPS, EBITDA, free cash flow, debt, equity, and more.\n\n' +
+      'Equity-only: returns no data for crypto or ETFs. Use for valuation analysis, earnings quality, ' +
+      'balance sheet health, or comparing periods.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Equity ticker symbol (e.g. AAPL, NVDA, MSFT)'),
+    }),
+    async execute(params: { ticker: string }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const result = await safeCall(() =>
+        client.enrichEntity(params.ticker.toUpperCase(), ['financials'] as EnrichmentField[]),
+      );
+      if (!result.ok) return result.toolResult;
+      const handled = handleResult(result.data);
+      if (!handled.ok) return handled.toolResult;
+      const entity = handled.data as Entity;
+      if (!entity.financials) {
+        return {
+          content: `No financial statement data available for ${params.ticker}. (Equity-only field — not available for crypto or ETFs.)`,
+        };
+      }
+      return {
+        content: `# ${entity.name ?? params.ticker} — Financial Statements\n\n${formatFinancials(entity.financials)}`,
+      };
+    },
+  };
+
+  const getExecutives: ToolDefinition = {
+    name: 'get_executives',
+    description:
+      'Get key executives and officers for an equity ticker — names, titles, compensation, and age.\n\n' +
+      'Equity-only: returns no data for crypto or ETFs. Use when the user asks about management, ' +
+      'leadership, CEO, board composition, or executive compensation.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Equity ticker symbol (e.g. AAPL, TSLA, NVDA)'),
+    }),
+    async execute(params: { ticker: string }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const result = await safeCall(() =>
+        client.enrichEntity(params.ticker.toUpperCase(), ['executives'] as EnrichmentField[]),
+      );
+      if (!result.ok) return result.toolResult;
+      const handled = handleResult(result.data);
+      if (!handled.ok) return handled.toolResult;
+      const entity = handled.data as Entity;
+      if (!entity.executives?.length) {
+        return {
+          content: `No executive data available for ${params.ticker}. (Equity-only field — not available for crypto or ETFs.)`,
+        };
+      }
+      return {
+        content: `# ${entity.name ?? params.ticker} — Key Executives\n\n${formatExecutives(entity.executives)}`,
+      };
+    },
+  };
+
   const jintelQuery: ToolDefinition = {
     name: 'jintel_query',
     description:
       'Generic Jintel query tool for quotes, fundamentals, market data, history, news, research, sentiment, ' +
-      'technicals, derivatives, risk, or regulatory data. Use this when you want one Jintel-backed entry point ' +
-      'instead of choosing a more specialized tool.',
+      'technicals, derivatives, risk, regulatory, short_interest, financials, or executives. Use this when you want ' +
+      'one Jintel-backed entry point instead of choosing a more specialized tool.',
     parameters: z.object({
       kind: JINTEL_QUERY_KIND.describe(
-        'What to fetch: quote, market, fundamentals, history, news, research, sentiment, technicals, derivatives, risk, or regulatory',
+        'What to fetch: quote, market, fundamentals, history, news, research, sentiment, technicals, derivatives, risk, regulatory, short_interest, financials, or executives',
       ),
       ticker: z.string().optional().describe('Single ticker symbol (e.g. AAPL, BTC, NVDA)'),
       tickers: z.array(z.string()).optional().describe('Ticker batch for quote/history queries'),
@@ -1218,6 +1355,12 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
           return runTechnical.execute({ ticker: singleTicker });
         case 'derivatives':
           return getDerivatives.execute({ ticker: singleTicker });
+        case 'short_interest':
+          return getShortInterest.execute({ ticker: singleTicker });
+        case 'financials':
+          return getFinancials.execute({ ticker: singleTicker });
+        case 'executives':
+          return getExecutives.execute({ ticker: singleTicker });
       }
 
       return { content: `Unsupported Jintel query kind: ${params.kind}`, isError: true };
@@ -1363,5 +1506,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     getSocial,
     getPredictions,
     getDiscussions,
+    getFinancials,
+    getExecutives,
   ];
 }
