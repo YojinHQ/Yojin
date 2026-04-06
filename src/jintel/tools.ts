@@ -11,11 +11,8 @@ import {
   type EconomicDataPoint,
   type EnrichmentField,
   type Entity,
-  type EntityType,
   type FactorDataPoint,
-  type FamaFrenchSeries,
   GDP,
-  type GdpType,
   type HackerNewsStory,
   INFLATION,
   INTEREST_RATES,
@@ -28,7 +25,6 @@ import {
   type ResearchResult,
   type RiskSignal,
   type SP500DataPoint,
-  type SP500Series,
   SP500_MULTIPLES,
   type SanctionsMatch,
   type ShortInterestReport,
@@ -95,6 +91,23 @@ const ENRICHMENT_FIELDS = z.enum([
   'predictions',
   'discussions',
 ]);
+
+const ENTITY_TYPE = z.enum(['COMPANY', 'PERSON', 'CRYPTO', 'COMMODITY', 'INDEX']);
+type EntityType = z.infer<typeof ENTITY_TYPE>;
+
+const GDP_TYPE = z.enum(['REAL', 'NOMINAL', 'FORECAST']);
+type GdpType = z.infer<typeof GDP_TYPE>;
+
+const SP500_SERIES = z.enum(['PE_MONTH', 'SHILLER_PE_MONTH', 'DIVIDEND_YIELD_MONTH', 'EARNINGS_YIELD_MONTH']);
+type SP500Series = z.infer<typeof SP500_SERIES>;
+
+const FAMA_FRENCH_SERIES = z.enum([
+  'THREE_FACTOR_DAILY',
+  'THREE_FACTOR_MONTHLY',
+  'FIVE_FACTOR_DAILY',
+  'FIVE_FACTOR_MONTHLY',
+]);
+type FamaFrenchSeries = z.infer<typeof FAMA_FRENCH_SERIES>;
 
 const SEVERITY_CONFIDENCE: Record<string, number> = {
   CRITICAL: 0.95,
@@ -591,7 +604,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'Returns a list of matching entities with basic info.',
     parameters: z.object({
       query: z.string().describe('Search query (company name, ticker, person, etc.)'),
-      type: z.enum(['COMPANY', 'PERSON', 'CRYPTO', 'COMMODITY', 'INDEX']).optional().describe('Filter by entity type'),
+      type: ENTITY_TYPE.optional().describe('Filter by entity type'),
       limit: z.number().int().min(1).max(50).optional().describe('Max results (default 10)'),
     }),
     async execute(params: { query: string; type?: EntityType; limit?: number }): Promise<ToolResult> {
@@ -780,10 +793,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'Useful for macro context when analyzing market conditions or country risk.',
     parameters: z.object({
       country: z.string().describe('Country name or ISO code (e.g. "United States", "US", "Germany")'),
-      type: z
-        .enum(['REAL', 'NOMINAL', 'FORECAST'])
-        .optional()
-        .describe('GDP type: REAL, NOMINAL, or FORECAST (default: REAL)'),
+      type: GDP_TYPE.optional().describe('GDP type: REAL, NOMINAL, or FORECAST (default: REAL)'),
     }),
     async execute(params: { country: string; type?: GdpType }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
@@ -845,9 +855,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       '- EARNINGS_YIELD_MONTH: earnings yield (inverse of P/E)\n\n' +
       'Useful for gauging broad market valuation relative to historical norms.',
     parameters: z.object({
-      series: z
-        .enum(['PE_MONTH', 'SHILLER_PE_MONTH', 'DIVIDEND_YIELD_MONTH', 'EARNINGS_YIELD_MONTH'])
-        .describe('Which valuation series to fetch'),
+      series: SP500_SERIES.describe('Which valuation series to fetch'),
     }),
     async execute(params: { series: SP500Series }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
@@ -1058,9 +1066,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'Use when the user asks about factor exposure, risk decomposition, value vs growth tilt, or ' +
       'academic factor-based analysis of a portfolio.',
     parameters: z.object({
-      series: z
-        .enum(['THREE_FACTOR_DAILY', 'THREE_FACTOR_MONTHLY', 'FIVE_FACTOR_DAILY', 'FIVE_FACTOR_MONTHLY'])
-        .describe('Factor series to fetch'),
+      series: FAMA_FRENCH_SERIES.describe('Factor series to fetch'),
       range: z.string().optional().describe('Date range filter (e.g. "1y", "6m"). Leave empty for full history.'),
     }),
     async execute(params: { series: FamaFrenchSeries; range?: string }): Promise<ToolResult> {
