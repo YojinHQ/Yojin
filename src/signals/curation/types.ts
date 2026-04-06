@@ -16,11 +16,12 @@ export type FeedTarget = z.infer<typeof FeedTargetSchema>;
 // ---------------------------------------------------------------------------
 
 export const CurationWeightsSchema = z.object({
-  exposure: z.number().min(0).max(1).default(0.25),
-  typeRelevance: z.number().min(0).max(1).default(0.2),
+  exposure: z.number().min(0).max(1).default(0.2),
+  typeRelevance: z.number().min(0).max(1).default(0.15),
   recency: z.number().min(0).max(1).default(0.2),
-  sourceReliability: z.number().min(0).max(1).default(0.15),
-  contentQuality: z.number().min(0).max(1).default(0.2),
+  sourceReliability: z.number().min(0).max(1).default(0.1),
+  contentQuality: z.number().min(0).max(1).default(0.15),
+  engagement: z.number().min(0).max(1).default(0.2),
 });
 export type CurationWeights = z.infer<typeof CurationWeightsSchema>;
 
@@ -54,11 +55,12 @@ export const CurationConfigSchema = z.object({
     ]),
   /** Scoring weights (must sum to ~1.0). */
   weights: CurationWeightsSchema.default(() => ({
-    exposure: 0.25,
-    typeRelevance: 0.2,
+    exposure: 0.2,
+    typeRelevance: 0.15,
     recency: 0.2,
-    sourceReliability: 0.15,
-    contentQuality: 0.2,
+    sourceReliability: 0.1,
+    contentQuality: 0.15,
+    engagement: 0.2,
   })),
 });
 export type CurationConfig = z.infer<typeof CurationConfigSchema>;

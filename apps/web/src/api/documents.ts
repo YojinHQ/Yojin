@@ -832,6 +832,8 @@ export const SIGNALS_QUERY = gql`
         thesisAlignment
         actionability
       }
+      convergenceBoost
+      engagementScore
     }
   }
 `;
@@ -901,6 +903,8 @@ export const CURATED_SIGNALS_QUERY = gql`
         thesisAlignment
         actionability
       }
+      convergenceBoost
+      engagementScore
     }
   }
 `;
@@ -1343,6 +1347,8 @@ export const INTEL_FEED_QUERY = gql`
         thesisAlignment
         actionability
       }
+      convergenceBoost
+      engagementScore
     }
   }
 `;

@@ -18,7 +18,9 @@ import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.j
 import type { SignalArchive } from '../../../signals/archive.js';
 import type { AssessmentStore } from '../../../signals/curation/assessment-store.js';
 import type { SignalAssessment, SignalVerdict, ThesisAlignment } from '../../../signals/curation/assessment-types.js';
-import type { CurationConfig, FeedTarget } from '../../../signals/curation/types.js';
+import { detectConvergence } from '../../../signals/curation/convergence-detector.js';
+import { computeEngagementScore } from '../../../signals/curation/engagement-scorer.js';
+import type { CurationConfig, CurationWeights, FeedTarget } from '../../../signals/curation/types.js';
 import { DEFAULT_SPAM_PATTERNS, deduplicateByTitle, filterSignals } from '../../../signals/signal-filter.js';
 import type { Signal, SignalOutputType, SignalType } from '../../../signals/types.js';
 import type { WatchlistStore } from '../../../watchlist/watchlist-store.js';
@@ -79,6 +81,61 @@ interface CuratedSignalGql {
     thesisAlignment: ThesisAlignment;
     actionability: number;
   } | null;
+  convergenceBoost: number;
+  engagementScore: number;
+}
+
+// ---------------------------------------------------------------------------
+// Weighted composite score — uses CurationWeights to blend all scoring signals
+// ---------------------------------------------------------------------------
+
+const DEFAULT_WEIGHTS: CurationWeights = {
+  exposure: 0.2,
+  typeRelevance: 0.15,
+  recency: 0.2,
+  sourceReliability: 0.1,
+  contentQuality: 0.15,
+  engagement: 0.2,
+};
+
+/** Signal type relevance — how much each type matters for investment decisions. */
+const TYPE_RELEVANCE: Record<string, number> = {
+  FILINGS: 0.95,
+  FUNDAMENTAL: 0.9,
+  TECHNICAL: 0.75,
+  TRADING_LOGIC_TRIGGER: 0.95,
+  NEWS: 0.7,
+  SENTIMENT: 0.6,
+  SOCIALS: 0.5,
+  MACRO: 0.85,
+};
+
+function computeWeightedComposite(
+  signal: Signal,
+  assessment: SignalAssessment | undefined,
+  engagementScore: number,
+  convergenceBoost: number,
+  exposureWeight: number,
+  weights: CurationWeights,
+): number {
+  const recency = ageUrgencyScore(signal.publishedAt);
+  const sourceReliability = signal.sources[0]?.reliability ?? 0.5;
+  const contentQuality = (signal.qualityScore ?? 50) / 100;
+  const typeRelevance = TYPE_RELEVANCE[signal.type] ?? 0.5;
+
+  // If the strategist assessed it, blend its relevance into the content quality dimension
+  const effectiveQuality = assessment ? Math.max(contentQuality, assessment.relevanceScore) : contentQuality;
+
+  const base =
+    weights.exposure * exposureWeight +
+    weights.typeRelevance * typeRelevance +
+    weights.recency * recency +
+    weights.sourceReliability * sourceReliability +
+    weights.contentQuality * effectiveQuality +
+    weights.engagement * engagementScore;
+
+  // Convergence boost is additive — it lifts signals confirmed by multiple sources
+  return Math.min(1, base + convergenceBoost);
 }
 
 interface CurationStatusGql {
@@ -294,14 +351,48 @@ export async function curatedSignalsResolver(
     return !assessment || assessment.verdict !== 'NOISE';
   });
 
-  // Sort by derived severity, then by confidence.
+  // Compute engagement scores and cross-source convergence
+  const visibleSignals = visible.map((t) => t.signal);
+  const convergence = detectConvergence(visibleSignals);
+  const engagementScores = new Map<string, number>();
+  for (const signal of visibleSignals) {
+    engagementScores.set(signal.id, computeEngagementScore(signal));
+  }
+
+  // Build exposure weights from portfolio position sizes
+  const snapshot = await snapshotStore.getLatest();
+  const totalValue = snapshot?.totalValue ?? 0;
+  const positionExposure = new Map<string, number>();
+  if (snapshot && totalValue > 0) {
+    for (const pos of snapshot.positions) {
+      positionExposure.set(pos.symbol.toUpperCase(), (pos.marketValue ?? 0) / totalValue);
+    }
+  }
+
+  const weights = curationConfig?.weights ?? DEFAULT_WEIGHTS;
+
+  // Pre-compute composite scores for sorting
+  const compositeScores = new Map<string, number>();
+  for (const t of visible) {
+    const assessment = assessmentBySignalId.get(t.signal.id);
+    const engagement = engagementScores.get(t.signal.id) ?? 0;
+    const boost = convergence.boosts.get(t.signal.id) ?? 0;
+    // Use max exposure across linked tickers
+    const exposure = Math.max(0, ...t.signal.assets.map((a) => positionExposure.get(a.ticker) ?? 0));
+    compositeScores.set(
+      t.signal.id,
+      computeWeightedComposite(t.signal, assessment ?? undefined, engagement, boost, exposure, weights),
+    );
+  }
+
+  // Sort by derived severity, then by composite score.
   const sorted = visible.sort((a, b) => {
     const assessA = assessmentBySignalId.get(a.signal.id);
     const assessB = assessmentBySignalId.get(b.signal.id);
     const rankA = SEVERITY_RANK[deriveSignalSeverity(a.signal, assessA)];
     const rankB = SEVERITY_RANK[deriveSignalSeverity(b.signal, assessB)];
     if (rankA !== rankB) return rankB - rankA;
-    return b.signal.confidence - a.signal.confidence;
+    return (compositeScores.get(b.signal.id) ?? 0) - (compositeScores.get(a.signal.id) ?? 0);
   });
 
   // Pagination
@@ -315,12 +406,14 @@ export async function curatedSignalsResolver(
     const severity = deriveSignalSeverity(t.signal, assessment);
     const signalGql = toGql(t.signal);
     signalGql.outputType = deriveCuratedOutputType(t.signal, assessment);
+    const engagement = engagementScores.get(t.signal.id) ?? 0;
+    const boost = convergence.boosts.get(t.signal.id) ?? 0;
 
     return {
       signal: signalGql,
       scores: tickers.map((ticker) => ({
         ticker,
-        compositeScore: assessment?.relevanceScore ?? t.signal.confidence,
+        compositeScore: compositeScores.get(t.signal.id) ?? t.signal.confidence,
       })),
       feedTarget: t.feedTarget,
       severity,
@@ -331,6 +424,8 @@ export async function curatedSignalsResolver(
             actionability: assessment.actionability,
           }
         : null,
+      convergenceBoost: boost,
+      engagementScore: engagement,
     };
   });
 

@@ -998,6 +998,10 @@ export const typeDefs = /* GraphQL */ `
     severity: SignalSeverity!
     "Agent assessment summary — null if not yet assessed"
     assessment: CuratedSignalAssessment
+    "Cross-source convergence boost (0–1) — higher when multiple platforms discuss the same ticker"
+    convergenceBoost: Float!
+    "Normalized engagement score (0–1) from source-specific metrics (likes, views, points, etc.)"
+    engagementScore: Float!
   }
 
   type CuratedSignalAssessment {
