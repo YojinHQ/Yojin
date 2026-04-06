@@ -649,17 +649,17 @@ export class Scheduler {
       // 0. Fetch macro economic indicators (GDP, inflation, rates, S&P 500 P/E)
       //    Ingest as MACRO signals before agents analyze — gives the Strategist
       //    real data for the macroContext field in InsightReport.
-      const jintelClient = this.getJintelClient?.();
-      if (jintelClient && this.signalIngestor) {
-        try {
+      try {
+        const jintelClient = this.getJintelClient?.();
+        if (jintelClient && this.signalIngestor) {
           const macroResult = await fetchMacroIndicators(jintelClient, this.signalIngestor);
           logger.info('Macro indicators fetched', {
             ingested: macroResult.ingested,
             duplicates: macroResult.duplicates,
           });
-        } catch (err) {
-          logger.warn('Macro indicator fetch failed (continuing macro flow)', { error: err });
         }
+      } catch (err) {
+        logger.warn('Macro indicator fetch failed (continuing macro flow)', { error: err });
       }
 
       // 1. Signal assessment (RA + Strategist classify signals from archive)
