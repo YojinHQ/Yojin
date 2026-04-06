@@ -1,4 +1,4 @@
-import { MarketQuoteSchema } from '@yojinhq/jintel-client';
+import type { MarketQuote } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
 import { AssetClassSchema } from '../api/graphql/types.js';
@@ -22,7 +22,7 @@ export type WatchlistEntry = z.infer<typeof WatchlistEntrySchema>;
 export const EnrichmentCacheEntrySchema = z.object({
   symbol: IdField,
   enrichedAt: DateTimeField,
-  quote: MarketQuoteSchema.nullable(),
+  quote: z.custom<MarketQuote>().nullable(),
   riskScore: z.number().min(0).max(100).nullable(),
 });
 

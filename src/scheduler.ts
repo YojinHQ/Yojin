@@ -54,7 +54,7 @@ const logger = createSubsystemLogger('scheduler');
 // ---------------------------------------------------------------------------
 
 const CronStateSchema = z.object({
-  lastRuns: z.record(z.string()).default({}), // jobId → ISO timestamp
+  lastRuns: z.record(z.string(), z.string()).default({}), // jobId → ISO timestamp
   dailyRunCount: z.number().default(0),
   dailyRunBudgetDate: z.string().default(''), // YYYY-MM-DD UTC
   lastMacroCompletedAt: z.number().default(0), // epoch ms

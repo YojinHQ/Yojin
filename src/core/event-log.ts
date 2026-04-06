@@ -23,7 +23,7 @@ export interface EventEntry {
 
 const EventEnvelopeSchema = z.object({
   type: z.string().min(1),
-  data: z.record(z.unknown()).default({}),
+  data: z.record(z.string(), z.unknown()).default({}),
 });
 
 export interface EventLogOptions {

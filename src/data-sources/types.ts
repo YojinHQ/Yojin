@@ -139,7 +139,7 @@ const CliConfigSchema = z.object({
   args: z.array(z.string()).default([]),
   outputFormat: z.enum(['json', 'csv', 'ndjson']).default('json'),
   timeout: z.number().default(30_000),
-  env: z.record(z.string()).default({}),
+  env: z.record(z.string(), z.string()).default({}),
 });
 
 const McpConfigSchema = z.object({
@@ -147,7 +147,7 @@ const McpConfigSchema = z.object({
   serverCommand: z.string(),
   serverArgs: z.array(z.string()).default([]),
   transport: z.enum(['stdio', 'sse']).default('stdio'),
-  capabilityMapping: z.record(z.string()).default({}),
+  capabilityMapping: z.record(z.string(), z.string()).default({}),
 });
 
 const ApiConfigSchema = z.object({
@@ -160,6 +160,7 @@ const ApiConfigSchema = z.object({
   supportsAsync: z.boolean().default(false),
   endpointMapping: z
     .record(
+      z.string(),
       z.object({
         method: z.enum(['GET', 'POST', 'PUT', 'DELETE']).default('GET'),
         path: z.string(),
