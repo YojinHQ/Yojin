@@ -153,11 +153,20 @@ CRITICAL: if your tier2 would say "not related to [company]" or "this is about [
 
 **KEEP** for everything else — real financial signals with investment relevance.
 
+## Writer motivation & ticker connection
+
+Every signal was written by someone with an incentive. Ask yourself:
+- **Why was this written?** Genuine analyst insight, earnings coverage, and regulatory filings exist to inform. "Here's What It Means for Your X Stocks" exists to drive clicks. Score accordingly.
+- **Is the ticker substantively discussed or just name-dropped?** A macro headline ("Fed holds rates") tagged to a specific ticker via a loose category ("AI stocks", "tech stocks", "growth stocks") is NOT a signal about that ticker. The ticker must be specifically analyzed, named, or directly impacted for the connection to be real.
+- **Does the writer have domain-specific knowledge?** An analyst note on NVDA's data center revenue sensitivity to rates = real observation. A content mill repackaging a Fed headline with "AI stocks" in the title = noise.
+
+If the ticker is only connected through a broad sector label and the content contains no ticker-specific analysis, score ≤ 39 (noise).
+
 ## Quality score guide
 - 90-100: Direct material impact (earnings, FDA approval, merger, major insider transaction)
-- 70-89: Useful context (analyst upgrade, sector news, relevant macro data)
-- 40-69: Tangential (generic market commentary, minor price moves)
-- 0-39: Noise (no relevance, clickbait, false match, boilerplate)
+- 70-89: Useful context (analyst upgrade, sector news with specific company analysis, relevant macro data with direct mechanism)
+- 40-69: Tangential but ticker-specific (generic market commentary about the specific company, minor price moves)
+- 0-39: Noise (no relevance, clickbait, false match, boilerplate, macro headline with ticker name-dropped via sector umbrella)
 
 ## Writing rules for tier1/tier2
 - Pure factual language. State numbers and observable facts only.
