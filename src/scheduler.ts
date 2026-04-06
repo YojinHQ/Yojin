@@ -32,7 +32,7 @@ import type { InsightStore } from './insights/insight-store.js';
 import type { MicroInsightStore } from './insights/micro-insight-store.js';
 import { runMicroResearch } from './insights/micro-runner.js';
 import type { MicroInsightSource } from './insights/micro-types.js';
-import { fetchJintelSignals } from './jintel/signal-fetcher.js';
+import { fetchJintelSignals, fetchMacroIndicators } from './jintel/signal-fetcher.js';
 import { createSubsystemLogger } from './logging/logger.js';
 import type { SignalMemoryStore } from './memory/memory-store.js';
 import type { ReflectionEngine } from './memory/reflection.js';
@@ -646,6 +646,22 @@ export class Scheduler {
     await this.saveState(state);
 
     try {
+      // 0. Fetch macro economic indicators (GDP, inflation, rates, S&P 500 P/E)
+      //    Ingest as MACRO signals before agents analyze — gives the Strategist
+      //    real data for the macroContext field in InsightReport.
+      try {
+        const jintelClient = this.getJintelClient?.();
+        if (jintelClient && this.signalIngestor) {
+          const macroResult = await fetchMacroIndicators(jintelClient, this.signalIngestor);
+          logger.info('Macro indicators fetched', {
+            ingested: macroResult.ingested,
+            duplicates: macroResult.duplicates,
+          });
+        }
+      } catch (err) {
+        logger.warn('Macro indicator fetch failed (continuing macro flow)', { error: err });
+      }
+
       // 1. Signal assessment (RA + Strategist classify signals from archive)
       try {
         await this.orchestrator.execute('full-curation', {});
