@@ -31,7 +31,7 @@ import { timeAgo } from '../../lib/utils';
 const SEVEN_DAYS_AGO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
 // ---------------------------------------------------------------------------
-// Scale selector types & mapping (stocks only)
+// Scale selector types & mapping
 // ---------------------------------------------------------------------------
 
 type Scale = '15m' | '30m' | '1h' | '1d' | '1wk' | '1mo';
@@ -212,10 +212,8 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
   const [quoteResult] = useQuote(symbol);
   const quote = quoteResult.data?.quote ?? undefined;
 
-  const isCrypto = position?.assetClass === 'CRYPTO';
   const [scale, setScale] = useState<Scale>('15m');
-  // Crypto has no scale selector — always use daily view
-  const effectiveScale: Scale = isCrypto ? '1d' : scale;
+  const effectiveScale: Scale = scale;
   // Remember last intraday selection when switching back from period scales
   const [lastIntraday, setLastIntraday] = useState<Scale>('15m');
 
@@ -258,7 +256,10 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
     query: SIGNALS_QUERY,
     variables: signalsVars,
   });
-  const allSignals = useMemo(() => signalsResult.data?.signals ?? [], [signalsResult.data?.signals]);
+  const allSignals = useMemo(
+    () => (signalsResult.data?.curatedSignals ?? []).map((c) => c.signal),
+    [signalsResult.data?.curatedSignals],
+  );
   const signals = useMemo(() => allSignals.filter((s) => s.type !== 'NEWS').slice(0, 10), [allSignals]);
   const newsSignals = useMemo(() => allSignals.filter((s) => s.type === 'NEWS').slice(0, 10), [allSignals]);
 
@@ -385,57 +386,55 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
       <Card
         title="Price"
         headerAction={
-          !isCrypto ? (
-            <div className="flex items-center gap-1">
-              {/* Intraday dropdown */}
-              <div className="relative">
-                <select
-                  value={isIntraday(scale) ? scale : '__period__'}
-                  onChange={(e) => handleScaleChange(e.target.value as Scale)}
-                  className={cn(
-                    'cursor-pointer appearance-none rounded pl-2 pr-5 py-0.5 text-2xs font-medium transition-colors bg-transparent border',
-                    isIntraday(scale)
-                      ? 'border-accent-primary text-accent-primary'
-                      : 'border-border-light text-text-muted hover:text-text-secondary',
-                  )}
-                >
-                  {!isIntraday(scale) && (
-                    <option value="__period__" hidden>
-                      {INTRADAY_SCALES.find((s) => s.value === lastIntraday)?.label ?? '15min'}
-                    </option>
-                  )}
-                  {INTRADAY_SCALES.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-                <svg
-                  className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7" />
-                </svg>
-              </div>
-
-              {/* Period buttons */}
-              {PERIOD_SCALES.map((s) => (
-                <button
-                  key={s.value}
-                  onClick={() => handleScaleChange(s.value)}
-                  className={cn(
-                    'cursor-pointer rounded px-1.5 py-0.5 text-2xs font-medium transition-colors',
-                    scale === s.value ? 'bg-accent-primary text-white' : 'text-text-muted hover:text-text-secondary',
-                  )}
-                >
-                  {s.label}
-                </button>
-              ))}
+          <div className="flex items-center gap-1">
+            {/* Intraday dropdown */}
+            <div className="relative">
+              <select
+                value={isIntraday(scale) ? scale : '__period__'}
+                onChange={(e) => handleScaleChange(e.target.value as Scale)}
+                className={cn(
+                  'cursor-pointer appearance-none rounded pl-2 pr-5 py-0.5 text-2xs font-medium transition-colors bg-transparent border',
+                  isIntraday(scale)
+                    ? 'border-accent-primary text-accent-primary'
+                    : 'border-border-light text-text-muted hover:text-text-secondary',
+                )}
+              >
+                {!isIntraday(scale) && (
+                  <option value="__period__" hidden>
+                    {INTRADAY_SCALES.find((s) => s.value === lastIntraday)?.label ?? '15min'}
+                  </option>
+                )}
+                {INTRADAY_SCALES.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+              <svg
+                className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7" />
+              </svg>
             </div>
-          ) : undefined
+
+            {/* Period buttons */}
+            {PERIOD_SCALES.map((s) => (
+              <button
+                key={s.value}
+                onClick={() => handleScaleChange(s.value)}
+                className={cn(
+                  'cursor-pointer rounded px-1.5 py-0.5 text-2xs font-medium transition-colors',
+                  scale === s.value ? 'bg-accent-primary text-white' : 'text-text-muted hover:text-text-secondary',
+                )}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
         }
       >
         {historyResult.fetching && priceHistory.length === 0 ? (

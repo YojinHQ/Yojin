@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery } from 'urql';
 import { DISMISS_SIGNAL_MUTATION, INTEL_FEED_QUERY } from '../../api/documents';
@@ -15,6 +15,11 @@ import Spinner from '../common/spinner';
 type ItemType = 'alert' | 'insight';
 type FilterTab = 'all' | 'alerts' | 'insights';
 type IconName = 'rebalance' | 'dollar' | 'box' | 'warehouse' | 'clock' | 'trending' | 'bubble' | 'trending-up';
+
+export interface FeedPendingUpdate {
+  symbol: string;
+  action: 'added' | 'removed';
+}
 
 interface DataRow {
   label: string;
@@ -250,6 +255,7 @@ function SectionHeader({ label }: { label: string }) {
 function IntelFeedCard({
   item,
   expanded,
+  isNew,
   onToggle,
   onDismiss,
   onViewDetails,
@@ -257,6 +263,7 @@ function IntelFeedCard({
 }: {
   item: IntelFeedItem;
   expanded: boolean;
+  isNew: boolean;
   onToggle: () => void;
   onDismiss: () => void;
   onViewDetails: () => void;
@@ -267,8 +274,20 @@ function IntelFeedCard({
       className={cn(
         'relative rounded-xl border border-border-light bg-bg-tertiary/60 transition-colors',
         expanded ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary',
+        isNew &&
+          (item.type === 'alert' ? 'motion-safe:animate-new-event-alert' : 'motion-safe:animate-new-event-insight'),
       )}
     >
+      {isNew && (
+        <span
+          className={cn(
+            'absolute -top-2 -right-2 z-10 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wider text-white shadow-sm motion-safe:animate-badge-in',
+            item.type === 'alert' ? 'bg-warning' : 'bg-success',
+          )}
+        >
+          NEW
+        </span>
+      )}
       {/* Collapsed header — always visible */}
       <button
         type="button"
@@ -368,7 +387,15 @@ function IntelFeedCard({
 
 /* ── Gate wrapper ───────────────────────────────────────────────────── */
 
-export default function IntelFeed({ feedTarget }: { feedTarget?: FeedTarget } = {}) {
+export default function IntelFeed({
+  feedTarget,
+  pendingUpdate,
+  onScanComplete,
+}: {
+  feedTarget?: FeedTarget;
+  pendingUpdate?: FeedPendingUpdate | null;
+  onScanComplete?: () => void;
+} = {}) {
   const { jintelConfigured, aiConfigured } = useFeatureStatus();
 
   if (!jintelConfigured || !aiConfigured) {
@@ -385,25 +412,80 @@ export default function IntelFeed({ feedTarget }: { feedTarget?: FeedTarget } = 
     );
   }
 
-  return <IntelFeedContent feedTarget={feedTarget} />;
+  return <IntelFeedContent feedTarget={feedTarget} pendingUpdate={pendingUpdate} onScanComplete={onScanComplete} />;
 }
 
 /* ── Content ────────────────────────────────────────────────────────── */
 
 const POLL_INTERVAL_MS = 30_000;
+const SEEN_IDS_KEY_PREFIX = 'intel-feed-seen-';
 
-function IntelFeedContent({ feedTarget }: { feedTarget?: FeedTarget }) {
+function persistSeenIds(key: string, ids: Set<string>) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify([...ids]));
+  } catch {
+    // sessionStorage unavailable or quota exceeded
+  }
+}
+
+function IntelFeedContent({
+  feedTarget,
+  pendingUpdate,
+  onScanComplete,
+}: {
+  feedTarget?: FeedTarget;
+  pendingUpdate?: FeedPendingUpdate | null;
+  onScanComplete?: () => void;
+}) {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [modalData, setModalData] = useState<FeedDetailData | null>(null);
+  const [newIds, setNewIds] = useState<Set<string>>(new Set());
+  const initialIdsRef = useRef<Set<string> | null>(null);
+  const newIdTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [, dismissSignal] = useMutation(DISMISS_SIGNAL_MUTATION);
+
+  // ── Scan lifecycle state ────────────────────────────────────────────
+  const [scanState, setScanState] = useState<{
+    symbol: string;
+    phase: 'scanning' | 'found' | 'not-found';
+    foundCount: number;
+  } | null>(null);
+  const scanPreIdsRef = useRef<Set<string> | null>(null);
+  const scanStartTimeRef = useRef(0);
+  const scanVerifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onScanCompleteRef = useRef(onScanComplete);
+  useEffect(() => {
+    onScanCompleteRef.current = onScanComplete;
+  });
+  const latestItemsRef = useRef<IntelFeedItem[]>([]);
+
+  // Restore seen IDs from sessionStorage so remounts don't lose the snapshot
+  const storageKey = `${SEEN_IDS_KEY_PREFIX}${feedTarget ?? 'default'}`;
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem(storageKey);
+      if (stored) {
+        initialIdsRef.current = new Set(JSON.parse(stored) as string[]);
+      }
+    } catch {
+      // sessionStorage unavailable
+    }
+  }, [storageKey]);
 
   const [{ data, fetching, error }, reexecute] = useQuery<IntelFeedQueryResult, IntelFeedQueryVariables>({
     query: INTEL_FEED_QUERY,
     variables: { limit: 20, feedTarget },
-    requestPolicy: 'network-only',
+    requestPolicy: 'cache-and-network',
   });
+
+  // Refetch when watchlist changes (add/remove)
+  useEffect(() => {
+    if (pendingUpdate) {
+      reexecute({ requestPolicy: 'network-only' });
+    }
+  }, [pendingUpdate, reexecute]);
 
   // Poll for new data
   useEffect(() => {
@@ -466,6 +548,116 @@ function IntelFeedContent({ feedTarget }: { feedTarget?: FeedTarget }) {
     signalItems.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     return signalItems;
   }, [data]);
+
+  useEffect(() => {
+    latestItemsRef.current = items;
+  }, [items]);
+
+  // Track which items are "new" (arrived after initial load)
+  useEffect(() => {
+    if (items.length === 0) return;
+
+    // First data load — snapshot IDs, no animation
+    if (initialIdsRef.current === null) {
+      initialIdsRef.current = new Set(items.map((i) => i.id));
+      persistSeenIds(storageKey, initialIdsRef.current);
+      return;
+    }
+
+    const seenIds = initialIdsRef.current;
+    const freshIds = items.filter((i) => !seenIds.has(i.id)).map((i) => i.id);
+
+    // Always sync current items into the stored set
+    for (const item of items) seenIds.add(item.id);
+    persistSeenIds(storageKey, seenIds);
+
+    if (freshIds.length === 0) return;
+
+    // Mark as new
+    setNewIds((prev) => {
+      const next = new Set(prev);
+      for (const id of freshIds) next.add(id);
+      return next;
+    });
+
+    // Clear badge after 10s
+    for (const id of freshIds) {
+      const prev = newIdTimersRef.current.get(id);
+      if (prev) clearTimeout(prev);
+      const timer = setTimeout(() => {
+        setNewIds((s) => {
+          const next = new Set(s);
+          next.delete(id);
+          return next;
+        });
+        newIdTimersRef.current.delete(id);
+      }, 10_000);
+      newIdTimersRef.current.set(id, timer);
+    }
+  }, [items, storageKey]);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    const timers = newIdTimersRef.current;
+    return () => {
+      timers.forEach((t) => clearTimeout(t));
+    };
+  }, []);
+
+  // ── Scan: initialize when a new symbol is added ─────────────────────
+  useEffect(() => {
+    if (pendingUpdate?.action !== 'added') return;
+    scanPreIdsRef.current = new Set(latestItemsRef.current.map((i) => i.id));
+    scanStartTimeRef.current = Date.now();
+    setTimeout(() => setScanState({ symbol: pendingUpdate.symbol, phase: 'scanning', foundCount: 0 }), 0);
+    if (scanVerifyTimerRef.current) {
+      clearTimeout(scanVerifyTimerRef.current);
+      scanVerifyTimerRef.current = null;
+    }
+  }, [pendingUpdate]);
+
+  // ── Scan: fast polling while scanning ───────────────────────────────
+  const isScanning = scanState?.phase === 'scanning';
+  useEffect(() => {
+    if (!isScanning) return;
+    const id = setInterval(() => reexecute({ requestPolicy: 'network-only' }), 4_000);
+    return () => clearInterval(id);
+  }, [isScanning, reexecute]);
+
+  // ── Scan: detect new items or timeout ───────────────────────────────
+  useEffect(() => {
+    if (!scanState || scanState.phase !== 'scanning' || !scanPreIdsRef.current) return;
+    const preScanIds = scanPreIdsRef.current;
+    const newForSymbol = items.filter(
+      (i) => !preScanIds.has(i.id) && (i.tickers.includes(scanState.symbol) || i.ticker === scanState.symbol),
+    );
+    if (newForSymbol.length > 0) {
+      setScanState((prev) => (prev ? { ...prev, phase: 'found', foundCount: newForSymbol.length } : null));
+      scanPreIdsRef.current = null;
+      scanVerifyTimerRef.current = setTimeout(() => {
+        setScanState(null);
+        onScanCompleteRef.current?.();
+        scanVerifyTimerRef.current = null;
+      }, 3_000);
+      return;
+    }
+    if (Date.now() - scanStartTimeRef.current > 45_000) {
+      setScanState((prev) => (prev ? { ...prev, phase: 'not-found' } : null));
+      scanPreIdsRef.current = null;
+      scanVerifyTimerRef.current = setTimeout(() => {
+        setScanState(null);
+        onScanCompleteRef.current?.();
+        scanVerifyTimerRef.current = null;
+      }, 3_000);
+    }
+  }, [items, scanState]);
+
+  // Cleanup scan verification timer on unmount
+  useEffect(() => {
+    return () => {
+      if (scanVerifyTimerRef.current) clearTimeout(scanVerifyTimerRef.current);
+    };
+  }, []);
 
   const filteredItems = useMemo(() => {
     if (activeFilter === 'all') return items;
@@ -535,6 +727,48 @@ function IntelFeedContent({ feedTarget }: { feedTarget?: FeedTarget }) {
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-auto px-3 pb-4">
+          {/* Scan progress / verification banner */}
+          {scanState && (
+            <div
+              key={`scan-${scanState.phase}`}
+              className={cn(
+                'mx-0.5 mt-3 flex items-center gap-2.5 rounded-lg border px-3 py-2 text-xs font-medium motion-safe:animate-[fadeSlideIn_0.25s_ease-out]',
+                scanState.phase === 'scanning'
+                  ? 'border-accent-primary/20 bg-accent-primary/5 text-accent-primary'
+                  : scanState.phase === 'found'
+                    ? 'border-success/20 bg-success/5 text-success'
+                    : 'border-border-light bg-bg-tertiary text-text-secondary',
+              )}
+            >
+              {scanState.phase === 'scanning' && (
+                <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-primary animate-pulse" />
+              )}
+              {scanState.phase === 'found' && (
+                <svg
+                  className="h-3.5 w-3.5 flex-shrink-0 text-success"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+              )}
+              <span>
+                {scanState.phase === 'scanning'
+                  ? `Scanning intel for ${scanState.symbol}\u2026`
+                  : scanState.phase === 'found'
+                    ? `Found ${scanState.foundCount} new item${scanState.foundCount !== 1 ? 's' : ''} for ${scanState.symbol}`
+                    : `No new intel found for ${scanState.symbol}`}
+              </span>
+            </div>
+          )}
+          {/* Removal banner */}
+          {pendingUpdate?.action === 'removed' && (
+            <div className="mx-0.5 mt-3 flex items-center gap-2.5 rounded-lg border border-border-light bg-bg-tertiary px-3 py-2 text-xs font-medium text-text-secondary motion-safe:animate-[fadeSlideIn_0.25s_ease-out]">
+              <span>{pendingUpdate.symbol} removed from feed</span>
+            </div>
+          )}
           {isLoading ? (
             <div className="flex items-center justify-center pt-12">
               <Spinner size="md" label="Loading intel..." />
@@ -600,6 +834,7 @@ function IntelFeedContent({ feedTarget }: { feedTarget?: FeedTarget }) {
                     key={item.id}
                     item={item}
                     expanded={expandedId === item.id}
+                    isNew={newIds.has(item.id)}
                     onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
                     onDismiss={() => {
                       if (expandedId === item.id) setExpandedId(null);

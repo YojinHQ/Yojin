@@ -20,12 +20,13 @@ import type { AssessmentStore } from '../../../signals/curation/assessment-store
 import type { SignalAssessment, SignalVerdict, ThesisAlignment } from '../../../signals/curation/assessment-types.js';
 import type { CurationConfig, FeedTarget } from '../../../signals/curation/types.js';
 import { DEFAULT_SPAM_PATTERNS, deduplicateByTitle, filterSignals } from '../../../signals/signal-filter.js';
-import type { Signal, SignalOutputType } from '../../../signals/types.js';
+import type { Signal, SignalOutputType, SignalType } from '../../../signals/types.js';
 import type { WatchlistStore } from '../../../watchlist/watchlist-store.js';
 
 const log = createSubsystemLogger('curated-signals-resolver');
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const FOUR_DAYS_MS = 4 * 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // State
@@ -180,7 +181,19 @@ export function deriveCuratedOutputType(signal: Signal, assessment?: SignalAsses
 
 export async function curatedSignalsResolver(
   _parent: unknown,
-  args: { ticker?: string; since?: string; limit?: number; offset?: number; feedTarget?: FeedTarget },
+  args: {
+    ticker?: string;
+    since?: string;
+    until?: string;
+    type?: SignalType;
+    search?: string;
+    minConfidence?: number;
+    outputType?: string;
+    sourceId?: string;
+    limit?: number;
+    offset?: number;
+    feedTarget?: FeedTarget;
+  },
 ): Promise<CuratedSignalGql[]> {
   if (!signalArchive || !snapshotStore) return [];
 
@@ -208,7 +221,15 @@ export async function curatedSignalsResolver(
 
   // Query raw signals from archive — default 7-day window
   const since = args.since ?? new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
-  const rawSignals = await signalArchive.query({ tickers: allTickers, since });
+  const rawSignals = await signalArchive.query({
+    tickers: allTickers,
+    since,
+    until: args.until,
+    type: args.type,
+    search: args.search,
+    sourceId: args.sourceId,
+    outputType: args.outputType,
+  });
 
   // Get dismissed IDs
   const dismissedIds = await signalArchive.getDismissedIds();
@@ -216,7 +237,7 @@ export async function curatedSignalsResolver(
   // Filter
   const filtered = filterSignals(rawSignals, {
     minQualityScore: curationConfig?.minQualityScore ?? 40,
-    minConfidence: curationConfig?.minConfidence ?? 0.3,
+    minConfidence: args.minConfidence ?? curationConfig?.minConfidence ?? 0.3,
     spamPatterns: curationConfig?.spamPatterns ?? DEFAULT_SPAM_PATTERNS,
     excludeIds: dismissedIds,
   });
@@ -288,7 +309,7 @@ export async function curatedSignalsResolver(
   const limit = args.limit ?? 200;
   const page = sorted.slice(offset, offset + limit);
 
-  return page.map((t) => {
+  const result = page.map((t) => {
     const assessment = assessmentBySignalId.get(t.signal.id);
     const tickers = t.signal.assets.map((a) => a.ticker);
     const severity = deriveSignalSeverity(t.signal, assessment);
@@ -312,6 +333,17 @@ export async function curatedSignalsResolver(
         : null,
     };
   });
+
+  // Track shown signals and auto-dismiss stale ones (shown > 4 days ago).
+  // Sequential to avoid concurrent writes to shown.json.
+  const archive = signalArchive;
+  const shownIds = result.map((r) => r.signal.id);
+  void archive
+    .markShown(shownIds)
+    .then(() => archive.autoDismissStale(FOUR_DAYS_MS))
+    .catch((err) => log.debug('Failed to track/auto-dismiss signals', { error: err }));
+
+  return result;
 }
 
 export async function curationStatusResolver(): Promise<CurationStatusGql> {

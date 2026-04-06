@@ -108,7 +108,7 @@ import { tickerProfileQuery, tickerProfilesQuery } from './resolvers/profiles.js
 import { riskReportQuery } from './resolvers/risk.js';
 import { assessmentStatusResolver, signalAssessmentsResolver } from './resolvers/signal-assessments.js';
 import { signalGroupFieldResolvers, signalGroupResolver, signalGroupsResolver } from './resolvers/signal-groups.js';
-import { signalsByIdsResolver, signalsResolver } from './resolvers/signals.js';
+import { signalsByIdsResolver } from './resolvers/signals.js';
 import {
   resolveCreateSkill,
   resolveDeleteSkill,
@@ -148,7 +148,6 @@ const schema = createSchema({
       listDataSources: listDataSourcesResolver,
       checkDataSourceHealth: checkDataSourceHealthResolver,
       checkCliCommands: checkCliCommandsResolver,
-      signals: signalsResolver,
       signalsByIds: signalsByIdsResolver,
       signalGroups: signalGroupsResolver,
       curatedSignals: curatedSignalsResolver,

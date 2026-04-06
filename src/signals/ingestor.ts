@@ -505,7 +505,7 @@ export class SignalIngestor {
     return results;
   }
 
-  private static readonly RECENT_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+  private static readonly RECENT_LOOKBACK_MS = 72 * 60 * 60 * 1000;
 
   /** Single-query fetch of recent signals grouped by ticker for dedup context. */
   private async getRecentSignalsByTicker(tickers: string[]): Promise<Map<string, Signal[]>> {

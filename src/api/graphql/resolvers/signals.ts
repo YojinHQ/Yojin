@@ -1,12 +1,12 @@
 /**
- * Signal resolvers — query stored signals from the archive.
+ * Signal resolvers — shared types and by-ID lookup.
  *
- * Module-level state: setSignalArchive is called once during server startup.
+ * The main signal query is `curatedSignals` in curated-signals.ts.
+ * This file provides the shared `SignalGql` type, `toGql` mapper,
+ * and the `signalsByIds` resolver for direct ID-based lookups.
  */
 
-import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
-import type { SignalArchive, SignalQueryFilter } from '../../../signals/archive.js';
-import type { AssessmentStore } from '../../../signals/curation/assessment-store.js';
+import type { SignalArchive } from '../../../signals/archive.js';
 import { classifyOutputType } from '../../../signals/signal-filter.js';
 import type { Signal, SignalSentiment, SignalType, SourceType } from '../../../signals/types.js';
 
@@ -15,19 +15,9 @@ import type { Signal, SignalSentiment, SignalType, SourceType } from '../../../s
 // ---------------------------------------------------------------------------
 
 let archive: SignalArchive | null = null;
-let snapshotStore: PortfolioSnapshotStore | null = null;
-let assessmentStore: AssessmentStore | null = null;
 
 export function setSignalArchive(a: SignalArchive): void {
   archive = a;
-}
-
-export function setSignalSnapshotStore(store: PortfolioSnapshotStore): void {
-  snapshotStore = store;
-}
-
-export function setSignalAssessmentStore(s: AssessmentStore): void {
-  assessmentStore = s;
 }
 
 // ---------------------------------------------------------------------------
@@ -93,81 +83,6 @@ export function toGql(signal: Signal): SignalGql {
 // ---------------------------------------------------------------------------
 // Resolvers
 // ---------------------------------------------------------------------------
-
-export async function signalsResolver(
-  _parent: unknown,
-  args: {
-    type?: SignalType;
-    ticker?: string;
-    sourceId?: string;
-    since?: string;
-    until?: string;
-    search?: string;
-    minConfidence?: number;
-    outputType?: string;
-    limit?: number;
-  },
-): Promise<SignalGql[]> {
-  if (!archive) return [];
-
-  // Push portfolio ticker filter into the archive query so non-portfolio
-  // signals are skipped during the JSONL scan (avoids parsing + allocating).
-  const snapshot = !args.ticker && snapshotStore ? await snapshotStore.getLatest() : null;
-  const positionTickers =
-    snapshot && snapshot.positions.length > 0 ? snapshot.positions.map((p) => p.symbol.toUpperCase()) : null;
-
-  const filter: SignalQueryFilter = {};
-  if (args.type) filter.type = args.type;
-  if (args.ticker) filter.ticker = args.ticker;
-  if (!args.ticker && positionTickers) filter.tickers = positionTickers;
-  if (args.sourceId) filter.sourceId = args.sourceId;
-  if (args.since) filter.since = args.since;
-  if (args.until) filter.until = args.until;
-  if (args.search) filter.search = args.search;
-  if (args.minConfidence != null) filter.minConfidence = args.minConfidence;
-  if (args.outputType) filter.outputType = args.outputType;
-  filter.limit = args.limit ?? 50;
-
-  const signals = await archive.query(filter);
-
-  // Dedup by normalized title — keep the most recent signal per unique title.
-  // This prevents stale copies (e.g. same fundamentals refreshed daily) from
-  // cluttering the feed while preserving the latest version of each data point.
-  const byTitle = new Map<string, Signal>();
-  for (const signal of signals) {
-    const key = signal.title.trim().toLowerCase();
-    const existing = byTitle.get(key);
-    if (!existing || signal.publishedAt > existing.publishedAt) {
-      byTitle.set(key, signal);
-    }
-  }
-
-  let deduped = [...byTitle.values()];
-
-  // Filter out NOISE-verdicted signals — agents determined these have no value
-  if (assessmentStore) {
-    try {
-      const tickers = args.ticker ? [args.ticker] : (positionTickers ?? []);
-      if (tickers.length > 0) {
-        const reports = await assessmentStore.queryByTickers(tickers, { limit: 10 });
-        const noiseIds = new Set<string>();
-        for (const report of reports) {
-          for (const a of report.assessments) {
-            if (a.verdict === 'NOISE') noiseIds.add(a.signalId);
-          }
-        }
-        if (noiseIds.size > 0) {
-          deduped = deduped.filter((s) => !noiseIds.has(s.id));
-        }
-      }
-    } catch {
-      // Best-effort — assessments are enrichment, not critical
-    }
-  }
-
-  deduped.sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : a.publishedAt > b.publishedAt ? -1 : 0));
-  return deduped.map(toGql);
-}
 
 export async function signalsByIdsResolver(_parent: unknown, args: { ids: string[] }): Promise<SignalGql[]> {
   if (!archive || args.ids.length === 0) return [];

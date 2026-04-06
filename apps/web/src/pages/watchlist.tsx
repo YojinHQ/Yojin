@@ -5,8 +5,11 @@ import EmptyState from '../components/common/empty-state';
 import Button from '../components/common/button';
 import { PageBlurGate } from '../components/common/page-blur-gate';
 import IntelFeed from '../components/overview/intel-feed';
+import type { FeedPendingUpdate } from '../components/overview/intel-feed';
 import { AddSymbolModal } from '../components/watchlist/add-symbol-modal';
 import { SymbolCard, SymbolCardSkeleton } from '../components/watchlist/symbol-card';
+import { useAssetDetailModal } from '../lib/asset-detail-modal-context';
+import { useMarketStatus } from '../hooks/use-market-status';
 import { cn } from '../lib/utils';
 
 // ---------------------------------------------------------------------------
@@ -38,11 +41,14 @@ export default function Watchlist() {
 function WatchlistContent() {
   const [{ data, fetching, error }, refetchWatchlist] = useWatchlist();
   const [, removeFromWatchlist] = useRemoveFromWatchlist();
+  const { openAssetDetail } = useAssetDetailModal();
+  const { status: marketStatus } = useMarketStatus();
   const [modalOpen, setModalOpen] = useState(false);
   const [optimisticEntries, setOptimisticEntries] = useState<WatchlistEntry[]>([]);
   const [removedSymbols, setRemovedSymbols] = useState<Set<string>>(new Set());
   const [removingSymbol, setRemovingSymbol] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' } | null>(null);
+  const [feedUpdate, setFeedUpdate] = useState<FeedPendingUpdate | null>(null);
   const [, setTick] = useState(0); // Forces re-render for "last updated" timestamp
 
   // Tick every 30s to update "last updated" display
@@ -57,6 +63,13 @@ function WatchlistContent() {
     const timer = setTimeout(() => setToast(null), 3000);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  // Auto-clear feed update banner (only for 'removed' — 'added' is managed by IntelFeed scan lifecycle)
+  useEffect(() => {
+    if (!feedUpdate || feedUpdate.action === 'added') return;
+    const timer = setTimeout(() => setFeedUpdate(null), 4000);
+    return () => clearTimeout(timer);
+  }, [feedUpdate]);
 
   // Merge server data with optimistic adds, filter out removed
   const entries = useMemo(() => {
@@ -87,9 +100,17 @@ function WatchlistContent() {
           price: null,
           change: null,
           changePercent: null,
+          preMarketPrice: null,
+          preMarketChange: null,
+          preMarketChangePercent: null,
+          postMarketPrice: null,
+          postMarketChange: null,
+          postMarketChangePercent: null,
+          sparkline: null,
           enrichedAt: null,
         },
       ]);
+      setFeedUpdate({ symbol: added.symbol, action: 'added' });
       refetchWatchlist({ requestPolicy: 'network-only' });
     },
     [refetchWatchlist],
@@ -120,6 +141,7 @@ function WatchlistContent() {
 
       // Clean up optimistic entries too
       setOptimisticEntries((prev) => prev.filter((e) => e.symbol !== symbol));
+      setFeedUpdate({ symbol, action: 'removed' });
       setToast({ message: `Removed ${symbol}`, variant: 'success' });
       refetchWatchlist({ requestPolicy: 'network-only' });
     },
@@ -128,6 +150,7 @@ function WatchlistContent() {
 
   const openModal = useCallback(() => setModalOpen(true), []);
   const closeModal = useCallback(() => setModalOpen(false), []);
+  const handleScanComplete = useCallback(() => setFeedUpdate(null), []);
 
   const isLoading = fetching && !data;
   const hasError = !isLoading && !!error && entries.length === 0;
@@ -174,7 +197,9 @@ function WatchlistContent() {
                   key={entry.symbol}
                   entry={entry}
                   onRemove={handleRemove}
+                  onSelect={openAssetDetail}
                   removing={removingSymbol === entry.symbol}
+                  marketStatus={marketStatus}
                 />
               ))}
             </div>
@@ -196,7 +221,7 @@ function WatchlistContent() {
 
       {/* Right column: Intel Feed scoped to watchlist assets */}
       <aside className="flex h-[50vh] flex-col overflow-hidden border-t border-border bg-bg-secondary lg:h-auto lg:w-[360px] lg:flex-shrink-0 lg:border-t-0 lg:border-l">
-        <IntelFeed feedTarget="WATCHLIST" />
+        <IntelFeed feedTarget="WATCHLIST" pendingUpdate={feedUpdate} onScanComplete={handleScanComplete} />
       </aside>
     </div>
   );

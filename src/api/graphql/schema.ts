@@ -966,6 +966,13 @@ export const typeDefs = /* GraphQL */ `
     price: Float
     change: Float
     changePercent: Float
+    preMarketPrice: Float
+    preMarketChange: Float
+    preMarketChangePercent: Float
+    postMarketPrice: Float
+    postMarketChange: Float
+    postMarketChangePercent: Float
+    sparkline: [Float!]
     enrichedAt: String
   }
 
@@ -1149,20 +1156,21 @@ export const typeDefs = /* GraphQL */ `
     listDataSources: [DataSource!]!
     checkDataSourceHealth: [DataSource!]!
     checkCliCommands(commands: [String!]!): [CliCommandStatus!]!
-    signals(
-      type: SignalType
+    signalsByIds(ids: [ID!]!): [Signal!]!
+    signalGroups(ticker: String, since: String, limit: Int): [SignalGroup!]!
+    curatedSignals(
       ticker: String
-      sourceId: String
       since: String
       until: String
+      type: SignalType
       search: String
       minConfidence: Float
       outputType: SignalOutputType
+      sourceId: String
       limit: Int
-    ): [Signal!]!
-    signalsByIds(ids: [ID!]!): [Signal!]!
-    signalGroups(ticker: String, since: String, limit: Int): [SignalGroup!]!
-    curatedSignals(ticker: String, since: String, limit: Int, offset: Int, feedTarget: FeedTarget): [CuratedSignal!]!
+      offset: Int
+      feedTarget: FeedTarget
+    ): [CuratedSignal!]!
     curationStatus: CurationStatus!
     curationWorkflowStatus: WorkflowStatus!
     signalAssessments(ticker: String, since: String, limit: Int): [AssessmentReport!]!

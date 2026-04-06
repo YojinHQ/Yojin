@@ -354,10 +354,90 @@ export class SignalArchive {
     logger.info('Signal dismissed', { signalId });
   }
 
+  // ---------------------------------------------------------------------------
+  // Shown tracking — auto-dismiss after staleness window
+  // ---------------------------------------------------------------------------
+
+  private cachedShownMap: Map<string, string> | null = null;
+
+  private get shownPath(): string {
+    return join(this.dir, 'shown.json');
+  }
+
+  /** Load the shown map: signalId → ISO timestamp of first display. */
+  private async getShownMap(): Promise<Map<string, string>> {
+    if (this.cachedShownMap) return this.cachedShownMap;
+    try {
+      const raw = await readFile(this.shownPath, 'utf-8');
+      const obj = JSON.parse(raw) as Record<string, string>;
+      this.cachedShownMap = new Map(Object.entries(obj));
+    } catch {
+      this.cachedShownMap = new Map();
+    }
+    return this.cachedShownMap;
+  }
+
+  private async persistShownMap(): Promise<void> {
+    const shown = await this.getShownMap();
+    await this.ensureDir();
+    await writeFile(this.shownPath, JSON.stringify(Object.fromEntries(shown), null, 2));
+  }
+
+  /** Record the first time signal IDs are shown to the user. Already-tracked and dismissed IDs are skipped. */
+  async markShown(signalIds: string[]): Promise<void> {
+    if (signalIds.length === 0) return;
+    const shown = await this.getShownMap();
+    const dismissed = await this.getDismissedIds();
+    const now = new Date().toISOString();
+    let added = 0;
+    for (const id of signalIds) {
+      if (!shown.has(id) && !dismissed.has(id)) {
+        shown.set(id, now);
+        added++;
+      }
+    }
+    if (added > 0) {
+      await this.persistShownMap();
+      logger.debug('Marked signals as shown', { added, total: shown.size });
+    }
+  }
+
+  /** Auto-dismiss signals shown longer than `maxAgeMs` ago. Returns count of newly dismissed. */
+  async autoDismissStale(maxAgeMs: number): Promise<number> {
+    const shown = await this.getShownMap();
+    if (shown.size === 0) return 0;
+
+    const cutoff = Date.now() - maxAgeMs;
+    const staleIds: string[] = [];
+
+    for (const [id, shownAt] of shown) {
+      if (new Date(shownAt).getTime() <= cutoff) {
+        staleIds.push(id);
+      }
+    }
+
+    if (staleIds.length === 0) return 0;
+
+    // Dismiss stale signals
+    const dismissed = await this.getDismissedIds();
+    for (const id of staleIds) {
+      dismissed.add(id);
+      shown.delete(id);
+    }
+
+    // Persist both files
+    await this.ensureDir();
+    await Promise.all([writeFile(this.dismissedPath, JSON.stringify([...dismissed], null, 2)), this.persistShownMap()]);
+
+    logger.info('Auto-dismissed stale signals', { count: staleIds.length });
+    return staleIds.length;
+  }
+
   /** Reset cached state after external data wipe (clearAppData). */
   reset(): void {
     this.dirCreated = false;
     this.cachedDismissedIds = null;
+    this.cachedShownMap = null;
   }
 
   private async ensureDir(): Promise<void> {

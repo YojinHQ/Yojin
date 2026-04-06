@@ -498,6 +498,13 @@ export interface WatchlistEntry {
   price: number | null;
   change: number | null;
   changePercent: number | null;
+  preMarketPrice: number | null;
+  preMarketChange: number | null;
+  preMarketChangePercent: number | null;
+  postMarketPrice: number | null;
+  postMarketChange: number | null;
+  postMarketChangePercent: number | null;
+  sparkline: number[] | null;
   enrichedAt: string | null;
 }
 
@@ -663,7 +670,7 @@ export interface Signal {
 }
 
 export interface SignalsQueryResult {
-  signals: Signal[];
+  curatedSignals: CuratedSignal[];
 }
 
 export interface SignalsByIdsQueryResult {
@@ -1053,7 +1060,14 @@ export interface CuratedSignalsQueryResult {
 export interface CuratedSignalsVariables {
   ticker?: string;
   since?: string;
+  until?: string;
+  type?: SignalType;
+  search?: string;
+  minConfidence?: number;
+  outputType?: string;
+  sourceId?: string;
   limit?: number;
+  offset?: number;
   feedTarget?: FeedTarget;
 }
 

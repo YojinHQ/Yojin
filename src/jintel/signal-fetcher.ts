@@ -237,9 +237,30 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     });
   }
 
-  // 3. Key price events — skipped. Raw "TICKER: SIGNIFICANT MOVE on DATE" signals
-  // are mechanical noise in the intel feed. Price move context is already captured
-  // in the fundamentals snapshot signal (section 2 above).
+  // 3. Key price events — 52-week highs/lows, volume spikes, gap moves (included in market field)
+  //    Only ingest events from the last 7 days — Jintel returns full history which floods the feed.
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  for (const event of entity.market?.keyEvents ?? []) {
+    const eventDate = new Date(event.date);
+    if (eventDate < sevenDaysAgo) continue;
+    signals.push({
+      sourceId: 'jintel-key-event',
+      sourceName: 'Jintel Market Events',
+      sourceType: 'ENRICHMENT',
+      reliability: 0.95,
+      title: `${entity.name ?? tickers[0]}: ${event.type.replace(/_/g, ' ')} on ${event.date}`,
+      content: `${event.description} | Close: $${event.close.toFixed(2)} (${event.changePercent >= 0 ? '+' : ''}${event.changePercent.toFixed(1)}%)${event.volume != null ? ` | Volume: ${event.volume.toLocaleString()}` : ''}`,
+      publishedAt: eventDate.toISOString(),
+      type: SignalType.TECHNICAL,
+      tickers,
+      confidence: 0.9,
+      metadata: {
+        eventType: event.type,
+        priceChange: event.priceChange,
+        changePercent: event.changePercent,
+      },
+    });
+  }
 
   // 4. Short interest snapshot — included in market field, only emit when meaningful
   const shortInterestReports = entity.market?.shortInterest;
