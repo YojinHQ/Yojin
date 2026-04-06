@@ -1044,6 +1044,8 @@ export interface CuratedSignal {
     thesisAlignment: 'SUPPORTS' | 'CHALLENGES' | 'NEUTRAL';
     actionability: number;
   } | null;
+  convergenceBoost: number;
+  engagementScore: number;
 }
 
 export interface CuratedSignalsQueryResult {
