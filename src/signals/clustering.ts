@@ -100,12 +100,12 @@ export class SignalClustering {
 
   private async processOne(signal: Signal): Promise<void> {
     const tickers = signal.assets.map((a) => a.ticker);
-    const sixHoursAgo = new Date(new Date(signal.publishedAt).getTime() - 6 * 60 * 60 * 1000).toISOString();
+    const threeDaysAgo = new Date(new Date(signal.publishedAt).getTime() - 72 * 60 * 60 * 1000).toISOString();
 
     // Fetch recent signals for context (duplicate detection + signal groups)
     const candidates = await this.options.archive.query({
       tickers,
-      since: sixHoursAgo,
+      since: threeDaysAgo,
       until: signal.publishedAt,
       limit: 20,
     });

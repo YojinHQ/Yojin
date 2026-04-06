@@ -242,14 +242,15 @@ CRITICAL: if your tier2 would say "not related to [company]" or "this is about [
     return 'INSIGHT';
   }
 
-  private fallback(signal: Signal): QualityVerdict {
+  private fallback(_signal: Signal): QualityVerdict {
     return {
-      verdict: 'KEEP',
-      tier1: signal.title.slice(0, 60),
-      tier2: signal.title,
+      verdict: 'DROP',
+      dropReason: 'low_quality',
+      tier1: '',
+      tier2: '',
       sentiment: 'NEUTRAL',
       outputType: 'INSIGHT',
-      qualityScore: 50,
+      qualityScore: 0,
     };
   }
 }
