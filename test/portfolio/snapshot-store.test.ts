@@ -54,11 +54,6 @@ describe('PortfolioSnapshotStore', () => {
     expect(latest).toBeNull();
   });
 
-  it('returns empty array from getAll when no snapshots exist', async () => {
-    const all = await store.getAll();
-    expect(all).toEqual([]);
-  });
-
   it('saves and retrieves a snapshot', async () => {
     const snapshot = await store.save({
       positions: TEST_POSITIONS,
@@ -96,16 +91,6 @@ describe('PortfolioSnapshotStore', () => {
     const latest = await store.getLatest();
     expect(latest?.id).toBe(second.id);
     expect(latest?.positions).toHaveLength(3);
-  });
-
-  it('getAll returns all snapshots in order', async () => {
-    await store.save({ positions: [TEST_POSITIONS[0]], platform: 'INTERACTIVE_BROKERS' });
-    await store.save({ positions: TEST_POSITIONS, platform: 'COINBASE' });
-
-    const all = await store.getAll();
-    expect(all).toHaveLength(2);
-    expect(all[0].positions).toHaveLength(1);
-    expect(all[1].positions).toHaveLength(3);
   });
 
   it('getLatestRedacted returns snapshot with balances converted to ranges', async () => {
@@ -348,6 +333,108 @@ describe('PortfolioSnapshotStore', () => {
     const latest = await store.getLatest();
     expect(latest!.positions).toHaveLength(1);
     expect(latest!.positions[0].symbol).toBe('BTC');
+  });
+
+  it('getPositionTimeline returns earliest date per symbol', async () => {
+    await store.save({
+      positions: [
+        {
+          symbol: 'AAPL',
+          name: 'Apple',
+          quantity: 10,
+          costBasis: 150,
+          currentPrice: 178,
+          marketValue: 1780,
+          unrealizedPnl: 280,
+          unrealizedPnlPercent: 18.67,
+          assetClass: 'EQUITY',
+          platform: 'MANUAL',
+        },
+      ],
+      platform: 'MANUAL',
+    });
+    await store.save({
+      positions: [
+        {
+          symbol: 'AAPL',
+          name: 'Apple',
+          quantity: 10,
+          costBasis: 150,
+          currentPrice: 178,
+          marketValue: 1780,
+          unrealizedPnl: 280,
+          unrealizedPnlPercent: 18.67,
+          assetClass: 'EQUITY',
+          platform: 'MANUAL',
+        },
+        {
+          symbol: 'BTC',
+          name: 'Bitcoin',
+          quantity: 1,
+          costBasis: 60000,
+          currentPrice: 67000,
+          marketValue: 67000,
+          unrealizedPnl: 7000,
+          unrealizedPnlPercent: 11.67,
+          assetClass: 'CRYPTO',
+          platform: 'COINBASE',
+        },
+      ],
+      platform: 'COINBASE',
+    });
+
+    const timeline = await store.getPositionTimeline(['AAPL', 'BTC']);
+
+    expect(timeline.size).toBe(2);
+    expect(timeline.get('AAPL')).toBeDefined();
+    expect(timeline.get('BTC')).toBeDefined();
+    expect(timeline.get('AAPL')! <= timeline.get('BTC')!).toBe(true);
+  });
+
+  it('getPositionTimeline returns empty map when no snapshots exist', async () => {
+    const timeline = await store.getPositionTimeline(['AAPL']);
+    expect(timeline.size).toBe(0);
+  });
+
+  it('getPositionTimeline stops early once all symbols found', async () => {
+    await store.save({
+      positions: [
+        {
+          symbol: 'AAPL',
+          name: 'Apple',
+          quantity: 10,
+          costBasis: 150,
+          currentPrice: 178,
+          marketValue: 1780,
+          unrealizedPnl: 280,
+          unrealizedPnlPercent: 18.67,
+          assetClass: 'EQUITY',
+          platform: 'MANUAL',
+        },
+      ],
+      platform: 'MANUAL',
+    });
+    await store.save({
+      positions: [
+        {
+          symbol: 'AAPL',
+          name: 'Apple',
+          quantity: 10,
+          costBasis: 150,
+          currentPrice: 180,
+          marketValue: 1800,
+          unrealizedPnl: 300,
+          unrealizedPnlPercent: 20,
+          assetClass: 'EQUITY',
+          platform: 'MANUAL',
+        },
+      ],
+      platform: 'MANUAL',
+    });
+
+    const timeline = await store.getPositionTimeline(['AAPL']);
+    expect(timeline.size).toBe(1);
+    expect(timeline.get('AAPL')).toBeDefined();
   });
 
   it('MANUAL same-symbol update preserves other platforms (simulates addManualPosition flow)', async () => {

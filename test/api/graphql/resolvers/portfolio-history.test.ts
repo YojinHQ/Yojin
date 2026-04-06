@@ -1,3 +1,4 @@
+import type { JintelClient, TickerPriceHistory } from '@yojinhq/jintel-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -5,84 +6,190 @@ import {
   setPortfolioJintelClient,
   setSnapshotStore,
 } from '../../../../src/api/graphql/resolvers/portfolio.js';
+import type { PortfolioSnapshot } from '../../../../src/api/graphql/types.js';
 import type { PortfolioSnapshotStore } from '../../../../src/portfolio/snapshot-store.js';
 
-function makeSnapshotAt(day: string, totalValue: number, totalCost: number) {
+function makeSnapshot(positions: PortfolioSnapshot['positions']): PortfolioSnapshot {
+  const totalValue = positions.reduce((s, p) => s + p.marketValue, 0);
+  const totalCost = positions.reduce((s, p) => s + p.costBasis * p.quantity, 0);
   return {
-    id: `snap-${day}`,
-    positions: [
-      {
-        symbol: 'AAPL',
-        name: 'Apple Inc.',
-        quantity: 10,
-        costBasis: 150,
-        currentPrice: totalValue / 10,
-        marketValue: totalValue,
-        unrealizedPnl: totalValue - totalCost,
-        unrealizedPnlPercent: totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0,
-        assetClass: 'EQUITY' as const,
-        platform: 'MANUAL' as const,
-      },
-    ],
+    id: 'snap-test',
+    positions,
     totalValue,
     totalCost,
     totalPnl: totalValue - totalCost,
     totalPnlPercent: totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0,
     totalDayChange: 0,
     totalDayChangePercent: 0,
-    timestamp: `${day}T16:00:00Z`,
-    platform: 'MANUAL' as const,
+    timestamp: new Date().toISOString(),
+    platform: null,
   };
 }
 
-function createMockStore(snapshots: ReturnType<typeof makeSnapshotAt>[]): PortfolioSnapshotStore {
+function makePriceHistory(ticker: string, prices: Record<string, number>): TickerPriceHistory {
   return {
-    getLatest: vi.fn().mockResolvedValue(snapshots[snapshots.length - 1]),
-    getAll: vi.fn().mockResolvedValue(snapshots),
+    ticker,
+    history: Object.entries(prices).map(([date, close]) => ({
+      date,
+      open: close,
+      high: close,
+      low: close,
+      close,
+      volume: 1000,
+    })),
+  };
+}
+
+function createMockJintel(priceHistories: TickerPriceHistory[]): JintelClient {
+  return {
+    priceHistory: vi.fn().mockResolvedValue({ success: true, data: priceHistories }),
+    quotes: vi.fn().mockResolvedValue({ success: false, error: 'not needed' }),
+  } as unknown as JintelClient;
+}
+
+function createMockStore(snapshot: PortfolioSnapshot): PortfolioSnapshotStore {
+  return {
+    getLatest: vi.fn().mockResolvedValue(snapshot),
+    getPositionTimeline: vi.fn().mockResolvedValue(new Map()),
     save: vi.fn(),
   } as unknown as PortfolioSnapshotStore;
 }
 
-describe('portfolioHistoryQuery — period returns', () => {
+describe('portfolioHistoryQuery — backfill from Jintel prices', () => {
   beforeEach(() => {
     setPortfolioJintelClient(undefined);
   });
 
-  it('computes periodPnl as daily change excluding deposits', async () => {
-    const snapshots = [
-      makeSnapshotAt('2026-03-25', 1000, 900),
-      makeSnapshotAt('2026-03-26', 1050, 900),
-      makeSnapshotAt('2026-03-27', 980, 900),
-    ];
-    setSnapshotStore(createMockStore(snapshots) as unknown as PortfolioSnapshotStore);
+  it('returns empty when no jintel client', async () => {
+    const snap = makeSnapshot([
+      {
+        symbol: 'AAPL',
+        name: 'Apple',
+        quantity: 10,
+        costBasis: 150,
+        currentPrice: 200,
+        marketValue: 2000,
+        unrealizedPnl: 500,
+        unrealizedPnlPercent: 33.33,
+        assetClass: 'EQUITY',
+        platform: 'MANUAL',
+        entryDate: '2026-04-01',
+      },
+    ]);
+    setSnapshotStore(createMockStore(snap));
+    setPortfolioJintelClient(undefined);
+
     const history = await portfolioHistoryQuery(7);
-    expect(history[0].periodPnl).toBe(0);
-    expect(history[0].periodPnlPercent).toBe(0);
-    // Day-over-day: 1050 - 1000 = +50
-    expect(history[1].periodPnl).toBe(50);
-    expect(history[1].periodPnlPercent).toBeCloseTo(5, 2);
-    // Day-over-day: 980 - 1050 = -70
-    expect(history[2].periodPnl).toBe(-70);
-    expect(history[2].periodPnlPercent).toBeCloseTo(-6.67, 1);
+    expect(history).toEqual([]);
   });
 
-  it('handles single-day history with zero period return', async () => {
-    const snapshots = [makeSnapshotAt('2026-03-27', 1000, 900)];
-    setSnapshotStore(createMockStore(snapshots) as unknown as PortfolioSnapshotStore);
+  it('computes history points from Jintel daily prices', async () => {
+    // Use recent dates relative to now so they fall within the 7-day window
+    const today = new Date();
+    const d = (offset: number) => {
+      const date = new Date(today.getTime() - offset * 24 * 60 * 60 * 1000);
+      return date.toISOString().slice(0, 10);
+    };
+    const day3ago = d(3);
+    const day2ago = d(2);
+    const day1ago = d(1);
+
+    const snap = makeSnapshot([
+      {
+        symbol: 'AAPL',
+        name: 'Apple',
+        quantity: 10,
+        costBasis: 150,
+        currentPrice: 200,
+        marketValue: 2000,
+        unrealizedPnl: 500,
+        unrealizedPnlPercent: 33.33,
+        assetClass: 'EQUITY',
+        platform: 'MANUAL',
+        entryDate: day3ago,
+      },
+    ]);
+    const prices = makePriceHistory('AAPL', {
+      [day3ago]: 200,
+      [day2ago]: 210,
+      [day1ago]: 205,
+    });
+    setSnapshotStore(createMockStore(snap));
+    setPortfolioJintelClient(createMockJintel([prices]));
+
     const history = await portfolioHistoryQuery(7);
-    expect(history.length).toBeGreaterThanOrEqual(1);
-    expect(history[0].periodPnl).toBe(0);
-    expect(history[0].periodPnlPercent).toBe(0);
+
+    // Historical points + today's live point
+    expect(history.length).toBeGreaterThanOrEqual(4);
+    // Check specific historical day values
+    const point3ago = history.find((p) => p.timestamp.slice(0, 10) === day3ago);
+    const point2ago = history.find((p) => p.timestamp.slice(0, 10) === day2ago);
+    const point1ago = history.find((p) => p.timestamp.slice(0, 10) === day1ago);
+    expect(point3ago?.totalValue).toBe(2000); // 10 × 200
+    expect(point2ago?.totalValue).toBe(2100); // 10 × 210
+    expect(point1ago?.totalValue).toBe(2050); // 10 × 205
   });
 
-  it('handles zero starting value without division by zero', async () => {
-    const snapshots = [makeSnapshotAt('2026-03-25', 0, 0), makeSnapshotAt('2026-03-26', 500, 400)];
-    setSnapshotStore(createMockStore(snapshots) as unknown as PortfolioSnapshotStore);
+  it('returns empty when no positions', async () => {
+    const snap = makeSnapshot([]);
+    setSnapshotStore(createMockStore(snap));
+    setPortfolioJintelClient(createMockJintel([]));
+
     const history = await portfolioHistoryQuery(7);
-    expect(history[0].periodPnl).toBe(0);
-    expect(history[0].periodPnlPercent).toBe(0);
-    // Daily PnL = valueChange (500) - costChange (400) = 100 (pure market gain)
-    expect(history[1].periodPnl).toBe(100);
-    expect(history[1].periodPnlPercent).toBe(0); // prevValue was 0 → no percent
+    expect(history).toEqual([]);
+  });
+
+  it('returns empty when Jintel fails', async () => {
+    const snap = makeSnapshot([
+      {
+        symbol: 'AAPL',
+        name: 'Apple',
+        quantity: 10,
+        costBasis: 150,
+        currentPrice: 200,
+        marketValue: 2000,
+        unrealizedPnl: 500,
+        unrealizedPnlPercent: 33.33,
+        assetClass: 'EQUITY',
+        platform: 'MANUAL',
+        entryDate: '2026-04-01',
+      },
+    ]);
+    const failClient = {
+      priceHistory: vi.fn().mockResolvedValue({ success: false, error: 'API down' }),
+      quotes: vi.fn().mockResolvedValue({ success: false }),
+    } as unknown as JintelClient;
+
+    setSnapshotStore(createMockStore(snap));
+    setPortfolioJintelClient(failClient);
+
+    const history = await portfolioHistoryQuery(7);
+    expect(history).toEqual([]);
+  });
+
+  it('calls getPositionTimeline for positions missing entryDate', async () => {
+    const snap = makeSnapshot([
+      {
+        symbol: 'AAPL',
+        name: 'Apple',
+        quantity: 10,
+        costBasis: 150,
+        currentPrice: 200,
+        marketValue: 2000,
+        unrealizedPnl: 500,
+        unrealizedPnlPercent: 33.33,
+        assetClass: 'EQUITY',
+        platform: 'ROBINHOOD',
+      },
+    ]);
+    const mockStore = createMockStore(snap);
+    const prices = makePriceHistory('AAPL', { '2026-04-01': 200 });
+
+    setSnapshotStore(mockStore);
+    setPortfolioJintelClient(createMockJintel([prices]));
+
+    await portfolioHistoryQuery(7);
+
+    expect(mockStore.getPositionTimeline).toHaveBeenCalledWith(['AAPL']);
   });
 });

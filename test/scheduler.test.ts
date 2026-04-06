@@ -146,7 +146,7 @@ describe('Scheduler', () => {
     await (scheduler as unknown as { tick: () => Promise<void> }).tick();
 
     // Allow fire-and-forget persistBudgetState() to settle before reading
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 200));
 
     const stateRaw = await readFile(join(dataRoot, 'cron', 'state.json'), 'utf-8');
     const state = JSON.parse(stateRaw);

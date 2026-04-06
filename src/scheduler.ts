@@ -679,18 +679,6 @@ export class Scheduler {
       // 4. Snap brief regeneration
       await this.regenerateSnap();
 
-      // 5. Save portfolio history snapshot
-      if (this.snapshotStore) {
-        try {
-          const latest = await this.snapshotStore.getLatest();
-          if (latest && latest.positions.length > 0) {
-            await this.snapshotStore.appendHistoryPoint(latest);
-          }
-        } catch (err) {
-          logger.warn('Failed to save history snapshot', { error: err });
-        }
-      }
-
       // Mark completion only on success so a failed macro run doesn't start
       // the 2-hour cooldown clock, which would delay the next legitimate run.
       this.lastMacroCompletedAt = Date.now();
