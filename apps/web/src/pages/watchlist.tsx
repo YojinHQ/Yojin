@@ -60,11 +60,10 @@ function WatchlistContent() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  // Auto-clear feed update banner
+  // Auto-clear feed update banner (only for 'removed' — 'added' is managed by IntelFeed scan lifecycle)
   useEffect(() => {
-    if (!feedUpdate) return;
-    const ms = feedUpdate.action === 'added' ? 6000 : 4000;
-    const timer = setTimeout(() => setFeedUpdate(null), ms);
+    if (!feedUpdate || feedUpdate.action === 'added') return;
+    const timer = setTimeout(() => setFeedUpdate(null), 4000);
     return () => clearTimeout(timer);
   }, [feedUpdate]);
 
@@ -140,6 +139,7 @@ function WatchlistContent() {
 
   const openModal = useCallback(() => setModalOpen(true), []);
   const closeModal = useCallback(() => setModalOpen(false), []);
+  const handleScanComplete = useCallback(() => setFeedUpdate(null), []);
 
   const isLoading = fetching && !data;
   const hasError = !isLoading && !!error && entries.length === 0;
@@ -208,7 +208,7 @@ function WatchlistContent() {
 
       {/* Right column: Intel Feed scoped to watchlist assets */}
       <aside className="flex h-[50vh] flex-col overflow-hidden border-t border-border bg-bg-secondary lg:h-auto lg:w-[360px] lg:flex-shrink-0 lg:border-t-0 lg:border-l">
-        <IntelFeed feedTarget="WATCHLIST" pendingUpdate={feedUpdate} />
+        <IntelFeed feedTarget="WATCHLIST" pendingUpdate={feedUpdate} onScanComplete={handleScanComplete} />
       </aside>
     </div>
   );

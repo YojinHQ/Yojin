@@ -390,9 +390,11 @@ function IntelFeedCard({
 export default function IntelFeed({
   feedTarget,
   pendingUpdate,
+  onScanComplete,
 }: {
   feedTarget?: FeedTarget;
   pendingUpdate?: FeedPendingUpdate | null;
+  onScanComplete?: () => void;
 } = {}) {
   const { jintelConfigured, aiConfigured } = useFeatureStatus();
 
@@ -410,7 +412,7 @@ export default function IntelFeed({
     );
   }
 
-  return <IntelFeedContent feedTarget={feedTarget} pendingUpdate={pendingUpdate} />;
+  return <IntelFeedContent feedTarget={feedTarget} pendingUpdate={pendingUpdate} onScanComplete={onScanComplete} />;
 }
 
 /* ── Content ────────────────────────────────────────────────────────── */
@@ -429,9 +431,11 @@ function persistSeenIds(key: string, ids: Set<string>) {
 function IntelFeedContent({
   feedTarget,
   pendingUpdate,
+  onScanComplete,
 }: {
   feedTarget?: FeedTarget;
   pendingUpdate?: FeedPendingUpdate | null;
+  onScanComplete?: () => void;
 }) {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
@@ -441,6 +445,21 @@ function IntelFeedContent({
   const initialIdsRef = useRef<Set<string> | null>(null);
   const newIdTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [, dismissSignal] = useMutation(DISMISS_SIGNAL_MUTATION);
+
+  // ── Scan lifecycle state ────────────────────────────────────────────
+  const [scanState, setScanState] = useState<{
+    symbol: string;
+    phase: 'scanning' | 'found' | 'not-found';
+    foundCount: number;
+  } | null>(null);
+  const scanPreIdsRef = useRef<Set<string> | null>(null);
+  const scanStartTimeRef = useRef(0);
+  const scanVerifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onScanCompleteRef = useRef(onScanComplete);
+  useEffect(() => {
+    onScanCompleteRef.current = onScanComplete;
+  });
+  const latestItemsRef = useRef<IntelFeedItem[]>([]);
 
   // Restore seen IDs from sessionStorage so remounts don't lose the snapshot
   const storageKey = `${SEEN_IDS_KEY_PREFIX}${feedTarget ?? 'default'}`;
@@ -530,6 +549,10 @@ function IntelFeedContent({
     return signalItems;
   }, [data]);
 
+  useEffect(() => {
+    latestItemsRef.current = items;
+  }, [items]);
+
   // Track which items are "new" (arrived after initial load)
   useEffect(() => {
     if (items.length === 0) return;
@@ -578,6 +601,61 @@ function IntelFeedContent({
     const timers = newIdTimersRef.current;
     return () => {
       timers.forEach((t) => clearTimeout(t));
+    };
+  }, []);
+
+  // ── Scan: initialize when a new symbol is added ─────────────────────
+  useEffect(() => {
+    if (pendingUpdate?.action !== 'added') return;
+    scanPreIdsRef.current = new Set(latestItemsRef.current.map((i) => i.id));
+    scanStartTimeRef.current = Date.now();
+    setTimeout(() => setScanState({ symbol: pendingUpdate.symbol, phase: 'scanning', foundCount: 0 }), 0);
+    if (scanVerifyTimerRef.current) {
+      clearTimeout(scanVerifyTimerRef.current);
+      scanVerifyTimerRef.current = null;
+    }
+  }, [pendingUpdate]);
+
+  // ── Scan: fast polling while scanning ───────────────────────────────
+  const isScanning = scanState?.phase === 'scanning';
+  useEffect(() => {
+    if (!isScanning) return;
+    const id = setInterval(() => reexecute({ requestPolicy: 'network-only' }), 4_000);
+    return () => clearInterval(id);
+  }, [isScanning, reexecute]);
+
+  // ── Scan: detect new items or timeout ───────────────────────────────
+  useEffect(() => {
+    if (!scanState || scanState.phase !== 'scanning' || !scanPreIdsRef.current) return;
+    const preScanIds = scanPreIdsRef.current;
+    const newForSymbol = items.filter(
+      (i) => !preScanIds.has(i.id) && (i.tickers.includes(scanState.symbol) || i.ticker === scanState.symbol),
+    );
+    if (newForSymbol.length > 0) {
+      setScanState((prev) => (prev ? { ...prev, phase: 'found', foundCount: newForSymbol.length } : null));
+      scanPreIdsRef.current = null;
+      scanVerifyTimerRef.current = setTimeout(() => {
+        setScanState(null);
+        onScanCompleteRef.current?.();
+        scanVerifyTimerRef.current = null;
+      }, 3_000);
+      return;
+    }
+    if (Date.now() - scanStartTimeRef.current > 45_000) {
+      setScanState((prev) => (prev ? { ...prev, phase: 'not-found' } : null));
+      scanPreIdsRef.current = null;
+      scanVerifyTimerRef.current = setTimeout(() => {
+        setScanState(null);
+        onScanCompleteRef.current?.();
+        scanVerifyTimerRef.current = null;
+      }, 3_000);
+    }
+  }, [items, scanState]);
+
+  // Cleanup scan verification timer on unmount
+  useEffect(() => {
+    return () => {
+      if (scanVerifyTimerRef.current) clearTimeout(scanVerifyTimerRef.current);
     };
   }, []);
 
@@ -649,23 +727,46 @@ function IntelFeedContent({
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-auto px-3 pb-4">
-          {pendingUpdate && (
+          {/* Scan progress / verification banner */}
+          {scanState && (
             <div
+              key={`scan-${scanState.phase}`}
               className={cn(
                 'mx-0.5 mt-3 flex items-center gap-2.5 rounded-lg border px-3 py-2 text-xs font-medium motion-safe:animate-[fadeSlideIn_0.25s_ease-out]',
-                pendingUpdate.action === 'added'
+                scanState.phase === 'scanning'
                   ? 'border-accent-primary/20 bg-accent-primary/5 text-accent-primary'
-                  : 'border-border-light bg-bg-tertiary text-text-secondary',
+                  : scanState.phase === 'found'
+                    ? 'border-success/20 bg-success/5 text-success'
+                    : 'border-border-light bg-bg-tertiary text-text-secondary',
               )}
             >
-              {pendingUpdate.action === 'added' && (
+              {scanState.phase === 'scanning' && (
                 <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-primary animate-pulse" />
               )}
+              {scanState.phase === 'found' && (
+                <svg
+                  className="h-3.5 w-3.5 flex-shrink-0 text-success"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+              )}
               <span>
-                {pendingUpdate.action === 'added'
-                  ? `Scanning intel for ${pendingUpdate.symbol}\u2026`
-                  : `${pendingUpdate.symbol} removed from feed`}
+                {scanState.phase === 'scanning'
+                  ? `Scanning intel for ${scanState.symbol}\u2026`
+                  : scanState.phase === 'found'
+                    ? `Found ${scanState.foundCount} new item${scanState.foundCount !== 1 ? 's' : ''} for ${scanState.symbol}`
+                    : `No new intel found for ${scanState.symbol}`}
               </span>
+            </div>
+          )}
+          {/* Removal banner */}
+          {pendingUpdate?.action === 'removed' && (
+            <div className="mx-0.5 mt-3 flex items-center gap-2.5 rounded-lg border border-border-light bg-bg-tertiary px-3 py-2 text-xs font-medium text-text-secondary motion-safe:animate-[fadeSlideIn_0.25s_ease-out]">
+              <span>{pendingUpdate.symbol} removed from feed</span>
             </div>
           )}
           {isLoading ? (

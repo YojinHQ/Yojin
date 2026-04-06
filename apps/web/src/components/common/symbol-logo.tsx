@@ -36,7 +36,15 @@ function getColor(symbol: string): string {
   return PALETTE[Math.abs(hash) % PALETTE.length];
 }
 
+/** Local logo overrides — used when the CDN asset is broken or incorrect. */
+const LOCAL_LOGOS: Record<string, string> = {
+  USDC: '/logos/usdc.svg',
+};
+
 function getLogoUrls(symbol: string, assetClass: AssetClass): string[] {
+  const local = LOCAL_LOGOS[symbol];
+  if (local) return [local];
+
   const primary = assetClass === 'crypto' ? 'crypto' : 'symbol';
   const fallback = assetClass === 'crypto' ? 'symbol' : 'crypto';
 

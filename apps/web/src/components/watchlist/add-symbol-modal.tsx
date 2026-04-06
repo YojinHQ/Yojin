@@ -1,8 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { Search, Plus, Check, TrendingUp, Sparkles } from 'lucide-react';
 import Modal from '../common/modal';
-import Button from '../common/button';
 import { SymbolLogo } from '../common/symbol-logo';
-import Badge from '../common/badge';
+import { cn } from '../../lib/utils';
 import { useAddToWatchlist, useSearchSymbols } from '../../api';
 import type { AssetClass, SymbolSearchResult } from '../../api';
 
@@ -28,6 +28,82 @@ const RECOMMENDED: SymbolEntry[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Inline result row
+// ---------------------------------------------------------------------------
+
+interface ResultRowProps {
+  entry: SymbolEntry;
+  index: number;
+  isAdding: boolean;
+  justAdded: boolean;
+  onAdd: (entry: SymbolEntry) => void;
+}
+
+function ResultRow({ entry, index, isAdding, justAdded, onAdd }: ResultRowProps) {
+  const isCrypto = entry.assetClass === 'CRYPTO';
+
+  return (
+    <button
+      type="button"
+      disabled={isAdding || justAdded}
+      onClick={() => onAdd(entry)}
+      className={cn(
+        'group flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-200',
+        'hover:bg-white/[0.04] active:scale-[0.995]',
+        'disabled:pointer-events-none disabled:cursor-default',
+        justAdded && 'bg-success/[0.06]',
+      )}
+      style={{ animationDelay: `${index * 40}ms` }}
+    >
+      {/* Logo */}
+      <SymbolLogo symbol={entry.symbol} assetClass={isCrypto ? 'crypto' : 'equity'} size="md" />
+
+      {/* Symbol + Name */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold tracking-tight text-text-primary">{entry.symbol}</span>
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 rounded px-1 py-px text-3xs font-medium uppercase tracking-wider',
+              isCrypto ? 'bg-market/10 text-market' : 'bg-info/10 text-info',
+            )}
+          >
+            {isCrypto ? 'Crypto' : 'Stock'}
+          </span>
+        </div>
+        <span className="truncate text-xs text-text-muted">{entry.name}</span>
+      </div>
+
+      {/* Add button area */}
+      <div className="flex-shrink-0">
+        {justAdded ? (
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-success/15 text-success">
+            <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+          </span>
+        ) : isAdding ? (
+          <span className="inline-flex h-7 w-7 items-center justify-center">
+            <div className="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-accent-primary border-t-transparent" />
+          </span>
+        ) : (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 rounded-lg px-2 py-1 cursor-pointer',
+              'bg-white/[0.04] text-xs text-text-muted',
+              'transition-all duration-200',
+              'group-hover:bg-accent-primary/15 group-hover:text-accent-primary',
+              'group-hover:shadow-[0_0_12px_rgba(255,90,94,0.1)]',
+            )}
+          >
+            <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+            Add
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -45,7 +121,9 @@ export function AddSymbolModal({ open, onClose, existingSymbols, onAdded }: AddS
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' } | null>(null);
   const [addingSymbol, setAddingSymbol] = useState<string | null>(null);
+  const [recentlyAdded, setRecentlyAdded] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
+  const recentlyAddedTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const [, addToWatchlist] = useAddToWatchlist();
 
@@ -59,6 +137,11 @@ export function AddSymbolModal({ open, onClose, existingSymbols, onAdded }: AddS
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 50);
+    } else {
+      // Clean up recently-added timers on close
+      for (const timer of recentlyAddedTimers.current.values()) clearTimeout(timer);
+      recentlyAddedTimers.current.clear();
+      setTimeout(() => setRecentlyAdded(new Set()), 0);
     }
   }, [open]);
 
@@ -104,11 +187,25 @@ export function AddSymbolModal({ open, onClose, existingSymbols, onAdded }: AddS
         return;
       }
 
-      // Success — notify parent, clear search, show toast
+      // Success — show checkmark briefly, then notify parent
+      setRecentlyAdded((prev) => new Set(prev).add(entry.symbol));
+      const timer = setTimeout(() => {
+        setRecentlyAdded((prev) => {
+          const next = new Set(prev);
+          next.delete(entry.symbol);
+          return next;
+        });
+        recentlyAddedTimers.current.delete(entry.symbol);
+      }, 1200);
+      // Clear any existing timer for this symbol
+      const existing = recentlyAddedTimers.current.get(entry.symbol);
+      if (existing) clearTimeout(existing);
+      recentlyAddedTimers.current.set(entry.symbol, timer);
+
       onAdded({ symbol: entry.symbol, name: entry.name, assetClass: entry.assetClass });
       setSearch('');
       setDebouncedSearch('');
-      setToast({ message: `Added ${entry.symbol} to watchlist`, variant: 'success' });
+      setToast({ message: `${entry.symbol} added to watchlist`, variant: 'success' });
     },
     [addToWatchlist, onAdded],
   );
@@ -122,78 +219,104 @@ export function AddSymbolModal({ open, onClose, existingSymbols, onAdded }: AddS
   }, [onClose]);
 
   return (
-    <Modal open={open} onClose={handleClose} title="Add to Watchlist" maxWidth="max-w-md">
+    <Modal open={open} onClose={handleClose} maxWidth="max-w-md">
       <div className="space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-headline text-lg text-text-primary">Add to Watchlist</h2>
+            <p className="mt-0.5 text-xs text-text-muted">Track assets you're interested in</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Close"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary cursor-pointer"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
         {/* Search input */}
         <div className="relative">
-          <svg
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-            />
-          </svg>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
           <input
             ref={inputRef}
-            className="w-full rounded-lg border border-border bg-bg-card py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted outline-none transition-colors focus-visible:border-accent-primary focus-visible:ring-2 focus-visible:ring-accent-primary/30"
-            placeholder="Search symbol or company name..."
+            className={cn(
+              'w-full rounded-xl border border-border bg-bg-primary/60 py-2.5 pl-10 pr-3',
+              'text-sm text-text-primary placeholder:text-text-muted',
+              'outline-none transition-all duration-200',
+              'focus-visible:border-accent-primary/50 focus-visible:bg-bg-primary',
+              'focus-visible:shadow-[0_0_0_3px_rgba(255,90,94,0.08)]',
+            )}
+            placeholder="Search symbol or company..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          {search && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => {
+                setSearch('');
+                setDebouncedSearch('');
+              }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-text-muted transition-colors hover:text-text-primary cursor-pointer"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
 
-        {/* Results — fixed height, scrolls internally */}
+        {/* Results */}
         <div>
           {!isSearching && results.length > 0 && (
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">Popular</p>
+            <div className="mb-2 flex items-center gap-2 px-1">
+              <TrendingUp className="h-3 w-3 text-text-muted" />
+              <span className="text-2xs font-medium uppercase tracking-wider text-text-muted">Popular</span>
+              <div className="h-px flex-1 bg-border/50" />
+            </div>
           )}
-          <div className="h-72 overflow-auto">
+          {isSearching && !isLoading && apiResults.length > 0 && (
+            <div className="mb-2 flex items-center gap-2 px-1">
+              <Sparkles className="h-3 w-3 text-text-muted" />
+              <span className="text-2xs font-medium uppercase tracking-wider text-text-muted">
+                {apiResults.length} result{apiResults.length !== 1 ? 's' : ''}
+              </span>
+              <div className="h-px flex-1 bg-border/50" />
+            </div>
+          )}
+          <div className="h-[304px] overflow-y-auto overflow-x-hidden rounded-lg">
             {isLoading ? (
-              <div className="flex h-full items-center justify-center">
+              <div className="flex h-full flex-col items-center justify-center gap-3">
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent-primary border-t-transparent" />
+                <span className="text-xs text-text-muted">Searching...</span>
               </div>
             ) : results.length === 0 ? (
-              <p className="flex h-full items-center justify-center text-sm text-text-muted">
-                {isSearching ? 'No results found' : 'All popular symbols already added'}
-              </p>
+              <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+                <Search className="h-8 w-8 text-text-muted/40" />
+                <p className="text-sm font-medium text-text-muted">
+                  {isSearching ? 'No results found' : 'All popular symbols added'}
+                </p>
+                <p className="text-xs text-text-muted/60">
+                  {isSearching ? 'Try a different symbol or company name' : 'Search for more assets above'}
+                </p>
+              </div>
             ) : (
-              <div className="divide-y divide-border/40">
-                {results.map((entry) => (
-                  <div
+              <div className="space-y-0.5">
+                {results.map((entry, i) => (
+                  <ResultRow
                     key={entry.symbol}
-                    className="flex items-center justify-between px-3 py-2.5 transition-colors hover:bg-white/[0.04]"
-                  >
-                    <div className="flex items-center gap-3">
-                      <SymbolLogo
-                        symbol={entry.symbol}
-                        assetClass={entry.assetClass === 'CRYPTO' ? 'crypto' : 'equity'}
-                        size="md"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-text-primary">{entry.symbol}</span>
-                        <span className="ml-2 text-sm text-text-muted">{entry.name}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={entry.assetClass === 'CRYPTO' ? 'accent' : 'neutral'} size="xs" outline>
-                        {entry.assetClass === 'CRYPTO' ? 'Crypto' : 'Stock'}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        loading={addingSymbol === entry.symbol}
-                        onClick={() => handleAdd(entry)}
-                      >
-                        + Add
-                      </Button>
-                    </div>
-                  </div>
+                    entry={entry}
+                    index={i}
+                    isAdding={addingSymbol === entry.symbol}
+                    justAdded={recentlyAdded.has(entry.symbol)}
+                    onAdd={handleAdd}
+                  />
                 ))}
               </div>
             )}
@@ -203,10 +326,29 @@ export function AddSymbolModal({ open, onClose, existingSymbols, onAdded }: AddS
         {/* Toast notification */}
         {toast && (
           <div
-            className={`rounded-lg px-3 py-2 text-sm font-medium ${
-              toast.variant === 'success' ? 'bg-success/10 text-success' : 'bg-error/10 text-error'
-            }`}
+            className={cn(
+              'flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium',
+              'animate-[fadeSlideIn_0.2s_ease-out]',
+              toast.variant === 'success' ? 'bg-success/8 text-success' : 'bg-error/8 text-error',
+            )}
           >
+            {toast.variant === 'success' ? (
+              <Check className="h-3.5 w-3.5 flex-shrink-0" strokeWidth={2.5} />
+            ) : (
+              <svg
+                className="h-3.5 w-3.5 flex-shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+                />
+              </svg>
+            )}
             {toast.message}
           </div>
         )}
