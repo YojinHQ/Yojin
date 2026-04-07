@@ -246,6 +246,7 @@ export interface ChatEvent {
   type: ChatEventType;
   threadId: string;
   delta?: string;
+  accumulatedText?: string;
   messageId?: string;
   content?: string;
   error?: string;

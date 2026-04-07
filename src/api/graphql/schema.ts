@@ -329,6 +329,7 @@ export const typeDefs = /* GraphQL */ `
     type: ChatEventType!
     threadId: ID!
     delta: String
+    accumulatedText: String
     messageId: ID
     content: String
     error: String

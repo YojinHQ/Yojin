@@ -249,17 +249,28 @@ export class SignalIngestor {
     }
 
     if (signals.length > 0) {
-      if (this.clustering) {
-        try {
-          await this.clustering.processSignals(signals);
-        } catch (err) {
-          logger.warn('Signal clustering failed, writing raw signals as fallback', { error: err });
-          const enriched = await this.evaluateQuality(signals);
+      // ENRICHMENT-sourced signals bypass clustering + quality agent — write directly.
+      // Editorial signals (API/RSS/SCRAPER) go through the full pipeline.
+      const enrichmentSignals = signals.filter((s) => s.sources[0]?.type === 'ENRICHMENT');
+      const editorialSignals = signals.filter((s) => s.sources[0]?.type !== 'ENRICHMENT');
+
+      if (enrichmentSignals.length > 0) {
+        await this.archive.appendBatch(enrichmentSignals);
+      }
+
+      if (editorialSignals.length > 0) {
+        if (this.clustering) {
+          try {
+            await this.clustering.processSignals(editorialSignals);
+          } catch (err) {
+            logger.warn('Signal clustering failed, writing raw signals as fallback', { error: err });
+            const enriched = await this.evaluateQuality(editorialSignals);
+            await this.archive.appendBatch(enriched);
+          }
+        } else {
+          const enriched = await this.evaluateQuality(editorialSignals);
           await this.archive.appendBatch(enriched);
         }
-      } else {
-        const enriched = await this.evaluateQuality(signals);
-        await this.archive.appendBatch(enriched);
       }
       logger.info(
         `Ingested ${signals.length} signals${dropped > 0 ? `, ${dropped} dropped (not in portfolio or watchlist)` : ''}`,
@@ -431,17 +442,27 @@ export class SignalIngestor {
   /**
    * Run the quality agent on signals that don't go through clustering.
    * Single LLM call per signal — decides KEEP/DROP and produces summaries.
+   *
+   * ENRICHMENT-sourced signals bypass the LLM quality gate entirely — they are
+   * purpose-built data snapshots (market quotes, technicals, financials) that
+   * would score as "boilerplate" despite being valid investment data.
    */
   private async evaluateQuality(signals: Signal[]): Promise<Signal[]> {
     if (!this.qualityAgent) return signals;
 
+    // Split: ENRICHMENT signals are always kept; only editorial signals need LLM evaluation
+    const enrichmentSignals = signals.filter((s) => s.sources[0]?.type === 'ENRICHMENT');
+    const editorialSignals = signals.filter((s) => s.sources[0]?.type !== 'ENRICHMENT');
+
+    if (editorialSignals.length === 0) return signals;
+
     // Pre-fetch recent signals for all tickers in the batch (single query, no N+1).
-    const allTickers = [...new Set(signals.flatMap((s) => s.assets.map((a) => a.ticker)))];
+    const allTickers = [...new Set(editorialSignals.flatMap((s) => s.assets.map((a) => a.ticker)))];
     const recentByTicker = await this.getRecentSignalsByTicker(allTickers);
 
-    const results: Signal[] = [];
+    const results: Signal[] = [...enrichmentSignals];
     const dropCounts: Record<string, number> = {};
-    for (const signal of signals) {
+    for (const signal of editorialSignals) {
       const hasSummary = Boolean(signal.tier1 && signal.tier2);
       try {
         // Collect recent signals for this signal's tickers (deduplicated by id)

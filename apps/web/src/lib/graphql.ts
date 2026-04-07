@@ -66,6 +66,9 @@ const cache = cacheExchange({
     SkillTrigger: () => null, // embedded — nested under Skill
     SymbolSearchResult: () => null, // embedded — search result, no stable identity
     WatchlistEntry: () => null, // embedded — nested under watchlist query array
+    OAuthFlowResult: () => null, // mutation result — no stable identity
+    OAuthCompleteResult: () => null, // mutation result — no stable identity
+    KeychainTokenResult: () => null, // query result — singleton per provider
   },
   updates: {
     Mutation: {

@@ -11,6 +11,7 @@ import {
   SAVE_AI_CONFIG_MUTATION,
   SAVE_AI_CREDENTIAL_MUTATION,
   REMOVE_AI_CREDENTIAL_MUTATION,
+  DETECT_KEYCHAIN_TOKEN_QUERY,
 } from '../../api/documents';
 import type {
   AiConfigQueryResult,
@@ -21,6 +22,7 @@ import type {
   SaveAiCredentialVariables,
   RemoveAiCredentialMutationResult,
   RemoveAiCredentialVariables,
+  DetectKeychainTokenResult,
 } from '../../api/types';
 
 // ---------------------------------------------------------------------------
@@ -144,6 +146,12 @@ function ModelPicker() {
   const [keyError, setKeyError] = useState<string | null>(null);
   const [keySuccess, setKeySuccess] = useState(false);
 
+  const [keychainResult, reexecuteKeychain] = useQuery<DetectKeychainTokenResult>({
+    query: DETECT_KEYCHAIN_TOKEN_QUERY,
+    requestPolicy: 'network-only',
+    pause: provider !== 'claude-code',
+  });
+
   useEffect(() => {
     if (result.data?.aiConfig) {
       const resolved = resolveProvider(result.data.aiConfig.defaultProvider);
@@ -242,6 +250,8 @@ function ModelPicker() {
 
   const models = PROVIDER_MODELS[provider];
   const keyInfo = PROVIDER_KEY_INFO[provider];
+  const keychain = keychainResult.data?.detectKeychainToken;
+  const keychainConnected = keychain?.found && !keychain.error;
 
   return (
     <div className="space-y-5">
@@ -326,6 +336,40 @@ function ModelPicker() {
           </div>
         )}
       </div>
+
+      {/* Keychain authentication (Claude Code only) */}
+      {provider === 'claude-code' && (
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wider text-text-muted mb-2">Keychain Authentication</p>
+          <div className="rounded-xl border border-border bg-bg-card px-4 py-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-text-primary">macOS Keychain</p>
+                <p className="text-xs text-text-muted">
+                  {keychainResult.fetching
+                    ? 'Checking...'
+                    : keychainConnected
+                      ? `Connected · ${keychain?.model ?? 'Claude'}`
+                      : keychain?.error
+                        ? 'Token expired or invalid'
+                        : 'Not connected'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {keychainConnected && <span className="text-xs font-medium text-success">Active</span>}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  loading={keychainResult.fetching}
+                  onClick={() => reexecuteKeychain({ requestPolicy: 'network-only' })}
+                >
+                  Refresh
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Model selector */}
       <div>
