@@ -5,6 +5,76 @@ import { getLogger } from '../logging/index.js';
 
 const log = getLogger().sub('portfolio-live-enrichment');
 
+// ---------------------------------------------------------------------------
+// Quote cache — avoids hammering Jintel on repeated polls (30s frontend interval)
+// ---------------------------------------------------------------------------
+
+const QUOTE_CACHE_TTL_MS = 15_000; // 15 seconds
+
+interface CachedQuotes {
+  quotes: MarketQuote[];
+  fetchedAt: number;
+}
+
+// Keyed by sorted symbols string for stable cache hits
+const quoteCache = new Map<string, CachedQuotes>();
+
+function getCachedQuotes(symbols: string[]): MarketQuote[] | undefined {
+  const key = symbols.slice().sort().join(',');
+  const cached = quoteCache.get(key);
+  if (!cached) return undefined;
+  if (Date.now() - cached.fetchedAt > QUOTE_CACHE_TTL_MS) {
+    quoteCache.delete(key);
+    return undefined;
+  }
+  return cached.quotes;
+}
+
+function setCachedQuotes(symbols: string[], quotes: MarketQuote[]): void {
+  const key = symbols.slice().sort().join(',');
+  quoteCache.set(key, { quotes, fetchedAt: Date.now() });
+}
+
+const HISTORY_CACHE_TTL_MS = 30_000; // 30 seconds — sparklines change slowly
+
+interface CachedHistory {
+  data: Map<string, TickerPriceHistory>;
+  fetchedAt: number;
+}
+
+const historyCache = new Map<string, CachedHistory>();
+
+function getCachedHistory(
+  tickers: string[],
+  range: string,
+  interval?: string,
+): Map<string, TickerPriceHistory> | undefined {
+  const key = `${tickers.slice().sort().join(',')}_${range}_${interval ?? ''}`;
+  const cached = historyCache.get(key);
+  if (!cached) return undefined;
+  if (Date.now() - cached.fetchedAt > HISTORY_CACHE_TTL_MS) {
+    historyCache.delete(key);
+    return undefined;
+  }
+  return cached.data;
+}
+
+function setCachedHistory(
+  tickers: string[],
+  range: string,
+  interval: string | undefined,
+  data: Map<string, TickerPriceHistory>,
+): void {
+  const key = `${tickers.slice().sort().join(',')}_${range}_${interval ?? ''}`;
+  historyCache.set(key, { data, fetchedAt: Date.now() });
+}
+
+/** Clear all quote and history caches. Exported for tests. */
+export function clearLiveEnrichmentCache(): void {
+  quoteCache.clear();
+  historyCache.clear();
+}
+
 /** Check if the US stock market is currently in regular trading hours (9:30–16:00 ET, Mon–Fri). */
 export function isUSMarketOpen(): boolean {
   const now = new Date();
@@ -94,12 +164,6 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
   const equitySymbols = symbols.filter((s) => !cryptoSet.has(s));
   const cryptoSymbols = symbols.filter((s) => cryptoSet.has(s));
 
-  const fetchHistory = (tickers: string[], range: string, interval?: string) =>
-    client.priceHistory(tickers, range, interval).catch((err: unknown) => {
-      log.warn('Jintel priceHistory failed', { tickers, error: String(err) });
-      return undefined;
-    });
-
   const weekday = isUSWeekday();
   // On weekdays fetch today's session; on weekends/holidays widen to 5d so
   // buildSparkline can find the most recent complete trading session.
@@ -108,29 +172,71 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
   // price action at the same resolution as weekday sparklines.
   const equityInterval = '5m';
 
-  const [result, equityHistory, cryptoHistory] = await Promise.all([
-    client.quotes(symbols).catch((err: unknown) => {
-      log.warn('Jintel quotes call failed', { error: String(err) });
-      return undefined;
-    }),
+  // Check quote cache first to avoid hammering Jintel on repeated polls
+  const cachedQuotes = getCachedQuotes(symbols);
+
+  const fetchHistory = (tickers: string[], range: string, interval?: string) => {
+    const cached = getCachedHistory(tickers, range, interval);
+    if (cached) {
+      log.debug('Using cached priceHistory', { tickers });
+      return Promise.resolve(cached);
+    }
+    return client
+      .priceHistory(tickers, range, interval)
+      .then((res) => {
+        if (res?.success) {
+          const map = new Map<string, TickerPriceHistory>();
+          for (const h of res.data) map.set(h.ticker, h);
+          setCachedHistory(tickers, range, interval, map);
+          return map;
+        }
+        return undefined;
+      })
+      .catch((err: unknown) => {
+        log.warn('Jintel priceHistory failed', { tickers, error: String(err) });
+        return undefined;
+      });
+  };
+
+  // Fetch quotes + history in parallel (all respect their own caches)
+  const quotesPromise = cachedQuotes
+    ? Promise.resolve(cachedQuotes)
+    : client
+        .quotes(symbols)
+        .then((result) => {
+          if (!result?.success) {
+            const errorMsg = result && 'error' in result ? (result as { error: string }).error : 'no result';
+            log.warn('Jintel quotes returned non-success', { success: result?.success, error: errorMsg });
+            return { error: errorMsg };
+          }
+          const quotes = result.data.filter((q): q is MarketQuote => q != null);
+          setCachedQuotes(symbols, quotes);
+          log.info('Jintel quotes received', {
+            requested: symbols.length,
+            received: quotes.length,
+            tickers: quotes.map((q) => q.ticker),
+          });
+          return quotes;
+        })
+        .catch((err: unknown) => {
+          log.warn('Jintel quotes call failed', { error: String(err) });
+          return { error: String(err) };
+        });
+
+  const [quotesResult, equityHistoryMap, cryptoHistoryMap] = await Promise.all([
+    quotesPromise,
     equitySymbols.length > 0 ? fetchHistory(equitySymbols, equityRange, equityInterval) : undefined,
     cryptoSymbols.length > 0 ? fetchHistory(cryptoSymbols, '1d') : undefined,
   ]);
 
-  if (!result?.success) {
-    const errorMsg = result && 'error' in result ? (result as { error: string }).error : 'no result';
-    log.warn('Jintel quotes returned non-success', {
-      success: result?.success,
-      error: errorMsg,
-    });
-
+  // Handle quotes failure
+  if (!Array.isArray(quotesResult)) {
     const warnings: string[] = [];
-    if (typeof errorMsg === 'string' && /request limit/i.test(errorMsg)) {
+    if (typeof quotesResult.error === 'string' && /request limit/i.test(quotesResult.error)) {
       warnings.push(
         'Jintel API daily request limit exceeded. Upgrade your plan at https://api.jintel.ai/billing for higher limits.',
       );
     }
-
     return {
       ...snapshot,
       totalDayChange: snapshot.totalDayChange ?? 0,
@@ -139,24 +245,20 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
     };
   }
 
-  const validQuotes = result.data.filter((q): q is MarketQuote => q != null);
+  if (cachedQuotes) {
+    log.debug('Using cached quotes', { symbols });
+  }
 
-  log.info('Jintel quotes received', {
-    requested: symbols.length,
-    received: validQuotes.length,
-    tickers: validQuotes.map((q) => q.ticker),
-  });
-
-  const quoteMap = new Map<string, MarketQuote>(validQuotes.map((q) => [q.ticker, q]));
+  const quoteMap = new Map<string, MarketQuote>(quotesResult.map((q) => [q.ticker, q]));
 
   const historyMap = new Map<string, TickerPriceHistory>();
-  for (const res of [equityHistory, cryptoHistory]) {
-    if (res?.success) {
-      for (const h of res.data) historyMap.set(h.ticker, h);
+  for (const map of [equityHistoryMap, cryptoHistoryMap]) {
+    if (map) {
+      for (const [k, v] of map) historyMap.set(k, v);
     }
   }
   if (historyMap.size > 0) {
-    log.debug('Jintel priceHistory received', { tickers: [...historyMap.keys()] });
+    log.debug('priceHistory available', { tickers: [...historyMap.keys()] });
   }
 
   const positions: Position[] = snapshot.positions.map((pos) => {

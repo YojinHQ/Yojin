@@ -1,4 +1,4 @@
-import type { JintelClient, JintelResult, MarketQuote } from '@yojinhq/jintel-client';
+import type { JintelClient } from '@yojinhq/jintel-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { newsQuery, quoteQuery, setMarketJintelClient } from '../../../../src/api/graphql/resolvers/market.js';
@@ -9,27 +9,29 @@ import { newsQuery, quoteQuery, setMarketJintelClient } from '../../../../src/ap
 
 function createMockJintelClient(overrides: Partial<JintelClient> = {}): JintelClient {
   return {
-    quotes: vi.fn<(tickers: string[]) => Promise<JintelResult<MarketQuote[]>>>().mockResolvedValue({
+    quotes: vi.fn().mockResolvedValue({ success: false, error: 'not configured' }),
+    searchEntities: vi.fn(),
+    enrichEntity: vi.fn().mockResolvedValue({
       success: true,
-      data: [
-        {
-          ticker: 'AAPL',
-          price: 195.0,
-          change: 3.5,
-          changePercent: 1.83,
-          volume: 60_000_000,
-          high: 196.0,
-          low: 192.0,
-          open: 193.0,
-          previousClose: 191.5,
-          timestamp: '2024-01-15T16:00:00Z',
-          source: 'jintel',
-          marketCap: null,
+      data: {
+        name: 'Apple Inc.',
+        market: {
+          quote: {
+            ticker: 'AAPL',
+            price: 195.0,
+            change: 3.5,
+            changePercent: 1.83,
+            volume: 60_000_000,
+            high: 196.0,
+            low: 192.0,
+            open: 193.0,
+            previousClose: 191.5,
+            timestamp: '2024-01-15T16:00:00Z',
+            source: 'jintel',
+          },
         },
-      ],
+      },
     }),
-    searchEntities: vi.fn().mockResolvedValue({ success: true, data: [] }),
-    enrichEntity: vi.fn(),
     sanctionsScreen: vi.fn(),
     healthCheck: vi.fn(),
     ...overrides,
@@ -54,9 +56,10 @@ describe('market resolvers', () => {
 
       const result = await quoteQuery(null, { symbol: 'AAPL' });
 
-      expect(client.quotes).toHaveBeenCalledWith(['AAPL']);
+      expect(client.enrichEntity).toHaveBeenCalledWith('AAPL', ['market']);
       expect(result).toEqual({
         symbol: 'AAPL',
+        name: 'Apple Inc.',
         price: 195.0,
         change: 3.5,
         changePercent: 1.83,
@@ -71,7 +74,7 @@ describe('market resolvers', () => {
 
     it('falls back to stub when Jintel fails', async () => {
       const client = createMockJintelClient({
-        quotes: vi.fn().mockResolvedValue({ success: false, error: 'API down' }),
+        enrichEntity: vi.fn().mockResolvedValue({ success: false, error: 'API down' }),
       });
       setMarketJintelClient(client);
 
@@ -102,7 +105,7 @@ describe('market resolvers', () => {
 
       await quoteQuery(null, { symbol: 'aapl' });
 
-      expect(client.quotes).toHaveBeenCalledWith(['AAPL']);
+      expect(client.enrichEntity).toHaveBeenCalledWith('AAPL', ['market']);
     });
   });
 
