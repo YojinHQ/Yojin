@@ -89,17 +89,141 @@ export function classifyOutputType(signal: Signal): SignalOutputType {
   return 'INSIGHT';
 }
 
+// Stop words excluded from fuzzy title comparison
+const STOP_WORDS = new Set([
+  'a',
+  'an',
+  'the',
+  'and',
+  'or',
+  'but',
+  'in',
+  'on',
+  'at',
+  'to',
+  'for',
+  'of',
+  'with',
+  'by',
+  'from',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'has',
+  'have',
+  'had',
+  'do',
+  'does',
+  'did',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'its',
+  'it',
+  'this',
+  'that',
+  'these',
+  'those',
+  'as',
+  'not',
+  'no',
+  'so',
+  'if',
+  'up',
+  'out',
+  'about',
+  'into',
+  'over',
+  'after',
+  'before',
+  'between',
+  'through',
+  'new',
+  'says',
+  'said',
+  'sign',
+  'signs',
+  'report',
+  'reports',
+  'according',
+]);
+
+/** Extract significant words from a title for fuzzy comparison. */
+function extractSignificantWords(title: string): Set<string> {
+  const words = title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 1 && !STOP_WORDS.has(w));
+  return new Set(words);
+}
+
+/** Jaccard similarity between two word sets (0-1). */
+function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 1;
+  let intersection = 0;
+  for (const w of a) {
+    if (b.has(w)) intersection++;
+  }
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+/** Minimum Jaccard similarity to consider two titles as covering the same event. */
+const FUZZY_DEDUP_THRESHOLD = 0.45;
+
 /**
  * Title-based dedup — keeps the signal with highest confidence per title.
+ * Uses fuzzy matching: Jaccard word similarity above threshold treats
+ * differently-worded headlines about the same event as duplicates.
  */
 export function deduplicateByTitle(signals: Signal[]): Signal[] {
-  const byTitle = new Map<string, Signal>();
+  // First pass: exact title dedup (fast path)
+  const byExactTitle = new Map<string, Signal>();
   for (const s of signals) {
     const key = s.title.trim().toLowerCase();
-    const existing = byTitle.get(key);
+    const existing = byExactTitle.get(key);
     if (!existing || s.confidence > existing.confidence) {
-      byTitle.set(key, s);
+      byExactTitle.set(key, s);
     }
   }
-  return [...byTitle.values()];
+  const exactDeduped = [...byExactTitle.values()];
+
+  // Second pass: fuzzy dedup — group signals covering the same event
+  const kept: Signal[] = [];
+  const keptWords: Array<{ signal: Signal; words: Set<string> }> = [];
+
+  for (const signal of exactDeduped) {
+    const words = extractSignificantWords(signal.title);
+
+    // Check against already-kept signals for fuzzy match
+    let isDuplicate = false;
+    for (const entry of keptWords) {
+      const similarity = jaccardSimilarity(words, entry.words);
+      if (similarity >= FUZZY_DEDUP_THRESHOLD) {
+        // Keep the one with higher confidence
+        if (signal.confidence > entry.signal.confidence) {
+          const idx = kept.indexOf(entry.signal);
+          kept[idx] = signal;
+          entry.signal = signal;
+          entry.words = words;
+        }
+        isDuplicate = true;
+        break;
+      }
+    }
+
+    if (!isDuplicate) {
+      kept.push(signal);
+      keptWords.push({ signal, words });
+    }
+  }
+
+  return kept;
 }
