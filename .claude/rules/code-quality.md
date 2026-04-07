@@ -39,6 +39,7 @@ Extend via interfaces, not modification:
 - **Log success after the operation, not before.** A log like `logger.info('Session deleted')` must come after `await rm(...)`, not before. If the operation fails, a pre-operation log creates a misleading entry. Exception: log errors before propagating (see above).
 - **Reserve `warn` for unexpected or actionable conditions.** Expected paths (e.g. a data source intentionally left unconfigured) should use `debug` or `info`. `warn` implies something needs attention — if it fires on every normal startup, it's noise.
 - Never swallow errors silently.
+- **Don't retry a generator/stream after content has been yielded.** If a `for await` loop yields output before an error is thrown, retrying from scratch re-yields the full response — consumers accumulating output see doubled data. Track a `hasYieldedContent` flag and only retry if it is still false when the error is caught.
 - In `finally` blocks, wrap cleanup in its own try/catch to avoid suppressing the original exception.
 - When a function has setup + action + cleanup, decide explicitly whether setup failure should abort or be best-effort. Match the error strategy symmetrically.
 
