@@ -111,11 +111,12 @@ function createWatchlistTools(deps: {
         return { content: result.error, isError: true };
       }
 
-      // Best-effort: eager enrichment (entity already resolved above if possible)
+      // Best-effort: eager enrichment (skip resolveEntity if already resolved above)
       try {
         if (!resolvedEntityId) {
           await enrichment.resolveEntity(symbol);
         }
+        // enrichSymbol calls enrichEntity — no redundant searchEntities
         await enrichment.enrichSymbol(symbol);
       } catch (err) {
         log.warn('Enrichment failed after add', { symbol, error: String(err) });

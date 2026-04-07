@@ -12,6 +12,7 @@ function mockJintelClient(overrides: Partial<JintelClient> = {}): JintelClient {
   return {
     searchEntities: vi.fn().mockResolvedValue({ success: true, data: [] }),
     enrichEntity: vi.fn().mockResolvedValue({ success: true, data: {} }),
+    batchEnrich: vi.fn().mockResolvedValue({ success: true, data: [] }),
     ...overrides,
   } as unknown as JintelClient;
 }
@@ -82,24 +83,7 @@ describe('WatchlistEnrichment', () => {
       expect(client.searchEntities).toHaveBeenCalledWith('AAPL', expect.anything());
     });
 
-    it('falls back to name search when symbol search returns empty', async () => {
-      const searchFn = vi
-        .fn()
-        .mockResolvedValueOnce({ success: true, data: [] })
-        .mockResolvedValueOnce({ success: true, data: [MOCK_ENTITY] });
-      const client = mockJintelClient({ searchEntities: searchFn });
-      const enrichment = new WatchlistEnrichment({ store, jintelClient: client, dataDir: dir });
-      await enrichment.initialize();
-
-      await store.add({ symbol: 'AAPL', name: 'Apple Inc.', assetClass: 'EQUITY' });
-      await enrichment.resolveEntity('AAPL');
-
-      expect(searchFn).toHaveBeenCalledTimes(2);
-      expect(searchFn).toHaveBeenNthCalledWith(2, 'Apple Inc.', expect.anything());
-      expect(store.list()[0].jintelEntityId).toBe('jintel-aapl');
-    });
-
-    it('leaves jintelEntityId empty when both searches fail', async () => {
+    it('leaves jintelEntityId empty when search returns empty', async () => {
       const client = mockJintelClient({
         searchEntities: vi.fn().mockResolvedValue({ success: true, data: [] }),
       });
@@ -133,9 +117,9 @@ describe('WatchlistEnrichment', () => {
 
       await store.add({ symbol: 'XXXX', name: 'Unknown Corp', assetClass: 'EQUITY' });
 
-      // First attempt — makes API calls
+      // First attempt — makes API call
       await enrichment.resolveEntity('XXXX');
-      expect(searchFn).toHaveBeenCalledTimes(2); // symbol + name fallback
+      expect(searchFn).toHaveBeenCalledTimes(1);
 
       // Second attempt within TTL — skipped
       searchFn.mockClear();
@@ -274,9 +258,15 @@ describe('WatchlistEnrichment', () => {
   });
 
   describe('getEnrichedBatch', () => {
-    it('enriches all symbols concurrently and flushes once', async () => {
-      const enrichFn = vi.fn().mockResolvedValue({ success: true, data: MOCK_ENRICHED });
-      const client = mockJintelClient({ enrichEntity: enrichFn });
+    it('enriches all symbols in a single batch call and flushes once', async () => {
+      const batchFn = vi.fn().mockResolvedValue({
+        success: true,
+        data: [
+          { ...MOCK_ENRICHED, tickers: ['AAPL'] },
+          { ...MOCK_ENRICHED, name: 'Microsoft', tickers: ['MSFT'] },
+        ],
+      });
+      const client = mockJintelClient({ batchEnrich: batchFn } as Partial<JintelClient>);
       const enrichment = new WatchlistEnrichment({ store, jintelClient: client, dataDir: dir, ttlSeconds: 0 });
       await enrichment.initialize();
 
@@ -287,8 +277,11 @@ describe('WatchlistEnrichment', () => {
 
       expect(results.size).toBe(2);
       expect(results.get('AAPL')).not.toBeNull();
+      expect(results.get('AAPL')!.quote?.price).toBe(175.5);
       expect(results.get('MSFT')).not.toBeNull();
-      expect(enrichFn).toHaveBeenCalledTimes(2);
+      // Single batch call instead of N per-ticker calls
+      expect(batchFn).toHaveBeenCalledTimes(1);
+      expect(batchFn).toHaveBeenCalledWith(['AAPL', 'MSFT'], ['market', 'risk']);
 
       // Verify cache was persisted (single flush at end)
       const raw = await readFile(join(dir, 'watchlist', 'enrichment-cache.jsonl'), 'utf-8');
