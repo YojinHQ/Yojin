@@ -98,7 +98,7 @@ export type PortfolioTickerProvider = () => Promise<Set<string> | null>;
 export type WatchlistTickerProvider = () => Promise<Set<string> | null>;
 
 /** Hook called after signals are written to the archive. */
-export type PostIngestHook = (ingested: number) => Promise<void>;
+export type PostIngestHook = (tickers: string[], ingested: number) => Promise<void>;
 
 export class SignalIngestor {
   private readonly archive: SignalArchive;
@@ -280,10 +280,13 @@ export class SignalIngestor {
         `Ingested ${signals.length} signals${dropped > 0 ? `, ${dropped} dropped (not in portfolio or watchlist)` : ''}`,
       );
 
-      // Auto-curate: run deterministic curation immediately after ingestion
+      // Auto-curate: run deterministic curation immediately after ingestion.
+      // Collect unique tickers from kept signals so downstream consumers (e.g. micro
+      // research) can react to exactly which assets have new data.
       if (this.postIngestHook) {
+        const ingestedTickers = [...new Set(signals.flatMap((s) => s.assets.map((a) => a.ticker.toUpperCase())))];
         try {
-          await this.postIngestHook(signals.length);
+          await this.postIngestHook(ingestedTickers, signals.length);
         } catch (err) {
           logger.warn('Post-ingest curation failed', { error: err });
         }
