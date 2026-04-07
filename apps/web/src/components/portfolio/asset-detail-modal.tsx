@@ -31,35 +31,28 @@ import { timeAgo } from '../../lib/utils';
 const SEVEN_DAYS_AGO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
 // ---------------------------------------------------------------------------
-// Scale selector types & mapping
+// Range selector types & mapping
 // ---------------------------------------------------------------------------
 
-type Scale = '15m' | '30m' | '1h' | '1d' | '1wk' | '1mo';
+type TimeRange = '1W' | '1M' | '3M' | '6M' | '1Y' | '5Y';
 
-const INTRADAY_SCALES: { value: Scale; label: string }[] = [
-  { value: '15m', label: '15min' },
-  { value: '30m', label: '30min' },
-  { value: '1h', label: '1hr' },
+const TIME_RANGES: { value: TimeRange; label: string }[] = [
+  { value: '1W', label: '1W' },
+  { value: '1M', label: '1M' },
+  { value: '3M', label: '3M' },
+  { value: '6M', label: '6M' },
+  { value: '1Y', label: '1Y' },
+  { value: '5Y', label: '5Y' },
 ];
 
-const PERIOD_SCALES: { value: Scale; label: string }[] = [
-  { value: '1d', label: 'Daily' },
-  { value: '1wk', label: 'Weekly' },
-  { value: '1mo', label: 'Monthly' },
-];
-
-const SCALE_CONFIG: Record<Scale, { interval: string; range: string }> = {
-  '15m': { interval: '15m', range: '5d' },
-  '30m': { interval: '30m', range: '5d' },
-  '1h': { interval: '1h', range: '5d' },
-  '1d': { interval: '1d', range: '3m' },
-  '1wk': { interval: '1wk', range: '1y' },
-  '1mo': { interval: '1mo', range: '1y' },
+const RANGE_CONFIG: Record<TimeRange, { range: string; interval: string; intraday: boolean }> = {
+  '1W': { range: '5d', interval: '15m', intraday: true },
+  '1M': { range: '1m', interval: '1h', intraday: true },
+  '3M': { range: '3m', interval: '1d', intraday: false },
+  '6M': { range: '6m', interval: '1d', intraday: false },
+  '1Y': { range: '1y', interval: '1d', intraday: false },
+  '5Y': { range: '5y', interval: '1wk', intraday: false },
 };
-
-function isIntraday(scale: Scale): boolean {
-  return scale === '15m' || scale === '30m' || scale === '1h';
-}
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -212,17 +205,9 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
   const [quoteResult] = useQuote(symbol);
   const quote = quoteResult.data?.quote ?? undefined;
 
-  const [scale, setScale] = useState<Scale>('15m');
-  const effectiveScale: Scale = scale;
-  // Remember last intraday selection when switching back from period scales
-  const [lastIntraday, setLastIntraday] = useState<Scale>('15m');
+  const [timeRange, setTimeRange] = useState<TimeRange>('1M');
 
-  const handleScaleChange = (s: Scale) => {
-    setScale(s);
-    if (isIntraday(s)) setLastIntraday(s);
-  };
-
-  const { interval, range } = SCALE_CONFIG[effectiveScale];
+  const { interval, range, intraday: isIntradayRange } = RANGE_CONFIG[timeRange];
   const historyVars = useMemo<PriceHistoryQueryVariables>(
     () => ({ tickers: [symbol], range, interval }),
     [symbol, range, interval],
@@ -387,51 +372,16 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
         title="Price"
         headerAction={
           <div className="flex items-center gap-1">
-            {/* Intraday dropdown */}
-            <div className="relative">
-              <select
-                value={isIntraday(scale) ? scale : '__period__'}
-                onChange={(e) => handleScaleChange(e.target.value as Scale)}
-                className={cn(
-                  'cursor-pointer appearance-none rounded pl-2 pr-5 py-0.5 text-2xs font-medium transition-colors bg-transparent border',
-                  isIntraday(scale)
-                    ? 'border-accent-primary text-accent-primary'
-                    : 'border-border-light text-text-muted hover:text-text-secondary',
-                )}
-              >
-                {!isIntraday(scale) && (
-                  <option value="__period__" hidden>
-                    {INTRADAY_SCALES.find((s) => s.value === lastIntraday)?.label ?? '15min'}
-                  </option>
-                )}
-                {INTRADAY_SCALES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              <svg
-                className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7" />
-              </svg>
-            </div>
-
-            {/* Period buttons */}
-            {PERIOD_SCALES.map((s) => (
+            {TIME_RANGES.map((r) => (
               <button
-                key={s.value}
-                onClick={() => handleScaleChange(s.value)}
+                key={r.value}
+                onClick={() => setTimeRange(r.value)}
                 className={cn(
                   'cursor-pointer rounded px-1.5 py-0.5 text-2xs font-medium transition-colors',
-                  scale === s.value ? 'bg-accent-primary text-white' : 'text-text-muted hover:text-text-secondary',
+                  timeRange === r.value ? 'bg-accent-primary text-white' : 'text-text-muted hover:text-text-secondary',
                 )}
               >
-                {s.label}
+                {r.label}
               </button>
             ))}
           </div>
@@ -442,7 +392,7 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
             <Spinner size="sm" label="Loading price history..." />
           </div>
         ) : priceHistory.length > 0 ? (
-          <PriceChart data={priceHistory} intraday={isIntraday(effectiveScale)} />
+          <PriceChart data={priceHistory} intraday={isIntradayRange} />
         ) : (
           <p className="text-sm text-text-muted py-8 text-center">No price history available</p>
         )}
