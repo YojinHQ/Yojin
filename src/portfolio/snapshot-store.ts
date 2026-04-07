@@ -48,7 +48,7 @@ export class PortfolioSnapshotStore {
     const { positions, platform: rawPlatform } = params;
     const platform = rawPlatform.toUpperCase();
 
-    const stamped = positions.map((p) => ({ ...p, platform }));
+    const stamped = positions.map((p) => ({ ...p, symbol: p.symbol.toUpperCase(), platform }));
 
     const existing = params.existingSnapshot !== undefined ? params.existingSnapshot : await this.getLatest();
     // Keep only positions from OTHER known platforms. Drop same-platform entries

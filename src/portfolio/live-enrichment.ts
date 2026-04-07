@@ -84,11 +84,13 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
   }
 
   const client = jintelClient;
-  const symbols = [...new Set(snapshot.positions.map((p) => p.symbol))];
+  const symbols = [...new Set(snapshot.positions.map((p) => p.symbol.toUpperCase()))];
   log.debug('Fetching live quotes', { symbols });
 
   // Crypto trades 24/7 → always intraday. Equities → intraday only during US market hours.
-  const cryptoSet = new Set(snapshot.positions.filter((p) => p.assetClass === 'CRYPTO').map((p) => p.symbol));
+  const cryptoSet = new Set(
+    snapshot.positions.filter((p) => p.assetClass === 'CRYPTO').map((p) => p.symbol.toUpperCase()),
+  );
   const equitySymbols = symbols.filter((s) => !cryptoSet.has(s));
   const cryptoSymbols = symbols.filter((s) => cryptoSet.has(s));
 
@@ -158,7 +160,7 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
   }
 
   const positions: Position[] = snapshot.positions.map((pos) => {
-    const quote = quoteMap.get(pos.symbol);
+    const quote = quoteMap.get(pos.symbol.toUpperCase());
     if (!quote) {
       log.debug('No quote found for position', { symbol: pos.symbol, availableTickers: [...quoteMap.keys()] });
       return pos;
@@ -169,8 +171,9 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
     const hasCostBasis = pos.costBasis > 0;
     const totalCost = hasCostBasis ? pos.costBasis * pos.quantity : 0;
 
-    const priceHist = historyMap.get(pos.symbol);
-    const isEquity = !cryptoSet.has(pos.symbol);
+    const upperSymbol = pos.symbol.toUpperCase();
+    const priceHist = historyMap.get(upperSymbol);
+    const isEquity = !cryptoSet.has(upperSymbol);
     const sparkline =
       priceHist && priceHist.history.length > 0 ? buildSparkline(priceHist, currentPrice, isEquity) : undefined;
 
