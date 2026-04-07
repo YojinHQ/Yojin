@@ -103,6 +103,10 @@ function cleanInputSchema(schema: Record<string, unknown>): Record<string, unkno
       ]),
     );
   }
+  // Anthropic API requires `type` at the top level of input_schema
+  if (!rest.type) {
+    rest.type = 'object';
+  }
   return rest;
 }
 

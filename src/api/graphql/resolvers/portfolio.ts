@@ -5,9 +5,16 @@
  * empty state when no snapshots have been imported yet.
  */
 
-import type { JintelClient } from '@yojinhq/jintel-client';
+import type { JintelClient, TickerPriceHistory } from '@yojinhq/jintel-client';
 
 import { getLogger } from '../../../logging/index.js';
+import {
+  buildHistoryPoints,
+  buildPriceMap,
+  daysToJintelRange,
+  fillCalendarDays,
+  resolvePositionStartDates,
+} from '../../../portfolio/history.js';
 import { enrichPortfolioSnapshotWithLiveQuotes } from '../../../portfolio/live-enrichment.js';
 import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { ConnectionManager } from '../../../scraper/connection-manager.js';
@@ -93,98 +100,78 @@ export async function portfolioQuery(): Promise<PortfolioSnapshot> {
 
 export async function portfolioHistoryQuery(days?: number | null): Promise<PortfolioHistoryPoint[]> {
   if (!snapshotStore) return [];
-  const snapshots = await snapshotStore.getAll();
-  if (snapshots.length === 0) return [];
 
-  // Sort chronologically — JSONL insertion order may not be time-ordered
-  snapshots.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const snapshot = await snapshotStore.getLatest();
+  if (!snapshot || snapshot.positions.length === 0) return [];
 
-  // Single pass: dedup older days to one snapshot (the latest per day),
-  // but keep ALL intraday points for the most recent day so the chart
-  // shows movement on day 1 (e.g. portfolio being built up during onboarding).
-  const latestDay = snapshots[snapshots.length - 1].timestamp.slice(0, 10);
-  const dayDedup = new Map<string, PortfolioSnapshot>();
-  const latestDaySnapshots: PortfolioSnapshot[] = [];
-  for (const s of snapshots) {
-    const day = s.timestamp.slice(0, 10);
-    if (day === latestDay) {
-      latestDaySnapshots.push(s);
-    } else {
-      dayDedup.set(day, s);
-    }
+  const positions = snapshot.positions;
+  const symbols = [...new Set(positions.map((p) => p.symbol))];
+
+  // Determine date range
+  const effectiveDays = days ?? 7;
+  const startDate = new Date(Date.now() - effectiveDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  // Resolve when each position was first held
+  const needsTimeline = positions.filter((p) => !p.entryDate);
+  let timeline: Map<string, string> | null = null;
+  if (needsTimeline.length > 0) {
+    timeline = await snapshotStore.getPositionTimeline(needsTimeline.map((p) => p.symbol));
+  }
+  const startDates = resolvePositionStartDates(positions, timeline, startDate);
+
+  // Fetch historical daily prices from Jintel
+  if (!jintelClient) {
+    log.debug('No Jintel client — returning empty history');
+    return [];
   }
 
-  // Apply days filter if provided
-  let cutoff = -Infinity;
-  if (days != null && days > 0) {
-    const latestSnap = latestDaySnapshots[latestDaySnapshots.length - 1];
-    if (latestSnap) {
-      cutoff = new Date(latestSnap.timestamp).getTime() - days * 24 * 60 * 60 * 1000;
+  const range = daysToJintelRange(effectiveDays);
+  let priceData: TickerPriceHistory[];
+  try {
+    const result = await jintelClient.priceHistory(symbols, range, '1d');
+    if (!result.success) {
+      log.warn('Jintel priceHistory returned non-success', { error: result });
+      return [];
     }
+    priceData = result.data;
+  } catch (err) {
+    log.warn('Jintel priceHistory call failed', { error: String(err) });
+    return [];
   }
 
-  const final = [...dayDedup.values(), ...latestDaySnapshots]
-    .filter((s) => new Date(s.timestamp).getTime() >= cutoff)
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  // Build price map and fill weekends/holidays
+  const rawPriceMap = buildPriceMap(priceData);
+  const filledPrices = fillCalendarDays(rawPriceMap, startDate, yesterday);
 
-  const history: PortfolioHistoryPoint[] = final.map((s, i) => {
-    if (i === 0) {
-      return {
-        timestamp: s.timestamp,
-        totalValue: s.totalValue,
-        totalCost: s.totalCost,
-        totalPnl: s.totalPnl,
-        totalPnlPercent: s.totalPnlPercent,
-        periodPnl: 0,
-        periodPnlPercent: 0,
-      };
-    }
-    const prev = final[i - 1];
-    // Subtract cost-basis changes to exclude deposits/withdrawals from daily PnL.
-    // dailyPnl = (value change) - (cost change) = pure market movement.
-    const valueChange = s.totalValue - prev.totalValue;
-    const costChange = s.totalCost - prev.totalCost;
-    const dailyPnl = valueChange - costChange;
-    const prevMarketValue = prev.totalValue;
-    return {
-      timestamp: s.timestamp,
-      totalValue: s.totalValue,
-      totalCost: s.totalCost,
-      totalPnl: s.totalPnl,
-      totalPnlPercent: s.totalPnlPercent,
-      periodPnl: dailyPnl,
-      periodPnlPercent: prevMarketValue > 0 ? (dailyPnl / prevMarketValue) * 100 : 0,
-    };
-  });
+  // Compute historical points (up to yesterday)
+  const history = buildHistoryPoints(positions, filledPrices, startDates, startDate, yesterday);
 
-  // Replace the trailing point with live-priced data so the chart's edge
-  // matches the Portfolio Value card (which uses enrichWithLiveQuotes).
-  if (final.length > 0) {
-    const latest = final[final.length - 1];
-    const liveSnapshot = await enrichPortfolioSnapshotWithLiveQuotes(latest, jintelClient);
-    // Use previous day's snapshot as baseline (consistent with historical bars).
-    // If only one day exists, fall back to today's stored snapshot.
-    const prevSnap = final.length >= 2 ? final[final.length - 2] : null;
-    const prevValue = prevSnap ? prevSnap.totalValue : latest.totalValue;
-    const liveCostChange = prevSnap ? liveSnapshot.totalCost - prevSnap.totalCost : 0;
-    const liveDailyPnl = liveSnapshot.totalValue - prevValue - liveCostChange;
-    const livePoint: PortfolioHistoryPoint = {
-      timestamp: new Date().toISOString(),
-      totalValue: liveSnapshot.totalValue,
-      totalCost: liveSnapshot.totalCost,
-      totalPnl: liveSnapshot.totalPnl,
-      totalPnlPercent: liveSnapshot.totalPnlPercent,
-      periodPnl: liveDailyPnl,
-      periodPnlPercent: prevValue > 0 ? (liveDailyPnl / prevValue) * 100 : 0,
-    };
-    // Replace last entry if same day, otherwise append
-    const liveDay = livePoint.timestamp.slice(0, 10);
-    const lastDay = history[history.length - 1]?.timestamp.slice(0, 10);
-    if (liveDay === lastDay) {
-      history[history.length - 1] = livePoint;
-    } else {
-      history.push(livePoint);
-    }
+  // Append today's live-priced trailing point
+  const liveSnapshot = await enrichPortfolioSnapshotWithLiveQuotes(snapshot, jintelClient);
+  const prevPoint = history.length > 0 ? history[history.length - 1] : null;
+  const prevValue = prevPoint ? prevPoint.totalValue : 0;
+  const prevCost = prevPoint ? prevPoint.totalCost : 0;
+  const liveCostChange = liveSnapshot.totalCost - prevCost;
+  const livePnl = liveSnapshot.totalValue - prevValue - liveCostChange;
+
+  const livePoint: PortfolioHistoryPoint = {
+    timestamp: new Date().toISOString(),
+    totalValue: liveSnapshot.totalValue,
+    totalCost: liveSnapshot.totalCost,
+    totalPnl: liveSnapshot.totalPnl,
+    totalPnlPercent: liveSnapshot.totalPnlPercent,
+    periodPnl: prevPoint ? livePnl : 0,
+    periodPnlPercent: prevValue > 0 ? (livePnl / prevValue) * 100 : 0,
+  };
+
+  // If yesterday's point exists, append today. Otherwise just return the live point.
+  const liveDay = livePoint.timestamp.slice(0, 10);
+  const lastDay = history.length > 0 ? history[history.length - 1].timestamp.slice(0, 10) : null;
+  if (liveDay === lastDay) {
+    history[history.length - 1] = livePoint;
+  } else {
+    history.push(livePoint);
   }
 
   return history;

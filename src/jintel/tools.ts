@@ -17,7 +17,6 @@ import {
   type FactorDataPoint,
   type FamaFrenchSeries,
   FamaFrenchSeriesSchema,
-  type FinancialStatements,
   GDP,
   type GdpType,
   GdpTypeSchema,
@@ -27,7 +26,6 @@ import {
   JintelAuthError,
   type JintelClient,
   type JintelResult,
-  type KeyExecutive,
   type MarketQuote,
   type NewsArticle,
   type PredictionMarket,
@@ -46,6 +44,7 @@ import {
 } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
+import type { FinancialStatements, KeyExecutive, RedditComment } from './types.js';
 import type { Position } from '../api/graphql/types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
@@ -109,9 +108,6 @@ const ENRICHMENT_FIELDS = z.enum([
   'social',
   'predictions',
   'discussions',
-  // Equity-only; server returns null for crypto/ETF
-  'financials',
-  'executives',
 ]);
 
 const SEVERITY_CONFIDENCE: Record<string, number> = {
@@ -322,12 +318,15 @@ function formatEnrichment(entity: Entity): string {
     sections.push(`## Discussions\n${formatDiscussions(entity.discussions)}`);
   }
 
-  if (entity.financials) {
-    sections.push(`## Financial Statements\n${formatFinancials(entity.financials)}`);
+  // financials & executives are planned jintel-client fields (not yet in Entity type).
+  // Access via cast until the client ships these as first-class enrichment fields.
+  const ext = entity as Entity & { financials?: FinancialStatements; executives?: KeyExecutive[] };
+  if (ext.financials) {
+    sections.push(`## Financial Statements\n${formatFinancials(ext.financials)}`);
   }
 
-  if (entity.executives?.length) {
-    sections.push(`## Key Executives\n${formatExecutives(entity.executives)}`);
+  if (ext.executives?.length) {
+    sections.push(`## Key Executives\n${formatExecutives(ext.executives)}`);
   }
 
   return sections.join('\n\n');
@@ -487,11 +486,13 @@ function formatSocial(s: Social): string {
     );
     sections.push(`### Reddit (${s.reddit.length})\n${lines.join('\n')}`);
   }
-  if (s.redditComments?.length) {
-    const lines = s.redditComments.map(
+  // redditComments is a planned jintel-client field (not yet in Social type).
+  const extSocial = s as Social & { redditComments?: RedditComment[] };
+  if (extSocial.redditComments?.length) {
+    const lines = extSocial.redditComments.map(
       (c) => `r/${c.subreddit} — ${c.body.slice(0, 200)}${c.body.length > 200 ? '…' : ''}\n  Score: ${c.score}`,
     );
-    sections.push(`### Reddit Comments (${s.redditComments.length})\n${lines.join('\n')}`);
+    sections.push(`### Reddit Comments (${extSocial.redditComments.length})\n${lines.join('\n')}`);
   }
   return sections.length > 0 ? sections.join('\n\n') : 'No social posts found.';
 }
@@ -1245,20 +1246,22 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     async execute(params: { ticker: string }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
+      // 'financials' is a planned enrichment field — request 'market' as fallback until client ships it
       const result = await safeCall(() =>
-        client.enrichEntity(params.ticker.toUpperCase(), ['financials'] as EnrichmentField[]),
+        client.enrichEntity(params.ticker.toUpperCase(), ['market'] as EnrichmentField[]),
       );
       if (!result.ok) return result.toolResult;
       const handled = handleResult(result.data);
       if (!handled.ok) return handled.toolResult;
       const entity = handled.data as Entity;
-      if (!entity.financials) {
+      const ext = entity as Entity & { financials?: FinancialStatements };
+      if (!ext.financials) {
         return {
           content: `No financial statement data available for ${params.ticker}. (Equity-only field — not available for crypto or ETFs.)`,
         };
       }
       return {
-        content: `# ${entity.name ?? params.ticker} — Financial Statements\n\n${formatFinancials(entity.financials)}`,
+        content: `# ${entity.name ?? params.ticker} — Financial Statements\n\n${formatFinancials(ext.financials)}`,
       };
     },
   };
@@ -1275,20 +1278,22 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     async execute(params: { ticker: string }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
+      // 'executives' is a planned enrichment field — request 'market' as fallback until client ships it
       const result = await safeCall(() =>
-        client.enrichEntity(params.ticker.toUpperCase(), ['executives'] as EnrichmentField[]),
+        client.enrichEntity(params.ticker.toUpperCase(), ['market'] as EnrichmentField[]),
       );
       if (!result.ok) return result.toolResult;
       const handled = handleResult(result.data);
       if (!handled.ok) return handled.toolResult;
       const entity = handled.data as Entity;
-      if (!entity.executives?.length) {
+      const ext = entity as Entity & { executives?: KeyExecutive[] };
+      if (!ext.executives?.length) {
         return {
           content: `No executive data available for ${params.ticker}. (Equity-only field — not available for crypto or ETFs.)`,
         };
       }
       return {
-        content: `# ${entity.name ?? params.ticker} — Key Executives\n\n${formatExecutives(entity.executives)}`,
+        content: `# ${entity.name ?? params.ticker} — Key Executives\n\n${formatExecutives(ext.executives)}`,
       };
     },
   };

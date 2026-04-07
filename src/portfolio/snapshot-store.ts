@@ -10,7 +10,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { appendFile, mkdir, readFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { Platform, PortfolioSnapshot, Position } from '../api/graphql/types.js';
@@ -122,52 +123,53 @@ export class PortfolioSnapshotStore {
     return RedactedSnapshotSchema.parse(data);
   }
 
-  /** Remove all snapshots (used during onboarding reset). */
-  async clearAll(): Promise<void> {
-    const { unlink } = await import('node:fs/promises');
-    const { existsSync } = await import('node:fs');
-    if (existsSync(this.filePath)) {
-      await unlink(this.filePath);
-      logger.info('All snapshots cleared');
-    }
-  }
-
   /**
-   * Append a timestamped copy of a snapshot for history tracking.
-   * Unlike `save()`, this does not merge platforms — it simply records
-   * the current portfolio state as a new data point for the chart.
+   * Forward-scan the JSONL to find the earliest snapshot date for each
+   * requested symbol. Stops as soon as all symbols are found.
+   * Returns Map<symbol, dateString (YYYY-MM-DD)>.
    */
-  async appendHistoryPoint(snapshot: PortfolioSnapshot): Promise<void> {
-    await mkdir(join(this.filePath, '..'), { recursive: true });
-    const point: PortfolioSnapshot = {
-      ...snapshot,
-      id: `snap-${randomUUID().slice(0, 8)}`,
-      timestamp: new Date().toISOString(),
-    };
-    await appendFile(this.filePath, JSON.stringify(point) + '\n');
-    logger.debug('History point appended', { id: point.id, totalValue: point.totalValue });
-  }
+  async getPositionTimeline(symbols: string[]): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
+    if (symbols.length === 0) return result;
 
-  /** Read all snapshots (for history). */
-  async getAll(): Promise<PortfolioSnapshot[]> {
     let content: string;
     try {
       content = await readFile(this.filePath, 'utf-8');
     } catch {
-      return [];
+      return result;
     }
 
-    const lines = content.trim().split('\n').filter(Boolean);
-    const snapshots: PortfolioSnapshot[] = [];
+    const remaining = new Set(symbols);
+    const lines = content.split('\n');
 
     for (const line of lines) {
+      if (remaining.size === 0) break;
+      if (!line.trim()) continue;
+
+      let snap: PortfolioSnapshot;
       try {
-        snapshots.push(JSON.parse(line) as PortfolioSnapshot);
+        snap = JSON.parse(line) as PortfolioSnapshot;
       } catch {
-        logger.warn('Skipping malformed snapshot line');
+        continue;
+      }
+
+      const snapDate = snap.timestamp.slice(0, 10);
+      for (const pos of snap.positions) {
+        if (remaining.has(pos.symbol)) {
+          result.set(pos.symbol, snapDate);
+          remaining.delete(pos.symbol);
+        }
       }
     }
 
-    return snapshots;
+    return result;
+  }
+
+  /** Remove all snapshots (used during onboarding reset). */
+  async clearAll(): Promise<void> {
+    if (existsSync(this.filePath)) {
+      await unlink(this.filePath);
+      logger.info('All snapshots cleared');
+    }
   }
 }
