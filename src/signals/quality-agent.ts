@@ -104,7 +104,11 @@ export class QualityAgent {
     if (recentSignals && recentSignals.length > 0) {
       const lines = recentSignals
         .slice(0, 10)
-        .map((s) => `- [${s.id}] "${s.tier1 ?? s.title}" (${s.publishedAt.slice(0, 16)})`)
+        .map((s) => {
+          const title = s.title;
+          const summary = s.tier1 && s.tier1 !== s.title ? ` | summary: "${s.tier1}"` : '';
+          return `- [${s.id}] "${title}"${summary} (${s.publishedAt.slice(0, 16)})`;
+        })
         .join('\n');
       recentSection = `\n\n<recent_signals>\n${lines}\n</recent_signals>`;
     }
@@ -145,7 +149,10 @@ CRITICAL: if your tier2 would say "not related to [company]" or "this is about [
 
 **DROP with dropReason "irrelevant"** when the content is NOT about finance, markets, or the company/asset. Examples: music, entertainment, sports, recipes, games, website boilerplate, navigation menus, cookie notices, tracking pixels.
 
-**DROP with dropReason "duplicate"** when the signal covers the SAME event already in <recent_signals>. Same fact from a different source or with different wording = duplicate. A genuinely new development about the same ticker is NOT a duplicate. Set "duplicateOfId" to the matching signal's ID (the [id] prefix). If no <recent_signals>, never use this reason.
+**DROP with dropReason "duplicate"** when the signal covers the SAME event already in <recent_signals>. CRITICAL: different headlines about the same underlying fact = duplicate. Examples of duplicates:
+- "Google, Broadcom sign five-year AI chip deal" and "Broadcom Signs Multi-Year AI Chip Deals With Google" — same deal, different wording
+- "AAPL beats Q3 estimates" and "Apple reports strong Q3 earnings" — same earnings event
+Look at the SUBSTANCE, not the exact words. If two headlines would be the same story on a news site, they are duplicates. A genuinely new development about the same ticker (e.g. earnings → analyst reaction) is NOT a duplicate. Set "duplicateOfId" to the matching signal's ID (the [id] prefix). If no <recent_signals>, never use this reason.
 
 **relatedToId**: If this signal is causally connected to one in <recent_signals> (e.g. earnings report → analyst reaction, FDA approval → stock move), set "relatedToId" to that signal's ID. Do NOT set this for signals that merely share a ticker — only for events that form a narrative chain. If no causal link, set null.
 

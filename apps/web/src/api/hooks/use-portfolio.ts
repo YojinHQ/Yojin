@@ -27,6 +27,7 @@ export function usePortfolio(variables?: PortfolioQueryVariables, opts?: { pollI
   const [result, reexecute] = useQuery<PortfolioQueryResult, PortfolioQueryVariables>({
     query: PORTFOLIO_QUERY,
     variables,
+    requestPolicy: 'cache-and-network',
   });
 
   // Re-fetch when portfolio is updated from any source (chat, scraper, etc.)

@@ -106,24 +106,17 @@ export async function quoteQuery(_parent: unknown, args: { symbol: string }): Pr
   const sym = args.symbol.toUpperCase();
 
   if (jintelClient) {
-    const [result, entityResult] = await Promise.all([
-      jintelClient.quotes([sym]).catch(() => ({
-        success: false as const,
-        error: 'quotes threw',
-        data: [] as never[],
-      })),
-      jintelClient.searchEntities(sym, { limit: 1 }).catch(() => ({
-        success: false as const,
-        error: 'searchEntities threw',
-        data: [] as never[],
-      })),
-    ]);
-    const entityName = entityResult.success && entityResult.data[0] ? entityResult.data[0].name : undefined;
-    if (result.success && result.data[0]) {
-      const q = result.data[0];
+    // Try enrichEntity first — single call gets both name and quote via market sub-graph
+    const result = await jintelClient.enrichEntity(sym, ['market']).catch(() => ({
+      success: false as const,
+      error: 'enrichEntity threw',
+      data: undefined as never,
+    }));
+    if (result.success && result.data?.market?.quote) {
+      const q = result.data.market.quote;
       return {
         symbol: q.ticker,
-        name: entityName,
+        name: result.data.name,
         price: q.price,
         change: q.change,
         changePercent: q.changePercent,
@@ -135,9 +128,25 @@ export async function quoteQuery(_parent: unknown, args: { symbol: string }): Pr
         timestamp: q.timestamp,
       };
     }
-    if (!result.success) {
-      log.warn('Jintel quote failed, using stub', { symbol: sym, error: result.error });
+    // Fallback: entity not found or has no market quote — try standalone quotes()
+    const quotesResult = await jintelClient.quotes([sym]).catch(() => undefined);
+    if (quotesResult?.success && quotesResult.data[0]) {
+      const q = quotesResult.data[0];
+      return {
+        symbol: q.ticker,
+        name: (result.success ? result.data?.name : undefined) ?? q.ticker,
+        price: q.price,
+        change: q.change,
+        changePercent: q.changePercent,
+        volume: q.volume,
+        high: q.high ?? 0,
+        low: q.low ?? 0,
+        open: q.open ?? 0,
+        previousClose: q.previousClose ?? 0,
+        timestamp: q.timestamp,
+      };
     }
+    log.warn('Jintel quote failed, using stub', { symbol: sym });
   }
 
   return stubQuotes[sym] ?? null;

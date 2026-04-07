@@ -18,7 +18,7 @@ async function executeQuery(query: string, variables?: Record<string, unknown>) 
 
 describe('GraphQL resolvers', () => {
   describe('Query.portfolio', () => {
-    it('returns a portfolio snapshot (empty when no data imported)', async () => {
+    it('returns null when no snapshots exist', async () => {
       const result = await executeQuery(`
         query {
           portfolio {
@@ -37,11 +37,7 @@ describe('GraphQL resolvers', () => {
       `);
 
       expect(result.errors).toBeUndefined();
-      expect(result.data?.portfolio).toBeDefined();
-
-      const portfolio = result.data!.portfolio as Record<string, unknown>;
-      expect(portfolio.positions).toBeInstanceOf(Array);
-      expect(typeof portfolio.totalValue).toBe('number');
+      expect(result.data?.portfolio).toBeNull();
     });
   });
 

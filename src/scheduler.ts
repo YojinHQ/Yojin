@@ -497,8 +497,10 @@ export class Scheduler {
       });
 
       // Run micro research in parallel (up to MAX_MICRO_CONCURRENCY)
-      // Note: getJintelClient/signalIngestor are omitted here because the batch
-      // already fetched + curated Jintel signals above — no need to re-fetch per ticker.
+      // Note: getJintelClient/signalIngestor are omitted from the top-level deps
+      // (so runMicroResearch won't re-fetch signals per ticker — already batch-fetched above).
+      // getJintelClient IS passed in briefOptions so buildSingleBrief can enrich entities
+      // for fundamentals, risk, technicals etc. that signals alone don't provide.
       const results = await Promise.allSettled(
         assetsWithNewSignals.map((asset) => {
           const isFirstRun = preFetchAt.get(asset.symbol) === null;

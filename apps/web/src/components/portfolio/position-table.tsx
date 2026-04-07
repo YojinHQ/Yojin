@@ -79,11 +79,12 @@ export interface GroupedPosition extends Position {
 export function groupPositions(positions: Position[]): GroupedPosition[] {
   const bySymbol = new Map<string, Position[]>();
   for (const pos of positions) {
-    const group = bySymbol.get(pos.symbol);
+    const key = pos.symbol.toUpperCase();
+    const group = bySymbol.get(key);
     if (group) {
       group.push(pos);
     } else {
-      bySymbol.set(pos.symbol, [pos]);
+      bySymbol.set(key, [pos]);
     }
   }
 
