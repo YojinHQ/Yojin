@@ -20,6 +20,7 @@ interface ChatEvent {
   type: 'THINKING' | 'TOOL_USE' | 'TEXT_DELTA' | 'MESSAGE_COMPLETE' | 'PII_REDACTED' | 'ERROR' | 'TOOL_CARD';
   threadId: string;
   delta?: string;
+  accumulatedText?: string;
   messageId?: string;
   content?: string;
   error?: string;
@@ -43,6 +44,7 @@ const CHAT_SUBSCRIPTION = `
       type
       threadId
       delta
+      accumulatedText
       messageId
       content
       error
@@ -312,7 +314,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       } else if (event.type === 'TEXT_DELTA' && event.delta != null) {
         setIsThinking(false);
         setActiveTools([]);
-        setStreamingContent((prev) => prev + event.delta);
+        // Use accumulatedText (idempotent set) to avoid doubling when StrictMode
+        // creates two concurrent subscriptions that both process the same delta.
+        if (event.accumulatedText != null) {
+          setStreamingContent(event.accumulatedText);
+        } else {
+          setStreamingContent((prev) => prev + event.delta);
+        }
       } else if (event.type === 'MESSAGE_COMPLETE') {
         const msgId = event.messageId ?? crypto.randomUUID();
         if (completedMessagesRef.current.has(msgId)) return data;
@@ -348,9 +356,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         resetStreamingState();
         setTimeout(() => processQueue(), 0);
       } else if (event.type === 'ERROR') {
+        if (event.messageId) {
+          if (completedMessagesRef.current.has(event.messageId)) return data;
+          completedMessagesRef.current.add(event.messageId);
+        }
         const isAuthError = event.error?.startsWith('[AUTH_EXPIRED]');
         const errorContent = isAuthError ? '[AUTH_EXPIRED]' : `Sorry, something went wrong. ${event.error ?? ''}`;
-        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: errorContent }]);
+        setMessages((prev) => [
+          ...prev,
+          { id: event.messageId ?? crypto.randomUUID(), role: 'assistant', content: errorContent },
+        ]);
         resetStreamingState();
         setTimeout(() => processQueue(), 0);
       }

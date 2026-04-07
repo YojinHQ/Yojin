@@ -93,6 +93,8 @@ function fromOAuthToolName(name: string): string {
 /** Strip JSON Schema metadata that the Anthropic API rejects (recursive for nested objects). */
 function cleanInputSchema(schema: Record<string, unknown>): Record<string, unknown> {
   const { $schema: _s, additionalProperties: _ap, ...rest } = schema;
+  // The Anthropic API requires `type` to be present in every input_schema.
+  if (!rest.type) rest.type = 'object';
   if (rest.properties && typeof rest.properties === 'object') {
     rest.properties = Object.fromEntries(
       Object.entries(rest.properties as Record<string, unknown>).map(([k, v]) => [

@@ -108,6 +108,8 @@ export function sendMessageMutation(
       }
       const validatedImageType = imageBase64 ? (imageMediaType as ImageMediaType) : undefined;
 
+      let streamAccumulatedText = '';
+
       // runtime is guaranteed non-null — checked above before the void IIFE
       await (runtime as AgentRuntime).handleMessage({
         message,
@@ -117,10 +119,12 @@ export function sendMessageMutation(
         ...(imageBase64 && validatedImageType ? { imageBase64, imageMediaType: validatedImageType } : {}),
         onEvent: (event: AgentLoopEvent) => {
           if (event.type === 'text_delta') {
+            streamAccumulatedText += event.text;
             pubsub.publish(`chat:${threadId}`, {
               type: 'TEXT_DELTA',
               threadId,
               delta: event.text,
+              accumulatedText: streamAccumulatedText,
             } satisfies ChatEvent);
           } else if (event.type === 'action') {
             for (const call of event.toolCalls) {
@@ -158,6 +162,7 @@ export function sendMessageMutation(
             pubsub.publish(`chat:${threadId}`, {
               type: 'ERROR',
               threadId,
+              messageId,
               error: 'Agent reached maximum iterations without completing.',
             } satisfies ChatEvent);
           }
@@ -173,6 +178,7 @@ export function sendMessageMutation(
       const chatEvent: ChatEvent = {
         type: 'ERROR',
         threadId,
+        messageId,
         error: errorMessage,
       };
       pubsub.publish(`chat:${threadId}`, chatEvent);

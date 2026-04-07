@@ -327,6 +327,32 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
     };
   }
 
+  /** Re-read the keychain and reinitialize the client. Returns true if successful. */
+  async function refreshFromKeychain(): Promise<boolean> {
+    const token = await readTokenFromKeychain();
+    if (!token) return false;
+    client = new Anthropic({
+      apiKey: null,
+      authToken: token,
+      defaultHeaders: OAUTH_HEADERS,
+    });
+    log.info('OAuth token refreshed from macOS Keychain');
+    return true;
+  }
+
+  /** Retry fn once after refreshing the keychain token on AuthenticationError. */
+  async function withAuthRetry<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (err) {
+      if (authMode === 'oauth' && err instanceof Anthropic.AuthenticationError) {
+        const refreshed = await refreshFromKeychain();
+        if (refreshed) return fn();
+      }
+      throw err;
+    }
+  }
+
   return {
     id: 'anthropic',
     label: 'Anthropic',
@@ -411,7 +437,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       }
 
       // -- API mode --
-      const response = await client.messages.create(buildBaseRequest(params));
+      const response = await withAuthRetry(() => client.messages.create(buildBaseRequest(params)));
 
       const textBlock = response.content.find((b) => b.type === 'text');
 
@@ -436,21 +462,41 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       }
 
       // -- API mode --
-      const stream = client.messages.stream(buildBaseRequest(params));
-
-      for await (const event of stream) {
-        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-          yield { type: 'text_delta', text: event.delta.text };
+      const execute = async function* () {
+        const s = client.messages.stream(buildBaseRequest(params));
+        for await (const event of s) {
+          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+            yield { type: 'text_delta' as const, text: event.delta.text };
+          }
         }
-      }
-
-      const finalMessage = await stream.finalMessage();
-      yield {
-        type: 'usage',
-        inputTokens: finalMessage.usage.input_tokens,
-        outputTokens: finalMessage.usage.output_tokens,
+        const finalMessage = await s.finalMessage();
+        yield {
+          type: 'usage' as const,
+          inputTokens: finalMessage.usage.input_tokens,
+          outputTokens: finalMessage.usage.output_tokens,
+        };
+        yield { type: 'stop' as const, stopReason: finalMessage.stop_reason ?? 'end_turn' };
       };
-      yield { type: 'stop', stopReason: finalMessage.stop_reason ?? 'end_turn' };
+
+      // Track whether any content was yielded before a potential auth error.
+      // Only retry if no content has been emitted — retrying mid-stream would
+      // re-yield the full response, doubling any already-streamed text.
+      let hasYieldedContent = false;
+      try {
+        for await (const event of execute()) {
+          if (event.type === 'text_delta') hasYieldedContent = true;
+          yield event;
+        }
+      } catch (err) {
+        if (authMode === 'oauth' && err instanceof Anthropic.AuthenticationError && !hasYieldedContent) {
+          const refreshed = await refreshFromKeychain();
+          if (refreshed) {
+            yield* execute();
+            return;
+          }
+        }
+        throw err;
+      }
     },
 
     async completeWithTools(params: {
@@ -485,7 +531,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
 
       const { request, unremapName } = buildToolRequest(params);
 
-      const response = await client.messages.create(request);
+      const response = await withAuthRetry(() => client.messages.create(request));
 
       return {
         content: mapResponseContent(response.content, unremapName),
@@ -510,24 +556,24 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
         return this.completeWithTools(params);
       }
 
-      const { request, unremapName } = buildToolRequest(params);
-
-      const stream = client.messages.stream(request);
-
-      stream.on('text', (text) => {
-        params.onTextDelta?.(text);
-      });
-
-      const finalMessage = await stream.finalMessage();
-
-      return {
-        content: mapResponseContent(finalMessage.content, unremapName),
-        stopReason: finalMessage.stop_reason ?? 'end_turn',
-        usage: {
-          inputTokens: finalMessage.usage.input_tokens,
-          outputTokens: finalMessage.usage.output_tokens,
-        },
+      const execute = async () => {
+        const { request, unremapName } = buildToolRequest(params);
+        const stream = client.messages.stream(request);
+        stream.on('text', (text) => {
+          params.onTextDelta?.(text);
+        });
+        const finalMessage = await stream.finalMessage();
+        return {
+          content: mapResponseContent(finalMessage.content, unremapName),
+          stopReason: finalMessage.stop_reason ?? 'end_turn',
+          usage: {
+            inputTokens: finalMessage.usage.input_tokens,
+            outputTokens: finalMessage.usage.output_tokens,
+          },
+        };
       };
+
+      return withAuthRetry(execute);
     },
   };
 }

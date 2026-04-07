@@ -249,17 +249,32 @@ export class SignalIngestor {
     }
 
     if (signals.length > 0) {
-      if (this.clustering) {
-        try {
-          await this.clustering.processSignals(signals);
-        } catch (err) {
-          logger.warn('Signal clustering failed, writing raw signals as fallback', { error: err });
-          const enriched = await this.evaluateQuality(signals);
+      // ENRICHMENT-sourced signals bypass clustering + quality agent — write directly.
+      // Editorial signals (API/RSS/SCRAPER) go through the full pipeline.
+      // Use isEnrichmentOnlySignal so routing is stable regardless of source merge order.
+      const enrichmentSignals = signals.filter((s) => this.isEnrichmentOnlySignal(s));
+      const editorialSignals = signals.filter((s) => !this.isEnrichmentOnlySignal(s));
+
+      // Evaluate editorial signals BEFORE writing enrichment snapshots so the
+      // recent-signals query inside evaluateQuality only sees prior history,
+      // not synthetic snapshots from the current batch.
+      if (editorialSignals.length > 0) {
+        if (this.clustering) {
+          try {
+            await this.clustering.processSignals(editorialSignals);
+          } catch (err) {
+            logger.warn('Signal clustering failed, writing raw signals as fallback', { error: err });
+            const enriched = await this.evaluateQuality(editorialSignals);
+            await this.archive.appendBatch(enriched);
+          }
+        } else {
+          const enriched = await this.evaluateQuality(editorialSignals);
           await this.archive.appendBatch(enriched);
         }
-      } else {
-        const enriched = await this.evaluateQuality(signals);
-        await this.archive.appendBatch(enriched);
+      }
+
+      if (enrichmentSignals.length > 0) {
+        await this.archive.appendBatch(enrichmentSignals);
       }
       logger.info(
         `Ingested ${signals.length} signals${dropped > 0 ? `, ${dropped} dropped (not in portfolio or watchlist)` : ''}`,
@@ -420,6 +435,17 @@ export class SignalIngestor {
     return createHash('sha256').update(`${normalized}|${day}`).digest('hex');
   }
 
+  /**
+   * True when every source on a signal is ENRICHMENT-typed.
+   * Used to decide whether a signal bypasses the quality agent.
+   * Checking all sources (not just sources[0]) ensures routing is stable
+   * regardless of merge order — a signal that had an API source merged in
+   * still routes through quality evaluation.
+   */
+  private isEnrichmentOnlySignal(signal: Signal): boolean {
+    return signal.sources.length > 0 && signal.sources.every((s) => s.type === 'ENRICHMENT');
+  }
+
   /** Weighted confidence — bonus scales with average reliability so low-quality sources can't inflate score. */
   private weightedConfidence(sources: Signal['sources']): number {
     const totalReliability = sources.reduce((sum, s) => sum + s.reliability, 0);
@@ -431,17 +457,27 @@ export class SignalIngestor {
   /**
    * Run the quality agent on signals that don't go through clustering.
    * Single LLM call per signal — decides KEEP/DROP and produces summaries.
+   *
+   * ENRICHMENT-sourced signals bypass the LLM quality gate entirely — they are
+   * purpose-built data snapshots (market quotes, technicals, financials) that
+   * would score as "boilerplate" despite being valid investment data.
    */
   private async evaluateQuality(signals: Signal[]): Promise<Signal[]> {
     if (!this.qualityAgent) return signals;
 
+    // Split: ENRICHMENT signals are always kept; only editorial signals need LLM evaluation
+    const enrichmentSignals = signals.filter((s) => this.isEnrichmentOnlySignal(s));
+    const editorialSignals = signals.filter((s) => !this.isEnrichmentOnlySignal(s));
+
+    if (editorialSignals.length === 0) return signals;
+
     // Pre-fetch recent signals for all tickers in the batch (single query, no N+1).
-    const allTickers = [...new Set(signals.flatMap((s) => s.assets.map((a) => a.ticker)))];
+    const allTickers = [...new Set(editorialSignals.flatMap((s) => s.assets.map((a) => a.ticker)))];
     const recentByTicker = await this.getRecentSignalsByTicker(allTickers);
 
-    const results: Signal[] = [];
+    const results: Signal[] = [...enrichmentSignals];
     const dropCounts: Record<string, number> = {};
-    for (const signal of signals) {
+    for (const signal of editorialSignals) {
       const hasSummary = Boolean(signal.tier1 && signal.tier2);
       try {
         // Collect recent signals for this signal's tickers (deduplicated by id)
