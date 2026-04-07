@@ -311,25 +311,6 @@ export const DETECT_CODEX_TOKEN_QUERY = gql`
   }
 `;
 
-export const START_OAUTH_FLOW_MUTATION = gql`
-  mutation StartOAuthFlow {
-    startOAuthFlow {
-      authUrl
-      state
-    }
-  }
-`;
-
-export const COMPLETE_OAUTH_FLOW_MUTATION = gql`
-  mutation CompleteOAuthFlow($code: String!, $state: String!) {
-    completeOAuthFlow(code: $code, state: $state) {
-      success
-      error
-      model
-    }
-  }
-`;
-
 export const GENERATE_PERSONA_MUTATION = gql`
   mutation GeneratePersona($input: PersonaInput!) {
     generatePersona(input: $input) {

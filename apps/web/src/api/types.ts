@@ -1226,30 +1226,6 @@ export interface DetectCodexTokenResult {
   detectCodexToken: KeychainTokenResult;
 }
 
-export interface OAuthFlowResult {
-  authUrl: string;
-  state: string;
-}
-
-export interface StartOAuthFlowResult {
-  startOAuthFlow: OAuthFlowResult;
-}
-
-export interface OAuthCompleteResult {
-  success: boolean;
-  error?: string;
-  model?: string;
-}
-
-export interface CompleteOAuthFlowResult {
-  completeOAuthFlow: OAuthCompleteResult;
-}
-
-export interface CompleteOAuthFlowVariables {
-  code: string;
-  state: string;
-}
-
 // ---------------------------------------------------------------------------
 // Skills
 // ---------------------------------------------------------------------------
