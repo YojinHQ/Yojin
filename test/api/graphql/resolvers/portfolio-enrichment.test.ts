@@ -8,6 +8,7 @@ import {
   setPortfolioJintelClient,
   setSnapshotStore,
 } from '../../../../src/api/graphql/resolvers/portfolio.js';
+import { clearLiveEnrichmentCache } from '../../../../src/portfolio/live-enrichment.js';
 import type { PortfolioSnapshotStore } from '../../../../src/portfolio/snapshot-store.js';
 
 // ---------------------------------------------------------------------------
@@ -160,6 +161,7 @@ describe('isUSMarketOpen', () => {
 
 describe('live quote enrichment', () => {
   beforeEach(() => {
+    clearLiveEnrichmentCache();
     setPortfolioJintelClient(undefined);
     setSnapshotStore(createMockStore() as unknown as PortfolioSnapshotStore);
   });

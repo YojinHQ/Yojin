@@ -191,12 +191,8 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
   // re-fetch or re-ingest here. We just read what's already curated.
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const [quotes, enrichmentByTicker, curatedSignals, memories, previousReport] = await Promise.all([
-    // Quotes (1 API call)
-    jintelClient
-      ? jintelClient.quotes(tickers).catch(() => ({ success: false as const, error: 'quotes failed' }))
-      : Promise.resolve(null),
-    // Unified enrichment + news (1 API call per 20 tickers)
+  const [enrichmentByTicker, curatedSignals, memories, previousReport] = await Promise.all([
+    // Unified enrichment (includes market.quote) — 1 API call per 20 tickers
     // Returns Map<inputTicker, entity> — preserves portfolio ticker → entity association
     jintelClient ? batchEnrichAllChunked(jintelClient, tickers) : Promise.resolve(new Map<string, Entity>()),
     // Signals from archive, filtered for quality (no curation store needed)
@@ -212,7 +208,6 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
 
   // 3. Index data by ticker for O(1) lookup
   const signalsByTicker = groupSignalsByTicker(signals, tickers);
-  const quotesByTicker = indexQuotes(quotes);
   // enrichmentByTicker is already keyed by portfolio ticker from batchEnrichAllChunked
   const memoriesByTicker = indexMemories(memories, tickers);
 
@@ -222,8 +217,8 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
   // 7. Build compact briefs
   const briefs: DataBrief[] = snapshot.positions.map((pos) => {
     const tickerSignals = signalsByTicker.get(pos.symbol) ?? [];
-    const quote = quotesByTicker.get(pos.symbol);
     const entity = enrichmentByTicker.get(pos.symbol);
+    const quote = entity?.market?.quote;
     const mems = memoriesByTicker.get(pos.symbol) ?? [];
     const profile = profileBriefs.get(pos.symbol) ?? null;
 
@@ -587,15 +582,6 @@ function groupSignalsByTicker(signals: Signal[], tickers: string[]): Map<string,
   return map;
 }
 
-function indexQuotes(result: { success: boolean; data?: MarketQuote[] } | null): Map<string, MarketQuote> {
-  const map = new Map<string, MarketQuote>();
-  if (!result || !('data' in result) || !result.data) return map;
-  for (const q of result.data) {
-    if (q?.ticker) map.set(q.ticker, q);
-  }
-  return map;
-}
-
 function indexMemories(
   memories: Array<{ entry: MemoryEntry; score: number }>,
   tickers: string[],
@@ -628,7 +614,7 @@ function indexMemories(
 export function buildBrief(
   pos: Position,
   signals: Signal[],
-  quote: MarketQuote | undefined,
+  quote: MarketQuote | null | undefined,
   entity: Entity | undefined,
   memories: MemoryBrief[],
   profile: TickerProfileBrief | null,
@@ -822,10 +808,7 @@ export async function buildSingleBrief(symbol: string, options: SingleBriefOptio
   const signalsSince = options.signalsSince ?? oneDayAgo;
 
   // Parallel lookups for this single ticker
-  const [quotes, enrichmentMap, curatedSignals, memories] = await Promise.all([
-    jintelClient
-      ? jintelClient.quotes([ticker]).catch(() => ({ success: false as const, error: 'quotes failed' }))
-      : Promise.resolve(null),
+  const [enrichmentMap, curatedSignals, memories] = await Promise.all([
     jintelClient ? batchEnrichAllChunked(jintelClient, [ticker]) : Promise.resolve(new Map<string, Entity>()),
     signalArchive
       .query({ tickers: [ticker], since: signalsSince, limit: 100 })
@@ -834,19 +817,19 @@ export async function buildSingleBrief(symbol: string, options: SingleBriefOptio
   ]);
 
   const signals = curatedSignals;
-  const quoteMap = indexQuotes(quotes);
   const memMap = indexMemories(memories, [ticker]);
   const profile = profileStore ? profileStore.buildBrief(ticker) : null;
   const profileBrief = profile && profile.entryCount > 0 ? profile : null;
 
-  // Update position price from live quote if available
-  const quote = quoteMap.get(ticker);
+  // Extract quote from enrichment entity's market sub-graph
+  const entity = enrichmentMap.get(ticker);
+  const quote = entity?.market?.quote;
   if (quote && pos.currentPrice === 0) {
     pos.currentPrice = quote.price;
     pos.marketValue = pos.quantity * quote.price;
   }
 
-  return buildBrief(pos, signals, quote, enrichmentMap.get(ticker), memMap.get(ticker) ?? [], profileBrief);
+  return buildBrief(pos, signals, quote, entity, memMap.get(ticker) ?? [], profileBrief);
 }
 
 function formatLargeNumber(n: number): string {
