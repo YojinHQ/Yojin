@@ -93,8 +93,10 @@ async function getSnapshot(): Promise<PortfolioSnapshot> {
 // Query resolvers
 // ---------------------------------------------------------------------------
 
-export async function portfolioQuery(): Promise<PortfolioSnapshot> {
-  const snapshot = await getSnapshot();
+export async function portfolioQuery(): Promise<PortfolioSnapshot | null> {
+  if (!snapshotStore) return null;
+  const snapshot = await snapshotStore.getLatest();
+  if (!snapshot) return null;
   return enrichPortfolioSnapshotWithLiveQuotes(snapshot, jintelClient);
 }
 
