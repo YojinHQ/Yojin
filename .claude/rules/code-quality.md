@@ -51,6 +51,10 @@ Extend via interfaces, not modification:
 - **New module wiring checklist.** When adding a new store or domain module (e.g. `ActionStore`, `SkillStore`, `SnapStore`), complete all four wiring steps: (1) add the data directory to `DATA_SUBDIRS` in `src/paths.ts`, (2) instantiate + wire via setter in `src/composition.ts`, (3) import and register resolvers in `src/api/graphql/server.ts` (Query + Mutation maps), (4) add schema types in `src/api/graphql/schema.ts`. Missing any step leaves the feature silently broken at runtime.
 - **Mirror guards across duplicate workflow files.** When two workflow files share the same stage structure (e.g. `assessment-workflow.ts` and `full-curation-workflow.ts`), any guard added to one (like an empty-data early return in `buildMessage`) must be added to the other. Before committing, grep for the guarded pattern across all sibling workflows.
 
+## Early Returns in Gated Pipelines
+
+- **Every early return from a multi-step pipeline must advance all completion flags.** When a pipeline has an `allItemsComplete()` handoff (e.g. micro→macro) and items can be skipped by intermediate gates (signal-gate, interval-gate, budget-gate), the early return must still mark those items as complete. Otherwise quiet items permanently block the handoff after `resetFlags()`. Rule: if an item passes through a stage without doing work (gated out), set `item.completedToday = true` (or equivalent) before returning, the same as if it had succeeded.
+
 ## Missing Data Defaults
 
 - **Don't default missing data to values that satisfy conditions.** Using `?? 0` for a numeric lookup that feeds a threshold comparison (e.g. `value ?? 0` into `value <= threshold`) will fire the condition when data is absent. Skip the check (`return null`) when the input is `undefined` — absent data means "can't evaluate", not "value is zero".

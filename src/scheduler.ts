@@ -55,8 +55,6 @@ const logger = createSubsystemLogger('scheduler');
 
 const CronStateSchema = z.object({
   lastRuns: z.record(z.string(), z.string()).default({}), // jobId → ISO timestamp
-  dailyRunCount: z.number().default(0),
-  dailyRunBudgetDate: z.string().default(''), // YYYY-MM-DD UTC
   lastMacroCompletedAt: z.number().default(0), // epoch ms
 });
 type CronState = z.infer<typeof CronStateSchema>;
@@ -139,12 +137,8 @@ export interface SchedulerOptions {
   signalArchive?: SignalArchive;
   /** Micro research interval in ms (default: 5 * 60_000 = 5 minutes). */
   microIntervalMs?: number;
-  /**
-   * Max LLM agent runs per calendar day (UTC). When the budget is exhausted,
-   * the scheduler stops firing new workflows until midnight UTC.
-   * Default: 20. Set to 0 to disable the cap.
-   */
-  dailyRunBudget?: number;
+  /** Minimum interval between LLM analyses per asset in ms (default: 4h). */
+  microLlmIntervalMs?: number;
 }
 
 /** Minimum interval between macro flow runs (2 hours). */
@@ -157,14 +151,14 @@ const MACRO_INTERVAL_MS = 2 * 60 * 60 * 1000;
  */
 const MICRO_TRIGGER_MACRO_COOLDOWN_MS = MACRO_INTERVAL_MS;
 
-/** Max LLM agent runs per calendar day. Exceeding this stops the scheduler for the day. */
-const DEFAULT_DAILY_RUN_BUDGET = 20;
-
 /** Default expiry window for actions created from skill triggers. */
 const ACTION_EXPIRY_HOURS = 24;
 
 /** Default micro research interval (5 minutes). */
 const DEFAULT_MICRO_INTERVAL_MS = 5 * 60 * 1000;
+
+/** Default LLM analysis interval per asset (4 hours). */
+const DEFAULT_MICRO_LLM_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
 /** Micro tick interval — how often we check for due micro research (30 seconds). */
 const MICRO_TICK_INTERVAL_MS = 30_000;
@@ -185,9 +179,28 @@ const MAX_MICRO_CONCURRENCY = 3;
 interface MicroAssetState {
   symbol: string;
   source: MicroInsightSource;
+  /** Timestamp of last Jintel signal fetch for this asset (drives rotation). */
   lastMicroAt: string | null;
-  /** Whether this asset has completed micro research today. */
+  /** Timestamp of last LLM analysis for this asset (drives the LLM interval gate). */
+  lastLlmAt: string | null;
+  /** Whether this asset has completed LLM analysis today. */
   completedToday: boolean;
+}
+
+export interface SchedulerAssetStatus {
+  symbol: string;
+  source: string;
+  lastSignalFetchAt: string | null;
+  lastLlmAt: string | null;
+  nextLlmEligibleAt: string;
+  pendingAnalysis: boolean;
+}
+
+export interface SchedulerStatus {
+  microLlmIntervalHours: number;
+  pendingCount: number;
+  throttledCount: number;
+  assets: SchedulerAssetStatus[];
 }
 
 export class Scheduler {
@@ -213,6 +226,8 @@ export class Scheduler {
   private readonly profileStore?: TickerProfileStore;
   private readonly signalArchive?: SignalArchive;
   private readonly microIntervalMs: number;
+  /** Minimum interval between LLM analyses per asset. Settable at runtime. */
+  private microLlmIntervalMs: number;
 
   // Timers
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -229,11 +244,6 @@ export class Scheduler {
   // Snap notification dedup — prevent channel spam
   private lastSnapContentHash: string | undefined;
   private lastSnapNotifiedAt = 0;
-
-  // Daily LLM run budget — resets at midnight UTC
-  private dailyRunCount = 0;
-  private dailyRunBudgetDate = ''; // YYYY-MM-DD the count belongs to
-  private readonly dailyRunBudget: number;
 
   // Timestamp of last macro flow completion — used to gate micro→macro re-triggers
   private lastMacroCompletedAt = 0;
@@ -261,59 +271,33 @@ export class Scheduler {
     this.profileStore = options.profileStore;
     this.signalArchive = options.signalArchive;
     this.microIntervalMs = options.microIntervalMs ?? DEFAULT_MICRO_INTERVAL_MS;
-    this.dailyRunBudget = options.dailyRunBudget ?? DEFAULT_DAILY_RUN_BUDGET;
+    this.microLlmIntervalMs = options.microLlmIntervalMs ?? DEFAULT_MICRO_LLM_INTERVAL_MS;
   }
 
-  /**
-   * Check and increment the daily run budget.
-   * Returns true if a run is allowed, false if the daily cap is exhausted.
-   * The counter resets at midnight UTC.
-   */
-  private checkDailyBudget(runsToConsume = 1): boolean {
-    if (this.dailyRunBudget === 0) return true; // disabled
-
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
-    if (this.dailyRunBudgetDate !== today) {
-      this.dailyRunCount = 0;
-      this.dailyRunBudgetDate = today;
-    }
-
-    if (this.dailyRunCount + runsToConsume > this.dailyRunBudget) {
-      logger.warn('Daily LLM run budget exhausted — skipping workflow', {
-        dailyRunCount: this.dailyRunCount,
-        dailyRunBudget: this.dailyRunBudget,
-        date: today,
-      });
-      return false;
-    }
-
-    this.dailyRunCount += runsToConsume;
-    void this.persistBudgetState();
-    return true;
+  /** Update the LLM analysis interval at runtime (called when user changes setting in UI). */
+  setMicroLlmIntervalMs(ms: number): void {
+    this.microLlmIntervalMs = ms;
+    logger.info('Micro LLM interval updated', { microLlmIntervalMs: ms });
   }
 
-  /** Load persisted budget + macro state into memory on startup. */
+  /** Load persisted macro state into memory on startup. */
   private async hydrateFromState(): Promise<void> {
     try {
       const state = await this.loadState();
-      this.dailyRunCount = state.dailyRunCount;
-      this.dailyRunBudgetDate = state.dailyRunBudgetDate;
       this.lastMacroCompletedAt = state.lastMacroCompletedAt;
     } catch {
       // Start fresh — in-memory defaults are already set
     }
   }
 
-  /** Persist current budget + macro watermark into state.json (best-effort). */
-  private async persistBudgetState(): Promise<void> {
+  /** Persist macro watermark into state.json (best-effort). */
+  private async persistMacroState(): Promise<void> {
     try {
       const state = await this.loadState();
-      state.dailyRunCount = this.dailyRunCount;
-      state.dailyRunBudgetDate = this.dailyRunBudgetDate;
       state.lastMacroCompletedAt = this.lastMacroCompletedAt;
       await this.saveState(state);
     } catch (err) {
-      logger.warn('Failed to persist budget state', { error: err });
+      logger.warn('Failed to persist macro state', { error: err });
     }
   }
 
@@ -322,7 +306,7 @@ export class Scheduler {
     if (this.timer) return;
     logger.info('Scheduler started', { checkIntervalMs: this.checkIntervalMs, microIntervalMs: this.microIntervalMs });
 
-    // Hydrate persisted budget + macro state so restarts preserve the daily count
+    // Hydrate persisted macro state so restarts preserve the cooldown watermark
     void this.hydrateFromState();
 
     // Populate micro registry from current portfolio + watchlist
@@ -391,6 +375,7 @@ export class Scheduler {
         symbol,
         source,
         lastMicroAt: null, // force immediate run
+        lastLlmAt: null, // force LLM on next eligible tick
         completedToday: existing?.completedToday ?? false,
       });
     }
@@ -415,7 +400,13 @@ export class Scheduler {
         for (const pos of snapshot.positions) {
           const symbol = pos.symbol.toUpperCase();
           if (!this.microRegistry.has(symbol)) {
-            this.microRegistry.set(symbol, { symbol, source: 'portfolio', lastMicroAt: null, completedToday: false });
+            this.microRegistry.set(symbol, {
+              symbol,
+              source: 'portfolio',
+              lastMicroAt: null,
+              lastLlmAt: null,
+              completedToday: false,
+            });
           }
         }
       }
@@ -425,7 +416,13 @@ export class Scheduler {
       for (const entry of this.watchlistStore.list()) {
         const symbol = entry.symbol.toUpperCase();
         if (!this.microRegistry.has(symbol)) {
-          this.microRegistry.set(symbol, { symbol, source: 'watchlist', lastMicroAt: null, completedToday: false });
+          this.microRegistry.set(symbol, {
+            symbol,
+            source: 'watchlist',
+            lastMicroAt: null,
+            lastLlmAt: null,
+            completedToday: false,
+          });
         }
       }
     }
@@ -503,20 +500,83 @@ export class Scheduler {
         return;
       }
 
-      // Each asset = 1 LLM run. Gate against daily budget only after confirming
-      // all dependencies are present — avoids burning quota on runs that won't execute.
-      if (!this.checkDailyBudget(assets.length)) return;
+      // Capture the pre-fetch lastMicroAt for each asset (used as the signal baseline below),
+      // then stamp fetchedAt so symbols rotate out of the due queue on every tick regardless
+      // of whether the LLM step runs. Without this stamp, assets with no new signals would
+      // re-appear as due immediately, monopolising the batch slots.
+      const fetchedAt = new Date().toISOString();
+      const preFetchAt = new Map<string, string | null>();
+      for (const asset of assets) {
+        const state = this.microRegistry.get(asset.symbol);
+        if (state) {
+          preFetchAt.set(asset.symbol, state.lastMicroAt);
+          state.lastMicroAt = fetchedAt;
+        }
+      }
+
+      // Signal-gate: only run LLM analysis for assets that have new signals since
+      // their last micro run. This replaces the blunt daily run counter — we run
+      // exactly as many times as there is new data to analyze.
+      const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+      const assetsWithNewSignals = (
+        await Promise.all(
+          assets.map(async (asset) => {
+            const baseline = preFetchAt.get(asset.symbol) ?? null;
+            if (!baseline) return asset; // first run — always analyze
+            const fresh = await archive.query({ tickers: [asset.symbol], sinceIngested: baseline, limit: 1 });
+            return fresh.length > 0 ? asset : null;
+          }),
+        )
+      ).filter((a): a is (typeof assets)[number] => a !== null);
+
+      if (assetsWithNewSignals.length === 0) {
+        logger.debug('Micro research skipped — no new signals for batch', { symbols });
+        // Mark all assets as completed today so quiet assets don't block the micro→macro handoff.
+        for (const symbol of symbols) {
+          const state = this.microRegistry.get(symbol);
+          if (state) state.completedToday = true;
+        }
+        return;
+      }
+
+      // LLM interval gate: even when new signals exist, don't re-analyze an asset
+      // more often than microLlmIntervalMs. This bounds LLM spend on busy news days.
+      const now = Date.now();
+      const assetsReadyForLlm = assetsWithNewSignals.filter((asset) => {
+        const state = this.microRegistry.get(asset.symbol);
+        if (!state?.lastLlmAt) return true; // never analyzed — always eligible
+        return now - new Date(state.lastLlmAt).getTime() >= this.microLlmIntervalMs;
+      });
+
+      if (assetsReadyForLlm.length === 0) {
+        logger.debug('Micro research skipped — LLM interval not elapsed for batch', {
+          symbols: assetsWithNewSignals.map((a) => a.symbol),
+          microLlmIntervalMs: this.microLlmIntervalMs,
+        });
+        // Mark all assets with new signals as completed today — they were processed, just throttled.
+        for (const asset of assetsWithNewSignals) {
+          const state = this.microRegistry.get(asset.symbol);
+          if (state) state.completedToday = true;
+        }
+        return;
+      }
+
+      logger.debug('Micro research LLM gate', {
+        withNewSignals: assetsWithNewSignals.length,
+        readyForLlm: assetsReadyForLlm.length,
+        symbols: assetsReadyForLlm.map((a) => a.symbol),
+      });
 
       // Run micro research in parallel (up to MAX_MICRO_CONCURRENCY)
       // Note: getJintelClient/signalIngestor are omitted from the top-level deps
       // (so runMicroResearch won't re-fetch signals per ticker — already batch-fetched above).
       // getJintelClient IS passed in briefOptions so buildSingleBrief can enrich entities
       // for fundamentals, risk, technicals etc. that signals alone don't provide.
-      const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const results = await Promise.allSettled(
-        assets.map((asset) => {
-          const isFirstRun = this.microRegistry.get(asset.symbol)?.lastMicroAt === null;
+        assetsReadyForLlm.map((asset) => {
+          const isFirstRun = preFetchAt.get(asset.symbol) === null;
           return runMicroResearch(asset.symbol, asset.source, {
             providerRouter,
             microInsightStore,
@@ -544,14 +604,14 @@ export class Scheduler {
       // Update registry timestamps and mark completed today
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
-        const asset = assets[i];
+        const asset = assetsReadyForLlm[i];
         if (!result || !asset) continue;
         const symbol = asset.symbol;
 
         if (result.status === 'fulfilled' && result.value.insight) {
           const state = this.microRegistry.get(symbol);
           if (state) {
-            state.lastMicroAt = new Date().toISOString();
+            state.lastLlmAt = new Date().toISOString();
             state.completedToday = true;
           }
 
@@ -617,6 +677,41 @@ export class Scheduler {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Status API — exposes per-asset scheduler state for UI visibility
+  // ---------------------------------------------------------------------------
+
+  /** Per-asset status returned by getStatus(). */
+  getStatus(): SchedulerStatus {
+    const now = Date.now();
+    const assets: SchedulerAssetStatus[] = [...this.microRegistry.values()].map((state) => {
+      const nextLlmEligibleAt = state.lastLlmAt
+        ? new Date(new Date(state.lastLlmAt).getTime() + this.microLlmIntervalMs).toISOString()
+        : new Date().toISOString();
+      // Pending = has new signals fetched (lastMicroAt updated) but LLM hasn't run since
+      const pendingAnalysis =
+        state.lastMicroAt !== null && (state.lastLlmAt === null || state.lastMicroAt > state.lastLlmAt);
+      return {
+        symbol: state.symbol,
+        source: state.source,
+        lastSignalFetchAt: state.lastMicroAt,
+        lastLlmAt: state.lastLlmAt,
+        nextLlmEligibleAt,
+        pendingAnalysis,
+      };
+    });
+
+    return {
+      microLlmIntervalHours: this.microLlmIntervalMs / (60 * 60 * 1000),
+      pendingCount: assets.filter((a) => a.pendingAnalysis).length,
+      throttledCount: assets.filter((a) => {
+        if (!a.lastLlmAt) return false;
+        return now - new Date(a.lastLlmAt).getTime() < this.microLlmIntervalMs;
+      }).length,
+      assets,
+    };
+  }
+
   /**
    * Run the full macro flow:
    *   1. Fetch CLI/RSS/MCP data sources
@@ -631,10 +726,6 @@ export class Scheduler {
       logger.info('Skipping macro flow — already running');
       return;
     }
-
-    // A macro flow consumes ~6 agent runs (RA×2, strategist, risk-mgr, bull, bear).
-    // Gate against the daily budget before committing.
-    if (!this.checkDailyBudget(6)) return;
 
     logger.info('Macro flow started — portfolio-wide analysis');
     this.running = true;
@@ -684,7 +775,7 @@ export class Scheduler {
       // Mark completion only on success so a failed macro run doesn't start
       // the 2-hour cooldown clock, which would delay the next legitimate run.
       this.lastMacroCompletedAt = Date.now();
-      void this.persistBudgetState();
+      void this.persistMacroState();
     } catch (err) {
       logger.error('Macro flow failed', { error: err });
     } finally {

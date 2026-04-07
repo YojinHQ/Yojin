@@ -860,6 +860,30 @@ export interface MicroInsightsQueryResult {
 }
 
 // ---------------------------------------------------------------------------
+// Scheduler status
+// ---------------------------------------------------------------------------
+
+export interface SchedulerAssetStatus {
+  symbol: string;
+  source: string;
+  lastSignalFetchAt: string | null;
+  lastLlmAt: string | null;
+  nextLlmEligibleAt: string;
+  pendingAnalysis: boolean;
+}
+
+export interface SchedulerStatus {
+  microLlmIntervalHours: number;
+  pendingCount: number;
+  throttledCount: number;
+  assets: SchedulerAssetStatus[];
+}
+
+export interface SchedulerStatusQueryResult {
+  schedulerStatus: SchedulerStatus;
+}
+
+// ---------------------------------------------------------------------------
 // Subscriptions
 // ---------------------------------------------------------------------------
 

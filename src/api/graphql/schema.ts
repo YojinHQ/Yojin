@@ -687,6 +687,7 @@ export const typeDefs = /* GraphQL */ `
     time: String!
     timezone: String!
     sections: [String!]!
+    microLlmIntervalHours: Int
   }
 
   type BriefingConfig {
@@ -694,6 +695,23 @@ export const typeDefs = /* GraphQL */ `
     timezone: String!
     sections: [String!]!
     enabled: Boolean!
+    microLlmIntervalHours: Int!
+  }
+
+  type SchedulerAssetStatus {
+    symbol: String!
+    source: String!
+    lastSignalFetchAt: String
+    lastLlmAt: String
+    nextLlmEligibleAt: String!
+    pendingAnalysis: Boolean!
+  }
+
+  type SchedulerStatus {
+    microLlmIntervalHours: Float!
+    pendingCount: Int!
+    throttledCount: Int!
+    assets: [SchedulerAssetStatus!]!
   }
 
   enum ChannelStatus {
@@ -1196,6 +1214,7 @@ export const typeDefs = /* GraphQL */ `
     watchlist: [WatchlistEntry!]!
     insightsWorkflowStatus: WorkflowStatus!
     briefingConfig: BriefingConfig
+    schedulerStatus: SchedulerStatus!
     listChannels: [Channel!]!
     notificationPreferences: [NotificationPreferences!]!
     snap: Snap

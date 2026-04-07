@@ -39,6 +39,7 @@ let snapshotStore: PortfolioSnapshotStore | undefined;
 let claudeCodeProvider: ClaudeCodeProvider | undefined;
 let dataRoot = '.';
 let onJintelKeyValidatedCb: ((apiKey: string) => void) | undefined;
+let onMicroLlmIntervalChangedCb: ((hours: number) => void) | undefined;
 
 export function setOnboardingVault(v: EncryptedVault): void {
   vault = v;
@@ -71,6 +72,10 @@ export function setOnboardingDataRoot(root: string): void {
 
 export function setJintelKeyValidatedCallback(cb: (apiKey: string) => void): void {
   onJintelKeyValidatedCb = cb;
+}
+
+export function setMicroLlmIntervalCallback(cb: (hours: number) => void): void {
+  onMicroLlmIntervalChangedCb = cb;
 }
 
 // ---------------------------------------------------------------------------
@@ -671,13 +676,14 @@ interface BriefingConfigInput {
   time: string;
   timezone: string;
   sections: string[];
+  microLlmIntervalHours?: number | null;
 }
 
 export async function saveBriefingConfigMutation(
   _parent: unknown,
   args: { input: BriefingConfigInput },
 ): Promise<boolean> {
-  const { time, timezone, sections } = args.input;
+  const { time, timezone, sections, microLlmIntervalHours } = args.input;
 
   // Write digest config to alerts.json
   const alertsPath = `${dataRoot}/config/alerts.json`;
@@ -707,6 +713,10 @@ export async function saveBriefingConfigMutation(
     cron: `${minutes} ${hours} * * *`,
   };
   alertsConfig.digestSections = sections;
+  if (microLlmIntervalHours != null) {
+    alertsConfig.microLlmIntervalHours = microLlmIntervalHours;
+    onMicroLlmIntervalChangedCb?.(microLlmIntervalHours);
+  }
 
   await writeFile(alertsPath, JSON.stringify(alertsConfig, null, 2), 'utf-8');
 
@@ -788,6 +798,7 @@ interface BriefingConfigResult {
   timezone: string;
   sections: string[];
   enabled: boolean;
+  microLlmIntervalHours: number;
 }
 
 export async function briefingConfigQuery(): Promise<BriefingConfigResult | null> {
@@ -804,6 +815,7 @@ export async function briefingConfigQuery(): Promise<BriefingConfigResult | null
       timezone: schedule.timezone,
       sections: alertsConfig.digestSections ?? [],
       enabled: true,
+      microLlmIntervalHours: alertsConfig.microLlmIntervalHours ?? 4,
     };
   } catch {
     return null;

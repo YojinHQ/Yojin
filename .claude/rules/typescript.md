@@ -57,6 +57,7 @@ globs: ["**/*.{ts,tsx}"]
 - **Sort by the field you display.** If a list renders `publishedAt` timestamps, sort by `publishedAt`. Sorting by a different field (e.g. `ingestedAt`) makes the visual order disagree with the shown dates. Check: the `sort()` key must match the field the user sees.
 - **Sentinel fallbacks must not leak into display data.** Internal sentinel strings (e.g. `'MACRO'`, `'UNKNOWN'`) used as fallbacks when real data is absent must be filtered out before passing to display components. A sentinel in `relatedTickers` or a chip renders as a fake tradeable symbol. Strip sentinels at the mapping layer, not in the component.
 - **Clickable divs must use `<button>`.** Any `<div onClick>` that acts as a button is keyboard-inaccessible. Replace with `<button type="button">` and add `aria-expanded` when it controls a collapsible region. Add `w-full text-left` to preserve the full-width layout in flex/grid contexts.
+- **Settings form dirty-check must track a local saved baseline, not the query result.** When a mutation returns `Boolean` instead of the updated object, the query cache never refreshes. Track a separate `savedValue` state initialized from the query result and updated on successful save. `handleSelect` compares against `savedValue`, not `queryResult.field` — otherwise selecting the original value after saving is incorrectly treated as clean until reload.
 
 ## Imports
 - Group imports: node builtins, external packages, internal modules.

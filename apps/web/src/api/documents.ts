@@ -379,6 +379,7 @@ export const BRIEFING_CONFIG_QUERY = gql`
       timezone
       sections
       enabled
+      microLlmIntervalHours
     }
   }
 `;
@@ -386,6 +387,28 @@ export const BRIEFING_CONFIG_QUERY = gql`
 export const SAVE_BRIEFING_CONFIG_MUTATION = gql`
   mutation SaveBriefingConfig($input: BriefingConfigInput!) {
     saveBriefingConfig(input: $input)
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Scheduler status
+// ---------------------------------------------------------------------------
+
+export const SCHEDULER_STATUS_QUERY = gql`
+  query SchedulerStatus {
+    schedulerStatus {
+      microLlmIntervalHours
+      pendingCount
+      throttledCount
+      assets {
+        symbol
+        source
+        lastSignalFetchAt
+        lastLlmAt
+        nextLlmEligibleAt
+        pendingAnalysis
+      }
+    }
   }
 `;
 
