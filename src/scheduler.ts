@@ -137,6 +137,8 @@ export interface SchedulerOptions {
   signalArchive?: SignalArchive;
   /** Micro research interval in ms (default: 5 * 60_000 = 5 minutes). */
   microIntervalMs?: number;
+  /** Minimum interval between LLM analyses per asset in ms (default: 4h). */
+  microLlmIntervalMs?: number;
 }
 
 /** Minimum interval between macro flow runs (2 hours). */
@@ -154,6 +156,9 @@ const ACTION_EXPIRY_HOURS = 24;
 
 /** Default micro research interval (5 minutes). */
 const DEFAULT_MICRO_INTERVAL_MS = 5 * 60 * 1000;
+
+/** Default LLM analysis interval per asset (4 hours). */
+const DEFAULT_MICRO_LLM_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
 /** Micro tick interval — how often we check for due micro research (30 seconds). */
 const MICRO_TICK_INTERVAL_MS = 30_000;
@@ -174,8 +179,11 @@ const MAX_MICRO_CONCURRENCY = 3;
 interface MicroAssetState {
   symbol: string;
   source: MicroInsightSource;
+  /** Timestamp of last Jintel signal fetch for this asset (drives rotation). */
   lastMicroAt: string | null;
-  /** Whether this asset has completed micro research today. */
+  /** Timestamp of last LLM analysis for this asset (drives the LLM interval gate). */
+  lastLlmAt: string | null;
+  /** Whether this asset has completed LLM analysis today. */
   completedToday: boolean;
 }
 
@@ -202,6 +210,8 @@ export class Scheduler {
   private readonly profileStore?: TickerProfileStore;
   private readonly signalArchive?: SignalArchive;
   private readonly microIntervalMs: number;
+  /** Minimum interval between LLM analyses per asset. Settable at runtime. */
+  private microLlmIntervalMs: number;
 
   // Timers
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -245,6 +255,13 @@ export class Scheduler {
     this.profileStore = options.profileStore;
     this.signalArchive = options.signalArchive;
     this.microIntervalMs = options.microIntervalMs ?? DEFAULT_MICRO_INTERVAL_MS;
+    this.microLlmIntervalMs = options.microLlmIntervalMs ?? DEFAULT_MICRO_LLM_INTERVAL_MS;
+  }
+
+  /** Update the LLM analysis interval at runtime (called when user changes setting in UI). */
+  setMicroLlmIntervalMs(ms: number): void {
+    this.microLlmIntervalMs = ms;
+    logger.info('Micro LLM interval updated', { microLlmIntervalMs: ms });
   }
 
   /** Load persisted macro state into memory on startup. */
@@ -342,6 +359,7 @@ export class Scheduler {
         symbol,
         source,
         lastMicroAt: null, // force immediate run
+        lastLlmAt: null, // force LLM on next eligible tick
         completedToday: existing?.completedToday ?? false,
       });
     }
@@ -366,7 +384,13 @@ export class Scheduler {
         for (const pos of snapshot.positions) {
           const symbol = pos.symbol.toUpperCase();
           if (!this.microRegistry.has(symbol)) {
-            this.microRegistry.set(symbol, { symbol, source: 'portfolio', lastMicroAt: null, completedToday: false });
+            this.microRegistry.set(symbol, {
+              symbol,
+              source: 'portfolio',
+              lastMicroAt: null,
+              lastLlmAt: null,
+              completedToday: false,
+            });
           }
         }
       }
@@ -376,7 +400,13 @@ export class Scheduler {
       for (const entry of this.watchlistStore.list()) {
         const symbol = entry.symbol.toUpperCase();
         if (!this.microRegistry.has(symbol)) {
-          this.microRegistry.set(symbol, { symbol, source: 'watchlist', lastMicroAt: null, completedToday: false });
+          this.microRegistry.set(symbol, {
+            symbol,
+            source: 'watchlist',
+            lastMicroAt: null,
+            lastLlmAt: null,
+            completedToday: false,
+          });
         }
       }
     }
@@ -490,10 +520,27 @@ export class Scheduler {
         return;
       }
 
-      logger.debug('Micro research signal gate', {
-        total: assets.length,
+      // LLM interval gate: even when new signals exist, don't re-analyze an asset
+      // more often than microLlmIntervalMs. This bounds LLM spend on busy news days.
+      const now = Date.now();
+      const assetsReadyForLlm = assetsWithNewSignals.filter((asset) => {
+        const state = this.microRegistry.get(asset.symbol);
+        if (!state?.lastLlmAt) return true; // never analyzed — always eligible
+        return now - new Date(state.lastLlmAt).getTime() >= this.microLlmIntervalMs;
+      });
+
+      if (assetsReadyForLlm.length === 0) {
+        logger.debug('Micro research skipped — LLM interval not elapsed for batch', {
+          symbols: assetsWithNewSignals.map((a) => a.symbol),
+          microLlmIntervalMs: this.microLlmIntervalMs,
+        });
+        return;
+      }
+
+      logger.debug('Micro research LLM gate', {
         withNewSignals: assetsWithNewSignals.length,
-        symbols: assetsWithNewSignals.map((a) => a.symbol),
+        readyForLlm: assetsReadyForLlm.length,
+        symbols: assetsReadyForLlm.map((a) => a.symbol),
       });
 
       // Run micro research in parallel (up to MAX_MICRO_CONCURRENCY)
@@ -502,7 +549,7 @@ export class Scheduler {
       // getJintelClient IS passed in briefOptions so buildSingleBrief can enrich entities
       // for fundamentals, risk, technicals etc. that signals alone don't provide.
       const results = await Promise.allSettled(
-        assetsWithNewSignals.map((asset) => {
+        assetsReadyForLlm.map((asset) => {
           const isFirstRun = preFetchAt.get(asset.symbol) === null;
           return runMicroResearch(asset.symbol, asset.source, {
             providerRouter,
@@ -531,14 +578,14 @@ export class Scheduler {
       // Update registry timestamps and mark completed today
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
-        const asset = assetsWithNewSignals[i];
+        const asset = assetsReadyForLlm[i];
         if (!result || !asset) continue;
         const symbol = asset.symbol;
 
         if (result.status === 'fulfilled' && result.value.insight) {
           const state = this.microRegistry.get(symbol);
           if (state) {
-            state.lastMicroAt = new Date().toISOString();
+            state.lastLlmAt = new Date().toISOString();
             state.completedToday = true;
           }
 

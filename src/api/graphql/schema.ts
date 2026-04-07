@@ -687,6 +687,7 @@ export const typeDefs = /* GraphQL */ `
     time: String!
     timezone: String!
     sections: [String!]!
+    microLlmIntervalHours: Int
   }
 
   type BriefingConfig {
@@ -694,6 +695,7 @@ export const typeDefs = /* GraphQL */ `
     timezone: String!
     sections: [String!]!
     enabled: Boolean!
+    microLlmIntervalHours: Int!
   }
 
   enum ChannelStatus {

@@ -18,6 +18,7 @@ interface BriefingConfig {
   timezone: string;
   sections: string[];
   enabled: boolean;
+  microLlmIntervalHours: number;
 }
 
 interface DigestSection {

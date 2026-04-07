@@ -379,6 +379,7 @@ export const BRIEFING_CONFIG_QUERY = gql`
       timezone
       sections
       enabled
+      microLlmIntervalHours
     }
   }
 `;
