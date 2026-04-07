@@ -488,14 +488,16 @@ export class Scheduler {
       const jintelClient = this.getJintelClient?.();
       if (jintelClient && this.signalIngestor) {
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        // Oldest lastMicroAt across the batch — fetch covers all assets in one call.
-        const earliestLastFetch = assets.reduce<string | null>((min, asset) => {
-          const state = this.microRegistry.get(asset.symbol);
-          const t = state?.lastMicroAt ?? null;
-          if (!t) return null; // first-run asset → need full 7d window
-          return min === null ? t : t < min ? t : min;
-        }, sevenDaysAgo);
-        const since = earliestLastFetch ?? sevenDaysAgo;
+        // Oldest lastMicroAt across the batch. Any first-run asset forces the full 7d window.
+        let since = sevenDaysAgo;
+        for (const asset of assets) {
+          const t = this.microRegistry.get(asset.symbol)?.lastMicroAt ?? null;
+          if (!t) {
+            since = sevenDaysAgo;
+            break;
+          } // first-run asset → use full window
+          if (t < since) since = t;
+        }
         const result = await fetchJintelSignals(jintelClient, this.signalIngestor, symbols, { since });
         if (result.ingested > 0) {
           logger.info('Micro research Jintel fetch', { ingested: result.ingested, duplicates: result.duplicates });
