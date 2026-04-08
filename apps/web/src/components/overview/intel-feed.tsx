@@ -430,6 +430,8 @@ export default function IntelFeed({
 
 const POLL_INTERVAL_MS = 30_000;
 const SEEN_IDS_KEY_PREFIX = 'intel-feed-seen-';
+const PAGE_SIZE = 20;
+const FETCH_LIMIT = 100;
 
 function persistSeenIds(key: string, ids: Set<string>) {
   try {
@@ -487,9 +489,15 @@ function IntelFeedContent({
 
   const [{ data, fetching, error }, reexecute] = useQuery<IntelFeedQueryResult, IntelFeedQueryVariables>({
     query: INTEL_FEED_QUERY,
-    variables: { limit: 20, feedTarget },
+    variables: { limit: FETCH_LIMIT, feedTarget },
     requestPolicy: 'cache-and-network',
   });
+
+  // Client-side pagination — backend returns up to FETCH_LIMIT, we show
+  // PAGE_SIZE at a time and reveal more via an IntersectionObserver sentinel.
+  const [displayedCount, setDisplayedCount] = useState(PAGE_SIZE);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
 
   const [{ data: schedulerData }] = useQuery<SchedulerStatusQueryResult>({
     query: SCHEDULER_STATUS_QUERY,
@@ -717,6 +725,40 @@ function IntelFeedContent({
   }, [items, activeFilter]);
   const totalCount = filteredItems.length;
 
+  // Reset the visible page when the user switches filter or feed target —
+  // a tab switch is a "fresh view", jumping back to the most-important items.
+  // Uses the React "store info from previous renders" pattern to avoid an
+  // effect-driven reset that would trip `react-hooks/set-state-in-effect`.
+  const [prevViewKey, setPrevViewKey] = useState(`${activeFilter}|${feedTarget ?? ''}`);
+  const viewKey = `${activeFilter}|${feedTarget ?? ''}`;
+  if (viewKey !== prevViewKey) {
+    setPrevViewKey(viewKey);
+    setDisplayedCount(PAGE_SIZE);
+  }
+
+  const visibleItems = useMemo(() => filteredItems.slice(0, displayedCount), [filteredItems, displayedCount]);
+  const hasMore = displayedCount < filteredItems.length;
+
+  // IntersectionObserver sentinel — bump displayedCount by PAGE_SIZE as the
+  // sentinel scrolls into view. Scoped to the scroll container so it doesn't
+  // fire when the sentinel is offscreen behind other content.
+  useEffect(() => {
+    if (!hasMore) return;
+    const sentinel = loadMoreSentinelRef.current;
+    const root = scrollContainerRef.current;
+    if (!sentinel || !root) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setDisplayedCount((c) => c + PAGE_SIZE);
+        }
+      },
+      { root, rootMargin: '200px 0px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore]);
+
   function openModal(item: IntelFeedItem) {
     setModalData({
       title: item.title,
@@ -778,7 +820,7 @@ function IntelFeedContent({
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-auto px-3 pb-4">
+        <div ref={scrollContainerRef} className="flex-1 overflow-auto px-3 pb-4">
           {/* Scan progress / verification banner */}
           {scanState && (
             <div
@@ -891,7 +933,7 @@ function IntelFeedContent({
                 label={activeFilter === 'all' ? 'All' : activeFilter === 'alerts' ? 'Alerts' : 'Insights'}
               />
               <div className="space-y-2">
-                {filteredItems.map((item) => (
+                {visibleItems.map((item) => (
                   <IntelFeedCard
                     key={item.id}
                     item={item}
@@ -920,6 +962,11 @@ function IntelFeedContent({
                   />
                 ))}
               </div>
+              {hasMore && (
+                <div ref={loadMoreSentinelRef} className="flex items-center justify-center py-4">
+                  <Spinner size="sm" label="Loading more..." />
+                </div>
+              )}
             </div>
           )}
         </div>
