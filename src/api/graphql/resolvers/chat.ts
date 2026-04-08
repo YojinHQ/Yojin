@@ -160,10 +160,14 @@ export function sendMessageMutation(
         // The agent-loop already dispatches handleProviderCredentialError() when
         // it detects an auth error, but the chat path catches errors that may
         // bypass the loop (e.g. provider.initialize() failures). Call it here
-        // too as a safety net — it is idempotent.
+        // too as a safety net — it is idempotent and mode-aware (skips the
+        // wipe in OAuth mode where the vault is not the source of truth).
         void handleProviderCredentialError();
-        errorMessage =
-          'Your AI provider key is invalid or has expired. The key has been removed — please go to Settings → Connections to add a new one.';
+        // Mode-agnostic message: in api_key mode the vault entry was cleared,
+        // in OAuth mode the keychain token is stale and the provider's
+        // internal refresh already failed. Either way, the user resolves this
+        // in Settings → Connections.
+        errorMessage = 'Your Claude credential could not be validated. Open Settings → Connections to reconnect.';
       } else {
         errorMessage = err instanceof Error ? err.message : String(err);
       }
