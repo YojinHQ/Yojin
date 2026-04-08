@@ -274,9 +274,7 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
           if (bull || bear) {
             prompt +=
               `## Bull/Bear Debate\n` +
-              `Two adversarial analysts have argued for and against each position. ` +
-              `Weigh both perspectives — when they agree, conviction should be HIGH. ` +
-              `When they disagree, flag the uncertainty and explain your reasoning.\n\n` +
+              `Adversarial analysts argue for/against each position. Agreement → HIGH conviction. Disagreement → flag uncertainty.\n\n` +
               (bull ? `### Bull Case\n${bull}\n\n` : '') +
               (bear ? `### Bear Case\n${bear}\n\n` : '');
           }
@@ -287,14 +285,13 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
 
           prompt +=
             `## Instructions — 1 iteration, batch ALL tool calls\n` +
-            `Call save_insight_report with snapshotId="${snapshotId}":\n` +
-            `- positions[]: symbol, name, rating (sentiment: VERY_BULLISH/BULLISH/NEUTRAL/BEARISH/VERY_BEARISH), conviction, thesis (2-3 sentences: explain WHY — cite macro forces, geopolitical events, sector trends that drive this sentiment. When a concrete evidence-based link exists between positions — shared supply chain, same macro driver, correlated sector — cite it and estimate magnitude of impact. Do NOT invent connections), keySignals[] (top 2 per position), risks[] (1-2 items), opportunities[] (1-2 items), memoryContext: null, priceTarget: null\n` +
-            `- keySignals: { signalId: "sig-xxx" (copy EXACT ID), type, title (short), impact: "POSITIVE"|"NEGATIVE"|"NEUTRAL", confidence, url: null }\n` +
-            `- portfolio: overallHealth, summary (2 sentences MAX — include the most important cross-cutting theme), intelSummary (2-3 sentences: synthesize what the latest signals are saying across all positions — what patterns, themes, or shifts are the signals collectively pointing to?), sectorThemes[], macroContext (1-2 sentences: current macro environment and how it affects the portfolio — cite real data like GDP, rates, inflation, market P/E when available), topRisks[], topOpportunities[], actionItems[] (IMPORTANT: these are observations that surface relevant info — NOT action advisory. Frame as "X is at Y" or "X shows Y", NEVER as "Reduce X", "Increase Y", "Buy/Sell Z". You inform, the user decides.)\n` +
-            `- emotionState: { confidence, riskAppetite, reason (1 sentence) }\n` +
-            `Also call brain_update_memory and brain_update_emotion in the SAME batch.\n` +
-            `Keep ALL string values SHORT. Do NOT write lengthy prose.\n` +
-            `NEVER write weight percentages in any string field (e.g. "BTC (37.3%)", "17.5% weight", "Tech at 45%"). The user knows their portfolio — use weight to rank, not to mention.`;
+            `Call save_insight_report with snapshotId="${snapshotId}", plus brain_update_memory and brain_update_emotion in the SAME batch.\n\n` +
+            `Fields:\n` +
+            `- positions[]: symbol, name, rating (VERY_BULLISH..VERY_BEARISH), conviction, thesis (2-3 sentences — cite macro/sector/geopolitical drivers; cross-position links only with concrete evidence), keySignals[] (top 2), risks[] (1-2), opportunities[] (1-2), memoryContext: null, priceTarget: null\n` +
+            `- keySignals: { signalId (copy EXACT sig-xxx), type, title, impact: POSITIVE|NEGATIVE|NEUTRAL, confidence, url: null }\n` +
+            `- portfolio: overallHealth, summary (≤2 sentences, top cross-cutting theme), intelSummary (2-3 sentences on signal patterns across positions), sectorThemes[], macroContext (1-2 sentences citing real data — GDP, rates, inflation), topRisks[], topOpportunities[], actionItems[] (observations only, NOT advice: "X is at Y", never "Buy/Sell/Reduce Z")\n` +
+            `- emotionState: { confidence, riskAppetite, reason (1 sentence) }\n\n` +
+            `Rules: keep all strings SHORT, no prose. NEVER write weight percentages in any string field (e.g. "BTC (37.3%)", "17.5% weight") — use weight to rank, not to mention.`;
 
           return prompt;
         },
