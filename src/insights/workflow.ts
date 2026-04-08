@@ -143,7 +143,7 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
                 `All portfolio data has been pre-aggregated below — no data-gathering tools are available. ` +
                 `Analyze ONLY using the data provided.\n\n` +
                 `## Data Quality Guidance\n` +
-                `The data includes news articles and research reports from various sources. Evaluate quality critically:\n` +
+                `Evaluate source quality critically:\n` +
                 `- Lead with real EVENTS and CATALYSTS (earnings, analyst actions, regulatory filings, corporate developments, macro shifts) — not technicals.\n` +
                 `- Promotional/clickbait content (listicles, "Is X a buy?", hype pieces) is low-quality. Weight it accordingly.\n` +
                 `- Weigh event materiality against asset size (market cap is provided). Immaterial events are noise, not developments.\n` +
@@ -163,14 +163,13 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
               if (warmBriefs) {
                 prompt +=
                   `\n## Positions Requiring Quick Rating\n` +
-                  `These positions have moderate activity. Provide a brief 1-2 sentence sentiment assessment ` +
-                  `(VERY_BULLISH/BULLISH/NEUTRAL/BEARISH/VERY_BEARISH) with conviction for each:\n\n${warmBriefs}\n`;
+                  `Moderate activity — 1-2 sentence sentiment (VERY_BULLISH/BULLISH/NEUTRAL/BEARISH/VERY_BEARISH) + conviction per position:\n\n${warmBriefs}\n`;
               }
 
               if (coldSummary) {
                 prompt +=
                   `\n## Carried-Forward Positions (no analysis needed)\n` +
-                  `These positions have minimal activity and their previous assessments are carried forward:\n${coldSummary}\n`;
+                  `Minimal activity, previous assessments carried forward:\n${coldSummary}\n`;
               }
 
               return prompt;
@@ -210,8 +209,7 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
               `Analyze full portfolio risk using ONLY the data provided below.\n` +
               `Risk metrics (weights, HHI, sector exposure) are already pre-computed — do NOT recalculate them.\n` +
               `Focus on: interpreting the metrics, detecting correlations, identifying risk-adjusted themes.\n` +
-              `Complete in 1 iteration. Do NOT call any tools — all data is provided. Output analysis only.\n` +
-              `Be concise — output structured risk assessment, not lengthy narrative.\n\n` +
+              `Complete in 1 iteration, no tool calls — output a concise structured risk assessment, not lengthy narrative.\n\n` +
               (riskMetrics ? `${riskMetrics}\n\n` : '') +
               (dataBriefs ? `## Pre-Aggregated Position Data\n${dataBriefs}\n\n` : '')
             );
@@ -274,7 +272,7 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
           if (bull || bear) {
             prompt +=
               `## Bull/Bear Debate\n` +
-              `Adversarial analysts argue for/against each position. Agreement → HIGH conviction. Disagreement → flag uncertainty.\n\n` +
+              `Adversarial analysts argue for/against each position. Agreement → HIGH conviction. Disagreement → flag uncertainty and explain your reasoning.\n\n` +
               (bull ? `### Bull Case\n${bull}\n\n` : '') +
               (bear ? `### Bear Case\n${bear}\n\n` : '');
           }
@@ -287,9 +285,9 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
             `## Instructions — 1 iteration, batch ALL tool calls\n` +
             `Call save_insight_report with snapshotId="${snapshotId}", plus brain_update_memory and brain_update_emotion in the SAME batch.\n\n` +
             `Fields:\n` +
-            `- positions[]: symbol, name, rating (VERY_BULLISH..VERY_BEARISH), conviction, thesis (2-3 sentences — cite macro/sector/geopolitical drivers; cross-position links only with concrete evidence), keySignals[] (top 2), risks[] (1-2), opportunities[] (1-2), memoryContext: null, priceTarget: null\n` +
-            `- keySignals: { signalId (copy EXACT sig-xxx), type, title, impact: POSITIVE|NEGATIVE|NEUTRAL, confidence, url: null }\n` +
-            `- portfolio: overallHealth, summary (≤2 sentences, top cross-cutting theme), intelSummary (2-3 sentences on signal patterns across positions), sectorThemes[], macroContext (1-2 sentences citing real data — GDP, rates, inflation), topRisks[], topOpportunities[], actionItems[] (observations only, NOT advice: "X is at Y", never "Buy/Sell/Reduce Z")\n` +
+            `- positions[]: symbol, name, rating (VERY_BULLISH/BULLISH/NEUTRAL/BEARISH/VERY_BEARISH), conviction, thesis (2-3 sentences explaining WHY — cite macro/sector/geopolitical drivers. Cross-position links ONLY with concrete evidence (shared supply chain, same macro driver, correlated sector): cite the evidence and estimate impact magnitude. Do NOT invent connections), keySignals[] (top 2 per position), risks[] (1-2), opportunities[] (1-2), memoryContext: null, priceTarget: null\n` +
+            `- keySignals: { signalId: "sig-xxx" (copy EXACT ID), type, title, impact: "POSITIVE"|"NEGATIVE"|"NEUTRAL", confidence, url: null }\n` +
+            `- portfolio: overallHealth, summary (≤2 sentences, top cross-cutting theme), intelSummary (2-3 sentences on signal patterns across positions), sectorThemes[], macroContext (1-2 sentences — current macro environment and how it affects the portfolio, citing real data like GDP, rates, inflation, market P/E), topRisks[], topOpportunities[], actionItems[] (observations only, NOT advice: "X is at Y" or "X shows Y", never "Buy/Sell/Reduce Z" — you inform, user decides)\n` +
             `- emotionState: { confidence, riskAppetite, reason (1 sentence) }\n\n` +
             `Rules: keep all strings SHORT, no prose. NEVER write weight percentages in any string field (e.g. "BTC (37.3%)", "17.5% weight") — use weight to rank, not to mention.`;
 

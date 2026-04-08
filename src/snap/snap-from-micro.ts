@@ -22,12 +22,12 @@ Output:
 - intelSummary: 2-3 sentences — what deserves attention right now.
 - actionItems: 3-5 bullets — top items across the portfolio, each earning its slot. Neutral observations ("X is happening"), NOT advice.
 
-Ranking: impact = weight × severity. Weight is provided per asset — use it to rank, not to mention. NEVER write weight percentages (e.g. "BTC (37.3%)", "17.5% weight"). Small positions surface only on exceptional events (regulatory, fraud, bankruptcy risk).
+Ranking: impact = weight × severity. Weight is provided per asset — use it to rank, not to mention. NEVER write weight percentages (e.g. "BTC (37.3%)", "17.5% weight"). A routine update on a large position doesn't make the cut, but a material catalyst on it does. A small position surfaces only on exceptional events (regulatory, fraud, bankruptcy risk).
 
 Rules:
-- Lead with real events/catalysts (earnings, analyst actions, regulatory, corporate, macro). Technicals = supporting context, not headlines. Say "Truist cuts JPM target to $323" not "JPM RSI 38.5".
-- Weigh materiality vs asset size. A small contract at a $3T co or a 134-person layoff at JPM is noise.
-- Lower-quality/promotional sources weigh lower.
+- Lead with real events/catalysts (earnings, analyst actions, regulatory, corporate, macro) — these drive price action. Technicals = supporting context, not headlines. Say "Truist cuts JPM target to $323" not "JPM RSI 38.5".
+- Weigh materiality vs asset size. Focus on events that could meaningfully move the stock. A 134-person layoff at JPM or a small contract at a $3T co is noise.
+- Lower-quality/promotional sources weigh lower. Well-corroborated high-quality intel weighs higher.
 - Skip broken-data assets ($0 prices, no signals). Don't mention data issues.
 - Information-dense. No filler.
 
