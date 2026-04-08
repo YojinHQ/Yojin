@@ -268,7 +268,6 @@ function IntelFeedCard({
   item,
   expanded,
   isNew,
-  selectionMode,
   selected,
   onToggle,
   onToggleSelect,
@@ -279,7 +278,6 @@ function IntelFeedCard({
   item: IntelFeedItem;
   expanded: boolean;
   isNew: boolean;
-  selectionMode: boolean;
   selected: boolean;
   onToggle: () => void;
   onToggleSelect: () => void;
@@ -297,7 +295,7 @@ function IntelFeedCard({
           (item.type === 'alert' ? 'motion-safe:animate-new-event-alert' : 'motion-safe:animate-new-event-insight'),
       )}
     >
-      {isNew && !selectionMode && (
+      {isNew && !selected && (
         <span
           className={cn(
             'absolute -top-2 -right-2 z-10 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wider text-white shadow-sm motion-safe:animate-badge-in',
@@ -308,55 +306,59 @@ function IntelFeedCard({
         </span>
       )}
       {/* Collapsed header — always visible */}
-      <button
-        type="button"
-        aria-expanded={selectionMode ? undefined : expanded}
-        onClick={selectionMode ? onToggleSelect : onToggle}
-        className="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left"
-      >
-        {selectionMode ? (
-          <span
-            className={cn(
-              'flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-colors',
-              selected ? 'border-accent-primary bg-accent-primary' : 'border-border bg-bg-primary',
-            )}
-          >
-            {selected && (
-              <svg
-                className="h-2.5 w-2.5 text-white"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={3}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M4.5 12.75l6 6 9-13.5" />
-              </svg>
-            )}
-          </span>
-        ) : (
+      <div className="flex w-full items-center gap-3 px-3 py-2.5">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
+        >
           <ItemIcon icon={item.icon} type={item.type} expanded={expanded} />
-        )}
-        <div className="min-w-0 flex-1">
-          <span
-            className={cn(
-              'inline-block rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.08em]',
-              item.type === 'alert' ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success',
-            )}
-          >
-            {item.ticker}
-          </span>
-          <p className="mt-0.5 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
-        </div>
-        <span className="flex-shrink-0 text-2xs text-text-muted">{item.publishedTime}</span>
-      </button>
+          <div className="min-w-0 flex-1">
+            <span
+              className={cn(
+                'inline-block rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.08em]',
+                item.type === 'alert' ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success',
+              )}
+            >
+              {item.ticker}
+            </span>
+            <p className="mt-0.5 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
+          </div>
+          <span className="flex-shrink-0 text-2xs text-text-muted">{item.publishedTime}</span>
+        </button>
+        <button
+          type="button"
+          aria-label={selected ? 'Deselect' : 'Select'}
+          onClick={onToggleSelect}
+          className={cn(
+            'flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-colors',
+            selected
+              ? 'border-accent-primary bg-accent-primary'
+              : 'border-border bg-transparent hover:border-text-muted',
+          )}
+        >
+          {selected && (
+            <svg
+              className="h-2.5 w-2.5 text-white"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          )}
+        </button>
+      </div>
 
-      {/* Expanded content — hidden in selection mode */}
+      {/* Expanded content */}
       <div
         className={cn(
           'grid transition-[grid-template-rows] duration-200 ease-out',
-          !selectionMode && expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+          expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
         )}
       >
         <div className="overflow-hidden">
@@ -492,7 +494,6 @@ function IntelFeedContent({
   const initialIdsRef = useRef<Set<string> | null>(null);
   const newIdTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [, dismissSignal] = useMutation(DISMISS_SIGNAL_MUTATION);
-  const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [, batchDismissSignals] = useMutation(BATCH_DISMISS_SIGNALS_MUTATION);
 
@@ -895,30 +896,6 @@ function IntelFeedContent({
             <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-tertiary px-1.5 text-[10px] font-bold text-text-secondary">
               {totalCount}
             </span>
-            <div className="ml-auto">
-              {selectionMode ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectionMode(false);
-                    setSelectedIds(new Set());
-                  }}
-                  className="cursor-pointer text-xs font-medium text-text-muted transition-colors hover:text-text-secondary"
-                >
-                  Cancel
-                </button>
-              ) : (
-                totalCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectionMode(true)}
-                    className="cursor-pointer text-xs font-medium text-text-muted transition-colors hover:text-text-secondary"
-                  >
-                    Select
-                  </button>
-                )
-              )}
-            </div>
           </div>
 
           <div className="flex gap-5 border-b border-border px-4">
@@ -928,10 +905,7 @@ function IntelFeedContent({
                 onClick={() => {
                   setActiveFilter(tab.key);
                   setExpandedId(null);
-                  if (selectionMode) {
-                    setSelectionMode(false);
-                    setSelectedIds(new Set());
-                  }
+                  setSelectedIds(new Set());
                 }}
                 className={cn(
                   'relative cursor-pointer pb-2.5 pt-1.5 text-xs font-medium transition-colors',
@@ -1095,7 +1069,6 @@ function IntelFeedContent({
                     item={item}
                     expanded={expandedId === item.id}
                     isNew={newIds.has(item.id)}
-                    selectionMode={selectionMode}
                     selected={selectedIds.has(item.id)}
                     onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
                     onToggleSelect={() =>
@@ -1138,47 +1111,36 @@ function IntelFeedContent({
         </div>
       </div>
 
-      {/* Batch dismiss action bar */}
-      {selectionMode && (
+      {/* Batch dismiss action bar — appears when any items are checked */}
+      {selectedIds.size > 0 && (
         <div className="sticky bottom-0 z-20 flex items-center justify-between gap-3 border-t border-border bg-bg-secondary px-4 py-3">
+          <span className="text-xs text-text-muted">{selectedIds.size} selected</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => {
-                const allVisibleIds = new Set(visibleItems.map((i) => i.id));
-                const allSelected = visibleItems.every((i) => selectedIds.has(i.id));
-                setSelectedIds(allSelected ? new Set() : allVisibleIds);
-              }}
+              onClick={() => setSelectedIds(new Set())}
               className="cursor-pointer text-xs font-medium text-text-muted transition-colors hover:text-text-secondary"
             >
-              {visibleItems.every((i) => selectedIds.has(i.id)) ? 'Deselect all' : 'Select all'}
+              Clear
             </button>
-            {selectedIds.size > 0 && <span className="text-xs text-text-muted">· {selectedIds.size} selected</span>}
+            <button
+              type="button"
+              onClick={() => {
+                const ids = [...selectedIds];
+                setSelectedIds(new Set());
+                void batchDismissSignals({ signalIds: ids }).then((result) => {
+                  if (result.error) {
+                    console.error('Batch dismiss failed', result.error.message);
+                    return;
+                  }
+                  reexecute({ requestPolicy: 'network-only' });
+                });
+              }}
+              className="cursor-pointer rounded-lg border border-error/30 bg-error/10 px-3 py-1.5 text-xs font-medium text-error transition-colors hover:bg-error/20"
+            >
+              Dismiss {selectedIds.size}
+            </button>
           </div>
-          <button
-            type="button"
-            disabled={selectedIds.size === 0}
-            onClick={() => {
-              const ids = [...selectedIds];
-              setSelectionMode(false);
-              setSelectedIds(new Set());
-              void batchDismissSignals({ signalIds: ids }).then((result) => {
-                if (result.error) {
-                  console.error('Batch dismiss failed', result.error.message);
-                  return;
-                }
-                reexecute({ requestPolicy: 'network-only' });
-              });
-            }}
-            className={cn(
-              'rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
-              selectedIds.size === 0
-                ? 'cursor-not-allowed border-border text-text-muted opacity-50'
-                : 'cursor-pointer border-error/30 bg-error/10 text-error hover:bg-error/20',
-            )}
-          >
-            Dismiss{selectedIds.size > 0 ? ` ${selectedIds.size}` : ''}
-          </button>
         </div>
       )}
 
