@@ -6,6 +6,24 @@ import { resolveDataRoot } from '../paths.js';
 
 const logger = createSubsystemLogger('provider-router');
 
+/**
+ * Abstract model tier aliases → concrete model IDs per provider.
+ * Callsites use tier names ('haiku', 'sonnet', 'opus') so the correct model
+ * is resolved regardless of which provider is active.
+ */
+const MODEL_TIERS: Record<string, Record<string, string>> = {
+  'claude-code': {
+    opus: 'claude-opus-4-6',
+    sonnet: 'claude-sonnet-4-6',
+    haiku: 'claude-haiku-4-5-20251001',
+  },
+  codex: {
+    opus: 'o3',
+    sonnet: 'o4-mini',
+    haiku: 'codex-mini',
+  },
+};
+
 export interface ProviderRouterOptions {
   configPath?: string;
 }
@@ -31,7 +49,7 @@ export class ProviderRouter {
   resolve(overrides?: { provider?: string; model?: string }): { provider: AIProvider; model: string } {
     const config = this.getConfig();
     const providerId = overrides?.provider ?? config.defaultProvider;
-    const model = overrides?.model ?? config.defaultModel;
+    const rawModel = overrides?.model ?? config.defaultModel;
     if (providerId) {
       const provider = this.backends.get(providerId);
       if (!provider) {
@@ -39,6 +57,7 @@ export class ProviderRouter {
           `AI provider "${providerId}" is not registered. Available: [${[...this.backends.keys()].join(', ')}]`,
         );
       }
+      const model = this.resolveModelTier(providerId, rawModel);
       return { provider, model };
     }
 
@@ -46,6 +65,7 @@ export class ProviderRouter {
     if (!provider) {
       throw new Error('No AI provider registered');
     }
+    const model = this.resolveModelTier(provider.id, rawModel);
     return { provider, model };
   }
 
@@ -137,6 +157,12 @@ export class ProviderRouter {
   private getConfig(): AIProviderConfig {
     if (this.configOverride) return this.configOverride;
     return AIProviderConfigSchema.parse({});
+  }
+
+  /** Resolve abstract tier aliases ('haiku', 'sonnet', 'opus') to concrete model IDs for the given provider. */
+  private resolveModelTier(providerId: string, model: string): string {
+    const tiers = MODEL_TIERS[providerId];
+    return tiers?.[model] ?? model;
   }
 
   private firstAvailable(): AIProvider | undefined {

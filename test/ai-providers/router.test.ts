@@ -104,6 +104,96 @@ describe('ProviderRouter', () => {
   });
 });
 
+describe('ProviderRouter model tier resolution', () => {
+  function mockBackendWithId(id: string): AIProvider {
+    return {
+      id,
+      name: `Mock ${id}`,
+      models: () => ['mock-model'],
+      isAvailable: vi.fn(async () => true),
+      completeWithTools: vi.fn(async () => ({
+        content: [{ type: 'text' as const, text: 'ok' }],
+        stopReason: 'end_turn',
+        usage: { inputTokens: 1, outputTokens: 1 },
+      })),
+    };
+  }
+
+  it('resolves Claude tier aliases to Claude model IDs', () => {
+    const router = new ProviderRouter({ configPath: 'nonexistent.json' });
+    router.registerBackend(mockBackendWithId('claude-code'));
+    router.setConfig({ defaultProvider: 'claude-code', defaultModel: 'claude-opus-4-6' });
+
+    expect(router.resolve({ model: 'haiku' }).model).toBe('claude-haiku-4-5-20251001');
+    expect(router.resolve({ model: 'sonnet' }).model).toBe('claude-sonnet-4-6');
+    expect(router.resolve({ model: 'opus' }).model).toBe('claude-opus-4-6');
+  });
+
+  it('resolves tier aliases to Codex model IDs when codex is active', () => {
+    const router = new ProviderRouter({ configPath: 'nonexistent.json' });
+    router.registerBackend(mockBackendWithId('codex'));
+    router.setConfig({ defaultProvider: 'codex', defaultModel: 'o3' });
+
+    expect(router.resolve({ model: 'haiku' }).model).toBe('codex-mini');
+    expect(router.resolve({ model: 'sonnet' }).model).toBe('o4-mini');
+    expect(router.resolve({ model: 'opus' }).model).toBe('o3');
+  });
+
+  it('passes through concrete model IDs unchanged', () => {
+    const router = new ProviderRouter({ configPath: 'nonexistent.json' });
+    router.registerBackend(mockBackendWithId('claude-code'));
+    router.setConfig({ defaultProvider: 'claude-code', defaultModel: 'claude-opus-4-6' });
+
+    expect(router.resolve({ model: 'claude-sonnet-4-6' }).model).toBe('claude-sonnet-4-6');
+    expect(router.resolve({ model: 'gpt-4.1' }).model).toBe('gpt-4.1');
+  });
+
+  it('passes through unknown aliases unchanged', () => {
+    const router = new ProviderRouter({ configPath: 'nonexistent.json' });
+    router.registerBackend(mockBackendWithId('claude-code'));
+    router.setConfig({ defaultProvider: 'claude-code', defaultModel: 'claude-opus-4-6' });
+
+    expect(router.resolve({ model: 'unknown-model' }).model).toBe('unknown-model');
+  });
+
+  it('resolves tiers via provider override, not default provider', () => {
+    const router = new ProviderRouter({ configPath: 'nonexistent.json' });
+    router.registerBackend(mockBackendWithId('claude-code'));
+    router.registerBackend(mockBackendWithId('codex'));
+    router.setConfig({ defaultProvider: 'claude-code', defaultModel: 'claude-opus-4-6' });
+
+    // Explicitly override to codex — tier should resolve to codex model
+    const resolved = router.resolve({ provider: 'codex', model: 'haiku' });
+    expect(resolved.provider.id).toBe('codex');
+    expect(resolved.model).toBe('codex-mini');
+  });
+
+  it('resolves tiers for unknown provider as passthrough', () => {
+    const router = new ProviderRouter({ configPath: 'nonexistent.json' });
+    router.registerBackend(mockBackendWithId('custom'));
+    router.setConfig({ defaultProvider: 'custom', defaultModel: 'custom-model' });
+
+    // No tier mapping for 'custom' provider — alias passes through
+    expect(router.resolve({ model: 'haiku' }).model).toBe('haiku');
+  });
+
+  it('resolves tier in completeWithTools call via providerOverrides', async () => {
+    const codex = mockBackendWithId('codex');
+    const router = new ProviderRouter({ configPath: 'nonexistent.json' });
+    router.registerBackend(codex);
+    router.setConfig({ defaultProvider: 'codex', defaultModel: 'o3' });
+
+    await router.completeWithTools({
+      model: 'haiku',
+      messages: [{ role: 'user', content: 'test' }],
+      providerOverrides: { model: 'haiku' },
+    });
+
+    // The provider should receive the resolved model, not the alias
+    expect(codex.completeWithTools).toHaveBeenCalledWith(expect.objectContaining({ model: 'codex-mini' }));
+  });
+});
+
 describe('ProviderRouter config loading', () => {
   const tmpDir = path.resolve('test/ai-providers/.tmp-config');
   const configFile = path.join(tmpDir, 'ai-provider.json');

@@ -34,15 +34,7 @@ export class VercelAIProvider implements AIProvider {
   readonly name = 'Codex';
 
   models(): string[] {
-    return [
-      'gpt-5.4',
-      'gpt-5.4-mini',
-      'gpt-5.3-codex',
-      'gpt-5.2-codex',
-      'gpt-5.2',
-      'gpt-5.1-codex-max',
-      'gpt-5.1-codex-mini',
-    ];
+    return ['o3', 'o4-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'codex-mini'];
   }
 
   async isAvailable(): Promise<boolean> {

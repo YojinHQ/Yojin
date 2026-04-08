@@ -1,4 +1,8 @@
 {
+  "env": {
+    "BASH_DEFAULT_TIMEOUT_MS": "300000",
+    "BASH_MAX_TIMEOUT_MS": "600000"
+  },
   "hooks": {
     "PostToolUse": [
       {
@@ -13,8 +17,7 @@
       }
     ]
   },
-  "env": {
-    "BASH_DEFAULT_TIMEOUT_MS": "300000",
-    "BASH_MAX_TIMEOUT_MS": "600000"
+  "enabledPlugins": {
+    "codex@openai-codex": true
   }
 }

@@ -12,6 +12,7 @@ import {
   SAVE_AI_CREDENTIAL_MUTATION,
   REMOVE_AI_CREDENTIAL_MUTATION,
   DETECT_KEYCHAIN_TOKEN_QUERY,
+  DETECT_CODEX_TOKEN_QUERY,
 } from '../../api/documents';
 import type {
   AiConfigQueryResult,
@@ -23,6 +24,7 @@ import type {
   RemoveAiCredentialMutationResult,
   RemoveAiCredentialVariables,
   DetectKeychainTokenResult,
+  DetectCodexTokenResult,
 } from '../../api/types';
 
 // ---------------------------------------------------------------------------
@@ -49,13 +51,12 @@ const PROVIDER_MODELS: Record<AiProviderId, { id: string; label: string; descrip
     { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', description: 'Fastest — good for high-volume tasks' },
   ],
   codex: [
-    { id: 'gpt-5.4', label: 'GPT-5.4', description: 'Latest frontier agentic coding model' },
-    { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', description: 'Smaller frontier agentic model' },
-    { id: 'gpt-5.3-codex', label: 'GPT-5.3 Codex', description: 'Frontier Codex-optimized model' },
-    { id: 'gpt-5.2-codex', label: 'GPT-5.2 Codex', description: 'Frontier agentic coding model' },
-    { id: 'gpt-5.2', label: 'GPT-5.2', description: 'Professional work and long-running agents' },
-    { id: 'gpt-5.1-codex-max', label: 'GPT-5.1 Codex Max', description: 'Deep and fast reasoning' },
-    { id: 'gpt-5.1-codex-mini', label: 'GPT-5.1 Codex Mini', description: 'Cheaper, faster, less capable' },
+    { id: 'o3', label: 'o3', description: 'Most capable reasoning model' },
+    { id: 'o4-mini', label: 'o4-mini', description: 'Fast reasoning model' },
+    { id: 'gpt-4.1', label: 'GPT-4.1', description: 'Latest GPT model' },
+    { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', description: 'Smaller, faster, cheaper' },
+    { id: 'gpt-4.1-nano', label: 'GPT-4.1 Nano', description: 'Cheapest — high-volume tasks' },
+    { id: 'codex-mini', label: 'Codex Mini', description: 'Default Codex CLI model' },
   ],
 };
 
@@ -146,11 +147,20 @@ function ModelPicker() {
   const [keyError, setKeyError] = useState<string | null>(null);
   const [keySuccess, setKeySuccess] = useState(false);
 
-  const [keychainResult, reexecuteKeychain] = useQuery<DetectKeychainTokenResult>({
+  const [claudeKeychainResult, reexecuteClaudeKeychain] = useQuery<DetectKeychainTokenResult>({
     query: DETECT_KEYCHAIN_TOKEN_QUERY,
     requestPolicy: 'network-only',
     pause: provider !== 'claude-code',
   });
+
+  const [codexKeychainResult, reexecuteCodexKeychain] = useQuery<DetectCodexTokenResult>({
+    query: DETECT_CODEX_TOKEN_QUERY,
+    requestPolicy: 'network-only',
+    pause: provider !== 'codex',
+  });
+
+  const keychainResult = provider === 'codex' ? codexKeychainResult : claudeKeychainResult;
+  const reexecuteKeychain = provider === 'codex' ? reexecuteCodexKeychain : reexecuteClaudeKeychain;
 
   useEffect(() => {
     if (result.data?.aiConfig) {
@@ -250,7 +260,10 @@ function ModelPicker() {
 
   const models = PROVIDER_MODELS[provider];
   const keyInfo = PROVIDER_KEY_INFO[provider];
-  const keychain = keychainResult.data?.detectKeychainToken;
+  const keychain =
+    provider === 'codex'
+      ? (keychainResult.data as DetectCodexTokenResult | undefined)?.detectCodexToken
+      : (keychainResult.data as DetectKeychainTokenResult | undefined)?.detectKeychainToken;
   const keychainConnected = keychain?.found && !keychain.error;
 
   return (
@@ -337,39 +350,37 @@ function ModelPicker() {
         )}
       </div>
 
-      {/* Keychain authentication (Claude Code only) */}
-      {provider === 'claude-code' && (
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-text-muted mb-2">Keychain Authentication</p>
-          <div className="rounded-xl border border-border bg-bg-card px-4 py-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-text-primary">macOS Keychain</p>
-                <p className="text-xs text-text-muted">
-                  {keychainResult.fetching
-                    ? 'Checking...'
-                    : keychainConnected
-                      ? `Connected · ${keychain?.model ?? 'Claude'}`
-                      : keychain?.error
-                        ? 'Token expired or invalid'
-                        : 'Not connected'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {keychainConnected && <span className="text-xs font-medium text-success">Active</span>}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  loading={keychainResult.fetching}
-                  onClick={() => reexecuteKeychain({ requestPolicy: 'network-only' })}
-                >
-                  Refresh
-                </Button>
-              </div>
+      {/* Keychain authentication */}
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wider text-text-muted mb-2">Keychain Authentication</p>
+        <div className="rounded-xl border border-border bg-bg-card px-4 py-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-text-primary">macOS Keychain</p>
+              <p className="text-xs text-text-muted">
+                {keychainResult.fetching
+                  ? 'Checking...'
+                  : keychainConnected
+                    ? `Connected · ${keychain?.model ?? (provider === 'codex' ? 'Codex' : 'Claude')}`
+                    : keychain?.error
+                      ? 'Token expired or invalid'
+                      : 'Not connected'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {keychainConnected && <span className="text-xs font-medium text-success">Active</span>}
+              <Button
+                variant="ghost"
+                size="sm"
+                loading={keychainResult.fetching}
+                onClick={() => reexecuteKeychain({ requestPolicy: 'network-only' })}
+              >
+                Refresh
+              </Button>
             </div>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Model selector */}
       <div>
