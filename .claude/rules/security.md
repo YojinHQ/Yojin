@@ -15,6 +15,8 @@ The trust layer is Yojin's core differentiator. Every component must be determin
 - Never log credentials, tokens, or API keys — even at debug level.
 - Never commit `.env` files, browser session data, or `data/cache/` contents.
 - **Rate-limit auth endpoints.** Any GraphQL mutation or API endpoint that accepts a passphrase/password/token must have brute-force protection (attempt counter + exponential backoff/lockout). CLI TTY access is an implicit rate limit; network-exposed APIs are not.
+- **Credential save/delete must be symmetric across every layer.** Every layer the save path touches — vault entry, env var, and the provider's in-memory SDK client — must be undone by the delete path. Asymmetry creates zombie credentials: the provider keeps serving requests with the "removed" key until the next restart because its cached client was never reset. Rule: if `saveAiCredentialMutation` calls `claudeCodeProvider.configureApiKey(key)` after writing vault+env, then `deleteProviderCredential` must call `claudeCodeProvider.clearCredentials()` (or equivalent) after wiping them.
+- **Multi-variant credentials must be cleared as a set.** When a provider has more than one credential form (e.g. `claude-code` stores both `anthropic_api_key` and `anthropic_oauth_token`), model the mapping as an array of variants and iterate on delete. A scalar `{ vaultKey, envKey }` mapping silently leaves coexisting forms in place and lets stale credentials keep flipping the `has*Key` UI check to `true` after a removal. Save paths write the primary variant (`mappings[0]`); delete paths clear all.
 
 ## Layer 2: Guard Pipeline (Deterministic Pre-Execution)
 - Every agent action must pass through the guard pipeline before execution.
