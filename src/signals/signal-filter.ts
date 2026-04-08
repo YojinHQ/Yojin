@@ -97,14 +97,24 @@ const TITLE_DATE_RE = /\b(\d{4}-\d{2}-\d{2})\b/;
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
- * Filter out enrichment-sourced signals whose titles contain dates older than
- * 30 days. These are historical stragglers from before the 7-day event filter
- * was added — they passed dedup because publishedAt shifted on re-ingestion.
+ * Source IDs that were known to be broken before the 7-day event filter
+ * landed (commit 35242d3) — they set `publishedAt: now` for historical
+ * events, leaving the archive with stragglers whose titles embed an old
+ * YYYY-MM-DD but whose publishedAt is recent. Kept narrow so legitimate
+ * historical enrichment (SEC filings, risk signals) is never dropped.
+ */
+const STALE_BACKFILL_SOURCE_IDS = new Set(['jintel-key-event', 'jintel-short-interest']);
+
+/**
+ * Filter out backfilled key-event / short-interest signals whose titles
+ * still reference dates older than 30 days. This only targets the two
+ * producers that were historically broken — SEC filings and other dated
+ * enrichment records are preserved so explicit historical queries work.
  */
 export function filterStaleEnrichmentSignals(signals: Signal[]): Signal[] {
   const cutoff = new Date(Date.now() - THIRTY_DAYS_MS);
   return signals.filter((s) => {
-    if (!s.sources.some((src) => src.type === 'ENRICHMENT')) return true;
+    if (!s.sources.some((src) => STALE_BACKFILL_SOURCE_IDS.has(src.id))) return true;
     const match = s.title.match(TITLE_DATE_RE);
     if (!match) return true;
     const titleDate = new Date(match[1] + 'T00:00:00Z');

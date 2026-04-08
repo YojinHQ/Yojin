@@ -29,7 +29,7 @@ describe('filterStaleEnrichmentSignals', () => {
     vi.useRealTimers();
   });
 
-  it('filters enrichment signals with dates older than 30 days in titles', () => {
+  it('filters key-event signals with dates older than 30 days in titles', () => {
     const stale = makeSignal({
       title: 'ETH: SIGNIFICANT MOVE on 2025-11-06',
     });
@@ -38,7 +38,17 @@ describe('filterStaleEnrichmentSignals', () => {
     expect(result).toHaveLength(0);
   });
 
-  it('keeps enrichment signals with recent dates in titles', () => {
+  it('filters stale short-interest stragglers', () => {
+    const staleShort = makeSignal({
+      title: 'AAPL Short Interest 2025-10-01',
+      sources: [{ id: 'jintel-short-interest', name: 'Jintel Short Interest', type: 'ENRICHMENT', reliability: 0.9 }],
+    });
+
+    const result = filterStaleEnrichmentSignals([staleShort]);
+    expect(result).toHaveLength(0);
+  });
+
+  it('keeps key-event signals with recent dates in titles', () => {
     const fresh = makeSignal({
       title: 'AAPL: FIFTY TWO WEEK HIGH on 2026-04-05',
     });
@@ -47,7 +57,7 @@ describe('filterStaleEnrichmentSignals', () => {
     expect(result).toHaveLength(1);
   });
 
-  it('keeps enrichment signals without dates in titles', () => {
+  it('keeps signals without dates in titles', () => {
     const noDate = makeSignal({
       title: 'AAPL Market Snapshot',
     });
@@ -56,7 +66,17 @@ describe('filterStaleEnrichmentSignals', () => {
     expect(result).toHaveLength(1);
   });
 
-  it('keeps non-enrichment signals even with old dates in titles', () => {
+  it('keeps SEC filings with old dates (legitimate historical enrichment)', () => {
+    const oldFiling = makeSignal({
+      title: 'AAPL: 10-K filed 2025-12-15',
+      sources: [{ id: 'jintel-sec', name: 'Jintel SEC', type: 'ENRICHMENT', reliability: 0.95 }],
+    });
+
+    const result = filterStaleEnrichmentSignals([oldFiling]);
+    expect(result).toHaveLength(1);
+  });
+
+  it('keeps non-enrichment signals with old dates in titles', () => {
     const newsWithDate = makeSignal({
       title: 'Apple earnings report from 2025-11-06 still relevant',
       sources: [{ id: 'reuters', name: 'Reuters', type: 'API', reliability: 0.8 }],
@@ -68,9 +88,14 @@ describe('filterStaleEnrichmentSignals', () => {
 
   it('handles mixed batch correctly', () => {
     const signals = [
-      makeSignal({ id: 'stale', title: 'ETH: VOLUME SPIKE on 2025-08-19' }),
-      makeSignal({ id: 'fresh', title: 'AAPL: GAP MOVE on 2026-04-02' }),
+      makeSignal({ id: 'stale-event', title: 'ETH: VOLUME SPIKE on 2025-08-19' }),
+      makeSignal({ id: 'fresh-event', title: 'AAPL: GAP MOVE on 2026-04-02' }),
       makeSignal({ id: 'no-date', title: 'BTC Short Interest' }),
+      makeSignal({
+        id: 'old-filing',
+        title: 'AAPL: 10-K filed 2025-12-15',
+        sources: [{ id: 'jintel-sec', name: 'Jintel SEC', type: 'ENRICHMENT', reliability: 0.95 }],
+      }),
       makeSignal({
         id: 'news-old',
         title: 'Market crash on 2025-06-01',
@@ -80,6 +105,6 @@ describe('filterStaleEnrichmentSignals', () => {
 
     const result = filterStaleEnrichmentSignals(signals);
     const ids = result.map((s) => s.id);
-    expect(ids).toEqual(['fresh', 'no-date', 'news-old']);
+    expect(ids).toEqual(['fresh-event', 'no-date', 'old-filing', 'news-old']);
   });
 });
