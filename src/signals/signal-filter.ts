@@ -89,6 +89,29 @@ export function classifyOutputType(signal: Signal): SignalOutputType {
   return 'INSIGHT';
 }
 
+// ---------------------------------------------------------------------------
+// Stale enrichment guard — catches historical signals already in the archive
+// ---------------------------------------------------------------------------
+
+const TITLE_DATE_RE = /\b(\d{4}-\d{2}-\d{2})\b/;
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Filter out enrichment-sourced signals whose titles contain dates older than
+ * 30 days. These are historical stragglers from before the 7-day event filter
+ * was added — they passed dedup because publishedAt shifted on re-ingestion.
+ */
+export function filterStaleEnrichmentSignals(signals: Signal[]): Signal[] {
+  const cutoff = new Date(Date.now() - THIRTY_DAYS_MS);
+  return signals.filter((s) => {
+    if (!s.sources.some((src) => src.type === 'ENRICHMENT')) return true;
+    const match = s.title.match(TITLE_DATE_RE);
+    if (!match) return true;
+    const titleDate = new Date(match[1] + 'T00:00:00Z');
+    return titleDate >= cutoff;
+  });
+}
+
 /**
  * Title-based dedup — keeps the signal with highest confidence per title.
  */

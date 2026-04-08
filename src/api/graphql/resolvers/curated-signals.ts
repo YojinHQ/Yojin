@@ -21,7 +21,12 @@ import type { SignalAssessment, SignalVerdict, ThesisAlignment } from '../../../
 import { detectConvergence } from '../../../signals/curation/convergence-detector.js';
 import { computeEngagementScore } from '../../../signals/curation/engagement-scorer.js';
 import type { CurationConfig, CurationWeights, FeedTarget } from '../../../signals/curation/types.js';
-import { DEFAULT_SPAM_PATTERNS, deduplicateByTitle, filterSignals } from '../../../signals/signal-filter.js';
+import {
+  DEFAULT_SPAM_PATTERNS,
+  deduplicateByTitle,
+  filterSignals,
+  filterStaleEnrichmentSignals,
+} from '../../../signals/signal-filter.js';
 import type { Signal, SignalOutputType, SignalType } from '../../../signals/types.js';
 import type { WatchlistStore } from '../../../watchlist/watchlist-store.js';
 
@@ -322,6 +327,9 @@ export async function curatedSignalsResolver(
     return !sourceId || !REFERENCE_DATA_SOURCE_IDS.has(sourceId);
   });
 
+  // Drop stale enrichment signals with historical dates in their titles (archive stragglers)
+  const fresh = filterStaleEnrichmentSignals(actionable);
+
   // Classify signals as portfolio or watchlist
   const portfolioTickerSet = new Set(portfolioTickers);
   const watchlistTickerSet = new Set(watchlistTickers.filter((t) => !portfolioTickerSet.has(t)));
@@ -329,7 +337,7 @@ export async function curatedSignalsResolver(
   type TaggedSignal = { signal: Signal; feedTarget: FeedTarget };
   const tagged: TaggedSignal[] = [];
 
-  for (const signal of actionable) {
+  for (const signal of fresh) {
     const isPortfolio = signal.assets.some((a) => portfolioTickerSet.has(a.ticker));
     const isWatchlist = signal.assets.some((a) => watchlistTickerSet.has(a.ticker));
 

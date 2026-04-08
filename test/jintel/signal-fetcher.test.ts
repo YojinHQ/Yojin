@@ -1,5 +1,5 @@
 import type { Entity } from '@yojinhq/jintel-client';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { enrichmentToSignals } from '../../src/jintel/signal-fetcher.js';
 
@@ -136,5 +136,88 @@ describe('enrichmentToSignals — signal type classification', () => {
     expect(newsSignals).toHaveLength(1);
     expect(newsSignals[0].type).toBe('NEWS');
     expect(newsSignals[0].type).not.toBe('FUNDAMENTAL');
+  });
+});
+
+describe('enrichmentToSignals — key events publishedAt', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-08T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('uses day-precision ingestion time, not event date', () => {
+    const entity = makeEntity({
+      market: {
+        keyEvents: [
+          {
+            type: 'FIFTY_TWO_WEEK_HIGH',
+            date: '2026-04-05',
+            description: 'Apple hit a 52-week high',
+            close: 200.0,
+            changePercent: 2.5,
+            priceChange: 5.0,
+          },
+        ],
+      },
+    });
+
+    const signals = enrichmentToSignals(entity, ['AAPL']);
+    const keyEventSignals = signals.filter((s) => s.sourceId === 'jintel-key-event');
+
+    expect(keyEventSignals).toHaveLength(1);
+    expect(keyEventSignals[0].publishedAt).toBe('2026-04-08T00:00:00.000Z');
+    expect(keyEventSignals[0].metadata?.eventDate).toBe('2026-04-05');
+  });
+
+  it('skips events older than 7 days', () => {
+    const entity = makeEntity({
+      market: {
+        keyEvents: [
+          {
+            type: 'FIFTY_TWO_WEEK_HIGH',
+            date: '2025-11-06',
+            description: 'Old 52-week high',
+            close: 180.0,
+            changePercent: 1.0,
+            priceChange: 2.0,
+          },
+        ],
+      },
+    });
+
+    const signals = enrichmentToSignals(entity, ['AAPL']);
+    const keyEventSignals = signals.filter((s) => s.sourceId === 'jintel-key-event');
+
+    expect(keyEventSignals).toHaveLength(0);
+  });
+
+  it('produces stable hash across re-runs on the same day', () => {
+    const entity = makeEntity({
+      market: {
+        keyEvents: [
+          {
+            type: 'VOLUME_SPIKE',
+            date: '2026-04-07',
+            description: 'Volume spike detected',
+            close: 195.0,
+            changePercent: 3.0,
+            priceChange: 6.0,
+            volume: 150000000,
+          },
+        ],
+      },
+    });
+
+    const first = enrichmentToSignals(entity, ['AAPL']);
+    const second = enrichmentToSignals(entity, ['AAPL']);
+    const firstEvent = first.filter((s) => s.sourceId === 'jintel-key-event');
+    const secondEvent = second.filter((s) => s.sourceId === 'jintel-key-event');
+
+    expect(firstEvent[0].publishedAt).toBe(secondEvent[0].publishedAt);
+    expect(firstEvent[0].title).toBe(secondEvent[0].title);
   });
 });

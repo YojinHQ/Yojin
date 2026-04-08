@@ -22,7 +22,7 @@ import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
 import type { TickerProfileStore } from '../profiles/profile-store.js';
 import type { TickerProfileBrief } from '../profiles/types.js';
 import type { SignalArchive } from '../signals/archive.js';
-import { DEFAULT_SPAM_PATTERNS, filterSignals } from '../signals/signal-filter.js';
+import { DEFAULT_SPAM_PATTERNS, filterSignals, filterStaleEnrichmentSignals } from '../signals/signal-filter.js';
 import type { Signal, SignalOutputType, SignalSentiment } from '../signals/types.js';
 
 const logger = createSubsystemLogger('data-gatherer');
@@ -204,7 +204,7 @@ export async function gatherDataBriefs(options: DataGathererOptions): Promise<Ga
     // Previous report (local, fast)
     insightStore.getLatest(),
   ]);
-  const signals = curatedSignals;
+  const signals = filterStaleEnrichmentSignals(curatedSignals);
 
   // 3. Index data by ticker for O(1) lookup
   const signalsByTicker = groupSignalsByTicker(signals, tickers);
@@ -816,7 +816,7 @@ export async function buildSingleBrief(symbol: string, options: SingleBriefOptio
     recallAllMemories(memoryStores, [ticker]),
   ]);
 
-  const signals = curatedSignals;
+  const signals = filterStaleEnrichmentSignals(curatedSignals);
   const memMap = indexMemories(memories, [ticker]);
   const profile = profileStore ? profileStore.buildBrief(ticker) : null;
   const profileBrief = profile && profile.entryCount > 0 ? profile : null;
