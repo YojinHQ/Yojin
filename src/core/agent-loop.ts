@@ -37,6 +37,7 @@ import type {
   ToolResultBlock,
   ToolUseBlock,
 } from './types.js';
+import { handleProviderCredentialError, isProviderCredentialError } from '../ai-providers/credential-error.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 
 const logger = createSubsystemLogger('agent-loop');
@@ -229,6 +230,13 @@ export async function runAgentLoop(
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.error('LLM call failed', { agentId, iteration: iterations, error: errMsg });
+      // Credential errors (401, invalid key, expired OAuth) — invalidate the stored
+      // credential so every subsequent call path (chat, micro flow, macro flow) sees
+      // a clean state and the user is prompted to reconnect rather than hitting the
+      // same error on every scheduler tick.
+      if (isProviderCredentialError(err)) {
+        void handleProviderCredentialError();
+      }
       emit(onEvent, { type: 'error', error: errMsg, iterations });
       throw err;
     }

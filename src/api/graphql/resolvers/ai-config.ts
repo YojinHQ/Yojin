@@ -9,7 +9,9 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { ClaudeCodeProvider } from '../../../ai-providers/claude-code.js';
+import { registerCredentialErrorHandler } from '../../../ai-providers/credential-error.js';
 import type { ProviderRouter } from '../../../ai-providers/router.js';
+import { readTokenFromKeychain } from '../../../auth/keychain.js';
 import { AIProviderConfigSchema } from '../../../config/config.js';
 import { createSubsystemLogger } from '../../../logging/logger.js';
 import { resolveDataRoot } from '../../../paths.js';
@@ -31,6 +33,9 @@ export function setAiConfigProviderRouter(r: ProviderRouter): void {
 
 export function setAiConfigVault(v: EncryptedVault): void {
   vault = v;
+  // Register the credential cleanup handler so agent-loop (and all BE flows)
+  // can trigger it without depending on the API/resolver layer.
+  registerCredentialErrorHandler(clearDefaultProviderCredential);
 }
 
 export function setAiConfigClaudeCodeProvider(ccp: ClaudeCodeProvider): void {
@@ -57,9 +62,18 @@ interface SaveAiCredentialResult {
 // Vault key mapping
 // ---------------------------------------------------------------------------
 
-const PROVIDER_VAULT_KEYS: Record<string, { vaultKey: string; envKey: string }> = {
-  'claude-code': { vaultKey: 'anthropic_api_key', envKey: 'ANTHROPIC_API_KEY' },
-  codex: { vaultKey: 'openai_api_key', envKey: 'OPENAI_API_KEY' },
+/**
+ * Credential variants per provider. The first entry is the "primary" mapping
+ * that `saveAiCredential` writes to; subsequent entries are additional forms
+ * (e.g. OAuth tokens) that coexist with the primary and must all be cleared
+ * when the credential is removed. Save paths use `[0]`, delete paths iterate.
+ */
+const PROVIDER_VAULT_KEYS: Record<string, ReadonlyArray<{ vaultKey: string; envKey: string }>> = {
+  'claude-code': [
+    { vaultKey: 'anthropic_api_key', envKey: 'ANTHROPIC_API_KEY' },
+    { vaultKey: 'anthropic_oauth_token', envKey: 'CLAUDE_CODE_OAUTH_TOKEN' },
+  ],
+  codex: [{ vaultKey: 'openai_api_key', envKey: 'OPENAI_API_KEY' }],
 };
 
 // ---------------------------------------------------------------------------
@@ -69,6 +83,78 @@ const PROVIDER_VAULT_KEYS: Record<string, { vaultKey: string; envKey: string }> 
 async function hasVaultKey(key: string): Promise<boolean> {
   if (!vault?.isUnlocked) return false;
   return vault.has(key);
+}
+
+/**
+ * Delete the stored credential for a provider (vault + env var).
+ * Used both by the GraphQL removeAiCredential mutation and by automatic
+ * credential invalidation when a provider returns an auth error.
+ *
+ * Clears every credential variant listed in `PROVIDER_VAULT_KEYS[providerId]`
+ * (for claude-code that's both the API-key entry and the OAuth-token entry)
+ * and then resets the in-memory provider so its cached SDK client stops
+ * serving requests with the now-removed credential.
+ */
+async function deleteProviderCredential(providerId: string): Promise<void> {
+  const mappings = PROVIDER_VAULT_KEYS[providerId];
+  if (!mappings) return;
+  for (const mapping of mappings) {
+    if (vault?.isUnlocked && (await vault.has(mapping.vaultKey))) {
+      await vault.delete(mapping.vaultKey);
+    }
+    process.env[mapping.envKey] = '';
+  }
+  // Reset the in-memory provider so subsequent requests don't reuse the
+  // cached Anthropic client built with the removed credential. Mirrors the
+  // runtime reconfiguration that saveAiCredentialMutation does after writes.
+  if (providerId === 'claude-code') {
+    claudeCodeProvider?.clearCredentials();
+  }
+  logger.info('Provider credential removed', { provider: providerId });
+}
+
+/**
+ * Read the currently configured default provider id from disk.
+ * Falls back to 'claude-code' if the config is absent or unparseable.
+ */
+async function readDefaultProviderId(): Promise<string> {
+  const configPath = join(resolveDataRoot(), 'config', 'ai-provider.json');
+  try {
+    const raw = await readFile(configPath, 'utf-8');
+    const parsed = AIProviderConfigSchema.parse(JSON.parse(raw));
+    return parsed.defaultProvider;
+  } catch {
+    return 'claude-code';
+  }
+}
+
+/**
+ * Programmatically clear the default provider's credential.
+ * Called automatically when the provider returns an auth/invalid-key error
+ * so the user is prompted to reconnect rather than seeing a cryptic error loop.
+ *
+ * In OAuth mode the real credential lives in the macOS Keychain (or the
+ * keychain bridge file), not the vault. The Anthropic SDK already attempts
+ * an internal refresh in ClaudeCodeProvider.completeWithOAuth before the
+ * error reaches us, so a 401 here means refresh already failed. Deleting
+ * the vault's stale anthropic_api_key entry would do nothing useful and
+ * would flip the UI to "disconnected" even though the keychain token is
+ * still there — making it look like we deleted something we didn't.
+ * Skip the wipe in that case.
+ */
+export async function clearDefaultProviderCredential(): Promise<void> {
+  const providerId = await readDefaultProviderId();
+  if (providerId === 'claude-code' && claudeCodeProvider?.getAuthMode() === 'oauth') {
+    logger.warn(
+      'Claude auth failure in OAuth mode — refresh already attempted by provider. ' +
+        'Leaving vault/env untouched; user must re-login via Claude Code CLI if this persists.',
+    );
+    return;
+  }
+  await deleteProviderCredential(providerId);
+  logger.warn('Default provider credential cleared due to auth failure — user must reconnect', {
+    provider: providerId,
+  });
 }
 
 async function readAiConfig(): Promise<AiConfigGql> {
@@ -86,11 +172,17 @@ async function readAiConfig(): Promise<AiConfigGql> {
     defaultProvider = defaults.defaultProvider;
   }
 
+  // Keychain check is the source of truth for Claude Code OAuth tokens on
+  // macOS — without this the UI shows Claude as "disconnected" whenever the
+  // vault/env ANTHROPIC_API_KEY is absent, even though the OAuth token is
+  // present and usable. See ClaudeCodeProvider.initialize for the same
+  // resolution order the provider itself uses at startup.
   const hasAnthropicKey =
     !!process.env.ANTHROPIC_API_KEY ||
     !!process.env.CLAUDE_CODE_OAUTH_TOKEN ||
     (await hasVaultKey('anthropic_api_key')) ||
-    (await hasVaultKey('anthropic_oauth_token'));
+    (await hasVaultKey('anthropic_oauth_token')) ||
+    !!(await readTokenFromKeychain());
 
   const hasOpenaiKey = !!process.env.OPENAI_API_KEY || (await hasVaultKey('openai_api_key'));
 
@@ -153,10 +245,12 @@ export async function saveAiCredentialMutation(
   _: unknown,
   args: { provider: string; apiKey: string },
 ): Promise<SaveAiCredentialResult> {
-  const mapping = PROVIDER_VAULT_KEYS[args.provider];
-  if (!mapping) {
+  const mappings = PROVIDER_VAULT_KEYS[args.provider];
+  if (!mappings) {
     return { success: false, error: `Unknown provider: ${args.provider}` };
   }
+  // First entry is the primary (api_key) mapping used for saves.
+  const primary = mappings[0];
 
   const apiKey = args.apiKey.trim();
   if (!apiKey) {
@@ -170,11 +264,11 @@ export async function saveAiCredentialMutation(
 
   // Store in vault if available
   if (vault?.isUnlocked) {
-    await vault.set(mapping.vaultKey, apiKey);
+    await vault.set(primary.vaultKey, apiKey);
   }
 
   // Set in process env so the provider picks it up
-  process.env[mapping.envKey] = apiKey;
+  process.env[primary.envKey] = apiKey;
 
   // Reconfigure the provider immediately
   if (args.provider === 'claude-code' && claudeCodeProvider) {
@@ -198,19 +292,9 @@ export async function removeAiCredentialMutation(
   _: unknown,
   args: { provider: string },
 ): Promise<SaveAiCredentialResult> {
-  const mapping = PROVIDER_VAULT_KEYS[args.provider];
-  if (!mapping) {
+  if (!PROVIDER_VAULT_KEYS[args.provider]) {
     return { success: false, error: `Unknown provider: ${args.provider}` };
   }
-
-  // Remove from vault
-  if (vault?.isUnlocked && (await vault.has(mapping.vaultKey))) {
-    await vault.delete(mapping.vaultKey);
-  }
-
-  // Remove from process env
-  process.env[mapping.envKey] = '';
-
-  logger.info('AI credential removed', { provider: args.provider });
+  await deleteProviderCredential(args.provider);
   return { success: true };
 }
