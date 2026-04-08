@@ -149,7 +149,7 @@ describe('enrichmentToSignals — key events publishedAt', () => {
     vi.useRealTimers();
   });
 
-  it('uses day-precision ingestion time, not event date', () => {
+  it('preserves the actual event date as publishedAt', () => {
     const entity = makeEntity({
       market: {
         keyEvents: [
@@ -169,8 +169,7 @@ describe('enrichmentToSignals — key events publishedAt', () => {
     const keyEventSignals = signals.filter((s) => s.sourceId === 'jintel-key-event');
 
     expect(keyEventSignals).toHaveLength(1);
-    expect(keyEventSignals[0].publishedAt).toBe('2026-04-08T00:00:00.000Z');
-    expect(keyEventSignals[0].metadata?.eventDate).toBe('2026-04-05');
+    expect(keyEventSignals[0].publishedAt).toBe('2026-04-05T00:00:00.000Z');
   });
 
   it('skips events older than 7 days', () => {
