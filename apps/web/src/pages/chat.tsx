@@ -188,7 +188,7 @@ function ChatContent() {
   }, []);
 
   return (
-    <div className="chat-surface flex flex-1 overflow-hidden bg-bg-primary">
+    <div className="flex flex-1 overflow-hidden">
       {/* Sessions sidebar */}
       <SessionSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((prev) => !prev)} />
 
@@ -303,7 +303,7 @@ function ChatContent() {
 
 function MockChatPage() {
   return (
-    <div className="chat-surface flex flex-1 overflow-hidden bg-bg-primary">
+    <div className="flex flex-1 overflow-hidden">
       {/* Mock sidebar */}
       <div className="flex w-56 flex-col border-r border-border bg-bg-secondary/30 p-3">
         <div className="mb-4 rounded-lg bg-bg-tertiary px-3 py-2 text-xs text-text-muted">New Chat</div>
