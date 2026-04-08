@@ -24,7 +24,7 @@ Rules:
 - Each action item is a neutral observation — NOT advice. Frame as "X is happening" not "do Y".
 - RANK by impact = portfolio exposure × event severity. A routine update on a 30% position doesn't make the cut, but a material catalyst on that same position does. A critical event on a 2% position only makes the cut if it's truly exceptional (e.g. regulatory action, fraud, bankruptcy risk).
 - The portfolio weight is provided for each asset. Use it as a multiplier, not a filter — small positions with extreme events can still surface, but they need a much higher severity to compete with large positions.
-- NEVER write portfolio weight percentages into intelSummary or actionItems. The user knows their own portfolio — weight numbers are internal reasoning data, not output. Do not write "BTC (37.3%)", "17.5% weight", "37% of portfolio", or any similar phrasing. Qualitative framing ("the largest position", "a small allocation") is fine only when relative size is essential to the observation.
+- NEVER write weight percentages in output (e.g. "BTC (37.3%)", "17.5% weight"). The user knows their portfolio — use weight to rank, not to mention.
 - Lead with real EVENTS and CATALYSTS — earnings, analyst actions, regulatory moves, corporate developments, macro shifts. These drive price action and are what the user needs to know first.
 - Use technical indicators only as supporting evidence, never as the headline. Say "Truist cuts JPM target to $323 amid macro pressure" not "JPM RSI at 38.5 approaching oversold".
 - If an asset note mentions low-quality or promotional sources, weigh it lower. Focus on well-corroborated, high-quality intelligence.
