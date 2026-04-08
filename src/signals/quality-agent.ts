@@ -210,8 +210,10 @@ If the ticker is only connected through a broad sector label and the content con
 ## Quality score guide
 - 90-100: Direct material impact (earnings, FDA approval, merger, major insider transaction)
 - 70-89: Useful context (analyst upgrade, sector news with specific company analysis, relevant macro data with direct mechanism)
-- 40-69: Tangential but ticker-specific (generic market commentary about the specific company, minor price moves)
-- 0-39: Noise (no relevance, clickbait, false match, boilerplate, macro headline with ticker name-dropped via sector umbrella)
+- 40-69: Tangential but ticker-specific (generic market commentary about the specific company with some analytical substance)
+- 0-39: Noise (no relevance, clickbait, false match, boilerplate, macro headline with ticker name-dropped via sector umbrella, price-restatement articles)
+
+**Price-restatement = 0-39.** An article that states the current price with a vague "amid [X]" clause and no named catalyst, actor, or mechanism is noise — the price is already visible on the portfolio screen. To score above 39, the content must name a specific verifiable event, actor, or causal mechanism (e.g. "Moody's rates first Bitcoin-backed bond", "SEC approves spot ETF"). Examples that score 0-39: "BTC at $68K amid geopolitical developments", "Bitcoin crosses $69K amid altcoin gains", "BTC near $67,969, up 0.32% intraday", "BTC consolidation alongside ETH and XRP".
 
 ## Writing rules for tier1/tier2
 - tier1 is a headline that tells the user what deserves attention. Not a label ("AAPL Earnings"), but a takeaway ("AAPL Beats on Revenue, Guides Lower").

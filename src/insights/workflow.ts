@@ -293,7 +293,11 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
             `- portfolio: overallHealth, summary (2 sentences MAX — include the most important cross-cutting theme), intelSummary (2-3 sentences: synthesize what the latest signals are saying across all positions — what patterns, themes, or shifts are the signals collectively pointing to?), sectorThemes[], macroContext (1-2 sentences: current macro environment and how it affects the portfolio — cite real data like GDP, rates, inflation, market P/E when available), topRisks[], topOpportunities[], actionItems[] (IMPORTANT: these are observations that surface relevant info — NOT action advisory. Frame as "X is at Y" or "X shows Y", NEVER as "Reduce X", "Increase Y", "Buy/Sell Z". You inform, the user decides.)\n` +
             `- emotionState: { confidence, riskAppetite, reason (1 sentence) }\n` +
             `Also call brain_update_memory and brain_update_emotion in the SAME batch.\n` +
-            `Keep ALL string values SHORT. Do NOT write lengthy prose.`;
+            `Keep ALL string values SHORT. Do NOT write lengthy prose.\n` +
+            `\n## Weight Output Rule — CRITICAL\n` +
+            `NEVER write portfolio weight percentages into any string field. The user knows their own portfolio; weight numbers are internal reasoning data, not output. This applies to EVERY string field you save: positions[].thesis, positions[].risks, positions[].opportunities, portfolio.summary, portfolio.intelSummary, portfolio.macroContext, portfolio.actionItems, portfolio.topRisks, portfolio.topOpportunities, portfolio.sectorThemes, emotionState.reason.\n` +
+            `Forbidden patterns: "17.5% weight", "BTC (37.3%)", "37% of portfolio", "largest position at 42%", sector percentages like "Tech at 45%".\n` +
+            `You MAY reason with weights silently when prioritizing content, and MAY use qualitative framing ("the largest position", "a minor allocation") when relative size is essential to the observation.`;
 
           return prompt;
         },

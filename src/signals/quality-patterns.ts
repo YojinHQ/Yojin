@@ -29,9 +29,13 @@ export const JUNK_DOMAIN_RE =
  * Superset of patterns previously split across ingestor.ts and signal-fetcher.ts —
  * `stock price`, `closed at $`, `what you need to know`, `spy vs spy` were
  * signal-fetcher-only; now applied uniformly at all pipeline stages.
+ *
+ * Price-chatter patterns catch articles that restate the current price with a vague
+ * "amid" clause and no named catalyst — e.g. "BTC at $68K amid geopolitical developments",
+ * "Bitcoin crosses $69K amid altcoin gains", "BTC near $67,969, up 0.32% intraday".
  */
 export const JUNK_TITLE_RE =
-  /__\w+__|stock quote price|stock quotes? from|stock price|in real time$|tradingview|quote & history|price and forecast|price chart|commission-free|buy and sell|closed at \$|what you need to know$|spy vs\.? spy|song and lyrics|official music video|official video|official audio|full album|definition and meaning|definition of\b|meaning of\b|\bdefinition\b.*\bdictionary\b/i;
+  /__\w+__|stock quote price|stock quotes? from|stock price|in real time$|tradingview|quote & history|price and forecast|price chart|commission-free|buy and sell|closed at \$|what you need to know$|spy vs\.? spy|song and lyrics|official music video|official video|official audio|full album|definition and meaning|definition of\b|meaning of\b|\bdefinition\b.*\bdictionary\b|\b(?:at|near|crosses?|hits?|reaches?)\s+\$[\d,K.]+|\bup\s+\d+\.?\d*%\s+intraday|\bprices?\s+(?:up|down)\s+on\b/i;
 
 // ---------------------------------------------------------------------------
 // Content patterns — body-level junk detection
