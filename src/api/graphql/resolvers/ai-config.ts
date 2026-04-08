@@ -50,6 +50,7 @@ interface AiConfigGql {
   defaultModel: string;
   defaultProvider: string;
   hasAnthropicKey: boolean;
+  hasAnthropicApiKey: boolean;
   hasOpenaiKey: boolean;
 }
 
@@ -184,9 +185,13 @@ async function readAiConfig(): Promise<AiConfigGql> {
     (await hasVaultKey('anthropic_oauth_token')) ||
     !!(await readTokenFromKeychain());
 
+  // Vault/env API key only — excludes keychain OAuth. Used to determine
+  // whether a removable API key is stored (the API KEY section in settings).
+  const hasAnthropicApiKey = !!process.env.ANTHROPIC_API_KEY || (await hasVaultKey('anthropic_api_key'));
+
   const hasOpenaiKey = !!process.env.OPENAI_API_KEY || (await hasVaultKey('openai_api_key'));
 
-  return { defaultModel, defaultProvider, hasAnthropicKey, hasOpenaiKey };
+  return { defaultModel, defaultProvider, hasAnthropicKey, hasAnthropicApiKey, hasOpenaiKey };
 }
 
 // ---------------------------------------------------------------------------

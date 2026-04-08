@@ -1195,6 +1195,7 @@ export interface AiConfig {
   defaultModel: string;
   defaultProvider: string;
   hasAnthropicKey: boolean;
+  hasAnthropicApiKey: boolean;
   hasOpenaiKey: boolean;
 }
 

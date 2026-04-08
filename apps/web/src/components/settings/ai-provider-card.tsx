@@ -68,10 +68,20 @@ function resolveProvider(provider: string): AiProviderId {
 
 const PROVIDER_KEY_INFO: Record<
   AiProviderId,
-  { placeholder: string; prefix: string; configField: 'hasAnthropicKey' | 'hasOpenaiKey' }
+  {
+    placeholder: string;
+    prefix: string;
+    configField: 'hasAnthropicKey' | 'hasOpenaiKey';
+    apiKeyField: 'hasAnthropicApiKey' | 'hasOpenaiKey';
+  }
 > = {
-  'claude-code': { placeholder: 'sk-ant-...', prefix: 'sk-ant-', configField: 'hasAnthropicKey' },
-  codex: { placeholder: 'sk-...', prefix: 'sk-', configField: 'hasOpenaiKey' },
+  'claude-code': {
+    placeholder: 'sk-ant-...',
+    prefix: 'sk-ant-',
+    configField: 'hasAnthropicKey',
+    apiKeyField: 'hasAnthropicApiKey',
+  },
+  codex: { placeholder: 'sk-...', prefix: 'sk-', configField: 'hasOpenaiKey', apiKeyField: 'hasOpenaiKey' },
 };
 
 // ---------------------------------------------------------------------------
@@ -176,7 +186,7 @@ function ModelPicker() {
     }
   }, [result.data]);
 
-  const hasKey = result.data?.aiConfig?.[PROVIDER_KEY_INFO[provider].configField] ?? false;
+  const hasKey = result.data?.aiConfig?.[PROVIDER_KEY_INFO[provider].apiKeyField] ?? false;
 
   const handleSelectProvider = (p: AiProviderId) => {
     if (p === provider) return;
@@ -369,7 +379,9 @@ function ModelPicker() {
                   : keychainConnected
                     ? `Connected · ${keychain?.model ?? (provider === 'codex' ? 'Codex' : 'Claude')}`
                     : keychain?.error
-                      ? 'Token expired or invalid'
+                      ? keychain.error.includes('claude auth login')
+                        ? 'Token expired — run: claude auth login, then Refresh'
+                        : keychain.error
                       : 'Not connected'}
               </p>
             </div>
