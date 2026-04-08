@@ -47,7 +47,7 @@ export class VercelAIProvider implements AIProvider {
 
   async isAvailable(): Promise<boolean> {
     return new Promise((resolve) => {
-      const child = spawn('codex', ['--version'], { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] });
+      const child = spawn('codex', ['--version'], { timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'] });
       child.on('error', () => resolve(false));
       child.on('close', (code) => resolve(code === 0));
     });
@@ -73,7 +73,7 @@ export class VercelAIProvider implements AIProvider {
       const child = spawn('codex', args, {
         timeout: 120_000,
         cwd: '/tmp',
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
 
       let fullText = '';
@@ -129,8 +129,6 @@ export class VercelAIProvider implements AIProvider {
           usage,
         });
       });
-
-      child.stdin.end();
     });
   }
 
