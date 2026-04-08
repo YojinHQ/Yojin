@@ -227,6 +227,27 @@ export class WatchlistEnrichment {
     await this.flush();
   }
 
+  /**
+   * Invalidate enrichment cache for multiple symbols.
+   * Called after new signals arrive for watchlist tickers so the next enrichment
+   * call pulls fresh Jintel data instead of serving a stale snapshot.
+   */
+  async invalidateTickers(symbols: string[]): Promise<void> {
+    let changed = false;
+    for (const sym of symbols) {
+      const key = sym.toUpperCase();
+      if (this.cache.has(key)) {
+        this.cache.delete(key);
+        changed = true;
+      }
+    }
+    if (changed) await this.flush();
+    // Also clear the JintelClient response cache so the next batchEnrich
+    // call fetches live data rather than serving the in-memory cached result.
+    // Double-optional for runtime safety against pre-0.12.0 installs.
+    this.jintelClient?.invalidateCache?.(symbols);
+  }
+
   private isStale(entry: EnrichmentCacheEntry): boolean {
     const enrichedAt = new Date(entry.enrichedAt).getTime();
     const now = Date.now();

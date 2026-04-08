@@ -156,6 +156,8 @@ export const AlertsConfigSchema = z.object({
     .default([]),
   digestSchedule: DigestScheduleSchema.optional(),
   digestSections: z.array(z.string()).optional(),
+  /** How often (in hours) to run the LLM micro-analysis per asset. Default: 4h. */
+  microLlmIntervalHours: z.number().min(0.25).max(24).optional(),
 });
 export type AlertsConfig = z.infer<typeof AlertsConfigSchema>;
 

@@ -25,9 +25,14 @@ import { setChannelRegistry } from '../api/graphql/resolvers/channels.js';
 import { setCurationOrchestrator, setCurationPipelineDeps } from '../api/graphql/resolvers/curated-signals.js';
 import { setInsightsOrchestrator } from '../api/graphql/resolvers/insights.js';
 import { setMicroInsightStore } from '../api/graphql/resolvers/micro-insights.js';
-import { setOnboardingClaudeCodeProvider, setOnboardingProvider } from '../api/graphql/resolvers/onboarding.js';
+import {
+  setMicroLlmIntervalCallback,
+  setOnboardingClaudeCodeProvider,
+  setOnboardingProvider,
+} from '../api/graphql/resolvers/onboarding.js';
 import { setPortfolioChangedCallback } from '../api/graphql/resolvers/portfolio.js';
 import { onAppDataCleared } from '../api/graphql/resolvers/profile.js';
+import { setSchedulerStatusProvider, setTriggerMicroAnalysis } from '../api/graphql/resolvers/scheduler.js';
 import { setWatchlistChangedCallback } from '../api/graphql/resolvers/watchlist.js';
 import { buildContext } from '../composition.js';
 import { AgentRuntime } from '../core/agent-runtime.js';
@@ -221,14 +226,16 @@ async function startGateway(): Promise<void> {
   setInsightsOrchestrator(orchestrator);
 
   // Register full-curation workflow (Tier 1 + Tier 2) for the UI button
-  const { loadJsonConfig } = await import('../config/config.js');
+  const { loadJsonConfig, AlertsConfigSchema } = await import('../config/config.js');
+  const alertsConfigRaw = await loadJsonConfig(`${dataRoot}/config/alerts.json`, AlertsConfigSchema);
+  const alertsConfig = AlertsConfigSchema.parse(alertsConfigRaw);
   const curationConfigRaw = await loadJsonConfig(`${dataRoot}/config/curation.json`, CurationConfigSchema);
   const curationConfig = CurationConfigSchema.parse(curationConfigRaw);
   const assessmentConfigRaw = await loadJsonConfig(`${dataRoot}/config/assessment.json`, AssessmentConfigSchema);
   const assessmentConfig = AssessmentConfigSchema.parse(assessmentConfigRaw);
 
-  // Log ingestion events
-  services.signalIngestor.setPostIngestHook(async (ingested) => {
+  // Log ingestion events — scheduler.triggerMicroFlow wired below after scheduler construction.
+  services.signalIngestor.setPostIngestHook(async (tickers, ingested) => {
     if (ingested === 0) return;
     await eventLog.append({
       type: 'system',
@@ -295,6 +302,9 @@ async function startGateway(): Promise<void> {
     memoryStores: services.memoryStores,
     profileStore: services.profileStore,
     signalArchive: services.signalArchive,
+    microLlmIntervalMs: alertsConfig.microLlmIntervalHours
+      ? alertsConfig.microLlmIntervalHours * 60 * 60 * 1000
+      : undefined,
   });
   scheduler.start();
 
@@ -306,6 +316,30 @@ async function startGateway(): Promise<void> {
   setPortfolioChangedCallback((tickers) => scheduler.triggerMicroFlow(tickers));
   // Trigger micro flow when watchlist changes
   setWatchlistChangedCallback((tickers) => scheduler.triggerMicroFlow(tickers, 'watchlist'));
+  // Re-wire post-ingest hook now that scheduler is available: immediately trigger micro research
+  // for assets with new signals instead of waiting for the next 30s tick.
+  services.signalIngestor.setPostIngestHook(async (tickers, ingested) => {
+    if (ingested === 0) return;
+    await eventLog.append({
+      type: 'system',
+      data: { message: `Ingested ${ingested} new signal${ingested !== 1 ? 's' : ''}` },
+    });
+    if (tickers.length > 0) {
+      scheduler.triggerMicroFlow(tickers);
+      await services.watchlistEnrichment.invalidateTickers(tickers);
+    }
+  });
+  // Apply micro LLM interval changes from UI settings immediately (no restart needed)
+  setMicroLlmIntervalCallback((hours) => scheduler.setMicroLlmIntervalMs(hours * 60 * 60 * 1000));
+  // Expose scheduler status to the schedulerStatus GraphQL query
+  setSchedulerStatusProvider(() => scheduler.getStatus());
+  // Allow the UI to force-run micro analysis for throttled assets immediately
+  setTriggerMicroAnalysis(() => {
+    const throttled = scheduler.getStatus().assets.filter((a) => a.pendingAnalysis);
+    if (throttled.length > 0) {
+      scheduler.triggerMicroFlow(throttled.map((a) => a.symbol));
+    }
+  });
 
   const gateway = new Gateway(services.config, agentRuntime, {
     snapshotStore: services.snapshotStore,

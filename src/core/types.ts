@@ -171,6 +171,9 @@ export interface AgentLoopOptions {
 // ---------------------------------------------------------------------------
 
 export interface AgentLoopProvider {
+  /** The configured default model. Implementations may return a tier alias or concrete model ID. */
+  defaultModel?(): string;
+
   completeWithTools(params: {
     model: string;
     system?: string;

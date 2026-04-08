@@ -31,7 +31,7 @@ import type { ApprovalGate } from '../trust/approval/approval-gate.js';
 import { GuardedToolRegistry } from '../trust/guarded-tool-registry.js';
 import type { ChatPiiScanner } from '../trust/pii/chat-scanner.js';
 
-export const DEFAULT_MODEL = 'claude-sonnet-4-6';
+export const DEFAULT_MODEL = 'sonnet';
 
 const logger = createSubsystemLogger('agent-runtime');
 
@@ -119,7 +119,7 @@ export class AgentRuntime {
     try {
       result = await runAgentLoop(params.message, history, {
         provider: this.provider,
-        model: profile.model ?? DEFAULT_MODEL,
+        model: profile.model ?? this.provider.defaultModel?.() ?? DEFAULT_MODEL,
         systemPrompt,
         tools: guardedTools,
         maxIterations: params.maxIterations,
@@ -200,7 +200,7 @@ export class AgentRuntime {
     imageMediaType?: ImageMediaType;
     abortSignal?: AbortSignal;
   }): Promise<string> {
-    const model = DEFAULT_MODEL;
+    const model = this.provider.defaultModel?.() ?? DEFAULT_MODEL;
 
     let sessionKey: string | undefined;
     if (params.threadId) {

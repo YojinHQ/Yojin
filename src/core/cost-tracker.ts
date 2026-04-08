@@ -35,7 +35,15 @@ const MODEL_PRICING: ReadonlyMap<string, ModelPricing> = new Map([
   // Legacy (still used in some configs)
   ['claude-3-5-sonnet', { inputPerMtok: 3, outputPerMtok: 15, cacheReadPerMtok: 0.3, cacheWritePerMtok: 3.75 }],
   ['claude-3-5-haiku', { inputPerMtok: 0.8, outputPerMtok: 4, cacheReadPerMtok: 0.08, cacheWritePerMtok: 1 }],
-  // OpenAI (via Vercel AI SDK)
+  // OpenAI (via Codex CLI)
+  ['gpt-5.4', { inputPerMtok: 10, outputPerMtok: 40 }],
+  ['gpt-5.4-mini', { inputPerMtok: 5, outputPerMtok: 20 }],
+  ['gpt-5.3-codex', { inputPerMtok: 8, outputPerMtok: 32 }],
+  ['gpt-5.2-codex', { inputPerMtok: 6, outputPerMtok: 24 }],
+  ['gpt-5.2', { inputPerMtok: 5, outputPerMtok: 20 }],
+  ['gpt-5.1-codex-max', { inputPerMtok: 4, outputPerMtok: 16 }],
+  ['gpt-5.1-codex-mini', { inputPerMtok: 1.5, outputPerMtok: 6 }],
+  // Legacy OpenAI
   ['gpt-4o', { inputPerMtok: 2.5, outputPerMtok: 10 }],
   ['gpt-4o-mini', { inputPerMtok: 0.15, outputPerMtok: 0.6 }],
   ['gpt-4-turbo', { inputPerMtok: 10, outputPerMtok: 30 }],

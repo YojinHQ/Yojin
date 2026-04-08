@@ -67,6 +67,9 @@ const cache = cacheExchange({
     SymbolSearchResult: () => null, // embedded — search result, no stable identity
     WatchlistEntry: () => null, // embedded — nested under watchlist query array
     KeychainTokenResult: () => null, // query result — singleton per provider
+    BriefingConfig: () => null, // singleton — no id field
+    SchedulerStatus: () => null, // singleton — no id field
+    SchedulerAssetStatus: () => null, // embedded — keyed by symbol+source in parent
   },
   updates: {
     Mutation: {
