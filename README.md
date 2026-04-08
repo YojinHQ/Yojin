@@ -403,6 +403,7 @@ yojin/
 │   ├── config/         # Zod-validated config loader with env var resolution
 │   ├── sessions/       # Session management — per-user/channel conversation state
 │   ├── logging/        # Structured logging with token/secret redaction
+│   ├── formatting/     # Channel-agnostic message formatting helpers (chunk-message, escape-html)
 │   ├── plugin-sdk/     # Plugin SDK exports
 │   └── plugins/        # ProviderPlugin + ChannelPlugin interfaces, registry
 ├── apps/

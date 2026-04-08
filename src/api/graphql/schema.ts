@@ -1305,6 +1305,7 @@ export const typeDefs = /* GraphQL */ `
     saveAiConfig(input: AiConfigInput!): AiConfig!
     saveAiCredential(provider: String!, apiKey: String!): SaveAiCredentialResult!
     removeAiCredential(provider: String!): SaveAiCredentialResult!
+    triggerMicroAnalysis: Boolean!
   }
 
   # ---------------------------------------------------------------------------

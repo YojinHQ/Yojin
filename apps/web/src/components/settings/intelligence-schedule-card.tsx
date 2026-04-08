@@ -21,6 +21,8 @@ interface BriefingConfigQueryResult {
 }
 
 const LLM_INTERVAL_OPTIONS = [
+  { value: 0.25, label: '15 min' },
+  { value: 0.5, label: '30 min' },
   { value: 1, label: '1 hour' },
   { value: 2, label: '2 hours' },
   { value: 4, label: '4 hours' },
@@ -100,7 +102,7 @@ export function IntelligenceScheduleCard() {
   // Estimated calls/day based on 16 assets, market hours only (~8h), signal-gated
   // Rough heuristic: ~3–5 assets have new signals per cycle on an average day.
   const avgSignaledAssets = 4;
-  const cyclesPerDay = Math.max(1, Math.floor(8 / selectedHours));
+  const cyclesPerDay = Math.max(1, Math.round(8 / selectedHours));
   const estCallsPerDay = avgSignaledAssets * cyclesPerDay;
 
   return (
@@ -144,13 +146,19 @@ export function IntelligenceScheduleCard() {
         </div>
 
         {/* Estimate */}
-        <div className="rounded-lg bg-bg-secondary border border-border px-4 py-3">
+        <div className="rounded-lg bg-bg-secondary border border-border px-4 py-3 space-y-1.5">
           <p className="text-xs text-text-muted">
             <span className="font-medium text-text-secondary">Estimated LLM calls: </span>~{estCallsPerDay} per day
             <span className="ml-2 text-text-muted/70">
               (signal-gated · ~{avgSignaledAssets} active assets · {cyclesPerDay}×/day)
             </span>
           </p>
+          {selectedHours < 1 && (
+            <p className="text-xs text-warning">
+              Sub-hour intervals increase LLM costs significantly. Only use if you're actively monitoring during market
+              hours.
+            </p>
+          )}
         </div>
 
         {error && <p className="text-sm text-error">{error}</p>}

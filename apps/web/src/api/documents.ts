@@ -412,6 +412,12 @@ export const SCHEDULER_STATUS_QUERY = gql`
   }
 `;
 
+export const TRIGGER_MICRO_ANALYSIS_MUTATION = gql`
+  mutation TriggerMicroAnalysis {
+    triggerMicroAnalysis
+  }
+`;
+
 // ---------------------------------------------------------------------------
 // Channels
 // ---------------------------------------------------------------------------

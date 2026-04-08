@@ -32,7 +32,7 @@ import {
 } from '../api/graphql/resolvers/onboarding.js';
 import { setPortfolioChangedCallback } from '../api/graphql/resolvers/portfolio.js';
 import { onAppDataCleared } from '../api/graphql/resolvers/profile.js';
-import { setSchedulerStatusProvider } from '../api/graphql/resolvers/scheduler.js';
+import { setSchedulerStatusProvider, setTriggerMicroAnalysis } from '../api/graphql/resolvers/scheduler.js';
 import { setWatchlistChangedCallback } from '../api/graphql/resolvers/watchlist.js';
 import { buildContext } from '../composition.js';
 import { AgentRuntime } from '../core/agent-runtime.js';
@@ -234,8 +234,8 @@ async function startGateway(): Promise<void> {
   const assessmentConfigRaw = await loadJsonConfig(`${dataRoot}/config/assessment.json`, AssessmentConfigSchema);
   const assessmentConfig = AssessmentConfigSchema.parse(assessmentConfigRaw);
 
-  // Log ingestion events
-  services.signalIngestor.setPostIngestHook(async (ingested) => {
+  // Log ingestion events — scheduler.triggerMicroFlow wired below after scheduler construction.
+  services.signalIngestor.setPostIngestHook(async (tickers, ingested) => {
     if (ingested === 0) return;
     await eventLog.append({
       type: 'system',
@@ -316,10 +316,30 @@ async function startGateway(): Promise<void> {
   setPortfolioChangedCallback((tickers) => scheduler.triggerMicroFlow(tickers));
   // Trigger micro flow when watchlist changes
   setWatchlistChangedCallback((tickers) => scheduler.triggerMicroFlow(tickers, 'watchlist'));
+  // Re-wire post-ingest hook now that scheduler is available: immediately trigger micro research
+  // for assets with new signals instead of waiting for the next 30s tick.
+  services.signalIngestor.setPostIngestHook(async (tickers, ingested) => {
+    if (ingested === 0) return;
+    await eventLog.append({
+      type: 'system',
+      data: { message: `Ingested ${ingested} new signal${ingested !== 1 ? 's' : ''}` },
+    });
+    if (tickers.length > 0) {
+      scheduler.triggerMicroFlow(tickers);
+      await services.watchlistEnrichment.invalidateTickers(tickers);
+    }
+  });
   // Apply micro LLM interval changes from UI settings immediately (no restart needed)
   setMicroLlmIntervalCallback((hours) => scheduler.setMicroLlmIntervalMs(hours * 60 * 60 * 1000));
   // Expose scheduler status to the schedulerStatus GraphQL query
   setSchedulerStatusProvider(() => scheduler.getStatus());
+  // Allow the UI to force-run micro analysis for throttled assets immediately
+  setTriggerMicroAnalysis(() => {
+    const throttled = scheduler.getStatus().assets.filter((a) => a.pendingAnalysis);
+    if (throttled.length > 0) {
+      scheduler.triggerMicroFlow(throttled.map((a) => a.symbol));
+    }
+  });
 
   const gateway = new Gateway(services.config, agentRuntime, {
     snapshotStore: services.snapshotStore,

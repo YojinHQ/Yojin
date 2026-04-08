@@ -2,8 +2,8 @@
  * Scheduler status resolver — exposes per-asset micro research state so the UI
  * can show when LLM analysis is throttled and how long until the next run.
  *
- * Module-level state pattern: setSchedulerStatusProvider() is called once during
- * server startup (run-main.ts) to inject the scheduler.getStatus function.
+ * Module-level state pattern: setSchedulerStatusProvider() and setTriggerMicroAnalysis()
+ * are called once during server startup (run-main.ts) to inject scheduler callbacks.
  */
 
 import type { SchedulerStatus } from '../../../scheduler.js';
@@ -13,13 +13,18 @@ import type { SchedulerStatus } from '../../../scheduler.js';
 // ---------------------------------------------------------------------------
 
 let getSchedulerStatus: (() => SchedulerStatus) | undefined;
+let triggerMicroAnalysisFn: (() => void) | undefined;
 
 export function setSchedulerStatusProvider(fn: () => SchedulerStatus): void {
   getSchedulerStatus = fn;
 }
 
+export function setTriggerMicroAnalysis(fn: () => void): void {
+  triggerMicroAnalysisFn = fn;
+}
+
 // ---------------------------------------------------------------------------
-// Resolver
+// Resolvers
 // ---------------------------------------------------------------------------
 
 export function schedulerStatusQuery(): SchedulerStatus {
@@ -27,4 +32,10 @@ export function schedulerStatusQuery(): SchedulerStatus {
     return { microLlmIntervalHours: 4, pendingCount: 0, throttledCount: 0, assets: [] };
   }
   return getSchedulerStatus();
+}
+
+export function triggerMicroAnalysisMutation(): boolean {
+  if (!triggerMicroAnalysisFn) return false;
+  triggerMicroAnalysisFn();
+  return true;
 }

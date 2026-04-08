@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery } from 'urql';
-import { DISMISS_SIGNAL_MUTATION, INTEL_FEED_QUERY, SCHEDULER_STATUS_QUERY } from '../../api/documents';
+import {
+  DISMISS_SIGNAL_MUTATION,
+  INTEL_FEED_QUERY,
+  SCHEDULER_STATUS_QUERY,
+  TRIGGER_MICRO_ANALYSIS_MUTATION,
+} from '../../api/documents';
 import type {
   FeedTarget,
   IntelFeedQueryResult,
@@ -490,11 +495,41 @@ function IntelFeedContent({
     query: SCHEDULER_STATUS_QUERY,
     requestPolicy: 'cache-and-network',
   });
+  const [, triggerMicroAnalysis] = useMutation(TRIGGER_MICRO_ANALYSIS_MUTATION);
 
-  const [nowMs, setNowMs] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
-    setTimeout(() => setNowMs(Date.now()), 0);
+    const id = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(id);
   }, []);
+
+  // Auto-trigger micro analysis when user is actively using the page and assets are throttled.
+  // Fires at most once per configured LLM interval — the server re-checks pendingAnalysis before
+  // running, so a stale trigger (assets already analyzed) is always a no-op.
+  const lastTriggeredRef = useRef<number>(0);
+  useEffect(() => {
+    if (!schedulerData || schedulerData.schedulerStatus.pendingCount === 0) return;
+
+    const intervalMs = schedulerData.schedulerStatus.microLlmIntervalHours * 60 * 60 * 1000;
+
+    function onActivity() {
+      const now = Date.now();
+      if (now - lastTriggeredRef.current < intervalMs) return;
+      lastTriggeredRef.current = now;
+      void triggerMicroAnalysis({});
+    }
+
+    window.addEventListener('mousemove', onActivity);
+    window.addEventListener('mousedown', onActivity);
+    window.addEventListener('keydown', onActivity);
+    window.addEventListener('touchstart', onActivity);
+    return () => {
+      window.removeEventListener('mousemove', onActivity);
+      window.removeEventListener('mousedown', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('touchstart', onActivity);
+    };
+  }, [schedulerData, triggerMicroAnalysis]);
 
   // Refetch when watchlist changes (add/remove)
   useEffect(() => {
@@ -786,13 +821,15 @@ function IntelFeedContent({
             </div>
           )}
           {/* Throttle banner — shown when assets have new signals but LLM interval not yet elapsed */}
-          {schedulerData && schedulerData.schedulerStatus.throttledCount > 0 && (
-            <ThrottleBanner
-              throttledCount={schedulerData.schedulerStatus.throttledCount}
-              assets={schedulerData.schedulerStatus.assets}
-              now={nowMs}
-            />
-          )}
+          {schedulerData &&
+            schedulerData.schedulerStatus.pendingCount > 0 &&
+            schedulerData.schedulerStatus.throttledCount > 0 && (
+              <ThrottleBanner
+                throttledCount={schedulerData.schedulerStatus.throttledCount}
+                assets={schedulerData.schedulerStatus.assets}
+                now={nowMs}
+              />
+            )}
           {isLoading ? (
             <div className="flex items-center justify-center pt-12">
               <Spinner size="md" label="Loading intel..." />

@@ -98,7 +98,7 @@ export type PortfolioTickerProvider = () => Promise<Set<string> | null>;
 export type WatchlistTickerProvider = () => Promise<Set<string> | null>;
 
 /** Hook called after signals are written to the archive. */
-export type PostIngestHook = (ingested: number) => Promise<void>;
+export type PostIngestHook = (tickers: string[], ingested: number) => Promise<void>;
 
 export class SignalIngestor {
   private readonly archive: SignalArchive;
@@ -258,18 +258,24 @@ export class SignalIngestor {
       // Evaluate editorial signals BEFORE writing enrichment snapshots so the
       // recent-signals query inside evaluateQuality only sees prior history,
       // not synthetic snapshots from the current batch.
+      // Track persisted editorial signals to build an accurate post-ingest ticker set.
+      let persistedEditorial: Signal[] = [];
       if (editorialSignals.length > 0) {
         if (this.clustering) {
           try {
             await this.clustering.processSignals(editorialSignals);
+            // clustering writes internally — best-effort: treat input as persisted
+            persistedEditorial = editorialSignals;
           } catch (err) {
             logger.warn('Signal clustering failed, writing raw signals as fallback', { error: err });
             const enriched = await this.evaluateQuality(editorialSignals);
             await this.archive.appendBatch(enriched);
+            persistedEditorial = enriched;
           }
         } else {
           const enriched = await this.evaluateQuality(editorialSignals);
           await this.archive.appendBatch(enriched);
+          persistedEditorial = enriched;
         }
       }
 
@@ -280,10 +286,17 @@ export class SignalIngestor {
         `Ingested ${signals.length} signals${dropped > 0 ? `, ${dropped} dropped (not in portfolio or watchlist)` : ''}`,
       );
 
-      // Auto-curate: run deterministic curation immediately after ingestion
+      // Auto-curate: run deterministic curation immediately after ingestion.
+      // Derive tickers from actually-persisted signals so downstream consumers
+      // (micro research, watchlist cache invalidation) don't fan out for assets
+      // whose signals were dropped by quality evaluation.
       if (this.postIngestHook) {
+        const persistedSignals = [...persistedEditorial, ...enrichmentSignals];
+        const ingestedTickers = [
+          ...new Set(persistedSignals.flatMap((s) => s.assets.map((a) => a.ticker.toUpperCase()))),
+        ];
         try {
-          await this.postIngestHook(signals.length);
+          await this.postIngestHook(ingestedTickers, persistedSignals.length);
         } catch (err) {
           logger.warn('Post-ingest curation failed', { error: err });
         }
