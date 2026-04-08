@@ -22,7 +22,7 @@ Multi-agent, file-driven architecture. Four specialized agents (Research Analyst
 - **`src/watchlist/`** — WatchlistEntry tracking with Jintel-backed enrichment cache
 - **`src/jintel/`** — Wrapper around `@yojinhq/jintel-client`: entity fetching, signal fetching, price provider, enrichment
 - **`src/data-sources/`** — Pluggable data-feed framework: CLI tools, MCP servers, REST APIs under uniform DataQuery/DataResult interface
-- **`src/ai-providers/`** — Multi-provider LLM abstraction: ProviderRouter routes to ClaudeCodeProvider or VercelAIProvider (OpenAI-compatible)
+- **`src/ai-providers/`** — Multi-provider LLM abstraction: ProviderRouter routes to ClaudeCodeProvider or CodexProvider (Codex CLI subprocess)
 - **`src/scraper/`** — Playwright browser automation for investment platforms (IB, Robinhood, Coinbase, Schwab, Binance, Fidelity, PolyMarket, Phantom, custom)
 - **`src/guards/`** — Deterministic guard pipeline (25+ guards): security guards (fs, command, egress, output-dlp, rate-budget, repetition) + finance guards (read-only, cooldown, whitelist) + operational postures
 - **`src/trust/`** — Trust stack: encrypted vault (PBKDF2 + AES-256-GCM), PII redactor, approval gate, GuardedToolRegistry, security audit log
