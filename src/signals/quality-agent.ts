@@ -60,6 +60,44 @@ const VALID_SENTIMENTS = new Set(['BULLISH', 'BEARISH', 'MIXED', 'NEUTRAL']);
 const VALID_VERDICTS = new Set(['KEEP', 'DROP']);
 const VALID_DROP_REASONS = new Set(['false_match', 'irrelevant', 'duplicate', 'low_quality']);
 
+/**
+ * Extract the first balanced top-level JSON object from a string. Walks the
+ * input character-by-character, tracking string state and escape sequences so
+ * `{` / `}` inside string literals don't shift the depth counter.
+ * Returns null if no balanced object is found.
+ */
+function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf('{');
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // QualityAgent
 // ---------------------------------------------------------------------------
@@ -194,7 +232,10 @@ If the ticker is only connected through a broad sector label and the content con
       .replace(/```\s*/g, '')
       .trim();
 
-    const parsed: unknown = JSON.parse(cleaned);
+    // Some providers (Sonnet) wrap the JSON in preamble or trailing prose. Extract
+    // the first balanced {...} object so JSON.parse doesn't choke on extra text.
+    const jsonText = extractFirstJsonObject(cleaned) ?? cleaned;
+    const parsed: unknown = JSON.parse(jsonText);
     if (typeof parsed !== 'object' || parsed === null) {
       throw new Error('LLM response is not an object');
     }
