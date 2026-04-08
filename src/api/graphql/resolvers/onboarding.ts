@@ -136,8 +136,11 @@ async function activateOAuthToken(token: string): Promise<void> {
  * Validate an OAuth token with a lightweight API call.
  */
 async function validateOAuthToken(token: string): Promise<boolean> {
-  // Use claude-3-haiku for validation — lightweight and available on all OAuth plans
-  // (newer models like claude-sonnet-4 may return 400 on Max/subscription OAuth tokens)
+  // Use the current Haiku model for validation — lightweight and available on
+  // all OAuth plans. The previous `claude-3-haiku-20240307` was deprecated by
+  // Anthropic and now returns HTTP 404, which this validator read as "token
+  // expired" and misled detectKeychainTokenQuery into reporting every live
+  // token as invalid.
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -148,7 +151,7 @@ async function validateOAuthToken(token: string): Promise<boolean> {
         'anthropic-beta': 'claude-code-20250219,oauth-2025-04-20',
       },
       body: JSON.stringify({
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1,
         messages: [{ role: 'user', content: 'hi' }],
       }),
