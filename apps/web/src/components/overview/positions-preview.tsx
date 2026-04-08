@@ -40,8 +40,20 @@ function Sparkline({
 }) {
   if (data.length < 2) return null;
 
-  const min = Math.min(...data);
-  const max = Math.max(...data);
+  // Derive previous close from the last data point (live price) and day change %.
+  // Include it in the y-range so the baseline lives inside the chart, the gap
+  // between yesterday's close and today's prices is visible, and the gradient
+  // fill correctly represents the move vs prev close. Without this, an
+  // intraday band that's well above prev close shows as a downward-trending
+  // line in a green chart — the fill becomes meaningless because there's no
+  // visible reference for the positive day.
+  const showBaseline = dayChangePercent !== 0;
+  const currentPrice = data[data.length - 1];
+  const prevClose = showBaseline ? currentPrice / (1 + dayChangePercent / 100) : null;
+
+  const yValues = prevClose != null ? [...data, prevClose] : data;
+  const min = Math.min(...yValues);
+  const max = Math.max(...yValues);
   const range = max - min || 1;
 
   // Progressive reveal: during market hours, width proportional to elapsed trading day
@@ -64,17 +76,7 @@ function Sparkline({
 
   const gradId = `sparkline-grad-${symbol}`;
 
-  // Derive previous close baseline from last data point (live price) and day change %
-  const showBaseline = dayChangePercent !== 0;
-  let baselineY: number | undefined;
-  if (showBaseline) {
-    const currentPrice = data[data.length - 1];
-    const prevClose = currentPrice / (1 + dayChangePercent / 100);
-    const rawY = 32 - ((prevClose - min) / range) * 24 - 4;
-    // Clamp to SVG viewBox so the baseline is visible even when prevClose is
-    // outside the candle data range (e.g. pre-market gap).
-    baselineY = Math.max(0.5, Math.min(31.5, rawY));
-  }
+  const baselineY = prevClose != null ? 32 - ((prevClose - min) / range) * 24 - 4 : undefined;
 
   // Positive: fill below line to bottom; Negative: fill above line to baseline
   const fillCloseY = isNegative && baselineY != null ? baselineY : 32;
