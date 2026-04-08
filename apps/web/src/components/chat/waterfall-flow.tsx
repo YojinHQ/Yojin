@@ -9,6 +9,8 @@ interface WaterfallOption {
   description?: string;
   query?: string;
   action?: string;
+  /** When true, the query is pre-filled in the input for editing instead of sent immediately. */
+  prefill?: boolean;
   children?: WaterfallStep;
 }
 
@@ -19,152 +21,134 @@ interface WaterfallStep {
   options: WaterfallOption[];
 }
 
-/* ─── Decision trees ─── */
+/* ─── Prompt templates ─── */
 
 const TREES: Record<string, WaterfallStep> = {
   portfolio: {
-    title: 'What about your portfolio?',
-    subtitle: 'Portfolio insights',
-    layout: 'grid',
+    title: 'My Portfolio',
+    subtitle: 'Portfolio intelligence',
+    layout: 'stack',
     options: [
       {
-        id: 'perf',
-        label: 'Performance overview',
-        children: {
-          title: 'What timeframe?',
-          subtitle: 'Performance period',
-          layout: 'stack',
-          options: [
-            {
-              id: 'today',
-              label: 'Today',
-              description: "Today's performance snapshot",
-              action: 'tool:portfolio-overview:today',
-              query: 'How is my portfolio performing today?',
-            },
-            {
-              id: 'week',
-              label: 'This week',
-              description: 'Weekly performance summary',
-              action: 'tool:portfolio-overview:week',
-              query: 'How has my portfolio performed this week?',
-            },
-            {
-              id: 'ytd',
-              label: 'Year to date',
-              description: 'Full year performance review',
-              action: 'tool:portfolio-overview:ytd',
-              query: 'Show me my portfolio YTD performance',
-            },
-          ],
-        },
+        id: 'overview',
+        label: 'Full portfolio overview',
+        description: 'Performance, allocation breakdown, and key metrics',
+        query: 'Give me a full portfolio overview with allocation breakdown',
       },
       {
-        id: 'alloc',
-        label: 'Allocation breakdown',
-        action: 'tool:allocation',
-        query: 'Show me my portfolio allocation by sector and asset class',
+        id: 'performers',
+        label: 'Best & worst performers',
+        description: 'Top movers with explanations for each',
+        query: 'What are my best and worst performers and why?',
+      },
+      {
+        id: 'full-analysis',
+        label: 'Complete portfolio analysis',
+        description: 'Multi-agent deep dive — performance, risk, and watchlist',
+        query: 'Run a complete portfolio analysis — performance, risk, and what to watch',
       },
       {
         id: 'rebalance',
         label: 'Rebalancing ideas',
-        query: 'What rebalancing moves should I consider?',
+        description: 'Strategist perspective on portfolio adjustments',
+        query: 'How should I think about rebalancing my portfolio?',
+      },
+    ],
+  },
+  research: {
+    title: 'Research a Stock',
+    subtitle: 'Deep dive into any ticker',
+    layout: 'stack',
+    options: [
+      {
+        id: 'complete',
+        label: 'Complete analysis',
+        description: 'Fundamentals, technicals, news, and sentiment in one shot',
+        query: 'Give me a complete analysis of [TICKER] — fundamentals, technicals, news, and sentiment',
+        prefill: true,
       },
       {
-        id: 'benchmark',
-        label: 'Benchmark comparison',
-        query: 'How does my portfolio compare to the S&P 500?',
+        id: 'bull-bear',
+        label: 'Bull vs bear case',
+        description: 'Adversarial debate — strongest arguments for both sides',
+        query: "What's the bull vs bear case for [TICKER]?",
+        prefill: true,
       },
       {
-        id: 'add-asset',
-        label: 'Add asset',
-        description: 'Manually add a position',
-        action: 'add-asset',
+        id: 'technicals',
+        label: 'Technical analysis',
+        description: 'RSI, MACD, Bollinger Bands, moving averages, and more',
+        query: 'Show me the technicals for [TICKER] — RSI, MACD, Bollinger Bands, and moving averages',
+        prefill: true,
+      },
+      {
+        id: 'buzz',
+        label: 'News & social buzz',
+        description: 'Latest news, social sentiment, analyst research, and discussions',
+        query: 'What are the latest news, social buzz, and analyst sentiment on [TICKER]?',
+        prefill: true,
       },
     ],
   },
   risk: {
-    title: 'What would you like to analyze?',
-    subtitle: 'Risk & exposure options',
-    layout: 'grid',
+    title: 'Risk Check',
+    subtitle: 'Portfolio risk analysis',
+    layout: 'stack',
     options: [
       {
-        id: 'concentration',
-        label: 'Concentration risk',
-        query: 'Which positions are too concentrated in my portfolio?',
+        id: 'full-risk',
+        label: 'Full risk analysis',
+        description: 'Concentration, correlations, and sector exposure',
+        query: 'Analyze my portfolio risk — concentration, correlations, and sector exposure',
       },
       {
-        id: 'sector',
-        label: 'Sector exposure',
-        query: 'Show me my sector exposure breakdown',
-      },
-      {
-        id: 'correlation',
-        label: 'Correlation analysis',
-        query: 'Are any of my positions highly correlated?',
+        id: 'correlations',
+        label: 'Correlated positions',
+        description: 'Find positions that move together and diversification gaps',
+        query: 'Which of my positions are most correlated?',
       },
       {
         id: 'earnings',
-        label: 'Earnings calendar',
-        query: 'Which of my holdings have upcoming earnings?',
+        label: 'Upcoming earnings',
+        description: 'Earnings calendar for all holdings with potential impact',
+        query: 'Do I have earnings coming up that could move my positions?',
+      },
+      {
+        id: 'drawdown',
+        label: 'Drawdown risk',
+        description: 'Stress test your portfolio against market downturns',
+        query: "What's my drawdown risk if the market drops?",
       },
     ],
   },
-  positions: {
-    title: 'Which positions interest you?',
-    subtitle: 'Position details',
-    layout: 'grid',
-    options: [
-      {
-        id: 'top',
-        label: 'Top performers',
-        action: 'tool:positions-list:top',
-        query: 'Show me my top performing positions',
-      },
-      {
-        id: 'worst',
-        label: 'Underperformers',
-        action: 'tool:positions-list:worst',
-        query: 'Which positions are underperforming?',
-      },
-      {
-        id: 'movers',
-        label: "Today's movers",
-        action: 'tool:positions-list:movers',
-        query: 'What moved most in my portfolio today?',
-      },
-      {
-        id: 'all',
-        label: 'All positions',
-        action: 'tool:positions-list:all',
-        query: 'List all my current positions with key metrics',
-      },
-    ],
-  },
-  trends: {
-    title: 'What trends interest you?',
+  happening: {
+    title: "What's Happening",
     subtitle: 'Market intelligence',
-    layout: 'grid',
+    layout: 'stack',
     options: [
       {
-        id: 'movers',
-        label: 'Market movers',
-        query: 'What are the biggest market movers today?',
+        id: 'briefing',
+        label: 'Morning briefing',
+        description: 'Full curated digest of what matters today',
+        query: 'Give me a morning briefing',
       },
       {
-        id: 'sectors',
-        label: 'Sector trends',
-        query: 'Which sectors are trending right now?',
-      },
-      {
-        id: 'news',
-        label: 'Portfolio news',
-        query: 'What recent news could affect my portfolio?',
+        id: 'signals',
+        label: 'Signals to watch',
+        description: 'AI-curated signals prioritized for your portfolio',
+        query: 'What signals should I pay attention to today?',
       },
       {
         id: 'macro',
-        label: 'Economic outlook',
-        query: 'What key economic data should I be watching?',
+        label: 'Macro outlook',
+        description: 'GDP, inflation, interest rates, and S&P 500 multiples',
+        query: "What's the macro outlook — GDP, inflation, and interest rates?",
+      },
+      {
+        id: 'news-moves',
+        label: 'News & moves',
+        description: 'Significant news and price movements for your holdings',
+        query: 'Any significant news or moves for my holdings today?',
       },
     ],
   },
@@ -175,11 +159,12 @@ const TREES: Record<string, WaterfallStep> = {
 interface WaterfallFlowProps {
   categoryId: string;
   onComplete: (query: string) => void;
+  onPrefill?: (query: string) => void;
   onAction?: (action: string, displayLabel: string) => void;
   onCancel: () => void;
 }
 
-export default function WaterfallFlow({ categoryId, onComplete, onAction, onCancel }: WaterfallFlowProps) {
+export default function WaterfallFlow({ categoryId, onComplete, onPrefill, onAction, onCancel }: WaterfallFlowProps) {
   const tree = TREES[categoryId];
   const [path, setPath] = useState<WaterfallStep[]>([tree]);
   const [selectedId, setSelectedId] = useState<string | undefined>();
@@ -198,6 +183,8 @@ export default function WaterfallFlow({ categoryId, onComplete, onAction, onCanc
       setTimeout(() => {
         if (option.action) {
           onAction?.(option.action, option.query ?? option.label);
+        } else if (option.prefill && option.query) {
+          onPrefill?.(option.query);
         } else if (option.query) {
           onComplete(option.query);
         } else if (option.children) {
@@ -208,7 +195,7 @@ export default function WaterfallFlow({ categoryId, onComplete, onAction, onCanc
         }
       }, 250);
     },
-    [currentStep, onComplete, onAction],
+    [currentStep, onComplete, onPrefill, onAction],
   );
 
   const handleBack = useCallback(() => {
@@ -228,6 +215,7 @@ export default function WaterfallFlow({ categoryId, onComplete, onAction, onCanc
       {/* Header with back button */}
       <div className="mb-4 flex items-center gap-3">
         <button
+          type="button"
           onClick={handleBack}
           className="flex h-9 w-9 flex-shrink-0 cursor-pointer items-center justify-center rounded-full bg-bg-tertiary text-text-secondary transition-colors hover:bg-bg-hover"
           aria-label="Go back"
@@ -258,6 +246,7 @@ export default function WaterfallFlow({ categoryId, onComplete, onAction, onCanc
           return (
             <button
               key={opt.id}
+              type="button"
               onClick={() => handleSelect(opt.id)}
               className={cn(
                 'relative cursor-pointer overflow-hidden rounded-xl border text-left transition-all duration-200',
@@ -282,7 +271,12 @@ export default function WaterfallFlow({ categoryId, onComplete, onAction, onCanc
                   />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-text-primary">{opt.label}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-text-primary">{opt.label}</span>
+                    {opt.prefill && (
+                      <span className="rounded bg-bg-tertiary px-1.5 py-0.5 text-2xs text-text-muted">edit</span>
+                    )}
+                  </div>
                   {opt.description && <div className="mt-0.5 text-xs text-text-muted">{opt.description}</div>}
                 </div>
               </div>

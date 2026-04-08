@@ -17,8 +17,8 @@ import { startAcpServer } from '../acp/server.js';
 import { AcpSessionStore } from '../acp/session-store.js';
 import { Orchestrator, registerBuiltinWorkflows, setWorkflowProgressCallback } from '../agents/index.js';
 import { ClaudeCodeProvider } from '../ai-providers/claude-code.js';
+import { CodexProvider } from '../ai-providers/codex.js';
 import { ProviderRouter } from '../ai-providers/router.js';
-import { VercelAIProvider } from '../ai-providers/vercel-ai.js';
 import { setEventLog } from '../api/graphql/resolvers/activity-log.js';
 import { setAiConfigClaudeCodeProvider, setAiConfigProviderRouter } from '../api/graphql/resolvers/ai-config.js';
 import { setChannelRegistry } from '../api/graphql/resolvers/channels.js';
@@ -115,7 +115,7 @@ async function buildFullRuntime(): Promise<{
   const claudeProvider = new ClaudeCodeProvider();
   await claudeProvider.initialize();
   providerRouter.registerBackend(claudeProvider);
-  providerRouter.registerBackend(new VercelAIProvider());
+  providerRouter.registerBackend(new CodexProvider());
   await providerRouter.loadConfig();
   providerRouter.startConfigRefresh();
   setOnboardingProvider(providerRouter);

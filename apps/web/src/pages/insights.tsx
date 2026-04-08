@@ -301,8 +301,10 @@ function InsightsContent() {
     return map;
   }, [insightQueryResult.data]);
 
-  // By Position view: signals grouped by ticker
+  // By Position view: all portfolio positions with their curated signals.
+  // Shows ALL positions (from portfolio + insight report), not just those with signals.
   const signalsByTicker = useMemo(() => {
+    // Build signal buckets from curated signals
     const byTicker = new Map<string, Signal[]>();
     for (const cs of allCuratedSignals) {
       for (const score of cs.scores) {
@@ -314,13 +316,21 @@ function InsightsContent() {
         }
       }
     }
-    return Array.from(byTicker.entries())
-      .map(([ticker, signals]) => ({
+
+    // Collect all known tickers: portfolio positions + insight report positions
+    const allTickers = new Set<string>();
+    for (const p of positions) allTickers.add(p.symbol);
+    if (report) {
+      for (const p of report.positions) allTickers.add(p.symbol);
+    }
+
+    return Array.from(allTickers)
+      .map((ticker) => ({
         ticker,
-        signals: signals.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)),
+        signals: (byTicker.get(ticker) ?? []).sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)),
       }))
       .sort((a, b) => b.signals.length - a.signals.length);
-  }, [allCuratedSignals]);
+  }, [allCuratedSignals, positions, report]);
 
   // All Signals view: client-side filtered
   const filteredSignals = useMemo(() => {
@@ -369,7 +379,7 @@ function InsightsContent() {
     if (loading) return 'Loading...';
     switch (viewTab) {
       case 'position':
-        return totalSignals > 0
+        return signalsByTicker.length > 0
           ? `${totalSignals} signal${totalSignals !== 1 ? 's' : ''} · ${signalsByTicker.length} position${signalsByTicker.length !== 1 ? 's' : ''}`
           : 'No recent signals';
       case 'all':
@@ -518,7 +528,7 @@ function InsightsContent() {
                     <PositionSignalCard
                       key={ticker}
                       ticker={ticker}
-                      name={position?.name ?? ticker}
+                      name={position?.name ?? insight?.name ?? ticker}
                       signals={signals}
                       insight={insight}
                       onViewAll={navigateToSignals}
@@ -794,6 +804,11 @@ function PositionSignalCard({
           {name !== ticker && <span className="text-sm text-text-muted">{name}</span>}
         </div>
         <div className="flex items-center gap-3">
+          {insight && (
+            <Badge variant={sentimentVariant[insight.rating] ?? 'neutral'} size="sm">
+              {insight.rating}
+            </Badge>
+          )}
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-bg-tertiary">
             <svg
               className="h-3 w-3 text-text-muted"
@@ -816,19 +831,21 @@ function PositionSignalCard({
               <span className="h-1.5 w-1.5 rounded-full bg-error" title={`${sentimentCounts.BEARISH} bearish`} />
             )}
           </div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onViewAll(ticker);
-            }}
-            className="text-xs font-medium text-accent-primary hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            View all
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
-            </svg>
-          </button>
+          {signals.length > 0 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewAll(ticker);
+              }}
+              className="text-xs font-medium text-accent-primary hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              View all
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+              </svg>
+            </button>
+          )}
           <svg
             className={cn('h-5 w-5 text-text-muted transition-transform', expanded && 'rotate-180')}
             fill="none"
@@ -891,14 +908,18 @@ function PositionSignalCard({
           )}
 
           {/* All curated signals for this position */}
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-              All Signals ({signals.length})
-            </h4>
-            {sorted.map((signal) => (
-              <PositionSignalItem key={signal.id} signal={signal} onViewSignal={onViewSignal} />
-            ))}
-          </div>
+          {sorted.length > 0 ? (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+                All Signals ({signals.length})
+              </h4>
+              {sorted.map((signal) => (
+                <PositionSignalItem key={signal.id} signal={signal} onViewSignal={onViewSignal} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-text-muted italic">No recent signals for this position.</p>
+          )}
 
           {/* Risks & Opportunities from analysis */}
           {insight && (insight.risks.length > 0 || insight.opportunities.length > 0) && (

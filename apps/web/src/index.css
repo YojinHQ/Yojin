@@ -38,6 +38,83 @@
   --animate-price-down: price-down-glow 4s ease-out forwards;
 }
 
+/* Chat — user message bubble */
+.chat-user-bubble {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='light'] .chat-user-bubble {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+/* Chat — assistant text colors */
+.chat-assistant-text {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme='light'] .chat-assistant-text {
+  color: var(--color-text-primary);
+}
+
+/* Chat — assistant prose theme */
+.chat-assistant-prose {
+  --tw-prose-body: rgba(255, 255, 255, 0.85);
+  --tw-prose-headings: #fff;
+  --tw-prose-bold: #fff;
+  --tw-prose-bullets: rgba(255, 255, 255, 0.4);
+  --tw-prose-code: #6ee7b7;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.chat-assistant-prose code:not(pre code) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.chat-assistant-prose pre {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+[data-theme='light'] .chat-assistant-prose {
+  --tw-prose-body: var(--color-text-primary);
+  --tw-prose-headings: var(--color-text-primary);
+  --tw-prose-bold: var(--color-text-primary);
+  --tw-prose-bullets: var(--color-text-muted);
+  --tw-prose-code: var(--color-success);
+  color: var(--color-text-primary);
+}
+
+[data-theme='light'] .chat-assistant-prose code:not(pre code) {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme='light'] .chat-assistant-prose pre {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* Chat message prose — standalone bold lines act as section headers */
+.prose p > strong:only-child {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  display: block;
+  margin-top: 0.5rem;
+}
+
+/* Chat grid background */
+.bg-chat-grid {
+  background-color: #222624;
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.2) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.2) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+[data-theme='light'] .bg-chat-grid {
+  background-color: #eae5da;
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+}
+
 /* Yojin hand-wave: damped oscillation with organic breathing pause */
 @keyframes wave {
   0% {

@@ -19,6 +19,14 @@ export interface ChatInputProps {
   disableAttachment?: boolean;
   placeholder?: string;
   initialValue?: string;
+  /** Text to pre-fill in the input. Pair with prefillKey to trigger updates. */
+  prefillValue?: string;
+  /** Increment to trigger a new prefill. */
+  prefillKey?: number;
+  /** Whether the planner panel is currently open. */
+  plannerOpen?: boolean;
+  /** Toggle the planner panel. When provided, the send button becomes a planner toggle when input is empty. */
+  onTogglePlanner?: () => void;
 }
 
 export default function ChatInput({
@@ -27,12 +35,50 @@ export default function ChatInput({
   disableAttachment,
   placeholder = 'How can I help you today?',
   initialValue,
+  prefillValue,
+  prefillKey,
+  plannerOpen,
+  onTogglePlanner,
 }: ChatInputProps) {
   const [value, setValue] = useState(initialValue ?? '');
   const [image, setImage] = useState<ImageAttachment | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const prefillTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prefillRafRef = useRef<number | null>(null);
+
+  // Pre-fill the input when prefillKey changes (template selection)
+  useEffect(() => {
+    if (prefillKey !== undefined && prefillKey > 0 && prefillValue !== undefined) {
+      // Capture prefillValue so the closure isn't affected by later prop changes
+      const captured = prefillValue;
+      // Defer setState to avoid synchronous setState-in-effect lint rule
+      prefillTimeoutRef.current = setTimeout(() => {
+        setValue(captured);
+        // Select the [TICKER] placeholder if present so the user can type over it
+        prefillRafRef.current = requestAnimationFrame(() => {
+          const el = textareaRef.current;
+          if (!el) return;
+          el.focus();
+          const start = captured.indexOf('[');
+          const end = captured.indexOf(']');
+          if (start !== -1 && end !== -1) {
+            el.setSelectionRange(start, end + 1);
+          }
+        });
+      }, 0);
+    }
+    return () => {
+      if (prefillTimeoutRef.current !== null) {
+        clearTimeout(prefillTimeoutRef.current);
+        prefillTimeoutRef.current = null;
+      }
+      if (prefillRafRef.current !== null) {
+        cancelAnimationFrame(prefillRafRef.current);
+        prefillRafRef.current = null;
+      }
+    };
+  }, [prefillKey]); // eslint-disable-line react-hooks/exhaustive-deps -- intentionally keyed on prefillKey only
 
   const resize = useCallback(() => {
     const el = textareaRef.current;
@@ -82,13 +128,6 @@ export default function ChatInput({
     onSend(value.trim() || (effectiveImage ? 'Analyze this image.' : ''), effectiveImage ?? undefined);
     setValue('');
     setImage(null);
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) processFile(file);
-    // Reset input so the same file can be re-selected
-    e.target.value = '';
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -185,40 +224,7 @@ export default function ChatInput({
         </div>
       )}
 
-      <div className="flex items-end gap-2 rounded-2xl border border-border-light bg-bg-secondary px-3 py-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/gif,image/webp"
-          onChange={handleFileSelect}
-          className="hidden"
-        />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={disabled || disableAttachment}
-          aria-label="Attach file"
-          className={cn(
-            'mb-px flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg transition-colors',
-            !(disabled || disableAttachment)
-              ? 'cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text-secondary'
-              : 'cursor-default text-text-muted/40',
-          )}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-          </svg>
-        </button>
-
+      <div className="flex min-h-[80px] items-center gap-2 rounded-2xl border border-border-light bg-bg-secondary px-5 py-3">
         <textarea
           ref={textareaRef}
           value={value}
@@ -227,34 +233,65 @@ export default function ChatInput({
           placeholder={effectiveImage ? 'Add a message or send the image...' : placeholder}
           rows={1}
           disabled={disabled}
-          className="flex-1 resize-none bg-transparent py-1.5 text-sm leading-5 text-text-primary outline-none placeholder:text-text-muted"
+          className="flex-1 resize-none bg-transparent py-1.5 text-base leading-6 text-text-primary outline-none placeholder:text-text-muted"
         />
 
-        <button
-          type="button"
-          onClick={submit}
-          disabled={(!value.trim() && !effectiveImage) || disabled}
-          className={cn(
-            'mb-px flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg transition-colors',
-            (value.trim() || effectiveImage) && !disabled
-              ? 'cursor-pointer bg-accent-primary text-white hover:bg-accent-secondary'
-              : 'cursor-default bg-bg-tertiary text-text-muted',
-          )}
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        {/* Send button when there's content, planner toggle when empty */}
+        {value.trim() || effectiveImage ? (
+          <button
+            type="button"
+            onClick={submit}
+            disabled={disabled}
+            className={cn(
+              'mb-px flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg transition-colors',
+              !disabled
+                ? 'cursor-pointer bg-accent-primary text-white hover:bg-accent-secondary'
+                : 'cursor-default bg-bg-tertiary text-text-muted',
+            )}
+            aria-label="Send message"
           >
-            <line x1="22" y1="2" x2="11" y2="13" />
-            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
-        </button>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onTogglePlanner}
+            disabled={!onTogglePlanner}
+            className={cn(
+              'mb-px flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg transition-colors',
+              onTogglePlanner
+                ? 'cursor-pointer bg-success/30 text-white hover:bg-success/40'
+                : 'cursor-default bg-bg-tertiary text-text-muted/40',
+            )}
+            aria-label={plannerOpen ? 'Hide prompt templates' : 'Show prompt templates'}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={cn('transition-transform duration-200', plannerOpen && 'rotate-180')}
+            >
+              <path d="M18 15l-6-6-6 6" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   );

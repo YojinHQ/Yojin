@@ -6,7 +6,6 @@ import WaterfallFlow from '../components/chat/waterfall-flow';
 import ChatInput from '../components/chat/chat-input';
 import type { ImageAttachment } from '../components/chat/chat-input';
 import ChatMessage from '../components/chat/chat-message';
-import ChatAvatar from '../components/chat/chat-avatar';
 import CardSkeleton from '../components/chat/tool-cards/card-skeleton';
 import { SessionSidebar } from '../components/chat/session-sidebar';
 import { useChatContext } from '../lib/chat-context';
@@ -78,7 +77,11 @@ function ChatContent() {
   } = useChatContext();
   const { openModal: openAddPosition } = useAddPositionModal();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [showPlanner, setShowPlanner] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [prefillText, setPrefillText] = useState<string | undefined>();
+  const prefillKeyRef = useRef(0);
+  const [prefillKey, setPrefillKey] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -123,6 +126,7 @@ function ChatContent() {
   const handleSend = useCallback(
     (content: string, image?: ImageAttachment) => {
       setActiveCategory(null);
+      setShowPlanner(false);
       sendMessage(content, image);
     },
     [sendMessage],
@@ -139,14 +143,24 @@ function ChatContent() {
   const handleWaterfallComplete = useCallback(
     (query: string) => {
       setActiveCategory(null);
+      setShowPlanner(false);
       sendMessage(query);
     },
     [sendMessage],
   );
 
+  const handleWaterfallPrefill = useCallback((query: string) => {
+    setActiveCategory(null);
+    setShowPlanner(false);
+    setPrefillText(query);
+    prefillKeyRef.current += 1;
+    setPrefillKey(prefillKeyRef.current);
+  }, []);
+
   const handleWaterfallAction = useCallback(
     (action: string, displayLabel: string) => {
       setActiveCategory(null);
+      setShowPlanner(false);
 
       // Non-tool actions (e.g. add-asset) open the add position modal
       if (action === 'add-asset') {
@@ -162,6 +176,15 @@ function ChatContent() {
 
   const handleWaterfallCancel = useCallback(() => {
     setActiveCategory(null);
+    // If we're in mid-conversation planner, close it entirely
+    if (messages.length > 0) setShowPlanner(false);
+  }, [messages.length]);
+
+  const togglePlanner = useCallback(() => {
+    setShowPlanner((prev) => {
+      if (prev) setActiveCategory(null);
+      return !prev;
+    });
   }, []);
 
   return (
@@ -170,7 +193,7 @@ function ChatContent() {
       <SessionSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((prev) => !prev)} />
 
       {/* Main chat area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden bg-chat-grid">
         {/* Messages area */}
         <div ref={scrollRef} className="flex-1 overflow-auto px-6 py-6">
           <div className="mx-auto max-w-3xl space-y-6">
@@ -229,26 +252,24 @@ function ChatContent() {
 
             {/* Minimal loading indicator — before any tool cards or streaming text arrive */}
             {isLoading && pendingToolCards.length === 0 && !streamingContent && (
-              <div className="flex items-start gap-3">
-                <ChatAvatar />
-                <div className="inline-flex items-center gap-1.5 rounded-2xl rounded-tl-sm border border-border bg-bg-card px-4 py-3">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted" />
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted [animation-delay:200ms]" />
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted [animation-delay:400ms]" />
-                </div>
+              <div className="flex items-center gap-1.5 py-1">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-text-muted" />
+                <span className="h-2 w-2 animate-pulse rounded-full bg-text-muted [animation-delay:200ms]" />
+                <span className="h-2 w-2 animate-pulse rounded-full bg-text-muted [animation-delay:400ms]" />
               </div>
             )}
           </div>
         </div>
 
-        {/* Query builder / waterfall — shown when no messages */}
-        {messages.length === 0 && (
+        {/* Query builder / waterfall — shown on empty state or when toggled */}
+        {(messages.length === 0 || showPlanner) && (
           <div className="px-6 pb-4 pt-2">
             <div className="mx-auto max-w-3xl">
               {activeCategory ? (
                 <WaterfallFlow
                   categoryId={activeCategory}
                   onComplete={handleWaterfallComplete}
+                  onPrefill={handleWaterfallPrefill}
                   onAction={handleWaterfallAction}
                   onCancel={handleWaterfallCancel}
                 />
@@ -262,7 +283,15 @@ function ChatContent() {
         {/* Chat input — always visible */}
         <div className="px-6 pb-6">
           <div className="mx-auto max-w-3xl">
-            <ChatInput onSend={handleSend} disableAttachment={isLoading} initialValue={presetMessage} />
+            <ChatInput
+              onSend={handleSend}
+              disableAttachment={isLoading}
+              initialValue={presetMessage}
+              prefillValue={prefillText}
+              prefillKey={prefillKey}
+              plannerOpen={showPlanner || messages.length === 0}
+              onTogglePlanner={messages.length > 0 ? togglePlanner : undefined}
+            />
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from '@storybook/test';
-import { BarChart3, DollarSign, Building2, TrendingUp } from 'lucide-react';
+import { BarChart3, Search, ShieldAlert, Newspaper } from 'lucide-react';
 import OptionSelector from './option-selector';
 
 const meta: Meta<typeof OptionSelector> = {
@@ -22,10 +22,10 @@ export default meta;
 type Story = StoryObj<typeof OptionSelector>;
 
 const sampleOptions = [
-  { id: 'portfolio', label: 'Portfolio', icon: <BarChart3 className="h-4 w-4" /> },
-  { id: 'risk', label: 'Risk & Exposure', icon: <DollarSign className="h-4 w-4" /> },
-  { id: 'positions', label: 'Positions', icon: <Building2 className="h-4 w-4" /> },
-  { id: 'trends', label: 'Trends', icon: <TrendingUp className="h-4 w-4" /> },
+  { id: 'portfolio', label: 'My Portfolio', icon: <BarChart3 className="h-4 w-4" /> },
+  { id: 'research', label: 'Research a Stock', icon: <Search className="h-4 w-4" /> },
+  { id: 'risk', label: 'Risk Check', icon: <ShieldAlert className="h-4 w-4" /> },
+  { id: 'happening', label: "What's Happening", icon: <Newspaper className="h-4 w-4" /> },
 ];
 
 export const Grid: Story = {

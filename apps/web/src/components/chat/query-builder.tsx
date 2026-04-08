@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { BarChart3, DollarSign, Briefcase, Activity, Sparkles } from 'lucide-react';
+import { BarChart3, Search, ShieldAlert, Newspaper, Sparkles } from 'lucide-react';
 
 interface QuerySuggestion {
   id: string;
@@ -17,26 +17,26 @@ const defaultSuggestions: QuerySuggestion[] = [
   {
     id: 'portfolio',
     icon: <BarChart3 className="h-4 w-4" />,
-    label: 'Portfolio',
+    label: 'My Portfolio',
     query: 'How is my portfolio performing today?',
   },
   {
+    id: 'research',
+    icon: <Search className="h-4 w-4" />,
+    label: 'Research a Stock',
+    query: 'Give me a complete analysis',
+  },
+  {
     id: 'risk',
-    icon: <DollarSign className="h-4 w-4" />,
-    label: 'Risk & Exposure',
-    query: 'Analyze my current risk exposure',
+    icon: <ShieldAlert className="h-4 w-4" />,
+    label: 'Risk Check',
+    query: 'Analyze my portfolio risk',
   },
   {
-    id: 'positions',
-    icon: <Briefcase className="h-4 w-4" />,
-    label: 'Positions',
-    query: 'Show me my top performing positions',
-  },
-  {
-    id: 'trends',
-    icon: <Activity className="h-4 w-4" />,
-    label: 'Trends',
-    query: 'What market trends should I watch?',
+    id: 'happening',
+    icon: <Newspaper className="h-4 w-4" />,
+    label: "What's Happening",
+    query: 'What should I pay attention to today?',
   },
 ];
 

@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import Markdown from 'react-markdown';
 import { cn } from '../../lib/utils';
 import type { ToolCardRef } from '../../lib/chat-context';
-import ChatAvatar from './chat-avatar';
 import ToolRenderer from './tool-cards/tool-renderer';
 
 export interface ChatMessageProps {
@@ -73,56 +72,51 @@ export default function ChatMessage({
   if (role === 'user') {
     return (
       <div className={cn('flex justify-end', className)}>
-        <div className="max-w-[80%] rounded-xl bg-accent-primary px-5 py-2.5">
-          <p className="text-sm leading-relaxed text-white">{content ?? children}</p>
+        <div className="chat-user-bubble max-w-[80%] rounded-xl px-5 py-2.5">
+          <p className="text-base leading-relaxed text-text-primary">{content ?? children}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={cn('flex items-start gap-3', className)}>
-      <ChatAvatar />
-      <div
-        className={cn('min-w-0', isAuthExpired || (toolCards && toolCards.length > 0) ? 'max-w-[95%]' : 'max-w-[85%]')}
-      >
-        {children ?? (
-          <div className="flex flex-col gap-3">
-            {toolCards?.map((card, i) => (
-              <ToolRenderer key={`${card.tool}-${i}`} tool={card.tool} params={JSON.parse(card.params)} />
-            ))}
-            {isAuthExpired && <AuthExpiredCard />}
-            {content && !isAuthExpired && (!toolCards || toolCards.length === 0) && (
-              <div className="rounded-xl rounded-tl-sm border border-border bg-bg-card px-4 py-3">
-                {streaming ? (
-                  <span className="whitespace-pre-wrap text-sm leading-relaxed text-text-primary">
-                    {content}
-                    <span className="inline-block w-1.5 animate-pulse text-text-muted">▍</span>
-                  </span>
-                ) : (
-                  <div className="prose prose-invert prose-sm max-w-none text-sm leading-relaxed text-text-primary">
-                    <Markdown>{content}</Markdown>
-                  </div>
-                )}
-              </div>
-            )}
-            {piiProtected && piiTypes && piiTypes.length > 0 && (
-              <div className="inline-flex items-center gap-1.5 self-start px-1">
-                <svg className="h-3 w-3 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path
-                    fillRule="evenodd"
-                    d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <span className="text-[10px] text-emerald-400/80">
-                  Your {formatPiiTypes(piiTypes)} was not shared with the AI
+    <div className={cn('w-full', className)}>
+      {children ?? (
+        <div className="flex flex-col gap-3">
+          {toolCards?.map((card, i) => (
+            <ToolRenderer key={`${card.tool}-${i}`} tool={card.tool} params={JSON.parse(card.params)} />
+          ))}
+          {isAuthExpired && <AuthExpiredCard />}
+          {content && !isAuthExpired && (!toolCards || toolCards.length === 0) && (
+            <>
+              {streaming ? (
+                <span className="chat-assistant-text whitespace-pre-wrap text-base leading-7">
+                  {content}
+                  <span className="inline-block w-1.5 animate-pulse text-text-muted">▍</span>
                 </span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+              ) : (
+                <div className="chat-assistant-prose prose max-w-none text-base leading-7 prose-headings:mb-2 prose-headings:mt-6 prose-p:my-3.5 prose-li:my-1 prose-a:break-all prose-a:text-success prose-a:no-underline hover:prose-a:underline prose-code:rounded prose-code:px-1.5 prose-code:py-0.5 prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:rounded-xl prose-pre:text-sm">
+                  <Markdown>{content}</Markdown>
+                </div>
+              )}
+            </>
+          )}
+          {piiProtected && piiTypes && piiTypes.length > 0 && (
+            <div className="inline-flex items-center gap-1.5 self-start px-1">
+              <svg className="h-3 w-3 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <span className="text-[10px] text-emerald-400/80">
+                Your {formatPiiTypes(piiTypes)} was not shared with the AI
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

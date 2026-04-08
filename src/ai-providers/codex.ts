@@ -31,7 +31,7 @@ interface CodexEvent {
  * - Text-only (no tool_use support — the CLI handles its own tools)
  * - Model selection via `-m` flag
  */
-export class VercelAIProvider implements AIProvider {
+export class CodexProvider implements AIProvider {
   readonly id = 'codex';
   readonly name = 'Codex';
 
@@ -67,7 +67,21 @@ export class VercelAIProvider implements AIProvider {
     usage?: { inputTokens: number; outputTokens: number };
   }> {
     const prompt = this.buildPrompt(params);
-    const args = ['exec', '--json', '--ephemeral', '--skip-git-repo-check', '-m', params.model, prompt];
+    // Pin reasoning effort to a value supported by every codex model — overrides
+    // any user-level `model_reasoning_effort` in ~/.codex/config.toml that may be
+    // incompatible with the model we're calling (e.g. `xhigh` is not accepted by
+    // `gpt-5.1-codex-mini`).
+    const args = [
+      'exec',
+      '--json',
+      '--ephemeral',
+      '--skip-git-repo-check',
+      '-c',
+      'model_reasoning_effort=high',
+      '-m',
+      params.model,
+      prompt,
+    ];
 
     logger.debug('Spawning codex exec', { model: params.model });
 
