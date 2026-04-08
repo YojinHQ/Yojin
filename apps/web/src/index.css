@@ -476,6 +476,20 @@
     --color-accent-dark: #9a0003;
   }
 
+  /* Chat page opts out of the warm parchment palette in light mode —
+     uses the older cool/neutral grays for better message-bubble contrast. */
+  [data-theme='light'] .chat-surface {
+    --color-bg-primary: #f8f8f7;
+    --color-bg-secondary: #ffffff;
+    --color-bg-tertiary: #f0f0ee;
+    --color-bg-hover: #e8e8e6;
+    --color-bg-card: #ffffff;
+    --color-border: #d8d8d6;
+    --color-border-light: #e4e4e2;
+    --color-text-secondary: #5c5c5c;
+    --color-text-muted: #999999;
+  }
+
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--color-bg-tertiary) transparent;
