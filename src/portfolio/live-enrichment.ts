@@ -85,14 +85,6 @@ export function isUSMarketOpen(): boolean {
   return minutes >= 570 && minutes < 960; // 9:30 (570) to 16:00 (960)
 }
 
-/** Check if today is a US weekday (Mon–Fri). Used to decide intraday vs multi-day sparkline range. */
-function isUSWeekday(): boolean {
-  const now = new Date();
-  const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const day = et.getDay();
-  return day !== 0 && day !== 6;
-}
-
 /** Parse a candle timestamp as UTC. The Jintel API returns UTC timestamps
  *  without a timezone suffix (e.g. '2026-03-31 16:30:00'). Bare `new Date()`
  *  treats these as local time, shifting the regular-hours filter by the host's
@@ -111,8 +103,15 @@ function toETDate(dateStr: string): string {
 
 /** Build a sparkline from price history closing prices.
  *  When `regularHoursOnly` is true, strips pre-market (<9:30 AM ET) and after-hours (>=4:00 PM ET) candles
- *  and keeps only the latest trading date so a multi-session 1d range doesn't produce an overnight cliff. */
-function buildSparkline(history: TickerPriceHistory, livePrice: number, regularHoursOnly = false): number[] {
+ *  and keeps only the most recent `sessions` trading dates. Including the previous session anchors today's
+ *  intraday at a real price level, so positive-day sparklines visibly slope up across the overnight gap
+ *  instead of looking flat-then-drift inside today's narrow band. */
+function buildSparkline(
+  history: TickerPriceHistory,
+  livePrice: number,
+  regularHoursOnly = false,
+  sessions = 2,
+): number[] {
   let candles = history.history;
   if (regularHoursOnly) {
     candles = candles.filter((p) => {
@@ -122,8 +121,12 @@ function buildSparkline(history: TickerPriceHistory, livePrice: number, regularH
       return minutes >= 570 && minutes < 960; // 9:30 AM – 4:00 PM ET
     });
     if (candles.length > 1) {
-      const latest = toETDate(candles[candles.length - 1].date);
-      candles = candles.filter((p) => toETDate(p.date) === latest);
+      // Collect the last `sessions` distinct ET dates by walking backwards.
+      const keepDates = new Set<string>();
+      for (let i = candles.length - 1; i >= 0 && keepDates.size < sessions; i--) {
+        keepDates.add(toETDate(candles[i].date));
+      }
+      candles = candles.filter((p) => keepDates.has(toETDate(p.date)));
     }
   }
   const points = candles.map((p) => p.close);
@@ -164,12 +167,13 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
   const equitySymbols = symbols.filter((s) => !cryptoSet.has(s));
   const cryptoSymbols = symbols.filter((s) => cryptoSet.has(s));
 
-  const weekday = isUSWeekday();
-  // On weekdays fetch today's session; on weekends/holidays widen to 5d so
-  // buildSparkline can find the most recent complete trading session.
-  const equityRange = weekday ? '1d' : '5d';
-  // Always 5m so weekend/holiday sparklines show the last session's open→close
-  // price action at the same resolution as weekday sparklines.
+  // Always fetch 5d so buildSparkline can keep the last 2 trading sessions
+  // (yesterday + today) — the overnight gap in the rendered line is what
+  // makes a positive day visibly slope up across the chart. 1d is too narrow
+  // on weekday mornings: it returns only ~20 candles in a tight band and
+  // hides the move from prev close. 5m interval keeps the resolution high
+  // enough to show real intraday shape.
+  const equityRange = '5d';
   const equityInterval = '5m';
 
   // Check quote cache first to avoid hammering Jintel on repeated polls
