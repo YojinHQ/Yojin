@@ -138,28 +138,6 @@ export async function fetchJintelSignals(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Check if text mentions any of the entity's tickers or name (word-boundary safe). */
-function mentionsEntity(text: string, tickers: string[], entityName: string | undefined): boolean {
-  const haystack = text.toUpperCase();
-  // Check tickers with word boundaries to avoid false positives (e.g. "A" matching "AI")
-  for (const ticker of tickers) {
-    const escaped = ticker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (new RegExp(`(?<![A-Z0-9])${escaped}(?![A-Z0-9])`).test(haystack)) return true;
-  }
-  // Check entity name (e.g. "NVIDIA", "Tesla", "Apple", "Microsoft")
-  if (entityName) {
-    const name = entityName.toUpperCase();
-    // For short names, use word boundary; for longer names, simple includes is fine
-    if (name.length <= 3) {
-      if (new RegExp(`(?<![A-Z0-9])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Z0-9])`).test(haystack))
-        return true;
-    } else if (haystack.includes(name)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 /** Titles that are just entity names with optional ticker suffix (e.g. "Invesco QQQ ETF | ICVT", "Apple Inc (AAPL)") */
 function isEntityNameTitle(title: string, entityName: string | undefined): boolean {
   if (!entityName) return false;
@@ -326,15 +304,14 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     });
   }
 
-  // 7. News articles — only keep articles that actually mention the entity
+  // 7. News articles — Jintel returns articles scoped to the queried entity.
+  // Junk/spam filters are deterministic; relevance is left to the quality agent.
   const entityName = entity.name;
   for (const article of entity.news ?? []) {
     if (!article.title) continue;
     if (JUNK_TITLE_RE.test(article.title)) continue;
     if (article.link && JUNK_DOMAIN_RE.test(article.link)) continue;
     if (isEntityNameTitle(article.title, entityName)) continue;
-    const text = `${article.title} ${article.snippet ?? ''}`;
-    if (!mentionsEntity(text, tickers, entityName)) continue;
     signals.push({
       sourceId: `jintel-news-${article.source.toLowerCase().replace(/\s+/g, '-')}`,
       sourceName: `Jintel News (${article.source})`,
@@ -351,14 +328,12 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     });
   }
 
-  // 8. Research articles — skip junk page titles and irrelevant articles
+  // 8. Research articles — skip junk page titles; relevance handled by quality agent.
   for (const article of entity.research ?? []) {
     if (!article.title) continue;
     if (JUNK_TITLE_RE.test(article.title)) continue;
     if (article.url && JUNK_DOMAIN_RE.test(article.url)) continue;
     if (isEntityNameTitle(article.title, entityName)) continue;
-    const researchText = `${article.title} ${article.text ?? ''}`;
-    if (!mentionsEntity(researchText, tickers, entityName)) continue;
     signals.push({
       sourceId: 'jintel-research',
       sourceName: 'Jintel Research',
@@ -434,8 +409,6 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
   if (social) {
     for (const post of social.reddit ?? []) {
       if (post.score < SOCIAL_MIN_REDDIT_SCORE) continue;
-      const text = `${post.title} ${post.text}`;
-      if (!mentionsEntity(text, tickers, entityName)) continue;
       signals.push({
         sourceId: `jintel-social-reddit-${post.id}`,
         sourceName: `Jintel Social (r/${post.subreddit})`,
@@ -456,7 +429,6 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     const extSocial = social as Social & { redditComments?: RedditComment[] };
     for (const comment of extSocial.redditComments ?? []) {
       if (comment.score < SOCIAL_MIN_REDDIT_COMMENT_SCORE) continue;
-      if (!mentionsEntity(comment.body, tickers, entityName)) continue;
       signals.push({
         sourceId: `jintel-social-reddit-comment-${comment.id}`,
         sourceName: `Jintel Social (r/${comment.subreddit} comment)`,
@@ -474,12 +446,9 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
   }
 
   // 12. Hacker News discussions — tech/investor community commentary.
-  // Only high-points stories to avoid noise, and only if the story title
-  // actually references the ticker — Jintel may return loosely related HN stories
-  // that have nothing to do with the asset.
+  // Only high-points stories to avoid noise; relevance handled by quality agent.
   for (const story of entity.discussions ?? []) {
     if (story.points < SOCIAL_MIN_HN_POINTS) continue;
-    if (!mentionsEntity(story.title, tickers, entityName)) continue;
     signals.push({
       sourceId: `jintel-discussions-hn-${story.objectId}`,
       sourceName: 'Jintel Discussions (HN)',
