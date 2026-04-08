@@ -71,10 +71,12 @@ const signalTypeIcon: Record<string, IconName> = {
   TRADING_LOGIC_TRIGGER: 'clock',
 };
 
-/** Promote higher-severity items into the alerts lane. */
+/** Promote higher-severity items into the alerts lane.
+ * Only CRITICAL signals and explicit ACTION outputs qualify as alerts —
+ * HIGH signals remain visible as prominent insights but don't clutter the alerts tab. */
 function classifySignal(signal: { outputType?: string | null; severity: IntelFeedItem['severity'] }): ItemType {
-  if (signal.severity === 'CRITICAL' || signal.severity === 'HIGH') return 'alert';
-  if (signal.outputType === 'ALERT') return 'alert';
+  if (signal.severity === 'CRITICAL') return 'alert';
+  if (signal.outputType === 'ACTION') return 'alert';
   return 'insight';
 }
 
