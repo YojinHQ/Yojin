@@ -431,6 +431,7 @@ export default function IntelFeed({
 /* ── Content ────────────────────────────────────────────────────────── */
 
 const POLL_INTERVAL_MS = 30_000;
+const PAGE_SIZE = 20;
 const SEEN_IDS_KEY_PREFIX = 'intel-feed-seen-';
 
 function persistSeenIds(key: string, ids: Set<string>) {
@@ -487,11 +488,37 @@ function IntelFeedContent({
     }
   }, [storageKey]);
 
+  // Incremental pagination: user scrolls to the sentinel and we bump the limit.
+  // Bumping limit (rather than adding an offset param) keeps the backend ranking
+  // stable — we always ask for the top N ranked items, and groups stay pinned at
+  // the top regardless of page.
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  // Reset pagination when the feed target flips (portfolio ↔ watchlist).
+  // Deferred to satisfy `react-hooks/set-state-in-effect`.
+  useEffect(() => {
+    const t = setTimeout(() => setLimit(PAGE_SIZE), 0);
+    return () => clearTimeout(t);
+  }, [feedTarget]);
+
+  const variables = useMemo<IntelFeedQueryVariables>(() => ({ limit, groupLimit: 8, feedTarget }), [limit, feedTarget]);
   const [{ data, fetching, error }, reexecute] = useQuery<IntelFeedQueryResult, IntelFeedQueryVariables>({
     query: INTEL_FEED_QUERY,
-    variables: { limit: 20, groupLimit: 8, feedTarget },
+    variables,
     requestPolicy: 'cache-and-network',
   });
+
+  // Preserve last successful response so the UI doesn't flash empty while
+  // urql swaps to a new cache entry on limit change. We use state (not a ref)
+  // so React 19 doesn't flag a ref-read during render.
+  const [effectiveData, setEffectiveData] = useState<IntelFeedQueryResult | null>(null);
+  useEffect(() => {
+    if (data) {
+      // Defer with setTimeout(fn, 0) to satisfy `react-hooks/set-state-in-effect`.
+      const t = setTimeout(() => setEffectiveData(data), 0);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [data]);
 
   const [{ data: schedulerData }] = useQuery<SchedulerStatusQueryResult>({
     query: SCHEDULER_STATUS_QUERY,
@@ -547,20 +574,23 @@ function IntelFeedContent({
   }, [reexecute]);
 
   // Signal groups (narratives) rendered above the singleton list.
+  // Backend already ranks by severity DESC, then lastEventAt DESC — preserve
+  // that order so the most important narrative surfaces first.
   const groups: IntelFeedGroup[] = useMemo(() => {
-    if (!data) return [];
-    // Newest narrative first — the "More signals" lane below is also newest-first.
-    return [...data.intelFeed.groups].sort(
-      (a, b) => new Date(b.lastEventAt).getTime() - new Date(a.lastEventAt).getTime(),
-    );
-  }, [data]);
+    if (!effectiveData) return [];
+    return effectiveData.intelFeed.groups;
+  }, [effectiveData]);
 
   // Map API data into IntelFeedItem[]
   const items: IntelFeedItem[] = useMemo(() => {
-    if (!data) return [];
+    if (!effectiveData) return [];
 
-    const signalItems: IntelFeedItem[] = data.intelFeed.signals.map((cs) => {
+    // Require tier1 (LLM-generated TLDR headline). Signals that haven't been
+    // processed by the quality agent yet have no TLDR — skip them rather than
+    // showing the raw source title, which is usually noisy and verbose.
+    const signalItems: IntelFeedItem[] = effectiveData.intelFeed.signals.flatMap((cs) => {
       const s = cs.signal;
+      if (!s.tier1) return [];
       const severity = cs.severity ?? 'LOW';
       const itemType = classifySignal({ outputType: s.outputType, severity });
       const topScore =
@@ -569,47 +599,51 @@ function IntelFeedContent({
           : null;
       const sourceName = s.sources?.[0]?.name;
       const ticker = topScore?.ticker ?? s.tickers[0] ?? 'MACRO';
-      const headline = s.tier1 ?? s.title;
+      const headline = s.tier1;
       const detail = s.tier2 ?? s.content ?? '';
-      return {
-        id: s.id,
-        type: itemType,
-        severity,
-        signalType: s.type,
-        ticker,
-        tickers: s.tickers,
-        sentiment: s.sentiment ?? null,
-        title: headline,
-        time: timeAgo(s.ingestedAt),
-        publishedAt: s.publishedAt,
-        ingestedAt: s.ingestedAt,
-        publishedTime: timeAgo(s.publishedAt),
-        icon: signalTypeIcon[s.type] ?? 'trending',
-        description: detail !== headline ? detail : '',
-        source: sourceName ?? null,
-        link: s.link ?? null,
-        data:
-          s.tickers.length > 0
-            ? [
-                { label: 'Confidence', value: `${Math.round(s.confidence * 100)}%`, highlight: s.confidence >= 0.8 },
-                ...(topScore
-                  ? [
-                      {
-                        label: 'Relevance',
-                        value: `${Math.round(topScore.compositeScore * 100)}%`,
-                        highlight: topScore.compositeScore >= 0.6,
-                      },
-                    ]
-                  : []),
-              ]
-            : undefined,
-      };
+      return [
+        {
+          id: s.id,
+          type: itemType,
+          severity,
+          signalType: s.type,
+          ticker,
+          tickers: s.tickers,
+          sentiment: s.sentiment ?? null,
+          title: headline,
+          time: timeAgo(s.ingestedAt),
+          publishedAt: s.publishedAt,
+          ingestedAt: s.ingestedAt,
+          publishedTime: timeAgo(s.publishedAt),
+          icon: signalTypeIcon[s.type] ?? 'trending',
+          description: detail !== headline ? detail : '',
+          source: sourceName ?? null,
+          link: s.link ?? null,
+          data:
+            s.tickers.length > 0
+              ? [
+                  { label: 'Confidence', value: `${Math.round(s.confidence * 100)}%`, highlight: s.confidence >= 0.8 },
+                  ...(topScore
+                    ? [
+                        {
+                          label: 'Relevance',
+                          value: `${Math.round(topScore.compositeScore * 100)}%`,
+                          highlight: topScore.compositeScore >= 0.6,
+                        },
+                      ]
+                    : []),
+                ]
+              : undefined,
+        },
+      ];
     });
 
-    // Sort newest first
-    signalItems.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+    // Preserve backend ranking (severity DESC, then composite score DESC) —
+    // the composite score already blends recency, so important recent items
+    // still float to the top while CRITICAL alerts aren't buried by newer LOW
+    // severity noise.
     return signalItems;
-  }, [data]);
+  }, [effectiveData]);
 
   useEffect(() => {
     latestItemsRef.current = items;
@@ -753,9 +787,36 @@ function IntelFeedContent({
     });
   }
 
-  const isLoading = fetching && !data;
+  // Only show the full loading spinner on the very first fetch. Subsequent
+  // pagination fetches keep `effectiveData` visible via lastDataRef.
+  const isLoading = fetching && !effectiveData;
   const hasError = !!error;
   const isEmpty = !fetching && !error && filteredItems.length === 0 && visibleGroups.length === 0;
+  // "More pages exist" — backend filled the page (groups + signals == limit).
+  // When it returns a non-full page we've reached the end.
+  const returnedCount = (effectiveData?.intelFeed.groups.length ?? 0) + (effectiveData?.intelFeed.signals.length ?? 0);
+  const hasMore = returnedCount >= limit;
+  const isPaginating = fetching && !!effectiveData && returnedCount < limit;
+
+  // IntersectionObserver sentinel — when the user scrolls it into view, bump
+  // the limit to request the next page. Only active on the "all" tab; filtered
+  // tabs slice locally so pagination there would be wasted network.
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!hasMore || fetching || activeFilter !== 'all') return;
+    const node = loadMoreRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setLimit((l) => l + PAGE_SIZE);
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, fetching, activeFilter, filteredItems.length]);
 
   return (
     <>
@@ -953,6 +1014,14 @@ function IntelFeedContent({
                     ))}
                   </div>
                 </>
+              )}
+
+              {/* Load-more sentinel + spinner. Only meaningful on the "all"
+                  tab — filtered tabs slice locally from the already-loaded set. */}
+              {activeFilter === 'all' && (hasMore || isPaginating) && (
+                <div ref={loadMoreRef} className="flex items-center justify-center py-4 text-2xs text-text-muted">
+                  {isPaginating ? <Spinner size="sm" label="Loading more..." /> : <span>Scroll for more</span>}
+                </div>
               )}
             </div>
           )}
