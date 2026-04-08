@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import type { ClaudeCodeProvider } from '../../../ai-providers/claude-code.js';
 import { registerCredentialErrorHandler } from '../../../ai-providers/credential-error.js';
 import type { ProviderRouter } from '../../../ai-providers/router.js';
+import { readTokenFromKeychain } from '../../../auth/keychain.js';
 import { AIProviderConfigSchema } from '../../../config/config.js';
 import { createSubsystemLogger } from '../../../logging/logger.js';
 import { resolveDataRoot } from '../../../paths.js';
@@ -109,9 +110,25 @@ async function readDefaultProviderId(): Promise<string> {
  * Programmatically clear the default provider's credential.
  * Called automatically when the provider returns an auth/invalid-key error
  * so the user is prompted to reconnect rather than seeing a cryptic error loop.
+ *
+ * In OAuth mode the real credential lives in the macOS Keychain (or the
+ * keychain bridge file), not the vault. The Anthropic SDK already attempts
+ * an internal refresh in ClaudeCodeProvider.completeWithOAuth before the
+ * error reaches us, so a 401 here means refresh already failed. Deleting
+ * the vault's stale anthropic_api_key entry would do nothing useful and
+ * would flip the UI to "disconnected" even though the keychain token is
+ * still there — making it look like we deleted something we didn't.
+ * Skip the wipe in that case.
  */
 export async function clearDefaultProviderCredential(): Promise<void> {
   const providerId = await readDefaultProviderId();
+  if (providerId === 'claude-code' && claudeCodeProvider?.getAuthMode() === 'oauth') {
+    logger.warn(
+      'Claude auth failure in OAuth mode — refresh already attempted by provider. ' +
+        'Leaving vault/env untouched; user must re-login via Claude Code CLI if this persists.',
+    );
+    return;
+  }
   await deleteProviderCredential(providerId);
   logger.warn('Default provider credential cleared due to auth failure — user must reconnect', {
     provider: providerId,
@@ -133,11 +150,17 @@ async function readAiConfig(): Promise<AiConfigGql> {
     defaultProvider = defaults.defaultProvider;
   }
 
+  // Keychain check is the source of truth for Claude Code OAuth tokens on
+  // macOS — without this the UI shows Claude as "disconnected" whenever the
+  // vault/env ANTHROPIC_API_KEY is absent, even though the OAuth token is
+  // present and usable. See ClaudeCodeProvider.initialize for the same
+  // resolution order the provider itself uses at startup.
   const hasAnthropicKey =
     !!process.env.ANTHROPIC_API_KEY ||
     !!process.env.CLAUDE_CODE_OAUTH_TOKEN ||
     (await hasVaultKey('anthropic_api_key')) ||
-    (await hasVaultKey('anthropic_oauth_token'));
+    (await hasVaultKey('anthropic_oauth_token')) ||
+    !!(await readTokenFromKeychain());
 
   const hasOpenaiKey = !!process.env.OPENAI_API_KEY || (await hasVaultKey('openai_api_key'));
 
