@@ -558,6 +558,25 @@ export const typeDefs = /* GraphQL */ `
     lastEventAt: String!
   }
 
+  "A signal group tailored for the Intel Feed — adds severity + feedTarget fields."
+  type IntelFeedGroup {
+    id: ID!
+    signals: [Signal!]!
+    tickers: [String!]!
+    summary: String!
+    outputType: SignalOutputType!
+    firstEventAt: String!
+    lastEventAt: String!
+    severity: SignalSeverity!
+    feedTarget: FeedTarget!
+  }
+
+  "Hybrid Intel Feed result: signal groups (narratives) on top, ungrouped curated signals below."
+  type IntelFeedResult {
+    groups: [IntelFeedGroup!]!
+    signals: [CuratedSignal!]!
+  }
+
   # ---------------------------------------------------------------------------
   # Actions (approval workflow)
   # ---------------------------------------------------------------------------
@@ -1181,6 +1200,8 @@ export const typeDefs = /* GraphQL */ `
     checkCliCommands(commands: [String!]!): [CliCommandStatus!]!
     signalsByIds(ids: [ID!]!): [Signal!]!
     signalGroups(ticker: String, since: String, limit: Int): [SignalGroup!]!
+    "Hybrid Intel Feed: signal groups + dedupe-filtered ungrouped curated signals."
+    intelFeed(limit: Int, groupLimit: Int, feedTarget: FeedTarget): IntelFeedResult!
     curatedSignals(
       ticker: String
       since: String

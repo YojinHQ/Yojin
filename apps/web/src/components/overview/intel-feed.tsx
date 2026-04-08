@@ -9,6 +9,7 @@ import {
 } from '../../api/documents';
 import type {
   FeedTarget,
+  IntelFeedGroup,
   IntelFeedQueryResult,
   IntelFeedQueryVariables,
   SchedulerAssetStatus,
@@ -21,6 +22,7 @@ import { CardBlurGate } from '../common/card-blur-gate';
 import { FeatureCardGate } from '../common/feature-gate';
 import FeedDetailModal from './feed-detail-modal';
 import type { FeedDetailData } from './feed-detail-modal';
+import SignalGroupCard from '../signals/signal-group-card';
 import Spinner from '../common/spinner';
 
 type ItemType = 'alert' | 'insight';
@@ -487,7 +489,7 @@ function IntelFeedContent({
 
   const [{ data, fetching, error }, reexecute] = useQuery<IntelFeedQueryResult, IntelFeedQueryVariables>({
     query: INTEL_FEED_QUERY,
-    variables: { limit: 20, feedTarget },
+    variables: { limit: 20, groupLimit: 8, feedTarget },
     requestPolicy: 'cache-and-network',
   });
 
@@ -544,11 +546,20 @@ function IntelFeedContent({
     return () => clearInterval(id);
   }, [reexecute]);
 
+  // Signal groups (narratives) rendered above the singleton list.
+  const groups: IntelFeedGroup[] = useMemo(() => {
+    if (!data) return [];
+    // Newest narrative first — the "More signals" lane below is also newest-first.
+    return [...data.intelFeed.groups].sort(
+      (a, b) => new Date(b.lastEventAt).getTime() - new Date(a.lastEventAt).getTime(),
+    );
+  }, [data]);
+
   // Map API data into IntelFeedItem[]
   const items: IntelFeedItem[] = useMemo(() => {
     if (!data) return [];
 
-    const signalItems: IntelFeedItem[] = data.curatedSignals.map((cs) => {
+    const signalItems: IntelFeedItem[] = data.intelFeed.signals.map((cs) => {
       const s = cs.signal;
       const severity = cs.severity ?? 'LOW';
       const itemType = classifySignal({ outputType: s.outputType, severity });
@@ -714,7 +725,11 @@ function IntelFeedContent({
     if (activeFilter === 'all') return items;
     return items.filter((item) => item.type === (activeFilter === 'alerts' ? 'alert' : 'insight'));
   }, [items, activeFilter]);
-  const totalCount = filteredItems.length;
+
+  // Groups only show on the "all" tab — the Alerts/Insights filters are about
+  // individual signal types, and a group contains multiple signals of mixed types.
+  const visibleGroups = activeFilter === 'all' ? groups : [];
+  const totalCount = filteredItems.length + visibleGroups.length;
 
   function openModal(item: IntelFeedItem) {
     setModalData({
@@ -740,7 +755,7 @@ function IntelFeedContent({
 
   const isLoading = fetching && !data;
   const hasError = !!error;
-  const isEmpty = !fetching && !error && filteredItems.length === 0;
+  const isEmpty = !fetching && !error && filteredItems.length === 0 && visibleGroups.length === 0;
 
   return (
     <>
@@ -886,39 +901,59 @@ function IntelFeedContent({
             </div>
           ) : (
             <div>
-              <SectionHeader
-                label={activeFilter === 'all' ? 'All' : activeFilter === 'alerts' ? 'Alerts' : 'Insights'}
-              />
-              <div className="space-y-2">
-                {filteredItems.map((item) => (
-                  <IntelFeedCard
-                    key={item.id}
-                    item={item}
-                    expanded={expandedId === item.id}
-                    isNew={newIds.has(item.id)}
-                    onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                    onDismiss={() => {
-                      if (expandedId === item.id) setExpandedId(null);
-                      void dismissSignal({ signalId: item.id }).then((result) => {
-                        if (result.error) {
-                          console.error('Dismiss failed', result.error.message);
-                          return;
-                        }
-                        reexecute({ requestPolicy: 'network-only' });
-                      });
-                    }}
-                    onViewDetails={() => openModal(item)}
-                    onAskYojin={() =>
-                      navigate('/chat', {
-                        state: {
-                          newSession: true,
-                          preset: `Analyze this ${categoryLabel[item.type].toLowerCase()}: "${item.title}"${item.description ? ` — ${item.description}` : ''}`,
-                        },
-                      })
+              {visibleGroups.length > 0 && (
+                <div className="space-y-2 pt-3">
+                  {visibleGroups.map((group) => (
+                    <SignalGroupCard key={group.id} group={group} />
+                  ))}
+                </div>
+              )}
+
+              {filteredItems.length > 0 && (
+                <>
+                  <SectionHeader
+                    label={
+                      visibleGroups.length > 0
+                        ? 'More signals'
+                        : activeFilter === 'all'
+                          ? 'All'
+                          : activeFilter === 'alerts'
+                            ? 'Alerts'
+                            : 'Insights'
                     }
                   />
-                ))}
-              </div>
+                  <div className="space-y-2">
+                    {filteredItems.map((item) => (
+                      <IntelFeedCard
+                        key={item.id}
+                        item={item}
+                        expanded={expandedId === item.id}
+                        isNew={newIds.has(item.id)}
+                        onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                        onDismiss={() => {
+                          if (expandedId === item.id) setExpandedId(null);
+                          void dismissSignal({ signalId: item.id }).then((result) => {
+                            if (result.error) {
+                              console.error('Dismiss failed', result.error.message);
+                              return;
+                            }
+                            reexecute({ requestPolicy: 'network-only' });
+                          });
+                        }}
+                        onViewDetails={() => openModal(item)}
+                        onAskYojin={() =>
+                          navigate('/chat', {
+                            state: {
+                              newSession: true,
+                              preset: `Analyze this ${categoryLabel[item.type].toLowerCase()}: "${item.title}"${item.description ? ` — ${item.description}` : ''}`,
+                            },
+                          })
+                        }
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

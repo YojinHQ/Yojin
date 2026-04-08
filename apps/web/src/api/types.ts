@@ -1133,13 +1133,32 @@ export interface Action {
 // Intel Feed
 // ---------------------------------------------------------------------------
 
+export type SignalSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+
+export interface IntelFeedGroup {
+  id: string;
+  signals: Signal[];
+  tickers: string[];
+  summary: string;
+  outputType: string;
+  firstEventAt: string;
+  lastEventAt: string;
+  severity: SignalSeverity;
+  feedTarget: FeedTarget;
+}
+
+export interface IntelFeedResult {
+  groups: IntelFeedGroup[];
+  signals: CuratedSignal[];
+}
+
 export interface IntelFeedQueryResult {
-  curatedSignals: CuratedSignal[];
+  intelFeed: IntelFeedResult;
 }
 
 export interface IntelFeedQueryVariables {
   limit?: number;
-  offset?: number;
+  groupLimit?: number;
   feedTarget?: FeedTarget;
 }
 

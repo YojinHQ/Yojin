@@ -34,6 +34,7 @@ import {
 } from './api/graphql/resolvers/data-sources.js';
 import { setFetchDeps } from './api/graphql/resolvers/fetch-data-source.js';
 import { setInsightStore } from './api/graphql/resolvers/insights.js';
+import { setIntelFeedDeps } from './api/graphql/resolvers/intel-feed.js';
 import { setMarketJintelClient } from './api/graphql/resolvers/market.js';
 import {
   setJintelKeyValidatedCallback,
@@ -626,6 +627,15 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   setCuratedAssessmentStore(assessmentStore);
   setCuratedWatchlistStore(watchlistStore);
   setAssessmentStore(assessmentStore);
+
+  // Intel Feed (hybrid groups + signals) wiring — needs group archive, signal
+  // archive, snapshot store, and watchlist store to resolve and classify groups.
+  setIntelFeedDeps({
+    groupArchive: signalGroupArchive,
+    signalArchive,
+    snapshotStore,
+    watchlistStore,
+  });
 
   // Insight tools (1 tool: save_insight_report)
   const { insightStore, tools: insightTools } = wireInsights({ dataRoot, signalArchive });

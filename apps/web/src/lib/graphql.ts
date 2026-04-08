@@ -49,6 +49,8 @@ const cache = cacheExchange({
     MicroInsight: (data) => data.id as string,
     EmotionState: () => null, // embedded — nested under InsightReport
     RefreshIntelFeedResult: () => null, // embedded — mutation result
+    IntelFeedResult: () => null, // singleton query result — fields are the list
+    IntelFeedGroup: (data) => data.id as string,
     TickerProfileEntry: (data) => data.id as string,
     TickerProfile: (data) => data.ticker as string,
     TickerProfileBrief: () => null, // embedded — nested under TickerProfile
@@ -80,11 +82,13 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'portfolio');
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
+        cache.invalidate('Query', 'intelFeed');
       },
       confirmPositions(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
+        cache.invalidate('Query', 'intelFeed');
       },
       validateJintelKey(_result, _args, cache) {
         cache.invalidate('Query', 'onboardingStatus');
@@ -95,16 +99,19 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'listConnections');
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
+        cache.invalidate('Query', 'intelFeed');
       },
       editPosition(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
+        cache.invalidate('Query', 'intelFeed');
       },
       removePosition(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
+        cache.invalidate('Query', 'intelFeed');
       },
       processInsights(_result, _args, cache) {
         cache.invalidate('Query', 'signals');
@@ -114,10 +121,12 @@ const cache = cacheExchange({
       fetchDataSource(_result, _args, cache) {
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
+        cache.invalidate('Query', 'intelFeed');
       },
       runFullCuration(_result, _args, cache) {
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
+        cache.invalidate('Query', 'intelFeed');
       },
       connectChannel(_result, _args, cache) {
         cache.invalidate('Query', 'listChannels');
@@ -140,10 +149,12 @@ const cache = cacheExchange({
       addToWatchlist(_result, _args, cache) {
         cache.invalidate('Query', 'watchlist');
         cache.invalidate('Query', 'curatedSignals');
+        cache.invalidate('Query', 'intelFeed');
       },
       removeFromWatchlist(_result, _args, cache) {
         cache.invalidate('Query', 'watchlist');
         cache.invalidate('Query', 'curatedSignals');
+        cache.invalidate('Query', 'intelFeed');
       },
       createSession(_result, _args, cache) {
         cache.invalidate('Query', 'sessions');
@@ -158,6 +169,7 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'listConnections');
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
+        cache.invalidate('Query', 'intelFeed');
       },
       createSkill(_result, _args, cache) {
         cache.invalidate('Query', 'skills');
@@ -180,6 +192,7 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'alerts');
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
+        cache.invalidate('Query', 'intelFeed');
         cache.invalidate('Query', 'sessions');
         cache.invalidate('Query', 'latestInsightReport');
         cache.invalidate('Query', 'insightReports');

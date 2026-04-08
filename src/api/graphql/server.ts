@@ -67,6 +67,7 @@ import {
   latestInsightReportQuery,
   processInsightsMutation,
 } from './resolvers/insights.js';
+import { intelFeedResolver } from './resolvers/intel-feed.js';
 import {
   onAlertSubscription,
   onPortfolioUpdateSubscription,
@@ -151,6 +152,7 @@ const schema = createSchema({
       checkCliCommands: checkCliCommandsResolver,
       signalsByIds: signalsByIdsResolver,
       signalGroups: signalGroupsResolver,
+      intelFeed: intelFeedResolver,
       curatedSignals: curatedSignalsResolver,
       curationStatus: curationStatusResolver,
       curationWorkflowStatus: () => getCurationWorkflowStatus(),

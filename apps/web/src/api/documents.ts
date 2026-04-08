@@ -1344,40 +1344,71 @@ export const ON_WORKFLOW_PROGRESS_SUBSCRIPTION = gql`
 // ---------------------------------------------------------------------------
 
 export const INTEL_FEED_QUERY = gql`
-  query IntelFeed($limit: Int, $offset: Int, $feedTarget: FeedTarget) {
-    curatedSignals(limit: $limit, offset: $offset, feedTarget: $feedTarget) {
-      signal {
+  query IntelFeed($limit: Int, $groupLimit: Int, $feedTarget: FeedTarget) {
+    intelFeed(limit: $limit, groupLimit: $groupLimit, feedTarget: $feedTarget) {
+      groups {
         id
-        title
-        type
-        sentiment
-        outputType
         tickers
-        publishedAt
-        ingestedAt
-        confidence
-        link
-        sources {
-          name
-          reliability
+        summary
+        outputType
+        firstEventAt
+        lastEventAt
+        severity
+        feedTarget
+        signals {
+          id
+          title
+          type
+          sentiment
+          outputType
+          tickers
+          publishedAt
+          ingestedAt
+          confidence
+          link
+          sources {
+            name
+            reliability
+          }
+          content
+          tier1
+          tier2
         }
-        content
-        tier1
-        tier2
       }
-      scores {
-        ticker
-        compositeScore
+      signals {
+        signal {
+          id
+          title
+          type
+          sentiment
+          outputType
+          tickers
+          publishedAt
+          ingestedAt
+          confidence
+          link
+          sources {
+            name
+            reliability
+          }
+          content
+          tier1
+          tier2
+        }
+        scores {
+          ticker
+          compositeScore
+        }
+        feedTarget
+        severity
+        assessment {
+          verdict
+          thesisAlignment
+          actionability
+        }
+        convergenceBoost
+        engagementScore
       }
-      feedTarget
-      severity
-      assessment {
-        verdict
-        thesisAlignment
-        actionability
-      }
-      convergenceBoost
-      engagementScore
     }
   }
 `;
