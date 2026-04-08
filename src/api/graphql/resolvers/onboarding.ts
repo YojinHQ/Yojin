@@ -11,14 +11,9 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import type { ClaudeCodeProvider } from '../../../ai-providers/claude-code.js';
-import {
-  buildClaudeOAuthUrl,
-  exchangeClaudeOAuthCode,
-  generatePkceParams,
-  refreshClaudeOAuthToken,
-} from '../../../auth/claude-oauth.js';
+import { buildClaudeOAuthUrl, exchangeClaudeOAuthCode, generatePkceParams } from '../../../auth/claude-oauth.js';
 import { readCodexCredentials } from '../../../auth/codex-credentials.js';
-import { readRefreshTokenFromKeychain, readTokenFromKeychain } from '../../../auth/keychain.js';
+import { readTokenFromKeychain } from '../../../auth/keychain.js';
 import { completeMagicLinkFlow, startMagicLinkFlow } from '../../../auth/magic-link-flow.js';
 import type { PersonaManager } from '../../../brain/types.js';
 import type { AgentLoopProvider } from '../../../core/types.js';
@@ -180,23 +175,11 @@ export async function detectKeychainTokenQuery(): Promise<KeychainTokenResult> {
     return { found: true, model: 'Claude (Keychain)' };
   }
 
-  // Token expired/invalid — try refreshing
-  const refreshToken = await readRefreshTokenFromKeychain();
-  if (refreshToken) {
-    try {
-      const refreshed = await refreshClaudeOAuthToken(refreshToken);
-      if (await validateOAuthToken(refreshed.accessToken)) {
-        activateOAuthToken(refreshed.accessToken);
-        if (vault?.isUnlocked && refreshed.refreshToken) {
-          await vault.set('anthropic_oauth_refresh_token', refreshed.refreshToken);
-        }
-        return { found: true, model: 'Claude (Keychain)' };
-      }
-    } catch {
-      // Refresh failed — token is truly expired
-    }
-  }
-
+  // Token expired/invalid. Claude Code CLI owns the rotation lifecycle and
+  // writes the fresh token to the keychain silently — do NOT call the OAuth
+  // refresh endpoint here. Doing so rotates the refresh token at the server,
+  // which invalidates the refresh token still stored in Claude Code CLI's
+  // own keychain entry and forces the user to re-login via `claude login`.
   return {
     found: true,
     error: 'Keychain token found but expired. Re-authenticate Claude Code with: claude auth login',
