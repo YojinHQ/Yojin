@@ -40,20 +40,20 @@ function Sparkline({
 }) {
   if (data.length < 2) return null;
 
-  // Derive previous close from the last data point (live price) and day change %.
-  // Include it in the y-range so the baseline lives inside the chart, the gap
-  // between yesterday's close and today's prices is visible, and the gradient
-  // fill correctly represents the move vs prev close. Without this, an
-  // intraday band that's well above prev close shows as a downward-trending
-  // line in a green chart — the fill becomes meaningless because there's no
-  // visible reference for the positive day.
+  // Match real "1D" daily charts (Robinhood, Yahoo Finance): the line starts at
+  // yesterday's close so the visible direction reflects the day's overall move.
+  // Without this, an intraday band that's well above prev close (gap-up day)
+  // renders as a downward squiggle in a green chart — the line direction
+  // disagrees with the % indicator. Prepending prev close anchors the line at
+  // the baseline so a positive day visually slopes up and a negative day
+  // slopes down, regardless of intraday wiggles.
   const showBaseline = dayChangePercent !== 0;
   const currentPrice = data[data.length - 1];
   const prevClose = showBaseline ? currentPrice / (1 + dayChangePercent / 100) : null;
 
-  const yValues = prevClose != null ? [...data, prevClose] : data;
-  const min = Math.min(...yValues);
-  const max = Math.max(...yValues);
+  const seriesData = prevClose != null ? [prevClose, ...data] : data;
+  const min = Math.min(...seriesData);
+  const max = Math.max(...seriesData);
   const range = max - min || 1;
 
   // Progressive reveal: during market hours, width proportional to elapsed trading day
@@ -61,8 +61,8 @@ function Sparkline({
   const elapsed = getMarketElapsedMinutes();
   const progressWidth = isMarketOpen ? Math.min(elapsed / MARKET_DURATION, 1) * 120 : 120;
 
-  const coords = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * progressWidth;
+  const coords = seriesData.map((v, i) => {
+    const x = (i / (seriesData.length - 1)) * progressWidth;
     const y = 32 - ((v - min) / range) * 24 - 4; // 4px padding for labels
     return { x, y };
   });
