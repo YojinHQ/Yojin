@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
 import { cn } from '../../lib/utils';
 import { useFeatureStatus } from '../../lib/feature-status';
 import { SymbolLogo } from '../common/symbol-logo';
-import { usePortfolio } from '../../api';
+import { useActions, usePortfolio } from '../../api';
 import { CardEmptyState } from '../common/card-empty-state';
 import { CardBlurGate } from '../common/card-blur-gate';
 import { FeatureCardGate } from '../common/feature-gate';
@@ -16,6 +17,7 @@ import { useMarketStatus, getMarketElapsedMinutes } from '../../hooks/use-market
 import type { Position } from '../../api/types';
 import { formatPrice } from '../../lib/format';
 import { isStablecoin } from '../../lib/stablecoins';
+import { groupActionsByTicker, severityBulletColor } from '../../lib/actions-by-ticker';
 
 function formatChange(n: number): string {
   const abs = Math.abs(n);
@@ -137,12 +139,67 @@ function formatExtendedPercent(value: number): string {
 const TH = 'whitespace-nowrap px-3 py-2 text-2xs font-medium uppercase tracking-wider text-text-muted';
 
 export default function PositionsPreview() {
-  const { jintelConfigured } = useFeatureStatus();
+  const { aiConfigured, jintelConfigured } = useFeatureStatus();
   const [{ data: portfolioData, fetching, error }] = usePortfolio(undefined, { pollInterval: 30_000 });
   const data = portfolioData?.portfolio;
   const { openModal } = useAddPositionModal();
   const { openAssetDetail } = useAssetDetailModal();
   const { status: marketStatus } = useMarketStatus();
+
+  // Pending actions per ticker — powers the hover popover on each row.
+  // urql dedupes this query against the one in `yojin-snap-card`, which owns
+  // the 30s polling cycle. We just read from cache as it refreshes.
+  const [actionsResult] = useActions({
+    status: 'PENDING',
+    limit: 50,
+    pause: !(aiConfigured && jintelConfigured),
+  });
+  const actionsByTicker = useMemo(
+    () => groupActionsByTicker(actionsResult.data?.actions ?? []),
+    [actionsResult.data?.actions],
+  );
+
+  // Hover popover anchor. `hoveredTicker` drives visibility; `hoverAnchor`
+  // holds the fixed-position coordinates so the popover can escape the
+  // table's `overflow-auto` clipping box via a portal.
+  const [hoveredTicker, setHoveredTicker] = useState<string | null>(null);
+  const [hoverAnchor, setHoverAnchor] = useState<{ left: number; top: number } | null>(null);
+
+  const handleTickerMouseEnter = useCallback(
+    (symbol: string, el: HTMLElement) => {
+      if (!actionsByTicker.has(symbol)) return;
+      const rect = el.getBoundingClientRect();
+      const POPOVER_WIDTH = 288; // matches w-72 below
+      const MARGIN = 16;
+      let left = rect.right + 8;
+      // Flip to the left side if the popover would overflow the viewport.
+      if (left + POPOVER_WIDTH > window.innerWidth - MARGIN) {
+        left = Math.max(MARGIN, rect.left - POPOVER_WIDTH - 8);
+      }
+      setHoveredTicker(symbol);
+      setHoverAnchor({ left, top: rect.top });
+    },
+    [actionsByTicker],
+  );
+
+  const handleTickerMouseLeave = useCallback(() => {
+    setHoveredTicker(null);
+    setHoverAnchor(null);
+  }, []);
+
+  // Any scroll (table body, page, modal container) invalidates the anchor
+  // rect captured on mouseenter. Close the popover rather than track it.
+  useEffect(() => {
+    if (!hoveredTicker) return;
+    const close = () => {
+      setHoveredTicker(null);
+      setHoverAnchor(null);
+    };
+    window.addEventListener('scroll', close, true);
+    return () => window.removeEventListener('scroll', close, true);
+  }, [hoveredTicker]);
+
+  const hoveredActions = hoveredTicker ? actionsByTicker.get(hoveredTicker) : undefined;
 
   // Detect new positions and trigger glow animation
   const [newPositionKeys, setNewPositionKeys] = useState<Set<string>>(new Set());
@@ -291,6 +348,9 @@ export default function PositionsPreview() {
               const ext = getExtendedHoursLabel(marketStatus, pos);
 
               const posKey = pos.symbol;
+              const actionsForSymbol = actionsByTicker.get(pos.symbol);
+              const hasActions = actionsForSymbol !== undefined && actionsForSymbol.length > 0;
+              const topActionSeverity = hasActions ? actionsForSymbol[0].severity : null;
               return (
                 <tr
                   key={posKey}
@@ -300,7 +360,7 @@ export default function PositionsPreview() {
                   )}
                   onClick={() => openAssetDetail(pos.symbol)}
                 >
-                  {/* Asset: logo + symbol (name on hover) */}
+                  {/* Asset: logo + symbol (name on hover, actions popover on hover if present) */}
                   <td className="px-3 py-2">
                     <div className="flex min-w-0 items-center gap-2">
                       <SymbolLogo
@@ -308,9 +368,23 @@ export default function PositionsPreview() {
                         assetClass={pos.assetClass.toLowerCase() as 'equity' | 'crypto'}
                         size="sm"
                       />
-                      <span className="group/asset relative text-xs font-semibold text-text-primary">
+                      <span
+                        className="group/asset relative text-xs font-semibold text-text-primary"
+                        onMouseEnter={(e) => handleTickerMouseEnter(pos.symbol, e.currentTarget)}
+                        onMouseLeave={handleTickerMouseLeave}
+                      >
                         {pos.symbol}
-                        {pos.name && pos.name !== pos.symbol && (
+                        {hasActions && (
+                          <span
+                            aria-label={`${actionsForSymbol.length} pending ${actionsForSymbol.length === 1 ? 'action' : 'actions'}`}
+                            className={cn(
+                              'ml-1 inline-block h-1.5 w-1.5 rounded-full align-middle',
+                              severityBulletColor(topActionSeverity),
+                            )}
+                          />
+                        )}
+                        {/* Name tooltip only when there is no actions popover to surface instead. */}
+                        {!hasActions && pos.name && pos.name !== pos.symbol && (
                           <div className="pointer-events-none absolute left-0 bottom-full z-20 mb-0.5 hidden rounded-md bg-bg-tertiary px-2 py-1 shadow-md ring-1 ring-border group-hover/asset:block">
                             <span className="whitespace-nowrap text-2xs text-text-secondary">{pos.name}</span>
                           </div>
@@ -403,6 +477,38 @@ export default function PositionsPreview() {
           </tbody>
         </table>
       </div>
+      {hoveredTicker &&
+        hoveredActions &&
+        hoverAnchor &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-label={`Actions for ${hoveredTicker}`}
+            style={{ position: 'fixed', left: hoverAnchor.left, top: hoverAnchor.top }}
+            className="pointer-events-none z-50 w-72 rounded-md bg-bg-tertiary p-3 shadow-lg ring-1 ring-border"
+          >
+            <div className="mb-2 flex items-baseline justify-between gap-2">
+              <span className="text-xs font-semibold text-text-primary">{hoveredTicker}</span>
+              <span className="text-2xs text-text-muted">
+                {hoveredActions.length} {hoveredActions.length === 1 ? 'action' : 'actions'}
+              </span>
+            </div>
+            <ul className="flex flex-col gap-2">
+              {hoveredActions.slice(0, 5).map((a) => (
+                <li key={a.id} className="flex items-start gap-2">
+                  <span
+                    className={cn('mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full', severityBulletColor(a.severity))}
+                  />
+                  <span className="text-xs leading-relaxed text-text-secondary">{a.what}</span>
+                </li>
+              ))}
+            </ul>
+            {hoveredActions.length > 5 && (
+              <div className="mt-2 text-2xs text-text-muted">+{hoveredActions.length - 5} more</div>
+            )}
+          </div>,
+          document.body,
+        )}
     </DashboardCard>
   );
 }

@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 
 import { useActions } from '../../api';
-import type { Action } from '../../api/types';
+import { groupActionsByTicker, insightsHrefForTicker, severityBulletColor } from '../../lib/actions-by-ticker';
 import { useFeatureStatus } from '../../lib/feature-status';
 import { cn, timeAgo } from '../../lib/utils';
 import { CardBlurGate } from '../common/card-blur-gate';
@@ -39,28 +39,6 @@ interface TickerGroup {
   whats: string[];
 }
 
-/** Map a 0–1 severity score to a bullet color (matches the analyzer prompt's ladder). */
-function severityBulletColor(severity: number | null): string {
-  if (severity === null) return 'bg-text-muted';
-  if (severity >= 0.9) return 'bg-error';
-  if (severity >= 0.7) return 'bg-warning';
-  if (severity >= 0.4) return 'bg-info';
-  if (severity >= 0.1) return 'bg-accent-primary';
-  return 'bg-text-muted';
-}
-
-/** Extract ticker from `source: "micro-observation: AAPL"`. */
-function extractTicker(source: string): string | null {
-  const match = source.match(/^micro-observation:\s*(.+)$/i);
-  return match?.[1]?.trim() ?? null;
-}
-
-/** Build the insights deep-link for a ticker (matches the App.tsx redirect shape). */
-function insightsHrefForTicker(ticker: string): string {
-  const params = new URLSearchParams({ tab: 'all', ticker });
-  return `/insights?${params.toString()}`;
-}
-
 export function YojinSnapCard() {
   const { aiConfigured, jintelConfigured } = useFeatureStatus();
   // Pause the query until both prerequisites are satisfied so a gated user
@@ -80,25 +58,13 @@ export function YojinSnapCard() {
   // Group actions by ticker — one row per ticker with its top 1-2 whats joined.
   // Row severity is the max severity seen for that ticker. Groups sort by that
   // severity DESC, then latest createdAt DESC. Null-ticker actions fall into a
-  // single trailing group rendered without a symbol label.
+  // single trailing group rendered without a symbol label. Grouping + per-bucket
+  // sort live in the shared helper; we only layer the cross-group sort here.
   const grouped: TickerGroup[] = useMemo(() => {
-    const list = actions ?? [];
-    const byTicker = new Map<string, Action[]>();
-    for (const action of list) {
-      const key = extractTicker(action.source) ?? '';
-      const bucket = byTicker.get(key) ?? [];
-      bucket.push(action);
-      byTicker.set(key, bucket);
-    }
+    const byTicker = groupActionsByTicker(actions ?? []);
     const groups: TickerGroup[] = [];
     for (const [key, items] of byTicker) {
-      const sortedItems = [...items].sort((a, b) => {
-        const sa = a.severity ?? -1;
-        const sb = b.severity ?? -1;
-        if (sa !== sb) return sb - sa;
-        return b.createdAt.localeCompare(a.createdAt);
-      });
-      const top = sortedItems[0];
+      const top = items[0];
       if (!top) continue;
       groups.push({
         key: key || '__untagged__',
@@ -106,7 +72,7 @@ export function YojinSnapCard() {
         topSeverity: top.severity,
         topActionId: top.id,
         latestCreatedAt: top.createdAt,
-        whats: sortedItems.map((a) => a.what),
+        whats: items.map((a) => a.what),
       });
     }
     return groups.sort((a, b) => {
