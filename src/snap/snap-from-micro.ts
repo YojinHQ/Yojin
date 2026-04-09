@@ -16,20 +16,21 @@ import { createSubsystemLogger } from '../logging/logger.js';
 
 const logger = createSubsystemLogger('snap-from-micro');
 
-const SYSTEM_PROMPT = `You synthesize per-asset research into a portfolio snap.
+const SYSTEM_PROMPT = `You synthesize per-asset research into a short portfolio snap.
 
 Output:
-- intelSummary: 2-3 sentences — what deserves attention right now.
-- actionItems: 3-5 bullets — top items across the portfolio, each earning its slot. Neutral observations ("X is happening"), NOT advice.
+- intelSummary: 1-2 sentences MAX. The single most important portfolio-level theme right now. Not a list. Not per-ticker — that's the Actions card's job.
+- actionItems: UP TO 3 bullets. Only the items the user would regret missing. Fewer is better than more. If nothing rises above the noise, return an empty array.
 
 Ranking: impact = weight × severity. Weight is provided per asset — use it to rank, not to mention. NEVER write weight percentages (e.g. "BTC (37.3%)", "17.5% weight"). A routine update on a large position doesn't make the cut, but a material catalyst on it does. A small position surfaces only on exceptional events (regulatory, fraud, bankruptcy risk).
 
 Rules:
 - Lead with real events/catalysts (earnings, analyst actions, regulatory, corporate, macro) — these drive price action. Technicals = supporting context, not headlines. Say "Truist cuts JPM target to $323" not "JPM RSI 38.5".
 - Weigh materiality vs asset size. Focus on events that could meaningfully move the stock. A 134-person layoff at JPM or a small contract at a $3T co is noise.
+- Do NOT repeat per-ticker observations that the Actions card already surfaces. The snap is PORTFOLIO-level synthesis (themes, correlations, regime shifts), not a catalogue of per-asset events.
 - Lower-quality/promotional sources weigh lower. Well-corroborated high-quality intel weighs higher.
 - Skip broken-data assets ($0 prices, no signals). Don't mention data issues.
-- Information-dense. No filler.
+- Information-dense. No filler. Brevity over completeness.
 
 Respond in JSON: { "intelSummary": "...", "actionItems": ["..."] }`;
 
@@ -73,13 +74,17 @@ export async function snapFromMicro(
     return b.conviction - a.conviction;
   });
 
-  // Build context for AI synthesis — include portfolio weight
+  // Build context for AI synthesis — include portfolio weight AND per-asset
+  // severity so the model has the raw inputs for its exposure × severity
+  // ranking. Without an explicit severity value the model would have to infer
+  // priority from prose, which weakens the supersede heuristic.
   const assetSummaries = sortedInsights
     .map((mi) => {
       const exp = exposureMap.get(mi.symbol.toUpperCase());
       const weightStr = exp ? ` | ${(exp.weight * 100).toFixed(1)}% of portfolio` : '';
+      const severityStr = typeof mi.severity === 'number' ? ` | severity ${mi.severity.toFixed(2)}` : '';
       return (
-        `${mi.symbol} (${mi.rating}, ${(mi.conviction * 100).toFixed(0)}% conviction${weightStr}): ${mi.assetSnap}` +
+        `${mi.symbol} (${mi.rating}, ${(mi.conviction * 100).toFixed(0)}% conviction${weightStr}${severityStr}): ${mi.assetSnap}` +
         (mi.assetActions.length > 0 ? `\n  Observations: ${mi.assetActions.join('; ')}` : '')
       );
     })
@@ -89,15 +94,17 @@ export async function snapFromMicro(
     // Build the user message — include previous snap so the LLM can make deliberate updates
     let userMessage = `Synthesize these ${insights.length} asset research notes:\n\n${assetSummaries}`;
 
-    if (previousSnap && previousSnap.actionItems.length > 0) {
-      const prevActions = previousSnap.actionItems.map((a) => `- ${a.text}`).join('\n');
+    if (previousSnap && (previousSnap.intelSummary || previousSnap.actionItems.length > 0)) {
+      const prevActions =
+        previousSnap.actionItems.length > 0 ? previousSnap.actionItems.map((a) => `- ${a.text}`).join('\n') : '(none)';
       userMessage +=
         `\n\n---\nPREVIOUS SNAP (generated ${previousSnap.generatedAt}):\n` +
-        `Summary: ${previousSnap.intelSummary}\n` +
-        `Actions:\n${prevActions}\n` +
-        `\nUpdate the snap based on what changed. Keep actions that are still the most impactful. ` +
-        `Replace only if new information is MORE relevant (higher exposure × severity). ` +
-        `If nothing material changed for an asset, its action can stay.`;
+        `Summary: ${previousSnap.intelSummary || '(none)'}\n` +
+        `Actions:\n${prevActions}\n\n` +
+        `UPDATE the snap in place — don't rebuild it from scratch. Keep bullets that are still the most impactful. ` +
+        `Replace a bullet ONLY if new information is materially more relevant (higher exposure × severity). ` +
+        `If nothing above the noise floor changed, it is perfectly fine to return the previous snap unchanged. ` +
+        `The goal is a stable, short brief that evolves with events — NOT a fresh synthesis every cycle.`;
     }
 
     const result = await providerRouter.completeWithTools({

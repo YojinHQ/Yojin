@@ -61,6 +61,33 @@ export class ActionStore {
     return this.resolve(id, 'REJECTED', 'user');
   }
 
+  /**
+   * Supersede a pending action — marked EXPIRED with resolvedBy='superseded'.
+   * Used when a higher-priority action replaces an older one for the same ticker.
+   */
+  async supersede(id: string): Promise<ActionResult<Action>> {
+    const existing = await this.getById(id);
+    if (!existing) {
+      return { success: false, error: `Action not found: ${id}` };
+    }
+    if (existing.status !== 'PENDING') {
+      return {
+        success: false,
+        error: `Action ${id} is already ${existing.status}, cannot supersede`,
+      };
+    }
+
+    const updated: Action = {
+      ...existing,
+      status: 'EXPIRED',
+      resolvedAt: new Date().toISOString(),
+      resolvedBy: 'superseded',
+    };
+    await this.appendAction(updated);
+    logger.info('Action superseded', { id });
+    return { success: true, data: updated };
+  }
+
   /** Get all pending actions, auto-expiring those past expiresAt. */
   async getPending(): Promise<Action[]> {
     const all = await this.queryAll();

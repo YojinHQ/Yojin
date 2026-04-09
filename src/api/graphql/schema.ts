@@ -577,6 +577,7 @@ export const typeDefs = /* GraphQL */ `
     why: String!
     source: String!
     riskContext: String
+    severity: Float
     status: ActionStatus!
     expiresAt: String!
     createdAt: String!

@@ -34,10 +34,14 @@ export const ActionSchema = z.object({
   why: z.string().min(1), // reasoning trace
   source: z.string().min(1), // skill name or "rule: ..." or "agent: strategist"
   riskContext: z.string().optional(), // guard checks summary
+  // 0–1 severity score — acts as priority. Used to rank actions and to gate
+  // low-impact micro updates. Producers that don't score actions can omit this
+  // (absent = 0 for comparison purposes).
+  severity: z.number().min(0).max(1).optional(),
   status: ActionStatusSchema.default('PENDING'),
   expiresAt: DateTimeField, // auto-reject after this
   createdAt: DateTimeField,
   resolvedAt: DateTimeField.optional(),
-  resolvedBy: z.string().optional(), // 'user' | 'timeout'
+  resolvedBy: z.string().optional(), // 'user' | 'timeout' | 'superseded'
 });
 export type Action = z.infer<typeof ActionSchema>;

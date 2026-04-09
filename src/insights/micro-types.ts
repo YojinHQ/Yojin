@@ -25,6 +25,11 @@ export const MicroInsightSchema = z.object({
   // AI analysis
   rating: InsightRatingSchema,
   conviction: z.number().min(0).max(1),
+  // 0–1 severity the LLM assigns to this observation — 0 = noise, 1 = critical
+  // catalyst. Acts as the priority for Action promotion (see micro-severity.ts).
+  // Optional for back-compat with pre-feature JSONL: older insights are scored
+  // via the rating × conviction fallback at read time.
+  severity: z.number().min(0).max(1).optional(),
   thesis: z.string().min(1),
   keyDevelopments: z.array(z.string()),
   risks: z.array(z.string()),

@@ -79,6 +79,14 @@ Extend via interfaces, not modification:
 
 - **Never use `a[0] ?? b[0] ?? c[0]` to read a multi-family struct.** When a type has parallel arrays holding domain-specific fields (e.g. `FinancialStatements.income`, `balanceSheet`, `cashFlow`), the `??` chain picks one winner and silently ignores the others. Read each family independently (`const inc = f.income[0]; const bs = f.balanceSheet[0]; ...`) and pull each metric from its correct source. The same rule applies to signal-fetcher sections that emit from structured sub-graphs — don't gate the signal on `income?.length` when `balanceSheet` or `cashFlow` alone would also be valuable.
 
+## Coherent Decision Gates
+
+- **When a new field becomes the priority signal, migrate all sibling gates.** If a field like `severity` takes over as the source of truth for one decision in a pipeline (e.g. "which action supersedes which"), every other gate that fans out from the same insight (notification gate, visibility, ranking, filtering) must move to the same field too. Leaving the notification gate on the legacy `rating × conviction` heuristic while the supersede logic uses `severity` creates a split-brain: a `VERY_BULLISH` rating with severity `0.1` still fires a user-facing alert even though the ranker would never promote it. After grep'ing for the new field, also grep for the old inputs (`rating ===`, `conviction >=`) to find sibling gates that need to be rewired.
+
+## Two-Phase Writes With a Single Notification
+
+- **Publish only at the final step of a multi-phase write.** When a pipeline writes a baseline, then merges it with fresh inputs to produce a final record (e.g. `regenerateSnap()` → `regenerateSnapFromMicro()`), only the final step should fire the `*.ready` event. If the intermediate step publishes first, a notification-cooldown (like `SNAP_NOTIFY_COOLDOWN_MS`) will swallow the merged-result notification and downstream consumers will hold the pre-merge `id`. Add a `skipPublish` (or equivalent) flag to the intermediate writer and pass it from the orchestrator — don't rely on cooldown timing to silence the extra event.
+
 ## Refactoring — Ask First
 
 Before making breaking changes to:

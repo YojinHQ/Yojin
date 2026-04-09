@@ -1107,16 +1107,16 @@ export const INSIGHT_REPORTS_QUERY = gql`
 // Queries — Snap (Strategist brief)
 // ---------------------------------------------------------------------------
 
+// Snap.actionItems is intentionally NOT fetched. The Actions card reads from
+// the `actions(status: PENDING)` query, which owns the actionable bullet list.
+// Keeping snap.actionItems out of this query avoids duplicate information on
+// the dashboard and shrinks the payload.
 export const SNAP_QUERY = gql`
   query Snap {
     snap {
       id
       generatedAt
       intelSummary
-      actionItems {
-        text
-        signalIds
-      }
       assetSnaps {
         symbol
         snap
@@ -1532,4 +1532,55 @@ export const IMPORT_SKILL_MUTATION = gql`
       source
     }
   }
+`;
+
+// ---------------------------------------------------------------------------
+// Actions — the TLDR/priority surface. Ranked by severity and gated by the
+// micro-runner's supersede logic; new critical items auto-evict weaker ones
+// for the same ticker. See src/insights/micro-runner.ts.
+// ---------------------------------------------------------------------------
+
+export const ACTION_FIELDS = gql`
+  fragment ActionFields on Action {
+    id
+    signalId
+    skillId
+    what
+    why
+    source
+    riskContext
+    severity
+    status
+    expiresAt
+    createdAt
+    resolvedAt
+    resolvedBy
+  }
+`;
+
+export const ACTIONS_QUERY = gql`
+  query Actions($status: ActionStatus, $since: String, $limit: Int) {
+    actions(status: $status, since: $since, limit: $limit) {
+      ...ActionFields
+    }
+  }
+  ${ACTION_FIELDS}
+`;
+
+export const APPROVE_ACTION_MUTATION = gql`
+  mutation ApproveAction($id: ID!) {
+    approveAction(id: $id) {
+      ...ActionFields
+    }
+  }
+  ${ACTION_FIELDS}
+`;
+
+export const REJECT_ACTION_MUTATION = gql`
+  mutation RejectAction($id: ID!) {
+    rejectAction(id: $id) {
+      ...ActionFields
+    }
+  }
+  ${ACTION_FIELDS}
 `;

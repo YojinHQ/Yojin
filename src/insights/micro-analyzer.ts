@@ -24,6 +24,7 @@ Output ONLY valid JSON matching this schema:
 {
   "rating": "VERY_BULLISH" | "BULLISH" | "NEUTRAL" | "BEARISH" | "VERY_BEARISH",
   "conviction": 0.0-1.0,
+  "severity": 0.0-1.0,
   "thesis": "2-3 sentence factual summary of what is happening with this asset",
   "keyDevelopments": ["up to 3 notable recent developments — facts only"],
   "risks": ["up to 3 observed risk factors"],
@@ -32,6 +33,15 @@ Output ONLY valid JSON matching this schema:
   "assetSnap": "1 sentence: the single most notable observation about this asset right now",
   "assetActions": ["1-3 bullet-point summaries of the key NEWS and EVENTS for this asset. Focus on real-world catalysts: earnings, analyst actions, deals, regulatory moves, corporate developments. NEVER include technical indicators (RSI, MACD, Bollinger Bands, moving averages) — those belong in the analysis, not in actions. NEVER include meta-commentary about data quality or dataset gaps. If there are no real events, return a single item summarizing the most notable factual observation. Always include at least 1 item."]
 }
+
+Severity calibration (the priority score for this observation — controls whether it surfaces as an Action and supersedes older ones for the same ticker):
+- 0.90–1.00  Critical: earnings beat/miss, guidance change, M&A, regulatory bombshell, major analyst upgrade/downgrade, 5%+ move on confirmed catalyst
+- 0.70–0.89  High: notable fundamental or sentiment shift, credible rumor, meaningful analyst price-target change, material contract/partnership
+- 0.40–0.69  Medium: incremental news, small analyst note, sector-wide move spilling over, mixed signals worth flagging
+- 0.10–0.39  Low: routine coverage, minor technical setup, quiet consolidation
+- 0.00–0.09  Noise: nothing material; only a boring factual observation to satisfy assetActions
+
+Severity should reflect the ACTUAL observation, not the rating. A "VERY_BEARISH" rating on a tiny, already-priced-in headline is still low severity. A "NEUTRAL" rating on a major but ambiguous catalyst (e.g. pending regulatory ruling) can be mid-to-high severity — the user wants to know it's happening even if direction is unclear.
 
 Rules:
 - Base your analysis ONLY on the provided data. Do not hallucinate.
@@ -91,6 +101,14 @@ export async function analyzeTicker(
     const parsed: unknown = JSON.parse(jsonMatch[0]);
     const analysis = parsed as Record<string, unknown>;
 
+    // Clamp severity to [0, 1] before schema validation. The LLM occasionally
+    // emits values slightly outside the ladder (e.g. 1.05, -0.02); those would
+    // fail `MicroInsightSchema.parse()` and drop the whole insight to the
+    // fallback path, losing an otherwise-valid analysis.
+    const rawSeverity = typeof analysis.severity === 'number' ? analysis.severity : undefined;
+    const severity =
+      rawSeverity !== undefined && Number.isFinite(rawSeverity) ? Math.max(0, Math.min(1, rawSeverity)) : undefined;
+
     const insight = MicroInsightSchema.parse({
       id: `micro-${randomUUID()}`,
       symbol: brief.symbol,
@@ -98,6 +116,7 @@ export async function analyzeTicker(
       source: options.source,
       rating: analysis.rating,
       conviction: analysis.conviction,
+      severity,
       thesis: analysis.thesis,
       keyDevelopments: analysis.keyDevelopments ?? [],
       risks: analysis.risks ?? [],

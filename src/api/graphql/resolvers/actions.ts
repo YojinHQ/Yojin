@@ -29,6 +29,7 @@ interface ActionGql {
   why: string;
   source: string;
   riskContext: string | null;
+  severity: number | null;
   status: string;
   expiresAt: string;
   createdAt: string;
@@ -45,6 +46,7 @@ function toGql(action: Action): ActionGql {
     why: action.why,
     source: action.source,
     riskContext: action.riskContext ?? null,
+    severity: action.severity ?? null,
     status: action.status,
     expiresAt: action.expiresAt,
     createdAt: action.createdAt,

@@ -6,7 +6,7 @@ import IntelFeed from '../components/overview/intel-feed';
 import IntelSummaryCard from '../components/overview/intel-summary-card';
 import PortfolioValueCard from '../components/overview/portfolio-value-card';
 import PositionsPreview from '../components/overview/positions-preview';
-import YojinSnapCard from '../components/overview/yojin-snap-card';
+import { YojinSnapCard } from '../components/overview/yojin-snap-card';
 import { PortfolioOverview } from '../components/portfolio/portfolio-overview';
 import { usePortfolio } from '../api';
 

@@ -803,11 +803,6 @@ export interface InsightsWorkflowStatusQueryResult {
 // Snap (Strategist brief)
 // ---------------------------------------------------------------------------
 
-export interface SnapActionItem {
-  text: string;
-  signalIds: string[];
-}
-
 export interface AssetSnap {
   symbol: string;
   snap: string;
@@ -815,11 +810,13 @@ export interface AssetSnap {
   generatedAt: string;
 }
 
+// Snap.actionItems exists in the backend schema but is NOT fetched by the
+// web client — the Actions card reads from the `actions` query instead to
+// avoid duplicate information on the dashboard.
 export interface Snap {
   id: string;
   generatedAt: string;
   intelSummary: string;
-  actionItems: SnapActionItem[];
   assetSnaps: AssetSnap[];
 }
 
@@ -1122,11 +1119,38 @@ export interface Action {
   why: string;
   source: string;
   riskContext: string | null;
+  severity: number | null;
   status: ActionStatus;
   expiresAt: string;
   createdAt: string;
   resolvedAt: string | null;
   resolvedBy: string | null;
+}
+
+export interface ActionsQueryVariables {
+  status?: ActionStatus;
+  since?: string;
+  limit?: number;
+}
+
+export interface ActionsQueryResult {
+  actions: Action[];
+}
+
+export interface ApproveActionVariables {
+  id: string;
+}
+
+export interface ApproveActionMutationResult {
+  approveAction: Action;
+}
+
+export interface RejectActionVariables {
+  id: string;
+}
+
+export interface RejectActionMutationResult {
+  rejectAction: Action;
 }
 
 // ---------------------------------------------------------------------------

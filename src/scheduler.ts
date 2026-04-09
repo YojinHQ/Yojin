@@ -794,8 +794,23 @@ export class Scheduler {
       // 3. Skill evaluation → create Actions
       await this.evaluateSkillsAfterCuration();
 
-      // 4. Snap brief regeneration
-      await this.regenerateSnap();
+      // 4. Snap brief regeneration.
+      //    Two-step dance gives the macro path the same "update in place"
+      //    behaviour as the micro path:
+      //      a. `regenerateSnap()` writes a deterministic snap from the
+      //         freshly-minted InsightReport (full-portfolio analysis +
+      //         macroContext). This seeds the disk with the macro baseline.
+      //      b. `regenerateSnapFromMicro()` then reads that snap as
+      //         `previousSnap` and asks Sonnet to MERGE it with the latest
+      //         micro observations — keeping stable bullets, only replacing
+      //         what materially changed. Net effect: the snap evolves rather
+      //         than being rebuilt from scratch every 2 hours, so it stays
+      //         short and users see continuity between macro/micro cycles.
+      // Suppress the baseline publish — only the merged snap written by
+      // `regenerateSnapFromMicro()` should fire `snap.ready`, so downstream
+      // consumers pin to the final (post-merge) snapId.
+      await this.regenerateSnap({ skipPublish: true });
+      await this.regenerateSnapFromMicro();
 
       // Mark completion only on success so a failed macro run doesn't start
       // the 2-hour cooldown clock, which would delay the next legitimate run.
@@ -898,8 +913,14 @@ export class Scheduler {
   /**
    * Regenerate the snap brief from the latest insight report.
    * Runs as part of the macro flow.
+   *
+   * When the macro flow is about to follow up with `regenerateSnapFromMicro()`
+   * to merge the baseline with fresh micro observations, pass `skipPublish: true`
+   * so the baseline doesn't fire `snap.ready` ahead of the merged snap. Without
+   * this, `maybePublishSnap`'s 1-hour cooldown would swallow the merged-snap
+   * notification and downstream consumers would hold the pre-merge snapId.
    */
-  private async regenerateSnap(): Promise<void> {
+  private async regenerateSnap(options?: { skipPublish?: boolean }): Promise<void> {
     if (!this.snapStore || !this.insightStore) return;
 
     try {
@@ -911,7 +932,9 @@ export class Scheduler {
       snap.contentHash = snapContentHash(snap);
       await this.snapStore.save(snap);
       logger.info('Snap brief regenerated', { snapId: snap.id });
-      this.maybePublishSnap(snap);
+      if (!options?.skipPublish) {
+        this.maybePublishSnap(snap);
+      }
 
       if (this.eventLog) {
         await this.eventLog.append({

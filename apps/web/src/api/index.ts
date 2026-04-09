@@ -17,6 +17,9 @@ export {
   useWatchlist,
   useAddToWatchlist,
   useRemoveFromWatchlist,
+  useActions,
+  useApproveAction,
+  useRejectAction,
 } from './hooks/index.js';
 
 // Types — for components that need to type props or local state
@@ -44,6 +47,8 @@ export type {
   WatchlistEntry,
   WatchlistResult,
   SymbolSearchResult,
+  Action,
+  ActionStatus,
 } from './types.js';
 
 export { KNOWN_PLATFORMS, isKnownPlatform } from './types.js';
