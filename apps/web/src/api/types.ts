@@ -1127,6 +1127,16 @@ export interface Action {
   createdAt: string;
   resolvedAt: string | null;
   resolvedBy: string | null;
+  dismissedAt: string | null;
+}
+
+export interface ActionsQueryResult {
+  actions: Action[];
+}
+export interface ActionsQueryVariables {
+  status?: ActionStatus;
+  limit?: number;
+  dismissed?: boolean;
 }
 
 // ---------------------------------------------------------------------------

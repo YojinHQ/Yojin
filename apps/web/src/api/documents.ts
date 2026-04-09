@@ -1608,3 +1608,17 @@ export const SYNC_STRATEGY_SOURCE_MUTATION = gql`
     }
   }
 `;
+
+export const ACTIONS_QUERY = gql`
+  query Actions($status: ActionStatus, $limit: Int, $dismissed: Boolean) {
+    actions(status: $status, limit: $limit, dismissed: $dismissed) {
+      id signalId skillId what why source riskContext status expiresAt createdAt dismissedAt
+    }
+  }
+`;
+
+export const DISMISS_ACTION_MUTATION = gql`
+  mutation DismissAction($id: ID!) {
+    dismissAction(id: $id) { id dismissedAt }
+  }
+`;

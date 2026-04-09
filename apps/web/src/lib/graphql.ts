@@ -72,6 +72,7 @@ const cache = cacheExchange({
     BriefingConfig: () => null, // singleton — no id field
     SchedulerStatus: () => null, // singleton — no id field
     SchedulerAssetStatus: () => null, // embedded — keyed by symbol+source in parent
+    Action: (data) => data.id as string,
   },
   updates: {
     Mutation: {
@@ -193,6 +194,9 @@ const cache = cacheExchange({
       syncStrategySource(_result, _args, cache) {
         cache.invalidate('Query', 'strategySources');
         cache.invalidate('Query', 'skills');
+      },
+      dismissAction(_result, _args, cache) {
+        cache.invalidate('Query', 'actions');
       },
       clearAppData(_result, _args, cache) {
         cache.invalidate('Query', 'portfolio');
