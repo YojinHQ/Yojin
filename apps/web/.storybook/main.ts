@@ -5,6 +5,7 @@ const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(ts|tsx)'],
   addons: [],
   framework: '@storybook/react-vite',
+  staticDirs: ['../public'],
   viteFinal(config) {
     config.plugins ??= [];
     config.plugins.push(tailwindcss());
