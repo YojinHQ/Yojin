@@ -1,6 +1,28 @@
+import { useMemo } from 'react';
+
 import Modal from '../common/modal';
 import Badge from '../common/badge';
 import type { BadgeVariant } from '../common/badge';
+import { timeAgo } from '../../lib/utils';
+
+/** Lightweight markdown → HTML for LLM-generated analysis text. */
+function markdownToHtml(md: string): string {
+  // Escape HTML entities first to prevent XSS from LLM output
+  const escaped = md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return escaped
+    .replace(/^### (.+)$/gm, '<h4 class="mt-3 mb-1 text-xs font-semibold text-text-primary">$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3 class="mt-4 mb-1 text-sm font-semibold text-text-primary">$1</h3>')
+    .replace(/^# (.+)$/gm, '<h3 class="mt-4 mb-1 text-sm font-bold text-text-primary">$1</h3>')
+    .replace(/^---$/gm, '<hr class="my-3 border-border" />')
+    .replace(
+      /^- \*\*(.+?):\*\*\s?(.*)$/gm,
+      '<li class="ml-3 list-disc"><strong class="text-text-primary font-medium">$1:</strong> $2</li>',
+    )
+    .replace(/^- (.+)$/gm, '<li class="ml-3 list-disc">$1</li>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-text-primary font-medium">$1</strong>')
+    .replace(/\n\n/g, '</p><p class="mt-2">')
+    .replace(/\n/g, '<br />');
+}
 
 export interface FeedSignalLink {
   signalId: string;
@@ -24,6 +46,13 @@ export interface FeedDetailData {
   recommendation?: string;
   relatedTickers?: string[];
   signals?: FeedSignalLink[];
+  /** Action-specific fields */
+  actionMeta?: {
+    strategyName: string | null;
+    severity: string;
+    riskContext: string | null;
+    expiresAt: string;
+  };
 }
 
 interface FeedDetailModalProps {
@@ -52,6 +81,19 @@ function SectionRule({ label }: { label: string }) {
       </span>
       <div className="h-px flex-1 bg-border" />
     </div>
+  );
+}
+
+function AnalysisSection({ analysis, isAction }: { analysis: string; isAction: boolean }) {
+  const html = useMemo(() => markdownToHtml(analysis), [analysis]);
+  return (
+    <>
+      <SectionRule label={isAction ? 'Strategy Rationale' : 'Analysis'} />
+      <div
+        className="text-xs leading-relaxed text-text-secondary [&_li]:my-0.5"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </>
   );
 }
 
@@ -107,20 +149,61 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
         )}
       </div>
 
-      {/* Key Points */}
-      <SectionRule label="Key Points" />
-      <ul className="space-y-1.5">
-        {data.keyPoints.map((point, i) => (
-          <li key={i} className="flex items-start gap-2 text-xs leading-relaxed text-text-secondary">
-            <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-accent-primary" />
-            {point}
-          </li>
-        ))}
-      </ul>
+      {/* Action details */}
+      {data.actionMeta && (
+        <>
+          <SectionRule label="Trigger Details" />
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+            {data.actionMeta.strategyName && (
+              <div>
+                <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Strategy</span>
+                <p className="mt-0.5 text-xs text-text-primary">{data.actionMeta.strategyName}</p>
+              </div>
+            )}
+            <div>
+              <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Severity</span>
+              <p className="mt-0.5 text-xs text-text-primary">{data.actionMeta.severity}</p>
+            </div>
+            <div>
+              <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Expires</span>
+              <p className="mt-0.5 text-xs text-text-primary">{timeAgo(data.actionMeta.expiresAt)}</p>
+            </div>
+          </div>
+          {data.actionMeta.riskContext && (
+            <div className="mt-3 rounded-lg border border-border-light bg-bg-primary/50 px-3 py-2">
+              <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Context</span>
+              <ul className="mt-1 space-y-0.5">
+                {data.actionMeta.riskContext
+                  .split('\n')
+                  .filter(Boolean)
+                  .map((line, i) => (
+                    <li key={i} className="text-xs leading-relaxed text-text-secondary">
+                      {line}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
 
-      {/* Analysis */}
-      <SectionRule label="Analysis" />
-      <p className="text-xs leading-relaxed text-text-secondary">{data.analysis}</p>
+      {/* Key Points */}
+      {data.keyPoints.length > 0 && (
+        <>
+          <SectionRule label="Key Points" />
+          <ul className="space-y-1.5">
+            {data.keyPoints.map((point, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs leading-relaxed text-text-secondary">
+                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-accent-primary" />
+                {point}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {/* Analysis / Strategy Rationale */}
+      {data.analysis && <AnalysisSection analysis={data.analysis} isAction={!!data.actionMeta} />}
 
       {/* Recommendation (intel-specific) */}
       {data.recommendation && (

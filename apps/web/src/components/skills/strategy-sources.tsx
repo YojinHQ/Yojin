@@ -14,6 +14,10 @@ import {
 import type { StrategySource } from '../../api/types.js';
 import { cn, timeAgo } from '../../lib/utils.js';
 
+function extractGqlError(err: { message: string }): string {
+  return err.message.replace('[GraphQL] ', '');
+}
+
 function SourceRow({
   source,
   onToggle,
@@ -88,7 +92,7 @@ export function StrategySources() {
 
     const res = await addSource({ url: trimmed });
     if (res.error) {
-      setError(res.error.message.replace('[GraphQL] ', ''));
+      setError(extractGqlError(res.error));
     } else {
       setUrl('');
     }
@@ -96,12 +100,12 @@ export function StrategySources() {
 
   async function handleToggle(id: string, enabled: boolean) {
     const res = await toggleSource({ id, enabled });
-    if (res.error) setError(res.error.message.replace('[GraphQL] ', ''));
+    if (res.error) setError(extractGqlError(res.error));
   }
 
   async function handleRemove(id: string) {
     const res = await removeSource({ id });
-    if (res.error) setError(res.error.message.replace('[GraphQL] ', ''));
+    if (res.error) setError(extractGqlError(res.error));
   }
 
   async function handleSyncAll() {

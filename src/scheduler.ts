@@ -602,9 +602,7 @@ export class Scheduler {
               profileStore: this.profileStore,
               signalsSince: isFirstRun ? fourDaysAgo : oneDayAgo,
             },
-            actionStore: this.actionStore,
             eventLog: this.eventLog,
-            notificationBus: this.notificationBus,
           });
         }),
       );
@@ -792,7 +790,7 @@ export class Scheduler {
       await this.runInsightsWorkflow('Macro flow — portfolio-wide analysis');
 
       // 3. Skill evaluation → create Actions
-      await this.evaluateSkillsAfterCuration();
+      await this.evaluateSkills();
 
       // 4. Snap brief regeneration.
       //    Two-step dance gives the macro path the same "update in place"
@@ -1033,7 +1031,7 @@ export class Scheduler {
     return results;
   }
 
-  private async evaluateSkillsAfterCuration(): Promise<void> {
+  async evaluateSkills(): Promise<void> {
     if (!this.skillEvaluator || !this.actionStore) return;
 
     // Resolve snapshot store — prefer the top-level option, fall back to curation pipeline's store
@@ -1068,16 +1066,84 @@ export class Scheduler {
     const now = new Date().toISOString();
 
     for (const evaluation of evaluations) {
-      const contextSummary = Object.entries(evaluation.context)
-        .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
-        .join(', ');
+      const ticker = evaluation.context.ticker as string | undefined;
+
+      // Build human-readable context from trigger data
+      const contextParts: string[] = [];
+      for (const [k, v] of Object.entries(evaluation.context)) {
+        if (k === 'ticker') continue;
+        const label = k
+          .replace(/([A-Z])/g, ' $1')
+          .replace(/_/g, ' ')
+          .trim();
+        const val = typeof v === 'number' ? (v < 1 && v > -1 ? `${(v * 100).toFixed(1)}%` : v.toFixed(2)) : String(v);
+        contextParts.push(`${label}: ${val}`);
+      }
+
+      // LLM reasoning: ask the Strategist to analyze this trigger and recommend action
+      let reasoning = '';
+      if (this.providerRouter) {
+        logger.info('Requesting LLM reasoning for skill trigger', { skillId: evaluation.skillId, ticker });
+        try {
+          const llmResult = await this.providerRouter.completeWithTools({
+            model: 'sonnet',
+            system: `You are a trading strategist. A strategy trigger has fired. Analyze the situation and provide a clear, actionable recommendation.
+
+Be specific about:
+1. Why this trigger matters right now (connect to current market context)
+2. What the user should DO (specific action: buy, sell, trim, hold, investigate further)
+3. Key risks to consider before acting
+4. Suggested position sizing or timing if applicable
+
+Write in direct, professional language. No hedging or disclaimers. Be concise but thorough.`,
+            messages: [
+              {
+                role: 'user',
+                content: `Strategy: ${evaluation.skillName}
+Trigger: ${evaluation.triggerDescription}
+Ticker: ${ticker ?? 'portfolio-wide'}
+Trigger data: ${contextParts.join(', ')}
+
+Strategy rules:
+${evaluation.skillContent}
+
+Provide your analysis and recommendation.`,
+              },
+            ],
+            maxTokens: 512,
+          });
+          reasoning = llmResult.content
+            .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+            .map((b) => b.text)
+            .join('');
+          if (reasoning) {
+            logger.info('LLM reasoning generated for skill trigger', {
+              skillId: evaluation.skillId,
+              ticker,
+              length: reasoning.length,
+            });
+          }
+        } catch (err) {
+          logger.warn('LLM reasoning failed for skill trigger, using static content', {
+            skillId: evaluation.skillId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      // Fallback to static content if LLM unavailable
+      if (!reasoning) {
+        const thesisMatch = evaluation.skillContent.match(/##\s*Thesis\s*\n+([\s\S]*?)(?=\n##|\n---|$)/);
+        reasoning = thesisMatch?.[1]?.trim().split('\n\n')[0] ?? evaluation.triggerDescription;
+      }
 
       const result = await this.actionStore.create({
         id: randomUUID(),
         skillId: evaluation.skillId,
-        what: `Skill "${evaluation.skillName}" trigger fired: ${evaluation.triggerType}`,
-        why: `Trigger ${evaluation.triggerId} fired with context: ${contextSummary}`,
-        source: `skill: ${evaluation.skillName}`,
+        what: `${evaluation.skillName}${ticker ? `: ${ticker}` : ''} — ${evaluation.triggerDescription}`,
+        why: reasoning,
+        source: `strategy: ${evaluation.skillName}`,
+        riskContext: contextParts.join('\n'),
         status: 'PENDING',
         expiresAt,
         createdAt: now,

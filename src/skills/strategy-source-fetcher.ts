@@ -41,7 +41,7 @@ export async function fetchStrategiesFromSource(
   let entries: GitHubContentEntry[];
   try {
     const res = await fetch(contentsPath, {
-      headers: { Accept: 'application/vnd.github.v3+json' },
+      headers: { Accept: 'application/vnd.github.v3+json', 'User-Agent': 'Yojin/1.0' },
     });
     const exhausted = checkRateLimit(res, source.id);
     if (!res.ok) {

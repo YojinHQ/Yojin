@@ -76,6 +76,8 @@ export const SkillEvaluationSchema = z.object({
   skillName: z.string().min(1),
   triggerId: IdField,
   triggerType: TriggerTypeSchema,
+  /** Human-readable description of the trigger condition. */
+  triggerDescription: z.string().min(1),
   /** Context data that caused the trigger to fire. */
   context: z.record(z.string(), z.unknown()),
   /** The Markdown content to inject into the Strategist prompt. */

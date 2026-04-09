@@ -1,4 +1,5 @@
 import { mkdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,7 +14,7 @@ import type { FetchedStrategy } from '../../src/skills/strategy-source-fetcher.j
 import { syncFromFetched, syncStrategies } from '../../src/skills/strategy-source-sync.js';
 import { DEFAULT_STRATEGY_SOURCE } from '../../src/skills/strategy-source-types.js';
 
-const TEST_DIR = join(import.meta.dirname, '.tmp-sync-test');
+const TEST_DIR = join(tmpdir(), `strategy-sync-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 const SKILLS_DIR = join(TEST_DIR, 'skills');
 
 const validMarkdown = `---

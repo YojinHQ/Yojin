@@ -113,7 +113,11 @@ import {
 import { clearAppDataMutation, deviceInfoResolver } from './resolvers/profile.js';
 import { tickerProfileQuery, tickerProfilesQuery } from './resolvers/profiles.js';
 import { riskReportQuery } from './resolvers/risk.js';
-import { schedulerStatusQuery, triggerMicroAnalysisMutation } from './resolvers/scheduler.js';
+import {
+  schedulerStatusQuery,
+  triggerMicroAnalysisMutation,
+  triggerSkillEvaluationMutation,
+} from './resolvers/scheduler.js';
 import { assessmentStatusResolver, signalAssessmentsResolver } from './resolvers/signal-assessments.js';
 import { signalGroupFieldResolvers, signalGroupResolver, signalGroupsResolver } from './resolvers/signal-groups.js';
 import { signalsByIdsResolver } from './resolvers/signals.js';
@@ -275,6 +279,7 @@ const schema = createSchema({
       saveAiCredential: saveAiCredentialMutation,
       removeAiCredential: removeAiCredentialMutation,
       triggerMicroAnalysis: triggerMicroAnalysisMutation,
+      triggerSkillEvaluation: triggerSkillEvaluationMutation,
     },
     Subscription: {
       onAlert: onAlertSubscription,

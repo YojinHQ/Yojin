@@ -30,9 +30,9 @@ export async function syncFromFetched(
 
   for (const { filename, markdown } of fetched) {
     try {
-      const skill = parseFromMarkdown(markdown);
-      skill.source = isDefault ? 'built-in' : 'community';
-      skill.createdBy = source.id;
+      const parsed = parseFromMarkdown(markdown);
+      const skillSource: 'built-in' | 'community' = isDefault ? 'built-in' : 'community';
+      const skill = { ...parsed, source: skillSource, createdBy: source.id };
 
       if (skillStore.getById(skill.id)) {
         result.skipped++;

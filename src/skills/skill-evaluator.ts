@@ -63,6 +63,7 @@ export class SkillEvaluator {
               skillName: skill.name,
               triggerId: `${skill.id}-${trigger.type}-${ticker}`,
               triggerType: trigger.type,
+              triggerDescription: trigger.description,
               context: { ticker, ...fired },
               skillContent: skill.content,
               evaluatedAt: new Date().toISOString(),

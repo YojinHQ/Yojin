@@ -341,7 +341,7 @@ function IntelFeedCard({
             >
               {item.ticker}
             </span>
-            <p className="mt-0.5 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
+            <p className="mt-0.5 line-clamp-2 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
             {item.skillName && <span className="mt-0.5 text-[10px] font-medium text-market/80">{item.skillName}</span>}
           </div>
           <span className="flex-shrink-0 text-2xs text-text-muted">{item.publishedTime}</span>
@@ -383,17 +383,17 @@ function IntelFeedCard({
         <div className="overflow-hidden">
           <div className="px-3 pb-3 pt-0.5">
             {item.description && (
-              <p className="line-clamp-5 text-xs leading-relaxed text-text-secondary">{item.description}</p>
+              <p className="line-clamp-3 text-xs leading-relaxed text-text-secondary">{item.description}</p>
             )}
 
             {/* Meta row */}
             {item.isAction ? (
               <div className="mt-2 flex items-center gap-x-2 rounded-lg border border-border-light bg-bg-primary/50 px-2.5 py-1.5 text-2xs text-text-muted">
                 {item.skillName && <span>{item.skillName}</span>}
-                {item.skillName && item.triggerInfo && <span className="text-border">|</span>}
-                {item.triggerInfo && <span>{item.triggerInfo}</span>}
                 {item.expiresAt && <span className="text-border">|</span>}
                 {item.expiresAt && <span>expires {timeAgo(item.expiresAt)}</span>}
+                {(item.skillName || item.expiresAt) && <span className="text-border">|</span>}
+                <span>{item.severity}</span>
               </div>
             ) : (
               <div className="mt-2 flex items-center gap-x-2 rounded-lg border border-border-light bg-bg-primary/50 px-2.5 py-1.5 text-2xs text-text-muted">
@@ -696,7 +696,11 @@ function IntelFeedContent({
     });
 
     const actionItems: IntelFeedItem[] = (actionsData?.actions ?? []).map((action) => {
-      const skillName = action.source.startsWith('skill:') ? action.source.slice('skill:'.length).trim() : null;
+      const skillName = action.source.startsWith('strategy:')
+        ? action.source.slice('strategy:'.length).trim()
+        : action.source.startsWith('skill:')
+          ? action.source.slice('skill:'.length).trim()
+          : null;
       return {
         id: `action:${action.id}`,
         type: 'action' as const,
@@ -935,9 +939,10 @@ function IntelFeedContent({
   }, [hasMore]);
 
   function openModal(item: IntelFeedItem) {
+    const displaySource = item.isAction ? (item.skillName ?? 'Action') : (item.source ?? item.signalType);
     setModalData({
       title: item.title,
-      source: item.source ?? item.signalType,
+      source: displaySource,
       time: item.publishedTime,
       link: item.link,
       tag: item.isAction ? 'ACTION' : categoryLabel[item.type],
@@ -950,9 +955,17 @@ function IntelFeedContent({
         const row = item.data?.find((r) => r.label === 'Confidence');
         return row ? Math.round(parseFloat(row.value)) : undefined;
       })(),
-      keyPoints: item.description ? [item.description] : [],
-      analysis: item.description || item.title,
+      keyPoints: item.isAction ? [] : item.description ? [item.description] : [],
+      analysis: item.isAction ? item.description || '' : item.description || item.title,
       relatedTickers: item.tickers,
+      actionMeta: item.isAction
+        ? {
+            strategyName: item.skillName ?? null,
+            severity: item.severity,
+            riskContext: item.triggerInfo ?? null,
+            expiresAt: item.expiresAt ?? '',
+          }
+        : undefined,
     });
   }
 

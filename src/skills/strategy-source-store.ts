@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
@@ -23,18 +22,13 @@ export class StrategySourceStore {
   async initialize(): Promise<void> {
     this.sources.clear();
 
-    if (existsSync(this.configPath)) {
-      try {
-        const raw = await readFile(this.configPath, 'utf-8');
-        const parsed = StrategySourceArraySchema.parse(JSON.parse(raw));
-        for (const source of parsed) {
-          this.sources.set(source.id, source);
-        }
-      } catch (err) {
-        logger.warn('Failed to load strategy sources, seeding defaults', { error: err });
-        await this.seedDefault();
+    try {
+      const raw = await readFile(this.configPath, 'utf-8');
+      const parsed = StrategySourceArraySchema.parse(JSON.parse(raw));
+      for (const source of parsed) {
+        this.sources.set(source.id, source);
       }
-    } else {
+    } catch {
       await this.seedDefault();
     }
 
@@ -106,10 +100,7 @@ export class StrategySourceStore {
   }
 
   private async persist(): Promise<void> {
-    const dir = dirname(this.configPath);
-    if (!existsSync(dir)) {
-      await mkdir(dir, { recursive: true });
-    }
+    await mkdir(dirname(this.configPath), { recursive: true });
     const data = [...this.sources.values()];
     await writeFile(this.configPath, JSON.stringify(data, null, 2), 'utf-8');
   }
