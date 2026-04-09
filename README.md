@@ -18,10 +18,10 @@ A local-first AI agent that connects to your investment accounts, delivers perso
 ### npm (fastest)
 
 ```bash
-npx yojin            # Run without installing
+npx @yojinhq/yojin            # Run without installing
 # or
-npm install -g yojin # Install globally
-yojin                # Start the backend + bundled dashboard
+npm install -g @yojinhq/yojin # Install globally
+yojin                         # Start the backend + bundled dashboard
 ```
 
 Open `http://localhost:3000` for the dashboard. The first run walks you through connecting an LLM provider (Anthropic API key or OAuth) and generating your Strategist persona.
