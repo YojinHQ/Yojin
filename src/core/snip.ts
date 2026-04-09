@@ -26,6 +26,15 @@ const MIN_SNIP_SIZE = 500;
 /** Don't snip if we're under this fraction of the context window. */
 const SNIP_TRIGGER_THRESHOLD = 0.7;
 
+/**
+ * Fire snip when the count of compactable tool results below the preserve
+ * boundary exceeds this number, even if estimated context usage is still
+ * below the size threshold. Catches the "many small enrichments" pattern
+ * common in long curation/insights runs that never trip the 70% trigger
+ * until they're near the context limit.
+ */
+const COUNT_TRIGGER_THRESHOLD = 8;
+
 export interface SnipConfig {
   /** Number of recent user turns to preserve unsnipped (default 5). */
   preserveRecentTurns: number;
@@ -35,11 +44,17 @@ export interface SnipResult {
   messages: AgentMessage[];
   messagesBefore: number;
   snipped: number;
+  /** Which trigger fired the snip pass — useful for telemetry. */
+  trigger: 'size' | 'count' | null;
 }
 
 /**
  * Snip verbose tool results from older messages.
- * Only triggers when estimated usage exceeds 70% of context window.
+ *
+ * Two triggers fire this pass:
+ * - **size**: estimated context usage ≥ 70% of context window
+ * - **count**: more than 8 large tool results have piled up below the
+ *   preserve boundary (catches long workflows with many small results)
  */
 export function snipToolResults(
   messages: AgentMessage[],
@@ -48,18 +63,25 @@ export function snipToolResults(
 ): SnipResult {
   const preserveRecentTurns = config?.preserveRecentTurns ?? 5;
 
-  // Don't snip if we're well within budget
-  const usage = budget.estimateTotal(messages);
-  const threshold = budget.contextWindow * SNIP_TRIGGER_THRESHOLD;
-  if (usage < threshold) {
-    return { messages, messagesBefore: messages.length, snipped: 0 };
-  }
-
   // Find the boundary — preserve recent turns
   const splitIndex = findPreserveBoundary(messages, preserveRecentTurns);
   if (splitIndex <= 0) {
-    return { messages, messagesBefore: messages.length, snipped: 0 };
+    return { messages, messagesBefore: messages.length, snipped: 0, trigger: null };
   }
+
+  // Trigger 1 — size: estimated usage exceeds the size threshold
+  const usage = budget.estimateTotal(messages);
+  const overSizeThreshold = usage >= budget.contextWindow * SNIP_TRIGGER_THRESHOLD;
+
+  // Trigger 2 — count: too many large tool results piled up below the boundary
+  const compactableCount = countCompactableBefore(messages, splitIndex);
+  const overCountThreshold = compactableCount > COUNT_TRIGGER_THRESHOLD;
+
+  if (!overSizeThreshold && !overCountThreshold) {
+    return { messages, messagesBefore: messages.length, snipped: 0, trigger: null };
+  }
+
+  const trigger: 'size' | 'count' = overSizeThreshold ? 'size' : 'count';
 
   // Snip tool results in old messages (before the preserve boundary)
   let snipped = 0;
@@ -85,14 +107,33 @@ export function snipToolResults(
   });
 
   if (snipped > 0) {
-    logger.info('Snipped tool results', { snipped, splitIndex, messageCount: messages.length });
+    logger.info('Snipped tool results', { snipped, splitIndex, trigger, messageCount: messages.length });
   }
 
   return {
     messages: snippedMessages,
     messagesBefore: messages.length,
     snipped,
+    trigger: snipped > 0 ? trigger : null,
   };
+}
+
+/**
+ * Count compactable (large enough to snip) tool_result blocks in the message
+ * range [0, splitIndex). Used by the count-based trigger.
+ */
+function countCompactableBefore(messages: AgentMessage[], splitIndex: number): number {
+  let count = 0;
+  for (let i = 0; i < splitIndex; i++) {
+    const msg = messages[i];
+    if (typeof msg.content === 'string') continue;
+    for (const block of msg.content) {
+      if (block.type === 'tool_result' && block.content.length > MIN_SNIP_SIZE) {
+        count++;
+      }
+    }
+  }
+  return count;
 }
 
 /**

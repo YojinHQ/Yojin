@@ -160,13 +160,14 @@ export async function runAgentLoop(
     const snipResult = snipToolResults(messages, budget, {
       preserveRecentTurns: memory?.preserveRecentTurns ?? 5,
     });
-    if (snipResult.snipped > 0) {
+    if (snipResult.snipped > 0 && snipResult.trigger) {
       messages = snipResult.messages;
       emit(onEvent, {
         type: 'snip',
         messagesBefore: snipResult.messagesBefore,
         messagesAfter: snipResult.messages.length,
         toolResultsSnipped: snipResult.snipped,
+        trigger: snipResult.trigger,
       });
     }
 

@@ -105,4 +105,58 @@ describe('snipToolResults', () => {
 
     expect(result.snipped).toBe(0);
   });
+
+  it('reports the size trigger when context usage forces a snip', () => {
+    const messages = buildConversation(10, 40_000);
+    const budget = new TokenBudget({ contextWindow: 200_000 });
+
+    const result = snipToolResults(messages, budget, { preserveRecentTurns: 3 });
+
+    expect(result.snipped).toBeGreaterThan(0);
+    expect(result.trigger).toBe('size');
+  });
+
+  it('fires count trigger when many large tool results pile up below threshold', () => {
+    // 12 turns × ~600-char tool results — large enough to be compactable but
+    // small enough that estimated usage stays well under 70% of 200k tokens.
+    // Without a count-based trigger this conversation would never snip.
+    const messages = buildConversation(12, 600);
+    const budget = new TokenBudget({ contextWindow: 200_000 });
+
+    // Sanity check: still well under the 70% size threshold (~140k tokens)
+    expect(budget.estimateTotal(messages)).toBeLessThan(140_000);
+
+    const result = snipToolResults(messages, budget, { preserveRecentTurns: 2 });
+
+    // 12 turns − 2 preserved = 10 old turns, each with one >500-char tool result.
+    // Count threshold is 8, so the trigger fires.
+    expect(result.snipped).toBeGreaterThan(0);
+    expect(result.trigger).toBe('count');
+  });
+
+  it('does not fire count trigger below threshold', () => {
+    // 6 turns × large results — count trigger is 8, so we stay under it
+    // and the size threshold is also not met.
+    const messages = buildConversation(6, 600);
+    const budget = new TokenBudget({ contextWindow: 200_000 });
+
+    const result = snipToolResults(messages, budget, { preserveRecentTurns: 2 });
+
+    expect(result.snipped).toBe(0);
+    expect(result.trigger).toBeNull();
+    // Same reference — no copy made
+    expect(result.messages).toBe(messages);
+  });
+
+  it('count trigger ignores small tool results', () => {
+    // 20 turns × small (100-char) results — well over count, but every result
+    // is below MIN_SNIP_SIZE, so the count check should not include them.
+    const messages = buildConversation(20, 100);
+    const budget = new TokenBudget({ contextWindow: 200_000 });
+
+    const result = snipToolResults(messages, budget, { preserveRecentTurns: 2 });
+
+    expect(result.snipped).toBe(0);
+    expect(result.trigger).toBeNull();
+  });
 });

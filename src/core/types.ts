@@ -118,7 +118,14 @@ export type AgentLoopEvent =
       truncatedChars: number;
     }
   | { type: 'compaction'; messagesBefore: number; messagesAfter: number; usedLlmSummary: boolean }
-  | { type: 'snip'; messagesBefore: number; messagesAfter: number; toolResultsSnipped: number }
+  | {
+      type: 'snip';
+      messagesBefore: number;
+      messagesAfter: number;
+      toolResultsSnipped: number;
+      /** Which trigger fired the snip pass — 'size' or 'count'. */
+      trigger: 'size' | 'count';
+    }
   | { type: 'pii_redacted'; entitiesFound: number; typesFound: string[]; processingTimeMs: number }
   | { type: 'cost'; model: string; costUsd: number; totalCostUsd: number }
   | { type: 'budget_exceeded'; totalCostUsd: number; budgetUsd: number }
