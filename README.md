@@ -15,7 +15,27 @@ A local-first AI agent that connects to your investment accounts, delivers perso
 
 ## Getting Started
 
-### Docker (recommended)
+### npm (fastest)
+
+```bash
+npx yojin            # Run without installing
+# or
+npm install -g yojin # Install globally
+yojin                # Start the backend + bundled dashboard
+```
+
+Open `http://localhost:3000` for the dashboard. The first run walks you through connecting an LLM provider (Anthropic API key or OAuth) and generating your Strategist persona.
+
+Platform scraping (Robinhood, IBKR, Coinbase, Schwab, Fidelity, Binance) is optional and needs Playwright's Chromium:
+
+```bash
+npm install playwright
+npx playwright install chromium
+```
+
+Chat, insights, and manual portfolio entry work without it.
+
+### Docker (recommended for long-running)
 
 One command gives you the web UI, API, and channel integrations (Slack, etc.):
 
@@ -40,7 +60,7 @@ docker compose --env-file .env.docker up -d
 
 Stop with `docker compose down`. Data persists in Docker volumes (`yojin_data`, `yojin_vault`).
 
-### CLI
+### From source
 
 Prerequisites: Node.js >= 22.12, pnpm 10+
 

@@ -87,7 +87,7 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist/', 'node_modules/', '*.mjs', 'vitest.config.ts', 'eslint.config.js', 'apps/', 'packages/'],
+    ignores: ['dist/', 'node_modules/', '**/*.mjs', 'vitest.config.ts', 'eslint.config.js', 'apps/', 'packages/'],
   },
   storybook.configs['flat/recommended'],
 );

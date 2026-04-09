@@ -1,8 +1,13 @@
 /**
  * Web channel plugin implementation.
  *
- * Serves the GraphQL API, chat endpoints, and SSE streaming over Hono.
+ * Serves the GraphQL API, chat endpoints, SSE streaming, and the built React
+ * dashboard (apps/web/dist) as static assets over Hono.
  */
+
+import { readFile, stat } from 'node:fs/promises';
+import { extname, normalize, resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { type ServerType, serve } from '@hono/node-server';
 import { Hono } from 'hono';
@@ -19,6 +24,60 @@ import type {
   IncomingMessage,
   OutgoingMessage,
 } from '../../../src/plugins/types.js';
+
+// Resolve the bundled React dashboard relative to this module so it works in
+// both local dev (`dist/channels/web/src/channel.js`) and the published npm
+// package (`<pkg>/dist/channels/web/src/channel.js`). Four levels up lands on
+// the package root; from there we descend into apps/web/dist.
+const WEB_DIST_DIR = fileURLToPath(new URL('../../../../apps/web/dist/', import.meta.url));
+
+const STATIC_MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.map': 'application/json; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+};
+
+async function readDashboardFile(requestPath: string): Promise<{ body: ArrayBuffer; mime: string } | null> {
+  const cleaned = normalize(requestPath).replace(/^[\\/]+/, '');
+  const filePath = resolvePath(WEB_DIST_DIR, cleaned);
+  // Reject any path that escapes the dashboard dir.
+  if (!filePath.startsWith(WEB_DIST_DIR)) return null;
+  try {
+    const buf = await readFile(filePath);
+    // Copy into a fresh ArrayBuffer so the Response body type is unambiguous
+    // (Node Buffer's backing store is typed as ArrayBufferLike, which isn't
+    // assignable to BodyInit under strict lib.dom.d.ts).
+    const body = new ArrayBuffer(buf.byteLength);
+    new Uint8Array(body).set(buf);
+    const mime = STATIC_MIME_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+    return { body, mime };
+  } catch {
+    return null;
+  }
+}
+
+async function dashboardAvailable(): Promise<boolean> {
+  try {
+    const info = await stat(resolvePath(WEB_DIST_DIR, 'index.html'));
+    return info.isFile();
+  } catch {
+    return false;
+  }
+}
 
 type MessageHandler = (msg: IncomingMessage) => Promise<void>;
 
@@ -171,12 +230,40 @@ export function buildWebChannel(): ChannelPlugin {
         });
       });
 
+      // Serve the bundled React dashboard (apps/web/dist) as static assets.
+      // This makes `yojin start` self-contained for published npm installs —
+      // no separate Vite dev server required. API routes above take precedence
+      // because Hono matches in registration order; this handler is the last
+      // fallback and only runs for paths that didn't hit /health, /graphql,
+      // or /api/*.
+      const hasDashboard = await dashboardAvailable();
+      if (hasDashboard) {
+        app.get('*', async (c) => {
+          const url = new URL(c.req.url);
+          // Never let static serving shadow API surface.
+          if (url.pathname.startsWith('/graphql') || url.pathname.startsWith('/api/')) {
+            return c.notFound();
+          }
+          const requested = url.pathname === '/' ? '/index.html' : url.pathname;
+          const file = (await readDashboardFile(requested)) ?? (await readDashboardFile('/index.html'));
+          if (!file) return c.notFound();
+          return new Response(file.body, { headers: { 'content-type': file.mime } });
+        });
+      } else {
+        console.warn(
+          `[web] Dashboard bundle not found at ${WEB_DIST_DIR}. Run \`pnpm build:web\` to build it, or use \`pnpm dev\` for the Vite dev server on :5173.`,
+        );
+      }
+
       // Bind to localhost only — this agent runs locally, not exposed to the network.
       // In Docker, set YOJIN_HOST=0.0.0.0 to allow container port mapping.
       const hostname = String(options?.hostname ?? process.env.YOJIN_HOST ?? '127.0.0.1');
 
       server = serve({ fetch: app.fetch, port, hostname }, () => {
         console.log(`Web channel listening on http://${hostname}:${port}`);
+        if (hasDashboard) {
+          console.log(`Dashboard: http://localhost:${port}`);
+        }
         console.log(`GraphQL playground: http://localhost:${port}/graphql`);
       });
     },

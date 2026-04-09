@@ -82,7 +82,14 @@ async function dismissCookieBanner(p: Page): Promise<void> {
  * so a visible browser window during onboarding is acceptable.
  */
 async function launchStealthBrowser(): Promise<{ browser: Browser; context: BrowserContext; page: Page }> {
-  const { chromium } = await import('playwright');
+  let chromium: typeof import('playwright').chromium;
+  try {
+    ({ chromium } = await import('playwright'));
+  } catch {
+    throw new Error(
+      'This flow requires Playwright. Install it with `npm install playwright` and then `npx playwright install chromium`.',
+    );
+  }
 
   const b = await chromium.launch({
     headless: false,

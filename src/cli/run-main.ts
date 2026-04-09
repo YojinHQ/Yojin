@@ -3,7 +3,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -361,7 +361,25 @@ async function startGateway(): Promise<void> {
   setChannelRegistry(gateway.getRegistry());
 }
 
+/**
+ * `yojin web` — start the dashboard.
+ *
+ * In a local monorepo checkout with `apps/web` present, spawn the Vite dev
+ * server on :5173 for hot reload. In a published npm install (where the web
+ * bundle ships pre-built under `apps/web/dist`), fall back to `yojin start`
+ * which serves the bundle from the gateway on :3000.
+ */
 function startFrontend(): Promise<void> {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const webAppDir = resolve(here, '../../../apps/web');
+  const webPackageJson = join(webAppDir, 'package.json');
+  const isMonorepoCheckout = existsSync(webPackageJson) && existsSync(join(webAppDir, 'vite.config.ts'));
+
+  if (!isMonorepoCheckout) {
+    console.log('Starting Yojin with the bundled dashboard...');
+    return startGateway();
+  }
+
   return new Promise((resolve, reject) => {
     const child = spawn('pnpm', ['--filter', '@yojin/web', 'dev'], {
       stdio: 'inherit',

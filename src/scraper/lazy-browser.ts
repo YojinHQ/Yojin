@@ -20,7 +20,14 @@ export class LazyBrowser implements BrowserLike {
     // Deduplicate concurrent launch requests
     if (!this.launching) {
       this.launching = (async () => {
-        const { chromium } = await import('playwright');
+        let chromium: typeof import('playwright').chromium;
+        try {
+          ({ chromium } = await import('playwright'));
+        } catch {
+          throw new Error(
+            'Platform scraping requires Playwright. Install it with `npm install playwright` and then `npx playwright install chromium`.',
+          );
+        }
         const browser = await chromium.launch({
           headless: false,
           args: ['--disable-blink-features=AutomationControlled', '--no-sandbox', '--disable-setuid-sandbox'],
