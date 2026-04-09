@@ -58,6 +58,10 @@ describe('parseGitHubUrl', () => {
   it('throws on blob URL', () => {
     expect(() => parseGitHubUrl('https://github.com/owner/repo/blob/main/file.md')).toThrow('Invalid GitHub URL');
   });
+
+  it('throws on /tree without a branch', () => {
+    expect(() => parseGitHubUrl('https://github.com/owner/repo/tree')).toThrow('/tree requires a branch');
+  });
 });
 
 describe('DEFAULT_STRATEGY_SOURCE', () => {

@@ -94,6 +94,5 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl {
     return { owner, repo, path, ref };
   }
 
-  // Tree URL without enough segments (e.g. /tree without a branch)
-  return { owner, repo, path: '', ref: 'main' };
+  throw new Error('Invalid GitHub URL: /tree requires a branch. Use https://github.com/owner/repo/tree/branch');
 }

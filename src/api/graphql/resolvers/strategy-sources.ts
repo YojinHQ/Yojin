@@ -90,8 +90,10 @@ export async function resolveSyncStrategySource(_: unknown, args: { id: string }
   const source = sourceStore.getById(args.id);
   if (!source) throw new Error(`Strategy source not found: ${args.id}`);
 
-  const { strategies } = await fetchStrategiesFromSource(source);
+  const { strategies, errors: fetchErrors } = await fetchStrategiesFromSource(source);
   const result = await syncFromFetched(strategies, skills, source);
-  await sourceStore.updateLastSynced(source.id);
-  return result;
+  if (fetchErrors.length === 0 && result.failed === 0) {
+    await sourceStore.updateLastSynced(source.id);
+  }
+  return { ...result, errors: [...fetchErrors, ...result.errors] };
 }

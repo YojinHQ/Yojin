@@ -71,7 +71,9 @@ export async function syncStrategies(
     totalResult.failed += result.failed;
     totalResult.errors.push(...result.errors);
 
-    sourceStore?.updateLastSynced(source.id);
+    if (fetchErrors.length === 0 && result.failed === 0) {
+      await sourceStore?.updateLastSynced(source.id);
+    }
   }
 
   return totalResult;

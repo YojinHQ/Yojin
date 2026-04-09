@@ -672,11 +672,11 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   setStrategySourceStore(strategySourceStore);
   setSkillStoreForSources(skillStore);
 
-  const enabledSources = strategySourceStore.getEnabled();
-  if (enabledSources.length > 0) {
+  const unsyncedSources = strategySourceStore.getEnabled().filter((s) => !s.lastSyncedAt);
+  if (unsyncedSources.length > 0) {
     try {
-      const { added } = await syncStrategies(enabledSources, skillStore, strategySourceStore);
-      if (added > 0) log.info(`Seeded ${added} strategies from ${enabledSources.length} source(s)`);
+      const { added } = await syncStrategies(unsyncedSources, skillStore, strategySourceStore);
+      if (added > 0) log.info(`Seeded ${added} strategies from ${unsyncedSources.length} source(s)`);
     } catch (err) {
       log.warn('Failed to sync strategies from sources', { error: err });
     }
