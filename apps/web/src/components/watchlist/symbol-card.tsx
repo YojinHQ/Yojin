@@ -3,6 +3,7 @@ import { SymbolLogo } from '../common/symbol-logo';
 import Button from '../common/button';
 import { cn } from '../../lib/utils';
 import { formatPrice } from '../../lib/format';
+import { getMarketElapsedMinutes } from '../../hooks/use-market-status';
 import type { WatchlistEntry } from '../../api';
 import type { MarketStatus } from '../../hooks/use-market-status';
 
@@ -10,37 +11,80 @@ import type { MarketStatus } from '../../hooks/use-market-status';
 // Sparkline — SVG polyline matching positions-preview pattern
 // ---------------------------------------------------------------------------
 
-function WatchlistSparkline({ data, symbol }: { data: number[]; symbol: string }) {
+function WatchlistSparkline({
+  data,
+  symbol,
+  dayChangePercent,
+  isMarketOpen,
+}: {
+  data: number[];
+  symbol: string;
+  dayChangePercent: number;
+  isMarketOpen: boolean;
+}) {
   if (data.length < 2) return null;
 
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;
 
-  const netChange = data[data.length - 1] - data[0];
-  const isPositive = netChange >= 0;
-  const color = isPositive ? 'var(--color-success)' : 'var(--color-error)';
-  const gradId = `wl-sparkline-${symbol}`;
+  // Progressive reveal: during market hours, width proportional to elapsed trading day
+  const MARKET_DURATION = 390;
+  const elapsed = getMarketElapsedMinutes();
+  const progressWidth = isMarketOpen ? Math.min(elapsed / MARKET_DURATION, 1) * 120 : 120;
 
   const coords = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * 120;
+    const x = (i / (data.length - 1)) * progressWidth;
     const y = 32 - ((v - min) / range) * 24 - 4;
     return { x, y };
   });
 
   const points = coords.map((c) => `${c.x},${c.y}`).join(' ');
-  const fillPoints = `0,32 ${points} 120,32`;
+
+  const isNegative = dayChangePercent < 0;
+  const color =
+    dayChangePercent > 0 ? 'var(--color-success)' : isNegative ? 'var(--color-error)' : 'var(--color-text-muted)';
+  const gradId = `wl-sparkline-${symbol}`;
+
+  // Derive previous close baseline from last data point and day change %
+  const showBaseline = dayChangePercent !== 0;
+  let baselineY: number | undefined;
+  if (showBaseline) {
+    const currentPrice = data[data.length - 1];
+    const prevClose = currentPrice / (1 + dayChangePercent / 100);
+    const rawY = 32 - ((prevClose - min) / range) * 24 - 4;
+    baselineY = Math.max(0.5, Math.min(31.5, rawY));
+  }
+
+  // Positive: fill below line to bottom; Negative: fill above line to baseline
+  const fillCloseY = isNegative && baselineY != null ? baselineY : 32;
+  const fillPoints = `0,${fillCloseY} ${points} ${progressWidth},${fillCloseY}`;
+
+  const gradTopOpacity = isNegative ? 0 : 0.2;
+  const gradBottomOpacity = isNegative ? 0.2 : 0;
 
   return (
-    <div className="pointer-events-none h-7 w-[72px]">
+    <div className="pointer-events-none h-7 w-[80px]">
       <svg viewBox="0 0 120 32" className="h-full w-full" preserveAspectRatio="none">
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={isPositive ? 0.2 : 0} />
-            <stop offset="100%" stopColor={color} stopOpacity={isPositive ? 0 : 0.2} />
+            <stop offset="0%" stopColor={color} stopOpacity={gradTopOpacity} />
+            <stop offset="100%" stopColor={color} stopOpacity={gradBottomOpacity} />
           </linearGradient>
         </defs>
         <polygon points={fillPoints} fill={`url(#${gradId})`} />
+        {baselineY != null && (
+          <line
+            x1="0"
+            x2="120"
+            y1={baselineY}
+            y2={baselineY}
+            stroke="var(--color-text-muted)"
+            strokeWidth="1"
+            strokeDasharray="3 2"
+            opacity="0.5"
+          />
+        )}
         <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
       </svg>
     </div>
@@ -173,9 +217,14 @@ export function SymbolCard({ entry, onRemove, onSelect, removing, marketStatus }
           {/* Sparkline */}
           <div className="flex-shrink-0">
             {entry.sparkline && entry.sparkline.length >= 2 ? (
-              <WatchlistSparkline data={entry.sparkline} symbol={entry.symbol} />
+              <WatchlistSparkline
+                data={entry.sparkline}
+                symbol={entry.symbol}
+                dayChangePercent={entry.changePercent ?? 0}
+                isMarketOpen={entry.assetClass !== 'CRYPTO' && marketStatus === 'open'}
+              />
             ) : (
-              <div className="h-7 w-[72px]" />
+              <div className="h-7 w-[80px]" />
             )}
           </div>
 
@@ -246,7 +295,7 @@ export function SymbolCardSkeleton() {
         </div>
       </div>
       <div className="mt-3 flex items-end justify-between">
-        <div className="h-7 w-[72px] rounded bg-bg-tertiary" />
+        <div className="h-7 w-[80px] rounded bg-bg-tertiary" />
         <div className="space-y-1">
           <div className="h-5 w-20 rounded bg-bg-tertiary" />
           <div className="h-3 w-14 rounded bg-bg-tertiary ml-auto" />
