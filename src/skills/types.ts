@@ -24,11 +24,12 @@ export type SkillCategory = z.infer<typeof SkillCategorySchema>;
 
 export const TriggerTypeSchema = z.enum([
   'PRICE_MOVE', // Absolute or % price change
-  'INDICATOR_THRESHOLD', // RSI, MACD, etc. crosses a value
+  'INDICATOR_THRESHOLD', // Technical indicator (RSI, MACD, ...) crosses a value
   'CONCENTRATION_DRIFT', // Position weight exceeds limit
   'DRAWDOWN', // Portfolio or position drawdown
   'EARNINGS_PROXIMITY', // Days until earnings report
-  'SIGNAL_MATCH', // New signal matches pattern
+  'METRIC_THRESHOLD', // Numeric metric (SUE, sentiment momentum, P/B, ...) crosses a value
+  'SIGNAL_PRESENT', // A recent Signal of given types/sentiment exists for the ticker
   'CUSTOM', // User-defined expression
 ]);
 export type TriggerType = z.infer<typeof TriggerTypeSchema>;

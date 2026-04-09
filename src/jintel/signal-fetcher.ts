@@ -20,10 +20,20 @@ import type { FinancialStatements, KeyExecutive, RedditComment } from './types.j
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
 import { JUNK_DOMAIN_RE, JUNK_TITLE_RE } from '../signals/quality-patterns.js';
-import { SignalTypeSchema, SourceTypeSchema } from '../signals/types.js';
+import { SignalSentimentSchema, SignalTypeSchema, SourceTypeSchema } from '../signals/types.js';
+import type { SignalSentiment } from '../signals/types.js';
 
 const SignalType = SignalTypeSchema.enum;
 const SourceType = SourceTypeSchema.enum;
+const SignalSentimentEnum = SignalSentimentSchema.enum;
+
+/** Map a numeric sentiment score in [-1, +1] to the categorical enum used for display. */
+function sentimentScoreToEnum(score: number): SignalSentiment {
+  if (score >= 0.3) return SignalSentimentEnum.BULLISH;
+  if (score <= -0.3) return SignalSentimentEnum.BEARISH;
+  if (score > -0.05 && score < 0.05) return SignalSentimentEnum.NEUTRAL;
+  return SignalSentimentEnum.MIXED;
+}
 
 const logger = createSubsystemLogger('jintel-signal-fetcher');
 
@@ -312,6 +322,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     if (JUNK_TITLE_RE.test(article.title)) continue;
     if (article.link && JUNK_DOMAIN_RE.test(article.link)) continue;
     if (isEntityNameTitle(article.title, entityName)) continue;
+    const { sentimentScore } = article;
     signals.push({
       sourceId: `jintel-news-${article.source.toLowerCase().replace(/\s+/g, '-')}`,
       sourceName: `Jintel News (${article.source})`,
@@ -325,6 +336,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       tickers,
       confidence: 0.8,
       metadata: { source: article.source, link: article.link },
+      ...(sentimentScore != null ? { sentimentScore, sentiment: sentimentScoreToEnum(sentimentScore) } : {}),
     });
   }
 

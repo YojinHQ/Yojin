@@ -6,8 +6,8 @@ style: sentiment
 requires:
   - sentiment
 triggers:
-  - type: SIGNAL_MATCH
-    description: 24-hour social sentiment momentum exceeds 20%, indicating rapid shift in crowd opinion
+  - type: METRIC_THRESHOLD
+    description: 24h social mention volume momentum exceeds 20%
     params:
       metric: sentiment_momentum_24h
       threshold: 0.20

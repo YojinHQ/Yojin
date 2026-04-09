@@ -22,7 +22,7 @@ import { JUNK_DOMAIN_RE, JUNK_TITLE_RE, MAX_SIGNAL_AGE_MS, MIN_TITLE_LENGTH } fr
 import { extractTickers } from './ticker-extractor.js';
 import type { SymbolResolver } from './ticker-extractor.js';
 import { SignalSchema } from './types.js';
-import type { Signal, SignalType } from './types.js';
+import type { Signal, SignalSentiment, SignalType } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 
 const logger = createSubsystemLogger('signal-ingestor');
@@ -77,6 +77,10 @@ export interface RawSignalInput {
   confidence?: number;
   /** Arbitrary metadata. */
   metadata?: Record<string, unknown>;
+  /** Numeric sentiment polarity in [-1, +1]. Populated by sources with real polarity scores. */
+  sentimentScore?: number;
+  /** Categorical sentiment for display. Usually derived from `sentimentScore` at ingestion. */
+  sentiment?: SignalSentiment;
 }
 
 export interface IngestResult {
@@ -349,6 +353,8 @@ export class SignalIngestor {
       ingestedAt: new Date().toISOString(),
       confidence,
       ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+      ...(input.sentimentScore != null ? { sentimentScore: Math.max(-1, Math.min(1, input.sentimentScore)) } : {}),
+      ...(input.sentiment ? { sentiment: input.sentiment } : {}),
     };
 
     // Validate before archiving — ensures write/read symmetry

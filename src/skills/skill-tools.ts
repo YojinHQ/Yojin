@@ -162,6 +162,8 @@ export function createSkillTools(options: SkillToolsOptions): ToolDefinition[] {
         earningsDays: {},
         portfolioDrawdown: 0,
         positionDrawdowns: {},
+        metrics: {},
+        signals: {},
       });
 
       const contextNote =

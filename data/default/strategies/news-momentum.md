@@ -7,14 +7,14 @@ requires:
   - news
   - sentiment
 triggers:
-  - type: SIGNAL_MATCH
-    description: High-relevance directional news signal detected with strong sentiment polarity
+  - type: SIGNAL_PRESENT
+    description: Recent NEWS or FILINGS signal with bullish sentiment polarity
     params:
-      relevance: high
-      sentiment_polarity_min: 0.7
       signal_types:
         - NEWS
         - FILINGS
+      min_sentiment: 0.3
+      lookback_hours: 24
 tickers: []
 maxPositionSize: 0.03
 ---
@@ -27,16 +27,16 @@ Information diffuses into stock prices gradually, not instantaneously. Tetlock (
 
 The post-news drift is a close cousin of post-earnings announcement drift (PEAD) but applies to a broader set of corporate events: management changes, product launches, regulatory decisions, contract wins, and M&A activity. Engelberg, McLean & Pontiff (2018) found that anomaly returns are concentrated on news days, suggesting that mispricing corrects when new information forces attention.
 
-The strategy requires acting within 2 hours of publication to capture the early phase of the drift, before algorithmic traders and institutional rebalancing fully arbitrage the signal. Speed is less critical than signal quality — a 2-hour window is achievable for retail investors monitoring news feeds.
+The strategy evaluates signals within a 24-hour lookback window — matching the skill evaluator's pre-fetched signal cache. This captures the bulk of the post-news drift without requiring sub-hour reaction times that retail investors cannot reliably sustain.
 
 ## Entry Rules
 
-1. Monitor real-time news feeds for signals with high relevance scores (top 10% by relevance ranking).
-2. Assess directional impact: sentiment polarity must exceed 0.7 (strongly positive) or be below -0.7 (strongly negative).
+1. Monitor the signal archive for recent `NEWS` or `FILINGS` signals on portfolio tickers published within the last 24 hours.
+2. Assess directional impact: the signal's numeric `sentimentScore` must be ≥ 0.3 (bullish). This strategy is long-only — negative-sentiment signals are handled as exits or avoidance, not short entries (see Risk Controls).
 3. Confirm that the news is genuinely new (not a rehash of prior information) by checking against the signal archive for duplicates in the past 48 hours.
-4. **Long entry**: Positive news + stock up > 1% from pre-news price + above-average volume in the first 30 minutes.
-5. **Short/avoid entry**: Negative news + stock down > 1% + above-average volume. Use as exit signal for existing long positions.
-6. Enter within 2 hours of news publication. Signals older than 4 hours are stale.
+4. **Long entry**: Bullish signal + stock up > 1% from pre-news price + above-average volume in the first 30 minutes of the post-news session.
+5. **Exit signal for existing longs**: A bearish news signal (negative `sentimentScore`) on a held position.
+6. Act on signals while they remain within the 24-hour lookback window. Signals older than 24 hours are not evaluated.
 7. Require market cap > $2B (smaller stocks may gap on illiquidity rather than information).
 8. Skip news during the first and last 15 minutes of the trading day (noisy, wide spreads).
 

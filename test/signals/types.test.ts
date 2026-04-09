@@ -237,6 +237,28 @@ describe('SignalSchema', () => {
       }),
     ).toThrow();
   });
+
+  describe('sentimentScore', () => {
+    it('accepts boundary values', () => {
+      for (const score of [-1, -0.5, 0, 0.5, 1]) {
+        const result = SignalSchema.parse({ ...validSignal, sentimentScore: score });
+        expect(result.sentimentScore).toBe(score);
+      }
+    });
+
+    it('rejects values below -1', () => {
+      expect(() => SignalSchema.parse({ ...validSignal, sentimentScore: -1.1 })).toThrow();
+    });
+
+    it('rejects values above +1', () => {
+      expect(() => SignalSchema.parse({ ...validSignal, sentimentScore: 1.1 })).toThrow();
+    });
+
+    it('treats sentimentScore as optional', () => {
+      const result = SignalSchema.parse(validSignal);
+      expect(result.sentimentScore).toBeUndefined();
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

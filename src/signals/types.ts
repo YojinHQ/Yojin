@@ -106,6 +106,13 @@ export const SignalSchema = z.object({
   tier2: z.string().optional(),
   // LLM-classified sentiment
   sentiment: SignalSentimentSchema.optional(),
+  /**
+   * Numeric sentiment polarity in range [-1, +1]. Populated for news/social signals
+   * where the upstream source provides a real polarity score (e.g. Jintel news with
+   * sentimentScore from the AFINN-based sentiment lib). Distinct from the categorical
+   * `sentiment` enum, which is LLM-classified for display.
+   */
+  sentimentScore: z.number().min(-1).max(1).optional(),
   // Feed classification
   outputType: SignalOutputTypeSchema.default('INSIGHT'),
   // LLM quality assessment — persisted so curation pipeline can filter generically

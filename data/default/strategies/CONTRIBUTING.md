@@ -85,15 +85,16 @@ The `requires` array declares what data the strategy needs. Yojin checks availab
 
 ## Trigger Types
 
-| Type                  | Description                         | Common Params                         |
-|-----------------------|-------------------------------------|---------------------------------------|
-| `PRICE_MOVE`          | Price change crosses a threshold    | `threshold`, `direction`, `window`    |
-| `INDICATOR_THRESHOLD` | Technical indicator crosses a value | `indicator`, `threshold`, `direction` |
-| `CONCENTRATION_DRIFT` | Position weight exceeds a limit     | `maxWeight`                           |
-| `DRAWDOWN`            | Portfolio or position drawdown      | `threshold`                           |
-| `EARNINGS_PROXIMITY`  | Days until earnings report          | `withinDays`                          |
-| `SIGNAL_MATCH`        | New signal matches a pattern        | (varies)                              |
-| `CUSTOM`              | User-defined condition              | (varies)                              |
+| Type                  | Description                                                      | Common Params                                                 |
+|-----------------------|------------------------------------------------------------------|---------------------------------------------------------------|
+| `PRICE_MOVE`          | Price change crosses a threshold                                 | `threshold`, `lookback_months` (3, 6, or 12 — omit for daily) |
+| `INDICATOR_THRESHOLD` | Technical indicator (RSI, MACD, BB, ...) crosses a value         | `indicator`, `threshold`, `direction`                         |
+| `CONCENTRATION_DRIFT` | Position weight exceeds a limit                                  | `maxWeight`                                                   |
+| `DRAWDOWN`            | Portfolio or position drawdown                                   | `threshold`                                                   |
+| `EARNINGS_PROXIMITY`  | Days until earnings report                                       | `withinDays`                                                  |
+| `METRIC_THRESHOLD`    | Numeric metric (SUE, sentiment momentum, P/B, ...) crosses value | `metric`, `threshold`, `direction`                            |
+| `SIGNAL_PRESENT`      | A recent Signal of given types/sentiment exists for the ticker   | `signal_types`, `min_sentiment`, `lookback_hours` (≤24)       |
+| `CUSTOM`              | User-defined condition                                           | (varies)                                                      |
 
 Trigger `params` are optional and free-form. The Strategist agent interprets them alongside the description.
 

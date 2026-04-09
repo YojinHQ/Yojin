@@ -1,17 +1,17 @@
 ---
 name: Book-to-Price Value
-description: Systematically buy stocks in the highest book-to-price quintile with quality filters, capturing the HML value premium
+description: Buy stocks trading at low price-to-book multiples — captures the value premium with a hard P/B threshold
 category: MARKET
 style: value
 requires:
   - fundamentals
 triggers:
-  - type: SIGNAL_MATCH
-    description: Stock ranks in the top quintile of book-to-price ratio within its sector
+  - type: METRIC_THRESHOLD
+    description: Stock trades below 1.5x book value
     params:
-      metric: book_to_price
-      ranking: top_quintile
-      scope: sector
+      metric: priceToBook
+      threshold: 1.5
+      direction: below
 tickers: []
 maxPositionSize: 0.05
 ---
@@ -26,7 +26,7 @@ Behavioral explanations argue that investors systematically overreact to poor pa
 
 The quality filter (positive trailing earnings) follows Novy-Marx (2013), who showed that combining value with quality (profitability) substantially improves the strategy's risk-adjusted returns. Piotroski (2000) demonstrated that simple accounting screens can separate winners from losers within the value quintile.
 
-Note: the academic literature (including Fama & French) typically uses decile sorts (top 10%) and long-short portfolios (long high B/P, short low B/P). This implementation uses quintile sorts (top 20%) and long-only positioning as a practical adaptation for retail investors who face short-selling constraints, higher borrowing costs, and smaller investable universes.
+Note: this implementation uses a hard scalar P/B threshold (≤1.5x) rather than the cross-sectional decile or quintile sorts common in the academic literature. Cross-sectional ranking against a sector benchmark requires a 100+ stock universe and benchmark sector medians — neither of which fits a 20-position retail portfolio. The scalar threshold is a practical adaptation: it fires for any held position whose price-to-book multiple is below 1.5x, and the Strategist agent is left to assess sector-relative cheapness, value-trap risk, and quality filters from the markdown body when proposing actions.
 
 ## Entry Rules
 

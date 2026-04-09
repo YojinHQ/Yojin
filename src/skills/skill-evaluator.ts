@@ -6,20 +6,25 @@
  * and returns evaluations that should be routed to the Strategist.
  */
 
+import { SUPPORTED_LOOKBACK_MONTHS } from './portfolio-context-builder.js';
 import type { SkillStore } from './skill-store.js';
 import type { SkillEvaluation, SkillTrigger } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
+import { SignalTypeSchema } from '../signals/types.js';
+import type { Signal, SignalType } from '../signals/types.js';
 
 const logger = createSubsystemLogger('skill-evaluator');
 
 /** Portfolio context passed to the evaluator for condition checking. */
-interface PortfolioContext {
+export interface PortfolioContext {
   /** Position weights by ticker (0-1). */
   weights: Record<string, number>;
   /** Current prices by ticker. */
   prices: Record<string, number>;
-  /** Price changes (%) over the evaluation window. */
+  /** Price changes (%) over the evaluation window (daily). */
   priceChanges: Record<string, number>;
+  /** Multi-period returns by ticker, keyed as "TICKER:months" → return fraction. */
+  periodReturns?: Record<string, number>;
   /** Technical indicators by ticker. */
   indicators: Record<string, Record<string, number>>;
   /** Days until next earnings by ticker. */
@@ -28,6 +33,10 @@ interface PortfolioContext {
   portfolioDrawdown: number;
   /** Per-position drawdown (%). */
   positionDrawdowns: Record<string, number>;
+  /** Numeric metrics per ticker (SUE, sentiment_momentum_24h, priceToBook, bookValue, ...). */
+  metrics: Record<string, Record<string, number>>;
+  /** Recent signals per ticker, pre-fetched and grouped (24h lookback). */
+  signals: Record<string, Signal[]>;
 }
 
 export class SkillEvaluator {
@@ -103,7 +112,21 @@ ${sections.join('\n\n---\n\n')}`;
     switch (trigger.type) {
       case 'PRICE_MOVE': {
         const threshold = Number(params['threshold'] ?? 0);
-        const change = ctx.priceChanges[ticker];
+        const lookbackMonths = params['lookback_months'] != null ? Number(params['lookback_months']) : undefined;
+
+        let change: number | undefined;
+        if (lookbackMonths != null) {
+          change = ctx.periodReturns?.[`${ticker}:${lookbackMonths}`];
+          if (change === undefined && !(SUPPORTED_LOOKBACK_MONTHS as readonly number[]).includes(lookbackMonths)) {
+            logger.warn(
+              `PRICE_MOVE: unsupported lookback_months=${lookbackMonths} (supported: ${SUPPORTED_LOOKBACK_MONTHS.join(', ')}). ` +
+                `Trigger will not fire for ${ticker}.`,
+            );
+          }
+        } else {
+          change = ctx.priceChanges[ticker];
+        }
+
         if (change === undefined) return null; // no data — don't fire
         if (threshold < 0 && change <= threshold) return { change, threshold };
         if (threshold > 0 && change >= threshold) return { change, threshold };
@@ -142,13 +165,55 @@ ${sections.join('\n\n---\n\n')}`;
         return null;
       }
 
-      case 'SIGNAL_MATCH':
+      case 'METRIC_THRESHOLD': {
+        const metric = String(params['metric'] ?? '');
+        const threshold = Number(params['threshold'] ?? 0);
+        const direction = String(params['direction'] ?? 'above');
+        const value = ctx.metrics[ticker]?.[metric];
+        if (value == null) return null; // honest: missing data → can't evaluate
+        const fired = direction === 'above' ? value >= threshold : value <= threshold;
+        if (!fired) return null;
+        return { metric, value, threshold, direction };
+      }
+
+      case 'SIGNAL_PRESENT': {
+        const rawTypes = params['signal_types'];
+        const signalTypes: SignalType[] = Array.isArray(rawTypes)
+          ? rawTypes.filter((t): t is SignalType => SignalTypeSchema.safeParse(t).success)
+          : [];
+        if (signalTypes.length === 0) return null;
+        const minSentiment = params['min_sentiment'] != null ? Number(params['min_sentiment']) : undefined;
+        const requestedLookback = params['lookback_hours'] != null ? Number(params['lookback_hours']) : 24;
+        // Hard-cap at 24h — the prefetch only covers 24h, honoring more would
+        // produce silent false negatives.
+        const lookback = Math.min(requestedLookback, 24);
+        const cutoff = Date.now() - lookback * 3_600_000;
+        const tickerSignals = ctx.signals[ticker] ?? [];
+        const matched = tickerSignals.find(
+          (s) =>
+            signalTypes.includes(s.type) &&
+            new Date(s.publishedAt).getTime() >= cutoff &&
+            (minSentiment == null || (s.sentimentScore != null && s.sentimentScore >= minSentiment)),
+        );
+        if (!matched) return null;
+        return {
+          signalId: matched.id,
+          signalType: matched.type,
+          signalTitle: matched.title,
+          sentimentScore: matched.sentimentScore ?? null,
+        };
+      }
+
       case 'CUSTOM':
-        // These require more complex evaluation — defer to Strategist reasoning
+        // User-defined expression — no auto-evaluation, defer to Strategist reasoning.
         return null;
 
       default:
-        return null;
+        return assertNever(trigger.type);
     }
   }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled trigger type: ${String(value)}`);
 }

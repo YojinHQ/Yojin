@@ -4,23 +4,23 @@ Community-authored trading strategies for Yojin. Each strategy is a Markdown fil
 
 ## Strategies
 
-| #  | Strategy                                                          | Style           | Asset Class | Requires                            | Trigger Type                     |
-|----|-------------------------------------------------------------------|-----------------|-------------|-------------------------------------|----------------------------------|
-| 1  | [Price Momentum](price-momentum.md)                               | momentum        | Stocks      | market_data                         | PRICE_MOVE                       |
-| 2  | [Earnings Momentum (SUE)](earnings-momentum.md)                   | event_driven    | Stocks      | fundamentals, market_data           | EARNINGS_PROXIMITY, SIGNAL_MATCH |
-| 3  | [Bollinger Mean-Reversion](bollinger-mean-reversion.md)           | mean_reversion  | Stocks      | market_data, technicals             | INDICATOR_THRESHOLD              |
-| 4  | [RSI Divergence](rsi-divergence.md)                               | technical       | Stocks      | technicals, market_data             | INDICATOR_THRESHOLD              |
-| 5  | [Multi-Factor Ranking](multi-factor-ranking.md)                   | quant           | Stocks      | fundamentals, technicals, sentiment | CUSTOM                           |
-| 6  | [Pairs Trading](pairs-trading.md)                                 | statistical_arb | Stocks      | market_data                         | CUSTOM                           |
-| 7  | [Sector Rotation](sector-rotation.md)                             | momentum        | ETFs        | market_data, portfolio              | PRICE_MOVE                       |
-| 8  | [Covered Call](covered-call.md)                                   | income          | Options     | market_data, derivatives            | INDICATOR_THRESHOLD              |
-| 9  | [Carry Trade](carry-trade.md)                                     | carry           | FX          | macro_data                          | CUSTOM                           |
-| 10 | [Sentiment-Based (Naive Bayes)](sentiment-naive-bayes.md)         | sentiment       | Crypto      | sentiment                           | SIGNAL_MATCH                     |
-| 11 | [Book-to-Price Value](book-to-price-value.md)                     | value           | Stocks      | fundamentals                        | SIGNAL_MATCH                     |
-| 12 | [Volatility Risk Premium](volatility-risk-premium.md)             | income          | Stocks/ETFs | technicals, market_data             | INDICATOR_THRESHOLD              |
-| 13 | [News Momentum](news-momentum.md)                                 | event_driven    | Stocks      | news, sentiment                     | SIGNAL_MATCH                     |
-| 14 | [Drawdown Mean-Reversion](drawdown-mean-reversion.md)             | mean_reversion  | Stocks      | market_data, technicals             | DRAWDOWN                         |
-| 15 | [Concentration Drift Rebalance](concentration-drift-rebalance.md) | risk            | Portfolio   | portfolio                           | CONCENTRATION_DRIFT              |
+| #  | Strategy                                                          | Style           | Asset Class | Requires                            | Trigger Type                         |
+|----|-------------------------------------------------------------------|-----------------|-------------|-------------------------------------|--------------------------------------|
+| 1  | [Price Momentum](price-momentum.md)                               | momentum        | Stocks      | market_data                         | PRICE_MOVE                           |
+| 2  | [Earnings Momentum (SUE)](earnings-momentum.md)                   | event_driven    | Stocks      | fundamentals, market_data           | EARNINGS_PROXIMITY, METRIC_THRESHOLD |
+| 3  | [Bollinger Mean-Reversion](bollinger-mean-reversion.md)           | mean_reversion  | Stocks      | market_data, technicals             | INDICATOR_THRESHOLD                  |
+| 4  | [RSI Divergence](rsi-divergence.md)                               | technical       | Stocks      | technicals, market_data             | INDICATOR_THRESHOLD                  |
+| 5  | [Multi-Factor Ranking](multi-factor-ranking.md)                   | quant           | Stocks      | fundamentals, technicals, sentiment | CUSTOM                               |
+| 6  | [Pairs Trading](pairs-trading.md)                                 | statistical_arb | Stocks      | market_data                         | CUSTOM                               |
+| 7  | [Sector Rotation](sector-rotation.md)                             | momentum        | ETFs        | market_data, portfolio              | PRICE_MOVE                           |
+| 8  | [Covered Call](covered-call.md)                                   | income          | Options     | market_data, derivatives            | INDICATOR_THRESHOLD                  |
+| 9  | [Carry Trade](carry-trade.md)                                     | carry           | FX          | macro_data                          | CUSTOM                               |
+| 10 | [Sentiment-Based (Naive Bayes)](sentiment-naive-bayes.md)         | sentiment       | Crypto      | sentiment                           | METRIC_THRESHOLD                     |
+| 11 | [Book-to-Price Value](book-to-price-value.md)                     | value           | Stocks      | fundamentals                        | METRIC_THRESHOLD                     |
+| 12 | [Volatility Risk Premium](volatility-risk-premium.md)             | income          | Stocks/ETFs | technicals, market_data             | INDICATOR_THRESHOLD                  |
+| 13 | [News Momentum](news-momentum.md)                                 | event_driven    | Stocks      | news, sentiment                     | SIGNAL_PRESENT                       |
+| 14 | [Drawdown Mean-Reversion](drawdown-mean-reversion.md)             | mean_reversion  | Stocks      | market_data, technicals             | DRAWDOWN                             |
+| 15 | [Concentration Drift Rebalance](concentration-drift-rebalance.md) | risk            | Portfolio   | portfolio                           | CONCENTRATION_DRIFT                  |
 
 ## How It Works
 

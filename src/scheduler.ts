@@ -19,7 +19,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { JintelClient } from '@yojinhq/jintel-client';
+import type { Entity, JintelClient } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
 import type { ActionStore } from './actions/action-store.js';
@@ -41,7 +41,9 @@ import type { PortfolioSnapshotStore } from './portfolio/snapshot-store.js';
 import type { TickerProfileStore } from './profiles/profile-store.js';
 import type { SignalArchive } from './signals/archive.js';
 import type { SignalIngestor } from './signals/ingestor.js';
-import type { SkillEvaluator } from './skills/skill-evaluator.js';
+import type { Signal } from './signals/types.js';
+import { buildPortfolioContext } from './skills/portfolio-context-builder.js';
+import type { PortfolioContext, SkillEvaluator } from './skills/skill-evaluator.js';
 import { snapFromInsight } from './snap/snap-from-insight.js';
 import { snapFromMicro } from './snap/snap-from-micro.js';
 import type { SnapStore } from './snap/snap-store.js';
@@ -926,6 +928,88 @@ export class Scheduler {
    * After curation, evaluate active skills against current portfolio state
    * and create Actions for any triggers that fire.
    */
+  /**
+   * Fetch live quotes + technicals from Jintel and build a full PortfolioContext.
+   * Falls back to snapshot-only context if Jintel is unavailable.
+   */
+  private async buildEnrichedContext(snapshot: {
+    positions: { symbol: string; currentPrice: number; marketValue: number }[];
+    totalValue: number;
+  }): Promise<PortfolioContext> {
+    const tickers = snapshot.positions.map((p) => p.symbol);
+    const jintelClient = this.getJintelClient?.();
+
+    if (!jintelClient || tickers.length === 0) {
+      return buildPortfolioContext(snapshot, [], []);
+    }
+
+    // `since` is a best-effort file-prune hint for the archive (day-partitioned).
+    // Record-level 24h filtering happens in the SIGNAL_PRESENT evaluator cutoff.
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const signalsP: Promise<Signal[]> = this.signalArchive
+      ? this.signalArchive.query({ tickers, since }).catch((err: unknown) => {
+          logger.warn('Failed to query signals for skill evaluation', { error: err });
+          return [];
+        })
+      : Promise.resolve([]);
+
+    const [quotesResult, entities, priceHistoryResult, signals] = await Promise.all([
+      jintelClient.quotes(tickers).catch((err: unknown) => {
+        logger.warn('Failed to fetch quotes for skill evaluation', { error: err });
+        return { success: false as const, error: String(err) };
+      }),
+      this.batchEnrichForSkills(jintelClient, tickers),
+      jintelClient.priceHistory(tickers, '1y', '1d').catch((err: unknown) => {
+        logger.warn('Failed to fetch price history for skill evaluation', { error: err });
+        return { success: false as const, error: String(err) };
+      }),
+      signalsP,
+    ]);
+
+    const quotes = quotesResult.success ? quotesResult.data : [];
+    const histories = priceHistoryResult.success ? priceHistoryResult.data : [];
+
+    // Group signals by ticker (one signal can link to multiple assets).
+    const signalsByTicker: Record<string, Signal[]> = {};
+    for (const sig of signals) {
+      for (const link of sig.assets) {
+        (signalsByTicker[link.ticker] ??= []).push(sig);
+      }
+    }
+
+    logger.info('Built enriched PortfolioContext for skill evaluation', {
+      tickers: tickers.length,
+      quotesAvailable: quotes.length,
+      entitiesAvailable: entities.length,
+      historiesAvailable: histories.length,
+      signalsAvailable: signals.length,
+    });
+
+    return buildPortfolioContext(snapshot, quotes, entities, histories, signalsByTicker);
+  }
+
+  /** Batch-enrich tickers in chunks of 20, requesting market + technicals + sentiment. */
+  private async batchEnrichForSkills(client: JintelClient, tickers: string[]): Promise<Entity[]> {
+    const CHUNK_SIZE = 20;
+    const results: Entity[] = [];
+
+    for (let i = 0; i < tickers.length; i += CHUNK_SIZE) {
+      const chunk = tickers.slice(i, i + CHUNK_SIZE);
+      try {
+        const result = await client.batchEnrich(chunk, ['market', 'technicals', 'sentiment']);
+        if (result.success) {
+          results.push(...result.data);
+        } else {
+          logger.warn('Batch enrich chunk failed', { chunk, error: result.error });
+        }
+      } catch (err) {
+        logger.warn('Batch enrich chunk threw', { chunk, error: err });
+      }
+    }
+
+    return results;
+  }
+
   private async evaluateSkillsAfterCuration(): Promise<void> {
     if (!this.skillEvaluator || !this.actionStore) return;
 
@@ -939,29 +1023,7 @@ export class Scheduler {
       return;
     }
 
-    // Build PortfolioContext from the latest snapshot
-    const weights: Record<string, number> = {};
-    const prices: Record<string, number> = {};
-
-    for (const position of snapshot.positions) {
-      weights[position.symbol] = snapshot.totalValue > 0 ? position.marketValue / snapshot.totalValue : 0;
-      prices[position.symbol] = position.currentPrice;
-    }
-
-    // Partial context — only weights and prices are available from the snapshot.
-    // priceChanges, indicators, earningsDays, and drawdowns will be populated
-    // once the enrichment pipeline wires these data sources. Trigger checks
-    // skip evaluation when their required data is absent (returns null).
-    const context = {
-      weights,
-      prices,
-      priceChanges: {} as Record<string, number>,
-      indicators: {} as Record<string, Record<string, number>>,
-      earningsDays: {} as Record<string, number>,
-      portfolioDrawdown: 0,
-      positionDrawdowns: {} as Record<string, number>,
-    };
-
+    const context = await this.buildEnrichedContext(snapshot);
     const evaluations = this.skillEvaluator.evaluate(context);
 
     if (evaluations.length === 0) {
