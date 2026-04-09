@@ -10,6 +10,12 @@ import {
   UPDATE_SKILL_MUTATION,
   DELETE_SKILL_MUTATION,
   IMPORT_SKILL_MUTATION,
+  STRATEGY_SOURCES_QUERY,
+  ADD_STRATEGY_SOURCE_MUTATION,
+  REMOVE_STRATEGY_SOURCE_MUTATION,
+  TOGGLE_STRATEGY_SOURCE_MUTATION,
+  SYNC_STRATEGIES_MUTATION,
+  SYNC_STRATEGY_SOURCE_MUTATION,
 } from '../documents.js';
 import type {
   SkillsQueryResult,
@@ -22,6 +28,12 @@ import type {
   DeleteSkillMutationResult,
   ImportSkillMutationResult,
   ImportSkillVariables,
+  StrategySourcesQueryResult,
+  AddStrategySourceResult,
+  RemoveStrategySourceResult,
+  ToggleStrategySourceResult,
+  SyncStrategiesResult,
+  SyncStrategySourceResult,
 } from '../types.js';
 
 export function useSkills(variables?: SkillsQueryVariables) {
@@ -59,4 +71,28 @@ export function useDeleteSkill() {
 
 export function useImportSkill() {
   return useMutation<ImportSkillMutationResult, ImportSkillVariables>(IMPORT_SKILL_MUTATION);
+}
+
+export function useStrategySources() {
+  return useQuery<StrategySourcesQueryResult>({ query: STRATEGY_SOURCES_QUERY });
+}
+
+export function useAddStrategySource() {
+  return useMutation<AddStrategySourceResult>(ADD_STRATEGY_SOURCE_MUTATION);
+}
+
+export function useRemoveStrategySource() {
+  return useMutation<RemoveStrategySourceResult>(REMOVE_STRATEGY_SOURCE_MUTATION);
+}
+
+export function useToggleStrategySource() {
+  return useMutation<ToggleStrategySourceResult>(TOGGLE_STRATEGY_SOURCE_MUTATION);
+}
+
+export function useSyncStrategies() {
+  return useMutation<SyncStrategiesResult>(SYNC_STRATEGIES_MUTATION);
+}
+
+export function useSyncStrategySource() {
+  return useMutation<SyncStrategySourceResult>(SYNC_STRATEGY_SOURCE_MUTATION);
 }

@@ -25,6 +25,7 @@ Thumbs.db
 # Internal docs — architecture plans, specs, design docs
 plans/
 docs/superpowers/
+.superpowers/
 
 # TypeScript build info
 *.tsbuildinfo

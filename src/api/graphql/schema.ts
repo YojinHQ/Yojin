@@ -577,6 +577,7 @@ export const typeDefs = /* GraphQL */ `
     why: String!
     source: String!
     riskContext: String
+    severity: Float
     status: ActionStatus!
     expiresAt: String!
     createdAt: String!
@@ -1144,6 +1145,32 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # ---------------------------------------------------------------------------
+  # Strategy Sources
+  # ---------------------------------------------------------------------------
+
+  type StrategySource {
+    id: ID!
+    owner: String!
+    repo: String!
+    path: String!
+    ref: String!
+    enabled: Boolean!
+    lastSyncedAt: String
+    label: String
+  }
+
+  type SyncResult {
+    added: Int!
+    skipped: Int!
+    failed: Int!
+    errors: [String!]!
+  }
+
+  input AddStrategySourceInput {
+    url: String!
+  }
+
+  # ---------------------------------------------------------------------------
   # Activity Log
   # ---------------------------------------------------------------------------
 
@@ -1222,6 +1249,7 @@ export const typeDefs = /* GraphQL */ `
     actions(status: ActionStatus, since: String, limit: Int): [Action!]!
     action(id: ID!): Action
     skills(category: SkillCategory, active: Boolean, style: String, query: String): [Skill!]!
+    strategySources: [StrategySource!]!
     skill(id: ID!): Skill
     exportSkill(id: ID!): String!
     tickerProfile(ticker: String!): TickerProfile
@@ -1303,6 +1331,11 @@ export const typeDefs = /* GraphQL */ `
     updateSkill(id: ID!, input: UpdateSkillInput!): Skill!
     deleteSkill(id: ID!): Boolean!
     importSkill(markdown: String!): Skill!
+    addStrategySource(input: AddStrategySourceInput!): StrategySource!
+    removeStrategySource(id: ID!): Boolean!
+    toggleStrategySource(id: ID!, enabled: Boolean!): StrategySource!
+    syncStrategies: SyncResult!
+    syncStrategySource(id: ID!): SyncResult!
     clearAppData: Boolean!
     saveAiConfig(input: AiConfigInput!): AiConfig!
     saveAiCredential(provider: String!, apiKey: String!): SaveAiCredentialResult!

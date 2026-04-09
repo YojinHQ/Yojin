@@ -55,6 +55,7 @@ import { setGroupSignalArchive, setSignalGroupArchive } from './api/graphql/reso
 import { setSignalArchive } from './api/graphql/resolvers/signals.js';
 import { setSkillStore } from './api/graphql/resolvers/skills.js';
 import { setSnapStore } from './api/graphql/resolvers/snap.js';
+import { setSkillStoreForSources, setStrategySourceStore } from './api/graphql/resolvers/strategy-sources.js';
 import { setVault, setVaultSecretChangedCallback } from './api/graphql/resolvers/vault.js';
 import {
   setWatchlistEnrichment,
@@ -105,6 +106,8 @@ import { createSignalTools } from './signals/tools.js';
 import { SkillEvaluator } from './skills/skill-evaluator.js';
 import { SkillStore } from './skills/skill-store.js';
 import { createSkillTools } from './skills/skill-tools.js';
+import { StrategySourceStore } from './skills/strategy-source-store.js';
+import { syncStrategies } from './skills/strategy-source-sync.js';
 import { SnapStore } from './snap/snap-store.js';
 import { createApiHealthTools } from './tools/api-health.js';
 import { createBrainTools } from './tools/brain-tools.js';
@@ -663,26 +666,19 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   const skillStore = new SkillStore({ dir: skillsDir });
   await skillStore.initialize();
   setSkillStore(skillStore);
-  const defaultStrategiesDir = `${resolveDefaultsRoot()}/strategies`;
-  if (existsSync(defaultStrategiesDir)) {
-    const { readdirSync, readFileSync } = await import('node:fs');
-    const { parseFromMarkdown } = await import('./skills/skill-serializer.js');
-    for (const file of readdirSync(defaultStrategiesDir).filter(
-      (f: string) => f.endsWith('.md') && f[0] === f[0].toLowerCase(),
-    )) {
-      try {
-        const md = readFileSync(`${defaultStrategiesDir}/${file}`, 'utf-8');
-        const skill = parseFromMarkdown(md);
-        skill.source = 'built-in';
-        skill.createdBy = 'yojin';
-        const dest = `${skillsDir}/${skill.id}.json`;
-        if (!existsSync(dest)) {
-          skillStore.save(skill);
-          log.info(`Seeded strategy from ${file}: ${skill.name}`);
-        }
-      } catch (err) {
-        log.debug(`Failed to seed strategy from ${file}`, { error: err });
-      }
+  // Strategy sources — sync from GitHub repos on first run
+  const strategySourceStore = new StrategySourceStore(`${dataRoot}/config/strategy-sources.json`);
+  await strategySourceStore.initialize();
+  setStrategySourceStore(strategySourceStore);
+  setSkillStoreForSources(skillStore);
+
+  const enabledSources = strategySourceStore.getEnabled();
+  if (enabledSources.length > 0) {
+    try {
+      const { added } = await syncStrategies(enabledSources, skillStore, strategySourceStore);
+      if (added > 0) log.info(`Seeded ${added} strategies from ${enabledSources.length} source(s)`);
+    } catch (err) {
+      log.warn('Failed to sync strategies from sources', { error: err });
     }
   }
 

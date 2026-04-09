@@ -64,6 +64,8 @@ const cache = cacheExchange({
     SessionDetail: (data) => data.id as string,
     Skill: (data) => data.id as string,
     SkillTrigger: () => null, // embedded — nested under Skill
+    StrategySource: (data) => data.id as string,
+    SyncResult: () => null, // embedded — mutation result
     SymbolSearchResult: () => null, // embedded — search result, no stable identity
     WatchlistEntry: () => null, // embedded — nested under watchlist query array
     KeychainTokenResult: () => null, // query result — singleton per provider
@@ -172,6 +174,24 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'skills');
       },
       toggleSkill(_result, _args, cache) {
+        cache.invalidate('Query', 'skills');
+      },
+      addStrategySource(_result, _args, cache) {
+        cache.invalidate('Query', 'strategySources');
+        cache.invalidate('Query', 'skills');
+      },
+      removeStrategySource(_result, _args, cache) {
+        cache.invalidate('Query', 'strategySources');
+      },
+      toggleStrategySource(_result, _args, cache) {
+        cache.invalidate('Query', 'strategySources');
+      },
+      syncStrategies(_result, _args, cache) {
+        cache.invalidate('Query', 'strategySources');
+        cache.invalidate('Query', 'skills');
+      },
+      syncStrategySource(_result, _args, cache) {
+        cache.invalidate('Query', 'strategySources');
         cache.invalidate('Query', 'skills');
       },
       clearAppData(_result, _args, cache) {

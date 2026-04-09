@@ -1533,3 +1533,78 @@ export const IMPORT_SKILL_MUTATION = gql`
     }
   }
 `;
+
+// ---------------------------------------------------------------------------
+// Queries — Strategy Sources
+// ---------------------------------------------------------------------------
+
+export const STRATEGY_SOURCES_QUERY = gql`
+  query StrategySources {
+    strategySources {
+      id
+      owner
+      repo
+      path
+      ref
+      enabled
+      lastSyncedAt
+      label
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Mutations — Strategy Sources
+// ---------------------------------------------------------------------------
+
+export const ADD_STRATEGY_SOURCE_MUTATION = gql`
+  mutation AddStrategySource($input: AddStrategySourceInput!) {
+    addStrategySource(input: $input) {
+      id
+      owner
+      repo
+      path
+      ref
+      enabled
+      lastSyncedAt
+      label
+    }
+  }
+`;
+
+export const REMOVE_STRATEGY_SOURCE_MUTATION = gql`
+  mutation RemoveStrategySource($id: ID!) {
+    removeStrategySource(id: $id)
+  }
+`;
+
+export const TOGGLE_STRATEGY_SOURCE_MUTATION = gql`
+  mutation ToggleStrategySource($id: ID!, $enabled: Boolean!) {
+    toggleStrategySource(id: $id, enabled: $enabled) {
+      id
+      enabled
+    }
+  }
+`;
+
+export const SYNC_STRATEGIES_MUTATION = gql`
+  mutation SyncStrategies {
+    syncStrategies {
+      added
+      skipped
+      failed
+      errors
+    }
+  }
+`;
+
+export const SYNC_STRATEGY_SOURCE_MUTATION = gql`
+  mutation SyncStrategySource($id: ID!) {
+    syncStrategySource(id: $id) {
+      added
+      skipped
+      failed
+      errors
+    }
+  }
+`;

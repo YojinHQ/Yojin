@@ -1324,6 +1324,52 @@ export interface ImportSkillVariables {
 }
 
 // ---------------------------------------------------------------------------
+// Strategy Sources
+// ---------------------------------------------------------------------------
+
+export interface StrategySource {
+  id: string;
+  owner: string;
+  repo: string;
+  path: string;
+  ref: string;
+  enabled: boolean;
+  lastSyncedAt: string | null;
+  label: string | null;
+}
+
+export interface SyncResult {
+  added: number;
+  skipped: number;
+  failed: number;
+  errors: string[];
+}
+
+export interface StrategySourcesQueryResult {
+  strategySources: StrategySource[];
+}
+
+export interface AddStrategySourceResult {
+  addStrategySource: StrategySource;
+}
+
+export interface RemoveStrategySourceResult {
+  removeStrategySource: boolean;
+}
+
+export interface ToggleStrategySourceResult {
+  toggleStrategySource: StrategySource;
+}
+
+export interface SyncStrategiesResult {
+  syncStrategies: SyncResult;
+}
+
+export interface SyncStrategySourceResult {
+  syncStrategySource: SyncResult;
+}
+
+// ---------------------------------------------------------------------------
 // Ticker Profiles
 // ---------------------------------------------------------------------------
 

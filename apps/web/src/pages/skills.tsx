@@ -4,6 +4,7 @@ import Button from '../components/common/button';
 import ActiveRulesView from '../components/skills/active-rules-view.js';
 import ImportSkillModal from '../components/skills/import-skill-modal.js';
 import SkillEditorModal from '../components/skills/skill-editor-modal.js';
+import { StrategySources } from '../components/skills/strategy-sources.js';
 
 export default function Skills() {
   const [importOpen, setImportOpen] = useState(false);
@@ -32,6 +33,9 @@ export default function Skills() {
 
       <div className="flex-1 overflow-auto px-6 pb-6">
         <ActiveRulesView />
+        <div className="mt-8">
+          <StrategySources />
+        </div>
       </div>
 
       <ImportSkillModal open={importOpen} onClose={() => setImportOpen(false)} />

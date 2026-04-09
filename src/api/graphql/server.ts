@@ -123,6 +123,14 @@ import {
 } from './resolvers/skills.js';
 import { snapQuery } from './resolvers/snap.js';
 import {
+  resolveAddStrategySource,
+  resolveRemoveStrategySource,
+  resolveStrategySources,
+  resolveSyncStrategies,
+  resolveSyncStrategySource,
+  resolveToggleStrategySource,
+} from './resolvers/strategy-sources.js';
+import {
   addVaultSecretMutation,
   changeVaultPassphraseMutation,
   deleteVaultSecretMutation,
@@ -185,6 +193,7 @@ const schema = createSchema({
       action: actionResolver,
       skills: resolveSkills,
       skill: resolveSkill,
+      strategySources: resolveStrategySources,
       exportSkill: resolveExportSkill,
       tickerProfile: tickerProfileQuery,
       tickerProfiles: tickerProfilesQuery,
@@ -249,6 +258,11 @@ const schema = createSchema({
       updateSkill: resolveUpdateSkill,
       deleteSkill: resolveDeleteSkill,
       importSkill: resolveImportSkill,
+      addStrategySource: resolveAddStrategySource,
+      removeStrategySource: resolveRemoveStrategySource,
+      toggleStrategySource: resolveToggleStrategySource,
+      syncStrategies: resolveSyncStrategies,
+      syncStrategySource: resolveSyncStrategySource,
       clearAppData: clearAppDataMutation,
       saveAiConfig: saveAiConfigMutation,
       saveAiCredential: saveAiCredentialMutation,
