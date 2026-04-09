@@ -87,6 +87,12 @@ Extend via interfaces, not modification:
 
 - **Publish only at the final step of a multi-phase write.** When a pipeline writes a baseline, then merges it with fresh inputs to produce a final record (e.g. `regenerateSnap()` → `regenerateSnapFromMicro()`), only the final step should fire the `*.ready` event. If the intermediate step publishes first, a notification-cooldown (like `SNAP_NOTIFY_COOLDOWN_MS`) will swallow the merged-result notification and downstream consumers will hold the pre-merge `id`. Add a `skipPublish` (or equivalent) flag to the intermediate writer and pass it from the orchestrator — don't rely on cooldown timing to silence the extra event.
 
+## Build Scripts — Don't Destroy What the Next Step Needs
+
+- **Composite build scripts must not call cleanup helpers that wipe `node_modules`.** A script like `"build:release": "pnpm clean && tsc && pnpm --filter @yojin/web build"` looks reasonable, but if `pnpm clean` does `rm -rf dist && find . -name node_modules -prune -exec rm -rf {} +`, the next step (`tsc`) runs against a missing `node_modules/` and fails — or worse, succeeds partially in CI where `node_modules` gets restored by an earlier install step, masking the bug locally.
+- **Scope cleanup to build artifacts only.** For release builds, use explicit paths: `rm -rf dist apps/web/dist && tsc && ...`. Never call a generic `clean` target that touches `node_modules/` from a script that immediately invokes a binary from `node_modules/.bin/`.
+- **Check the full blast radius of any helper target you chain.** Before composing scripts with `&&`, read the helper's definition — a `clean` script in one repo means "rm -rf dist", in another means "nuke everything including installed deps". The name is not the contract.
+
 ## Refactoring — Ask First
 
 Before making breaking changes to:
