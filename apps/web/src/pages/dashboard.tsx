@@ -1,7 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 
 import RightPanel from '../components/layout/right-panel';
-import ActionsTldr from '../components/overview/actions-tldr';
 import ConnectedAccountsCard from '../components/overview/connected-accounts-card';
 import IntelFeed from '../components/overview/intel-feed';
 import IntelSummaryCard from '../components/overview/intel-summary-card';
@@ -66,9 +65,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Right panel — Actions TLDR (severity-ranked) pinned above the Intel Feed */}
+      {/* Right panel — unified feed */}
       <RightPanel>
-        <ActionsTldr />
         <IntelFeed feedTarget="PORTFOLIO" />
       </RightPanel>
     </div>
