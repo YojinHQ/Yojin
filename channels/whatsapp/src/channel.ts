@@ -364,7 +364,7 @@ export function buildWhatsAppChannel(deps: WhatsAppChannelDeps = {}): ChannelPlu
         if (!session?.isConnected() || !selfJid || !deps.snapStore) return;
         if (!(await isNotificationEnabled('whatsapp', 'snap.ready'))) return;
         try {
-          const snap = await deps.snapStore.getLatest();
+          const snap = await deps.snapStore.getLatest(event.scope);
           if (!snap || snap.id !== event.snapId) return;
           await sendNotification(formatSnap(snap));
         } catch (err) {

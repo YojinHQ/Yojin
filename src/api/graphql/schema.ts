@@ -90,6 +90,16 @@ export const typeDefs = /* GraphQL */ `
     WATCHLIST
   }
 
+  """
+  Scope tag for Snap briefs and Actions — partitions user attention
+  between portfolio-held assets (Overview) and watchlist-only assets
+  (Watchlist page). Mirrors MicroInsightSource on the backend.
+  """
+  enum Scope {
+    PORTFOLIO
+    WATCHLIST
+  }
+
   # ---------------------------------------------------------------------------
   # Interfaces
   # ---------------------------------------------------------------------------
@@ -571,6 +581,7 @@ export const typeDefs = /* GraphQL */ `
 
   type Action {
     id: ID!
+    scope: Scope!
     signalId: ID
     skillId: ID
     what: String!
@@ -878,6 +889,7 @@ export const typeDefs = /* GraphQL */ `
 
   type Snap {
     id: ID!
+    scope: Scope!
     generatedAt: String!
     intelSummary: String!
     actionItems: [SnapActionItem!]!
@@ -1218,9 +1230,9 @@ export const typeDefs = /* GraphQL */ `
     schedulerStatus: SchedulerStatus!
     listChannels: [Channel!]!
     notificationPreferences: [NotificationPreferences!]!
-    snap: Snap
+    snap(scope: Scope): Snap
     activityLog(types: [ActivityEventType!], since: String, limit: Int): [ActivityEvent!]!
-    actions(status: ActionStatus, since: String, limit: Int): [Action!]!
+    actions(status: ActionStatus, scope: Scope, since: String, limit: Int): [Action!]!
     action(id: ID!): Action
     skills(category: SkillCategory, active: Boolean, style: String, query: String): [Skill!]!
     skill(id: ID!): Skill

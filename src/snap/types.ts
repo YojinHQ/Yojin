@@ -7,8 +7,18 @@
 
 import { z } from 'zod';
 
+import { MicroInsightSourceSchema } from '../insights/micro-types.js';
 import type { MicroInsight } from '../insights/micro-types.js';
 import { IdField } from '../types/base.js';
+
+/**
+ * Snap scope — matches MicroInsightSource so scheduler can use the same
+ * discriminator throughout the pipeline. Portfolio-held assets produce
+ * 'portfolio' snaps shown on Overview; watchlist assets produce 'watchlist'
+ * snaps shown on the Watchlist page.
+ */
+export const SnapScopeSchema = MicroInsightSourceSchema;
+export type SnapScope = z.infer<typeof SnapScopeSchema>;
 
 export const SnapActionItemSchema = z.object({
   text: z.string().min(1),
@@ -37,6 +47,7 @@ export function assetSnapsFromMicro(microInsights: Iterable<MicroInsight>): Asse
 
 export const SnapSchema = z.object({
   id: IdField,
+  scope: SnapScopeSchema.default('portfolio'),
   generatedAt: z.string().min(1),
   intelSummary: z.string().optional().default(''),
   actionItems: z.array(SnapActionItemSchema).default([]),

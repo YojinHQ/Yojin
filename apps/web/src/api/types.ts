@@ -61,6 +61,13 @@ export type SignalVerdict = 'CRITICAL' | 'IMPORTANT' | 'NOISE';
 export type SignalImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 export type ThesisAlignment = 'SUPPORTS' | 'CHALLENGES' | 'NEUTRAL';
 export type FeedTarget = 'PORTFOLIO' | 'WATCHLIST';
+/**
+ * Scope partitions Snap briefs and Actions by which asset group they were
+ * generated for: PORTFOLIO (held positions) or WATCHLIST (watched assets).
+ * The Overview page reads PORTFOLIO-scoped data; the Watchlist page reads
+ * WATCHLIST-scoped data.
+ */
+export type Scope = 'PORTFOLIO' | 'WATCHLIST';
 
 // ---------------------------------------------------------------------------
 // Channels
@@ -815,6 +822,7 @@ export interface AssetSnap {
 // avoid duplicate information on the dashboard.
 export interface Snap {
   id: string;
+  scope: Scope;
   generatedAt: string;
   intelSummary: string;
   assetSnaps: AssetSnap[];
@@ -822,6 +830,10 @@ export interface Snap {
 
 export interface SnapQueryResult {
   snap: Snap | null;
+}
+
+export interface SnapQueryVariables {
+  scope?: Scope;
 }
 
 // ---------------------------------------------------------------------------
@@ -1113,6 +1125,7 @@ export type ActionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
 
 export interface Action {
   id: string;
+  scope: Scope;
   signalId: string | null;
   skillId: string | null;
   what: string;
@@ -1129,6 +1142,7 @@ export interface Action {
 
 export interface ActionsQueryVariables {
   status?: ActionStatus;
+  scope?: Scope;
   since?: string;
   limit?: number;
 }

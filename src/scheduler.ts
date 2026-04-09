@@ -243,9 +243,10 @@ export class Scheduler {
   // Generation counter — incremented on reset() to invalidate in-flight batches
   private resetGeneration = 0;
 
-  // Snap notification dedup — prevent channel spam
-  private lastSnapContentHash: string | undefined;
-  private lastSnapNotifiedAt = 0;
+  // Snap notification dedup — prevent channel spam. Partitioned by scope so
+  // a portfolio-scope update doesn't silence a concurrent watchlist update
+  // (and vice versa) via the 1-hour cooldown.
+  private readonly snapDedupByScope = new Map<MicroInsightSource, { hash: string | undefined; notifiedAt: number }>();
 
   // Timestamp of last macro flow completion — used to gate micro→macro re-triggers
   private lastMacroCompletedAt = 0;
@@ -345,8 +346,7 @@ export class Scheduler {
   reset(): void {
     this.resetGeneration++;
     this.microRegistry.clear();
-    this.lastSnapContentHash = undefined;
-    this.lastSnapNotifiedAt = 0;
+    this.snapDedupByScope.clear();
     if (this.pendingMicroTimer) {
       clearTimeout(this.pendingMicroTimer);
       this.pendingMicroTimer = null;
@@ -615,7 +615,10 @@ export class Scheduler {
         return;
       }
 
-      // Update registry timestamps and mark completed today
+      // Update registry timestamps and mark completed today. Collect which
+      // scopes produced insights so we only regenerate snaps that actually
+      // changed — a pure-watchlist batch shouldn't rewrite the portfolio snap.
+      const updatedScopes = new Set<MicroInsightSource>();
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
         const asset = assetsReadyForLlm[i];
@@ -628,6 +631,7 @@ export class Scheduler {
             state.lastLlmAt = new Date().toISOString();
             state.completedToday = true;
           }
+          updatedScopes.add(asset.source);
 
           logger.info('Micro research complete', {
             symbol,
@@ -639,8 +643,11 @@ export class Scheduler {
         }
       }
 
-      // Regenerate snap from micro insights (immediate feedback before macro)
-      await this.regenerateSnapFromMicro();
+      // Regenerate snap(s) only for the scopes this batch touched. Empty set
+      // means every run failed — skip the regeneration entirely.
+      if (updatedScopes.size > 0) {
+        await this.regenerateSnapFromMicro([...updatedScopes]);
+      }
 
       // Trigger macro when all registered assets have completed micro today,
       // but only if the 2-hour cooldown since the last macro has passed.
@@ -810,7 +817,9 @@ export class Scheduler {
       // `regenerateSnapFromMicro()` should fire `snap.ready`, so downstream
       // consumers pin to the final (post-merge) snapId.
       await this.regenerateSnap({ skipPublish: true });
-      await this.regenerateSnapFromMicro();
+      // Macro flow is portfolio-only — only refresh the portfolio snap here.
+      // Watchlist snaps are driven exclusively by the micro batch handoff.
+      await this.regenerateSnapFromMicro(['portfolio']);
 
       // Mark completion only on success so a failed macro run doesn't start
       // the 2-hour cooldown clock, which would delay the next legitimate run.
@@ -857,35 +866,52 @@ export class Scheduler {
   private maybePublishSnap(snap: import('./snap/types.js').Snap): void {
     if (!this.notificationBus) return;
 
+    const scope = snap.scope;
+    const prev = this.snapDedupByScope.get(scope);
     const hash = snap.contentHash;
-    if (hash && hash === this.lastSnapContentHash) return;
+    if (hash && prev?.hash === hash) return;
 
-    const elapsed = Date.now() - this.lastSnapNotifiedAt;
+    const lastAt = prev?.notifiedAt ?? 0;
+    const elapsed = Date.now() - lastAt;
     if (elapsed < SNAP_NOTIFY_COOLDOWN_MS) return;
 
-    this.lastSnapContentHash = hash;
-    this.lastSnapNotifiedAt = Date.now();
-    this.notificationBus.publish({ type: 'snap.ready', snapId: snap.id });
+    this.snapDedupByScope.set(scope, { hash, notifiedAt: Date.now() });
+    this.notificationBus.publish({ type: 'snap.ready', snapId: snap.id, scope });
   }
 
   /**
-   * Regenerate snap from micro insights — provides immediate feedback
+   * Regenerate the snap briefs from micro insights — provides immediate feedback
    * after each micro batch without waiting for the full macro flow.
-   * If a macro InsightReport exists but micro insights are newer,
-   * the snap is still regenerated from micro data so fresh observations surface.
+   *
+   * Partitioned by scope: portfolio-tagged micro insights feed the Overview
+   * snap, watchlist-tagged insights feed the Watchlist page snap. If `scopes`
+   * is provided, only those scopes are regenerated; otherwise every scope with
+   * at least one insight is regenerated. The portfolio snap uses portfolio
+   * weights for ranking; the watchlist snap has no exposure signal and ranks
+   * on conviction/severity alone.
    */
-  private async regenerateSnapFromMicro(): Promise<void> {
+  private async regenerateSnapFromMicro(scopes?: readonly MicroInsightSource[]): Promise<void> {
     if (!this.snapStore || !this.microInsightStore || !this.providerRouter) return;
 
     try {
-      const microInsights = await this.microInsightStore.getAllLatest();
-      if (microInsights.size === 0) return;
+      const allMicro = await this.microInsightStore.getAllLatest();
+      if (allMicro.size === 0) return;
 
-      // Build portfolio exposure context so the snap prioritizes high-weight positions
-      const store = this.snapshotStore;
+      // Partition insights by scope — each snap only synthesizes its own slice.
+      const bySource = new Map<MicroInsightSource, Map<string, import('./insights/micro-types.js').MicroInsight>>();
+      for (const [symbol, mi] of allMicro) {
+        let bucket = bySource.get(mi.source);
+        if (!bucket) {
+          bucket = new Map();
+          bySource.set(mi.source, bucket);
+        }
+        bucket.set(symbol, mi);
+      }
+
+      // Build portfolio exposure once — only meaningful for the portfolio snap.
       let exposure: import('./snap/snap-from-micro.js').PortfolioExposure[] | undefined;
-      if (store) {
-        const snapshot = await store.getLatest();
+      if (this.snapshotStore) {
+        const snapshot = await this.snapshotStore.getLatest();
         if (snapshot && snapshot.totalValue > 0) {
           exposure = snapshot.positions.map((p) => ({
             symbol: p.symbol,
@@ -895,16 +921,29 @@ export class Scheduler {
         }
       }
 
-      // Load previous snap so the synthesizer can make deliberate update decisions
-      const previousSnap = await this.snapStore.getLatest();
+      const targets = scopes ?? [...bySource.keys()];
+      for (const scope of targets) {
+        const scopedInsights = bySource.get(scope);
+        if (!scopedInsights || scopedInsights.size === 0) continue;
 
-      const snap = await snapFromMicro(microInsights, this.providerRouter, exposure, previousSnap);
-      if (!snap) return;
+        const previousSnap = await this.snapStore.getLatest(scope);
+        const snap = await snapFromMicro(scopedInsights, this.providerRouter, {
+          scope,
+          // Only the portfolio snap needs exposure weights.
+          portfolioExposure: scope === 'portfolio' ? exposure : undefined,
+          previousSnap,
+        });
+        if (!snap) continue;
 
-      snap.contentHash = snapContentHash(snap);
-      await this.snapStore.save(snap);
-      logger.info('Snap brief generated from micro insights', { snapId: snap.id, assets: microInsights.size });
-      this.maybePublishSnap(snap);
+        snap.contentHash = snapContentHash(snap);
+        await this.snapStore.save(snap);
+        logger.info('Snap brief generated from micro insights', {
+          snapId: snap.id,
+          scope,
+          assets: scopedInsights.size,
+        });
+        this.maybePublishSnap(snap);
+      }
     } catch (err) {
       logger.warn('Failed to generate snap from micro insights', { error: err });
     }
@@ -1074,6 +1113,9 @@ export class Scheduler {
 
       const result = await this.actionStore.create({
         id: randomUUID(),
+        // Skills run against the holdings portfolio — surface their actions
+        // on Overview, not the Watchlist page.
+        scope: 'portfolio',
         skillId: evaluation.skillId,
         what: `Skill "${evaluation.skillName}" trigger fired: ${evaluation.triggerType}`,
         why: `Trigger ${evaluation.triggerId} fired with context: ${contextSummary}`,
@@ -1093,6 +1135,7 @@ export class Scheduler {
           type: 'action.created',
           actionId: result.data.id,
           ticker: evaluation.context.ticker as string | undefined,
+          scope: 'portfolio',
         });
       } else {
         logger.warn('Failed to create action from skill trigger', {

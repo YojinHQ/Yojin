@@ -94,13 +94,11 @@ export async function runMicroResearch(
       const actionSource = microActionSource(ticker);
 
       // Find pending micro actions already on file for this ticker.
-      // We query a window of pending actions and filter by source client-side —
-      // ActionStore has no source filter, and the pending set is small in
-      // practice (one entry per tracked ticker at most). The limit is an
-      // upper bound on the whole pending set, not just this ticker's slice;
-      // if we ever exceed 200 pending actions globally we would need to page
-      // or add a source filter to ActionStore.query.
-      const pending = await deps.actionStore.query({ status: 'PENDING', limit: 200 });
+      // Scope-filtered so portfolio and watchlist pending sets never cross —
+      // a ticker can only live in one scope at a time (populateMicroRegistry
+      // enforces this), but filtering by scope keeps the query cheap and
+      // future-proof. Source string match then narrows to this ticker.
+      const pending = await deps.actionStore.query({ status: 'PENDING', scope: source, limit: 200 });
       const sameTicker = pending.filter((a) => a.source === actionSource);
       const maxExistingSeverity = sameTicker.reduce((max, a) => Math.max(max, a.severity ?? 0), 0);
 
@@ -137,6 +135,7 @@ export async function runMicroResearch(
         for (const actionText of texts) {
           const result = await deps.actionStore.create({
             id: randomUUID(),
+            scope: source,
             what: actionText,
             why: `Observation from ${ticker} research: ${insight.thesis.slice(0, 100)}`,
             source: actionSource,
@@ -147,7 +146,12 @@ export async function runMicroResearch(
           });
           if (result.success) {
             if (isCritical) {
-              deps.notificationBus?.publish({ type: 'action.created', actionId: result.data.id, ticker });
+              deps.notificationBus?.publish({
+                type: 'action.created',
+                actionId: result.data.id,
+                ticker,
+                scope: source,
+              });
             }
           } else {
             logger.warn('Failed to create action from micro observation', { symbol: ticker, error: result.error });

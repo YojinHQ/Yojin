@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 
 import { useActions } from '../../api';
+import type { Scope } from '../../api/types';
 import { groupActionsByTicker, insightsHrefForTicker, severityBulletColor } from '../../lib/actions-by-ticker';
 import { useFeatureStatus } from '../../lib/feature-status';
 import { cn, timeAgo } from '../../lib/utils';
@@ -39,12 +40,17 @@ interface TickerGroup {
   whats: string[];
 }
 
-export function YojinSnapCard() {
+interface YojinSnapCardProps {
+  /** Which action scope to display. Defaults to PORTFOLIO (Overview page). */
+  scope?: Scope;
+}
+
+export function YojinSnapCard({ scope = 'PORTFOLIO' }: YojinSnapCardProps = {}) {
   const { aiConfigured, jintelConfigured } = useFeatureStatus();
   // Pause the query until both prerequisites are satisfied so a gated user
   // doesn't spam `actions(status: PENDING)` every 30s behind the blur overlay.
   const unlocked = aiConfigured && jintelConfigured;
-  const [result, reexecute] = useActions({ status: 'PENDING', limit: 50, pause: !unlocked });
+  const [result, reexecute] = useActions({ status: 'PENDING', scope, limit: 50, pause: !unlocked });
   const actions = result.data?.actions;
 
   // Poll to keep the card fresh without a manual refresh. Only runs once the

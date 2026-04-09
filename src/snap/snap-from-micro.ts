@@ -8,7 +8,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import type { Snap } from './types.js';
+import type { Snap, SnapScope } from './types.js';
 import { assetSnapsFromMicro } from './types.js';
 import type { ProviderRouter } from '../ai-providers/router.js';
 import type { MicroInsight } from '../insights/micro-types.js';
@@ -41,6 +41,15 @@ export interface PortfolioExposure {
   marketValue: number;
 }
 
+export interface SnapFromMicroOptions {
+  /** Scope tag embedded on the resulting snap — 'portfolio' or 'watchlist'. */
+  scope: SnapScope;
+  /** Portfolio weights (only meaningful for scope='portfolio'). */
+  portfolioExposure?: PortfolioExposure[];
+  /** Previous snap for the same scope so the LLM can make deliberate updates. */
+  previousSnap?: Snap | null;
+}
+
 /**
  * Build a Snap by AI-synthesizing micro insights into a concise brief.
  * Returns null if no usable micro insights exist.
@@ -51,9 +60,9 @@ export interface PortfolioExposure {
 export async function snapFromMicro(
   microInsights: Map<string, MicroInsight>,
   providerRouter: ProviderRouter,
-  portfolioExposure?: PortfolioExposure[],
-  previousSnap?: Snap | null,
+  options: SnapFromMicroOptions,
 ): Promise<Snap | null> {
+  const { scope, portfolioExposure, previousSnap } = options;
   const insights = [...microInsights.values()].filter((mi) => mi.assetSnap.length > 0 && mi.conviction > 0);
   if (insights.length === 0) return null;
 
@@ -133,6 +142,7 @@ export async function snapFromMicro(
 
     return {
       id: `snap-${randomUUID().slice(0, 8)}`,
+      scope,
       generatedAt: new Date().toISOString(),
       intelSummary: typeof parsed.intelSummary === 'string' ? parsed.intelSummary : '',
       actionItems: actionItems.map((text) => ({ text, signalIds: matchSignalIds(text, insights) })),
@@ -147,6 +157,7 @@ export async function snapFromMicro(
 
     return {
       id: `snap-${randomUUID().slice(0, 8)}`,
+      scope,
       generatedAt: new Date().toISOString(),
       intelSummary: top.assetSnap,
       actionItems: top.assetActions.slice(0, 5).map((text) => ({ text, signalIds: top.topSignalIds })),

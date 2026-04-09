@@ -13,7 +13,7 @@
 import { appendFile, mkdir, readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { Action, ActionStatus } from './types.js';
+import type { Action, ActionScope, ActionStatus } from './types.js';
 import { ActionSchema } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 
@@ -25,6 +25,7 @@ export interface ActionStoreOptions {
 
 interface ActionQueryFilter {
   status?: ActionStatus;
+  scope?: ActionScope;
   since?: string; // ISO date string
   limit?: number;
 }
@@ -148,6 +149,7 @@ export class ActionStore {
         const effectiveStatus = action.status === 'PENDING' && action.expiresAt <= now ? 'EXPIRED' : action.status;
 
         if (filter.status && effectiveStatus !== filter.status) continue;
+        if (filter.scope && action.scope !== filter.scope) continue;
 
         // Return with effective status
         if (effectiveStatus !== action.status) {

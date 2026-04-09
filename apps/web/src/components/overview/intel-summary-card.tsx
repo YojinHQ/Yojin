@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from 'urql';
 
 import { SNAP_QUERY } from '../../api/documents';
-import type { SnapQueryResult } from '../../api/types';
+import type { Scope, SnapQueryResult, SnapQueryVariables } from '../../api/types';
 import { cn, timeAgo } from '../../lib/utils';
 import { useFeatureStatus } from '../../lib/feature-status';
 import { CardBlurGate } from '../common/card-blur-gate';
@@ -13,10 +13,20 @@ import Spinner from '../common/spinner';
 const POLL_INTERVAL_MS = 30_000;
 const UPDATED_GLOW_MS = 3_000;
 
-export default function IntelSummaryCard() {
+interface IntelSummaryCardProps {
+  /** Which snap scope to display. Defaults to PORTFOLIO (Overview page). */
+  scope?: Scope;
+}
+
+export default function IntelSummaryCard({ scope = 'PORTFOLIO' }: IntelSummaryCardProps = {}) {
   const { aiConfigured, jintelConfigured } = useFeatureStatus();
-  // cache-and-network: urql deduplicates with YojinSnapCard which reads the same query from cache
-  const [result, reexecute] = useQuery<SnapQueryResult>({ query: SNAP_QUERY, requestPolicy: 'cache-and-network' });
+  // Memoize vars so urql doesn't re-fetch on every render (unstable object reference).
+  const variables = useMemo<SnapQueryVariables>(() => ({ scope }), [scope]);
+  const [result, reexecute] = useQuery<SnapQueryResult, SnapQueryVariables>({
+    query: SNAP_QUERY,
+    variables,
+    requestPolicy: 'cache-and-network',
+  });
   const snap = result.data?.snap;
 
   // Poll for snap updates

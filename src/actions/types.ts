@@ -13,6 +13,7 @@
 
 import { z } from 'zod';
 
+import { MicroInsightSourceSchema } from '../insights/micro-types.js';
 import { DateTimeField, IdField } from '../types/base.js';
 
 // ---------------------------------------------------------------------------
@@ -22,12 +23,24 @@ import { DateTimeField, IdField } from '../types/base.js';
 export const ActionStatusSchema = z.enum(['PENDING', 'APPROVED', 'REJECTED', 'EXPIRED']);
 export type ActionStatus = z.infer<typeof ActionStatusSchema>;
 
+/**
+ * Action scope — mirrors MicroInsightSource so the same tag flows from the
+ * micro runner through ActionStore to GraphQL. 'portfolio' actions show on
+ * Overview, 'watchlist' actions show on the Watchlist page.
+ */
+export const ActionScopeSchema = MicroInsightSourceSchema;
+export type ActionScope = z.infer<typeof ActionScopeSchema>;
+
 // ---------------------------------------------------------------------------
 // Action — the core entity
 // ---------------------------------------------------------------------------
 
 export const ActionSchema = z.object({
   id: IdField,
+  // Defaults to 'portfolio' so existing JSONL records from before the scope
+  // split keep loading without manual migration — the prior world was
+  // entirely portfolio-scoped.
+  scope: ActionScopeSchema.default('portfolio'),
   signalId: z.string().optional(), // originating signal, if any
   skillId: z.string().optional(), // originating skill, if any
   what: z.string().min(1), // plain English: "Review AAPL — bearish divergence detected"

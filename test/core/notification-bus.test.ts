@@ -9,7 +9,7 @@ describe('NotificationBus', () => {
     const handler = vi.fn();
     bus.on('snap.ready', handler);
 
-    const event: NotificationEvent = { type: 'snap.ready', snapId: 'snap-1' };
+    const event: NotificationEvent = { type: 'snap.ready', snapId: 'snap-1', scope: 'portfolio' };
     bus.publish(event);
 
     expect(handler).toHaveBeenCalledWith(event);
@@ -21,7 +21,7 @@ describe('NotificationBus', () => {
     const unsub = bus.on('snap.ready', handler);
     unsub();
 
-    bus.publish({ type: 'snap.ready', snapId: 'snap-2' });
+    bus.publish({ type: 'snap.ready', snapId: 'snap-2', scope: 'portfolio' });
 
     expect(handler).not.toHaveBeenCalled();
   });
@@ -43,7 +43,7 @@ describe('NotificationBus', () => {
     bus.on('action.created', h1);
     bus.on('action.created', h2);
 
-    const event: NotificationEvent = { type: 'action.created', actionId: 'act-1' };
+    const event: NotificationEvent = { type: 'action.created', actionId: 'act-1', scope: 'portfolio' };
     bus.publish(event);
 
     expect(h1).toHaveBeenCalledWith(event);
@@ -59,7 +59,7 @@ describe('NotificationBus', () => {
     bus.on('snap.ready', bad);
     bus.on('snap.ready', good);
 
-    bus.publish({ type: 'snap.ready', snapId: 'snap-3' });
+    bus.publish({ type: 'snap.ready', snapId: 'snap-3', scope: 'portfolio' });
 
     expect(bad).toHaveBeenCalled();
     expect(good).toHaveBeenCalled();

@@ -2,10 +2,17 @@ import { createSubsystemLogger } from '../logging/logger.js';
 
 const logger = createSubsystemLogger('notification-bus');
 
+/**
+ * Scope for events that partition between portfolio and watchlist flows.
+ * Matches MicroInsightSource / SnapScope / ActionScope — kept as a local
+ * literal union here to avoid coupling notification-bus to those modules.
+ */
+export type NotificationScope = 'portfolio' | 'watchlist';
+
 export type NotificationEvent =
-  | { type: 'snap.ready'; snapId: string }
+  | { type: 'snap.ready'; snapId: string; scope: NotificationScope }
   | { type: 'insight.ready'; insightId: string }
-  | { type: 'action.created'; actionId: string; ticker?: string }
+  | { type: 'action.created'; actionId: string; ticker?: string; scope: NotificationScope }
   | { type: 'approval.requested'; requestId: string; action: string; description: string };
 
 export type NotificationEventType = NotificationEvent['type'];

@@ -6,6 +6,8 @@ import Button from '../components/common/button';
 import { PageBlurGate } from '../components/common/page-blur-gate';
 import IntelFeed from '../components/overview/intel-feed';
 import type { FeedPendingUpdate } from '../components/overview/intel-feed';
+import IntelSummaryCard from '../components/overview/intel-summary-card';
+import { YojinSnapCard } from '../components/overview/yojin-snap-card';
 import { AddSymbolModal } from '../components/watchlist/add-symbol-modal';
 import { SymbolCard, SymbolCardSkeleton } from '../components/watchlist/symbol-card';
 import { useAssetDetailModal } from '../lib/asset-detail-modal-context';
@@ -161,6 +163,14 @@ function WatchlistContent() {
       {/* Left column: watchlist cards */}
       <div className="flex-1 overflow-auto p-6 space-y-6 max-w-5xl mx-auto w-full">
         <PageHeader onAdd={openModal} />
+
+        {/* Watchlist-scoped Snap brief + Actions — populated by the micro flow
+            when it runs on watchlist assets. Completely separate from the
+            portfolio-scoped versions shown on the Overview page. */}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
+          <IntelSummaryCard scope="WATCHLIST" />
+          <YojinSnapCard scope="WATCHLIST" />
+        </div>
 
         {isLoading ? (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

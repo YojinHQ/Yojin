@@ -1111,10 +1111,14 @@ export const INSIGHT_REPORTS_QUERY = gql`
 // the `actions(status: PENDING)` query, which owns the actionable bullet list.
 // Keeping snap.actionItems out of this query avoids duplicate information on
 // the dashboard and shrinks the payload.
+//
+// The `scope` arg selects PORTFOLIO (Overview) vs WATCHLIST (Watchlist page).
+// Defaults to PORTFOLIO on the backend when omitted.
 export const SNAP_QUERY = gql`
-  query Snap {
-    snap {
+  query Snap($scope: Scope) {
+    snap(scope: $scope) {
       id
+      scope
       generatedAt
       intelSummary
       assetSnaps {
@@ -1543,6 +1547,7 @@ export const IMPORT_SKILL_MUTATION = gql`
 export const ACTION_FIELDS = gql`
   fragment ActionFields on Action {
     id
+    scope
     signalId
     skillId
     what
@@ -1559,8 +1564,8 @@ export const ACTION_FIELDS = gql`
 `;
 
 export const ACTIONS_QUERY = gql`
-  query Actions($status: ActionStatus, $since: String, $limit: Int) {
-    actions(status: $status, since: $since, limit: $limit) {
+  query Actions($status: ActionStatus, $scope: Scope, $since: String, $limit: Int) {
+    actions(status: $status, scope: $scope, since: $since, limit: $limit) {
       ...ActionFields
     }
   }

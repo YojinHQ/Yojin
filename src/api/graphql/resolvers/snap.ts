@@ -5,7 +5,17 @@
  */
 
 import type { SnapStore } from '../../../snap/snap-store.js';
-import type { Snap } from '../../../snap/types.js';
+import type { Snap, SnapScope } from '../../../snap/types.js';
+
+type ScopeGql = 'PORTFOLIO' | 'WATCHLIST';
+
+function toDomainScope(arg: ScopeGql | undefined): SnapScope {
+  return arg === 'WATCHLIST' ? 'watchlist' : 'portfolio';
+}
+
+function toGqlScope(scope: SnapScope): ScopeGql {
+  return scope === 'watchlist' ? 'WATCHLIST' : 'PORTFOLIO';
+}
 
 // ---------------------------------------------------------------------------
 // State
@@ -35,6 +45,7 @@ interface AssetSnapGql {
 
 interface SnapGql {
   id: string;
+  scope: ScopeGql;
   generatedAt: string;
   intelSummary: string;
   actionItems: SnapActionItemGql[];
@@ -44,6 +55,7 @@ interface SnapGql {
 function toGql(snap: Snap): SnapGql {
   return {
     id: snap.id,
+    scope: toGqlScope(snap.scope),
     generatedAt: snap.generatedAt,
     intelSummary: snap.intelSummary ?? '',
     actionItems: snap.actionItems.map((item) => ({
@@ -63,8 +75,8 @@ function toGql(snap: Snap): SnapGql {
 // Query Resolver
 // ---------------------------------------------------------------------------
 
-export async function snapQuery(): Promise<SnapGql | null> {
+export async function snapQuery(_parent: unknown, args: { scope?: ScopeGql }): Promise<SnapGql | null> {
   if (!store) return null;
-  const snap = await store.getLatest();
+  const snap = await store.getLatest(toDomainScope(args.scope));
   return snap ? toGql(snap) : null;
 }

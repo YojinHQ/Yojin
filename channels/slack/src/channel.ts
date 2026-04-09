@@ -241,7 +241,7 @@ export function buildSlackChannel(deps: SlackChannelDeps = {}): ChannelPlugin {
         if (!defaultChannelId || !deps.snapStore) return;
         if (!(await isNotificationEnabled('slack', 'snap.ready'))) return;
         try {
-          const snap = await deps.snapStore.getLatest();
+          const snap = await deps.snapStore.getLatest(event.scope);
           if (!snap || snap.id !== event.snapId) return;
           await app.client.chat.postMessage({ channel: defaultChannelId, text: formatSnap(snap) });
         } catch (err) {

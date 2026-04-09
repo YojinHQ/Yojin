@@ -297,7 +297,7 @@ export function buildTelegramChannel(deps: TelegramChannelDeps = {}): ChannelPlu
         if (!bot || !activeChatId || !deps.snapStore) return;
         if (!(await isNotificationEnabled('telegram', 'snap.ready'))) return;
         try {
-          const snap = await deps.snapStore.getLatest();
+          const snap = await deps.snapStore.getLatest(event.scope);
           if (!snap || snap.id !== event.snapId) return;
           const text = formatSnap(snap);
           const chunks = chunkMessage(text);

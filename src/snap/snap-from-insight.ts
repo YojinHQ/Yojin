@@ -24,6 +24,9 @@ export function snapFromInsight(report: InsightReport, options?: SnapFromInsight
 
   return {
     id: `snap-${randomUUID().slice(0, 8)}`,
+    // Macro flow is portfolio-only — the report synthesizes holdings, not
+    // watchlist assets. Always tag the derived snap as the portfolio scope.
+    scope: 'portfolio',
     generatedAt: new Date().toISOString(),
     intelSummary: report.portfolio.intelSummary ?? '',
     actionItems: report.portfolio.actionItems.map((item) => ({

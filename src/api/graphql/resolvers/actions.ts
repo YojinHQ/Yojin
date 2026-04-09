@@ -5,7 +5,17 @@
  */
 
 import type { ActionStore } from '../../../actions/action-store.js';
-import type { Action, ActionStatus } from '../../../actions/types.js';
+import type { Action, ActionScope, ActionStatus } from '../../../actions/types.js';
+
+type ScopeGql = 'PORTFOLIO' | 'WATCHLIST';
+
+function toDomainScope(arg: ScopeGql): ActionScope {
+  return arg === 'WATCHLIST' ? 'watchlist' : 'portfolio';
+}
+
+function toGqlScope(scope: ActionScope): ScopeGql {
+  return scope === 'watchlist' ? 'WATCHLIST' : 'PORTFOLIO';
+}
 
 // ---------------------------------------------------------------------------
 // State
@@ -23,6 +33,7 @@ export function setActionStore(s: ActionStore): void {
 
 interface ActionGql {
   id: string;
+  scope: ScopeGql;
   signalId: string | null;
   skillId: string | null;
   what: string;
@@ -40,6 +51,7 @@ interface ActionGql {
 function toGql(action: Action): ActionGql {
   return {
     id: action.id,
+    scope: toGqlScope(action.scope),
     signalId: action.signalId ?? null,
     skillId: action.skillId ?? null,
     what: action.what,
@@ -61,12 +73,13 @@ function toGql(action: Action): ActionGql {
 
 export async function actionsResolver(
   _parent: unknown,
-  args: { status?: ActionStatus; since?: string; limit?: number },
+  args: { status?: ActionStatus; scope?: ScopeGql; since?: string; limit?: number },
 ): Promise<ActionGql[]> {
   if (!store) return [];
 
   const actions = await store.query({
     status: args.status,
+    scope: args.scope ? toDomainScope(args.scope) : undefined,
     since: args.since,
     limit: args.limit ?? 50,
   });
