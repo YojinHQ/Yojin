@@ -6,7 +6,7 @@
  */
 
 import { readFile, stat } from 'node:fs/promises';
-import { extname, normalize, resolve as resolvePath } from 'node:path';
+import { extname, join, normalize, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { type ServerType, serve } from '@hono/node-server';
@@ -15,6 +15,7 @@ import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
 
 import { mountGraphQL } from '../../../src/api/graphql/server.js';
+import { resolveDataRoot } from '../../../src/paths.js';
 import type {
   ChannelAuthAdapter,
   ChannelCapabilities,
@@ -24,6 +25,15 @@ import type {
   IncomingMessage,
   OutgoingMessage,
 } from '../../../src/plugins/types.js';
+
+const PORT_FALLBACK_ATTEMPTS = 10;
+
+/**
+ * `@hono/node-server` does not re-export its `Options.fetch` type, so we pin
+ * to the first positional argument of `serve` and extract `fetch` from it.
+ * This stays in sync with whatever `serve` accepts across versions.
+ */
+type ServeFetch = Parameters<typeof serve>[0]['fetch'];
 
 // Resolve the bundled React dashboard relative to this module so it works in
 // both local dev (`dist/channels/web/src/channel.js`) and the published npm
@@ -77,6 +87,99 @@ async function dashboardAvailable(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Try to bind `serve()` to `port`. If the port is already in use, probe the
+ * next N ports. Resolves with the bound server and the port that actually
+ * worked (which may differ from the requested one).
+ */
+async function listenWithFallback(opts: {
+  fetch: ServeFetch;
+  port: number;
+  hostname: string;
+  maxAttempts: number;
+}): Promise<{ server: ServerType; boundPort: number }> {
+  let lastError: Error | undefined;
+  for (let offset = 0; offset < opts.maxAttempts; offset++) {
+    const candidate = opts.port + offset;
+    try {
+      const s = await tryListen(opts.fetch, candidate, opts.hostname);
+      return { server: s, boundPort: candidate };
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'EADDRINUSE') throw err;
+      lastError = err as Error;
+    }
+  }
+  throw new Error(
+    `Could not bind to any port in range ${opts.port}-${opts.port + opts.maxAttempts - 1}. ` +
+      `Last error: ${lastError?.message ?? 'unknown'}. ` +
+      `Try a different port with \`yojin --port <n>\` or YOJIN_PORT=<n>.`,
+  );
+}
+
+function tryListen(fetch: ServeFetch, port: number, hostname: string): Promise<ServerType> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const s = serve({ fetch, port, hostname }, () => {
+      if (settled) return;
+      settled = true;
+      resolve(s);
+    });
+    s.on('error', (err: NodeJS.ErrnoException) => {
+      if (settled) return;
+      settled = true;
+      // Ensure the aborted server can't keep the event loop alive.
+      try {
+        s.close();
+      } catch {
+        // Best effort — the server may have never fully initialized.
+      }
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Print a clean, static "ready" banner once the server is listening.
+ * Uses plain console.log so it bypasses the tslog console transport —
+ * the splash is visible even when `--verbose` is off and tslog is hidden.
+ */
+function printSplash(opts: {
+  hostname: string;
+  boundPort: number;
+  requestedPort: number;
+  hasDashboard: boolean;
+}): void {
+  const { hostname, boundPort, requestedPort, hasDashboard } = opts;
+  const displayHost = hostname === '0.0.0.0' ? 'localhost' : hostname;
+  const base = `http://${displayHost}:${boundPort}`;
+  const logPath = join(resolveDataRoot(), 'logs', 'latest.log');
+  const wasFallback = boundPort !== requestedPort;
+
+  const lines: string[] = [''];
+  lines.push('  Yojin is ready.');
+  lines.push('');
+  if (hasDashboard) {
+    lines.push(`    Dashboard   ${base}`);
+  }
+  lines.push(`    GraphQL     ${base}/graphql`);
+  lines.push(`    Logs        ${logPath}`);
+  if (wasFallback) {
+    lines.push('');
+    lines.push(`    Note: port ${requestedPort} was in use — listening on ${boundPort} instead.`);
+    lines.push(`          Pin a specific port with \`yojin --port <n>\` or YOJIN_PORT=<n>.`);
+  }
+  if (!hasDashboard) {
+    lines.push('');
+    lines.push(`    Dashboard bundle not found. Run \`pnpm build:web\`, or use`);
+    lines.push(`    \`pnpm dev\` for the Vite dev server on :5173.`);
+  }
+  lines.push('');
+  lines.push('    Press Ctrl+C to stop.');
+  lines.push('');
+  console.log(lines.join('\n'));
 }
 
 type MessageHandler = (msg: IncomingMessage) => Promise<void>;
@@ -249,25 +352,27 @@ export function buildWebChannel(): ChannelPlugin {
           if (!file) return c.notFound();
           return new Response(file.body, { headers: { 'content-type': file.mime } });
         });
-      } else {
-        // Expected path during `pnpm dev:be` (dashboard runs on Vite :5173
-        // instead). Logged at info level — per the code-quality rule, `warn`
-        // is reserved for unexpected/actionable conditions, not normal dev mode.
-        console.log(
-          `[web] Dashboard bundle not found at ${WEB_DIST_DIR}. Run \`pnpm build:web\` to build it, or use \`pnpm dev\` for the Vite dev server on :5173.`,
-        );
       }
+      // The missing-dashboard case is surfaced by printSplash() below so the
+      // user sees it as part of the ready banner instead of a stray log line.
 
       // Bind to localhost only — this agent runs locally, not exposed to the network.
       // In Docker, set YOJIN_HOST=0.0.0.0 to allow container port mapping.
       const hostname = String(options?.hostname ?? process.env.YOJIN_HOST ?? '127.0.0.1');
 
-      server = serve({ fetch: app.fetch, port, hostname }, () => {
-        console.log(`Web channel listening on http://${hostname}:${port}`);
-        if (hasDashboard) {
-          console.log(`Dashboard: http://localhost:${port}`);
-        }
-        console.log(`GraphQL playground: http://localhost:${port}/graphql`);
+      const { server: listening, boundPort } = await listenWithFallback({
+        fetch: app.fetch,
+        port,
+        hostname,
+        maxAttempts: PORT_FALLBACK_ATTEMPTS,
+      });
+      server = listening;
+
+      printSplash({
+        hostname,
+        boundPort,
+        requestedPort: port,
+        hasDashboard,
       });
     },
 

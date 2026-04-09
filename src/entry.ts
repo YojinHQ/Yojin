@@ -24,9 +24,15 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
-// Hide console logs during interactive chat so they don't interfere
-const isChat = args[0] === 'chat';
-const logger = initLogger({ consoleStyle: isChat ? 'hidden' : undefined });
+// Hide console logs for foreground commands (start, serve, chat) so the
+// user sees the splash / REPL instead of a raw tslog stream. Power users
+// can opt back in with `--verbose` (or `-v`) to debug startup issues.
+// Logs are still written to ~/.yojin/logs/latest.log regardless.
+const command = args[0] ?? 'start';
+const verbose = args.includes('--verbose') || args.includes('-v');
+const quietCommands = new Set(['start', 'serve', 'chat']);
+const consoleStyle = !verbose && quietCommands.has(command) ? 'hidden' : undefined;
+const logger = initLogger({ consoleStyle });
 logger.info('Yojin starting', { args });
 runMain(args).catch((err) => {
   logger.error('Fatal error', { error: err instanceof Error ? err.message : String(err) });
