@@ -11,6 +11,10 @@ permissions:
 
 jobs:
   build:
+    # Only run on pushes and on PRs from the same repo (not from public forks).
+    # The self-hosted runner is shared across YojinHQ; running untrusted fork
+    # code on it would expose Railway env and the runner filesystem.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: self-hosted
 
     steps:
