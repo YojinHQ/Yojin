@@ -1107,16 +1107,16 @@ export const INSIGHT_REPORTS_QUERY = gql`
 // Queries — Snap (Strategist brief)
 // ---------------------------------------------------------------------------
 
+// Snap.actionItems is intentionally NOT fetched. The Actions card reads from
+// the `actions(status: PENDING)` query, which owns the actionable bullet list.
+// Keeping snap.actionItems out of this query avoids duplicate information on
+// the dashboard and shrinks the payload.
 export const SNAP_QUERY = gql`
   query Snap {
     snap {
       id
       generatedAt
       intelSummary
-      actionItems {
-        text
-        signalIds
-      }
       assetSnaps {
         symbol
         snap

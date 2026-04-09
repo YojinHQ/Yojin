@@ -792,8 +792,20 @@ export class Scheduler {
       // 3. Skill evaluation → create Actions
       await this.evaluateSkillsAfterCuration();
 
-      // 4. Snap brief regeneration
+      // 4. Snap brief regeneration.
+      //    Two-step dance gives the macro path the same "update in place"
+      //    behaviour as the micro path:
+      //      a. `regenerateSnap()` writes a deterministic snap from the
+      //         freshly-minted InsightReport (full-portfolio analysis +
+      //         macroContext). This seeds the disk with the macro baseline.
+      //      b. `regenerateSnapFromMicro()` then reads that snap as
+      //         `previousSnap` and asks Sonnet to MERGE it with the latest
+      //         micro observations — keeping stable bullets, only replacing
+      //         what materially changed. Net effect: the snap evolves rather
+      //         than being rebuilt from scratch every 2 hours, so it stays
+      //         short and users see continuity between macro/micro cycles.
       await this.regenerateSnap();
+      await this.regenerateSnapFromMicro();
 
       // Mark completion only on success so a failed macro run doesn't start
       // the 2-hour cooldown clock, which would delay the next legitimate run.
