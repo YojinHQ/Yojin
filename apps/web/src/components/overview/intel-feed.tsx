@@ -893,11 +893,22 @@ function IntelFeedContent({
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Sticky header */}
         <div className="sticky top-0 z-10 bg-bg-secondary">
-          <div className="flex items-center gap-2.5 px-4 pt-4 pb-1.5">
-            <h2 className="font-headline text-base text-text-primary">Intel Feed</h2>
-            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-tertiary px-1.5 text-[10px] font-bold text-text-secondary">
-              {totalCount}
-            </span>
+          <div className="flex items-center justify-between px-4 pt-4 pb-1.5">
+            <div className="flex items-center gap-2.5">
+              <h2 className="font-headline text-base text-text-primary">Intel Feed</h2>
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-tertiary px-1.5 text-[10px] font-bold text-text-secondary">
+                {totalCount}
+              </span>
+            </div>
+            {schedulerData &&
+              schedulerData.schedulerStatus.pendingCount > 0 &&
+              schedulerData.schedulerStatus.throttledCount > 0 && (
+                <ThrottleIndicator
+                  throttledCount={schedulerData.schedulerStatus.throttledCount}
+                  assets={schedulerData.schedulerStatus.assets}
+                  now={nowMs}
+                />
+              )}
           </div>
 
           <div className="flex gap-5 border-b border-border px-4">
@@ -995,16 +1006,6 @@ function IntelFeedContent({
               <span>{pendingUpdate.symbol} removed from feed</span>
             </div>
           )}
-          {/* Throttle banner — shown when assets have new signals but LLM interval not yet elapsed */}
-          {schedulerData &&
-            schedulerData.schedulerStatus.pendingCount > 0 &&
-            schedulerData.schedulerStatus.throttledCount > 0 && (
-              <ThrottleBanner
-                throttledCount={schedulerData.schedulerStatus.throttledCount}
-                assets={schedulerData.schedulerStatus.assets}
-                now={nowMs}
-              />
-            )}
           {isLoading ? (
             <div className="flex items-center justify-center pt-12">
               <Spinner size="md" label="Loading intel..." />
@@ -1151,9 +1152,9 @@ function IntelFeedContent({
   );
 }
 
-/* ── Throttle banner ─────────────────────────────────────────────────── */
+/* ── Throttle indicator ──────────────────────────────────────────────── */
 
-function ThrottleBanner({
+function ThrottleIndicator({
   throttledCount,
   assets,
   now,
@@ -1162,7 +1163,6 @@ function ThrottleBanner({
   assets: SchedulerAssetStatus[];
   now: number;
 }) {
-  // Find the asset whose next eligible time is soonest
   const nextLabel = useMemo(() => {
     const soonestMs = assets
       .filter((a) => a.lastLlmAt !== null)
@@ -1173,19 +1173,10 @@ function ThrottleBanner({
   }, [assets, now]);
 
   return (
-    <div className="mx-0.5 mt-3 flex items-center gap-2.5 rounded-lg border border-border-light bg-bg-tertiary px-3 py-2 text-xs text-text-muted">
+    <div className="flex items-center gap-1 text-[11px] text-text-muted">
       <ClockMiniIcon />
       <span>
-        AI analysis paused for{' '}
-        <span className="font-medium text-text-secondary">
-          {throttledCount} asset{throttledCount !== 1 ? 's' : ''}
-        </span>
-        {nextLabel ? (
-          <>
-            {' '}
-            · next in <span className="font-medium text-text-secondary">{nextLabel}</span>
-          </>
-        ) : null}
+        {throttledCount} paused{nextLabel ? ` · ${nextLabel}` : ''}
       </span>
     </div>
   );
