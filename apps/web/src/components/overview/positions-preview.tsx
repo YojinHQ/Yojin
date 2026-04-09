@@ -261,12 +261,11 @@ export default function PositionsPreview() {
     );
   }
 
-  // Dedupe by symbol (same asset across accounts), exclude stablecoins, sort by market value descending, show top 10
+  // Dedupe by symbol (same asset across accounts), exclude stablecoins, sort by market value descending
   const seen = new Set<string>();
   const top = [...data.positions]
     .sort((a, b) => b.marketValue - a.marketValue)
-    .filter((p) => !isStablecoin(p.symbol) && (seen.has(p.symbol) ? false : (seen.add(p.symbol), true)))
-    .slice(0, 10);
+    .filter((p) => !isStablecoin(p.symbol) && (seen.has(p.symbol) ? false : (seen.add(p.symbol), true)));
 
   return (
     <DashboardCard title="Portfolio" headerAction={viewAllLink}>
