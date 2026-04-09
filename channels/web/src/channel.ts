@@ -250,7 +250,10 @@ export function buildWebChannel(): ChannelPlugin {
           return new Response(file.body, { headers: { 'content-type': file.mime } });
         });
       } else {
-        console.warn(
+        // Expected path during `pnpm dev:be` (dashboard runs on Vite :5173
+        // instead). Logged at info level — per the code-quality rule, `warn`
+        // is reserved for unexpected/actionable conditions, not normal dev mode.
+        console.log(
           `[web] Dashboard bundle not found at ${WEB_DIST_DIR}. Run \`pnpm build:web\` to build it, or use \`pnpm dev\` for the Vite dev server on :5173.`,
         );
       }
