@@ -77,4 +77,23 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`Release verified: yojin v${pkg.version} (bin, dist, web bundle, defaults all present)`);
+// Smoke-test compiled modules that do eager work at import time. Catches
+// top-level path bugs (readFileSync on ../../package.json, etc.) that the
+// file-existence checks above cannot see. Does NOT import dist/src/entry.js
+// because that would actually invoke runMain() and start the gateway. The
+// two modules below do their eager init but only export symbols.
+const smokeModules = ['dist/src/package-meta.js', 'dist/src/acp/translator.js', 'dist/src/cli/run-main.js'];
+for (const mod of smokeModules) {
+  try {
+    await import(join(repoRoot, mod));
+  } catch (err) {
+    console.error('Release verification failed:');
+    console.error(`  - import smoke test crashed loading ${mod}:`);
+    console.error('   ', err?.stack ?? err);
+    process.exit(1);
+  }
+}
+
+console.log(
+  `Release verified: yojin v${pkg.version} (bin, dist, web bundle, defaults all present, entry imports clean)`,
+);

@@ -3,7 +3,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,6 +42,7 @@ import { Gateway } from '../gateway/server.js';
 import { MicroInsightStore } from '../insights/micro-insight-store.js';
 import { createJintelPriceProvider } from '../jintel/price-provider.js';
 import { createReflectionEngine } from '../memory/adapter.js';
+import { PKG_VERSION } from '../package-meta.js';
 import { resolveDataRoot } from '../paths.js';
 import { Scheduler } from '../scheduler.js';
 import { JsonlSessionStore } from '../sessions/jsonl-store.js';
@@ -51,9 +52,6 @@ import { registerFullCurationWorkflow } from '../signals/curation/full-curation-
 import { CurationConfigSchema } from '../signals/curation/types.js';
 import { QualityAgent } from '../signals/quality-agent.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
-
-const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../package.json');
-const { version: PKG_VERSION } = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version: string };
 
 export async function runMain(args: string[]): Promise<void> {
   const command = args[0] ?? 'start';
