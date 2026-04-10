@@ -107,17 +107,6 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
         )}
       </div>
 
-      {/* Key Points */}
-      <SectionRule label="Key Points" />
-      <ul className="space-y-1.5">
-        {data.keyPoints.map((point, i) => (
-          <li key={i} className="flex items-start gap-2 text-xs leading-relaxed text-text-secondary">
-            <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-accent-primary" />
-            {point}
-          </li>
-        ))}
-      </ul>
-
       {/* Analysis */}
       <SectionRule label="Analysis" />
       <p className="text-xs leading-relaxed text-text-secondary">{data.analysis}</p>
