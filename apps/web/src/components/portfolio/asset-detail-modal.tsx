@@ -506,24 +506,22 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
             ) : undefined
           }
         >
-          <div className="max-h-80 overflow-y-auto pr-1">
-            {microActions.length > 0 ? (
-              <ul className="space-y-2">
-                {microActions.map((text, i) => (
-                  <li key={i} className="flex items-start gap-2 border-b border-border-light py-2 last:border-0">
-                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-primary" />
-                    <p className="text-sm leading-relaxed text-text-secondary">{text}</p>
-                  </li>
-                ))}
-              </ul>
-            ) : microResult.fetching ? (
-              <div className="flex items-center justify-center py-6">
-                <Spinner size="sm" />
-              </div>
-            ) : (
-              <p className="py-4 text-center text-sm text-text-muted">No pending actions</p>
-            )}
-          </div>
+          {microActions.length > 0 ? (
+            <ul className="space-y-2">
+              {microActions.map((text, i) => (
+                <li key={i} className="flex items-start gap-2 border-b border-border-light py-2 last:border-0">
+                  <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-primary" />
+                  <p className="text-sm leading-relaxed text-text-secondary">{text}</p>
+                </li>
+              ))}
+            </ul>
+          ) : microResult.fetching ? (
+            <div className="flex items-center justify-center py-6">
+              <Spinner size="sm" />
+            </div>
+          ) : (
+            <p className="py-4 text-center text-sm text-text-muted">No pending actions</p>
+          )}
         </Card>
 
         <Card title="News">
