@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useMutation, useQuery } from 'urql';
 import {
   BATCH_DISMISS_SIGNALS_MUTATION,
@@ -12,7 +12,6 @@ import type {
   FeedTarget,
   IntelFeedQueryResult,
   IntelFeedQueryVariables,
-  SchedulerAssetStatus,
   SchedulerStatusQueryResult,
 } from '../../api/types';
 import { cn, timeAgo } from '../../lib/utils';
@@ -262,6 +261,17 @@ function SectionHeader({ label }: { label: string }) {
       <div className="h-px flex-1 bg-border" />
     </div>
   );
+}
+
+/* ── Last update label ──────────────────────────────────────────────── */
+
+function LastUpdateLabel({ ingestedAt }: { ingestedAt: string }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  return <>Last Update: {timeAgo(ingestedAt)}</>;
 }
 
 /* ── Card ──────────────────────────────────────────────────────────── */
@@ -554,12 +564,6 @@ function IntelFeedContent({
     requestPolicy: 'cache-and-network',
   });
   const [, triggerMicroAnalysis] = useMutation(TRIGGER_MICRO_ANALYSIS_MUTATION);
-
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
 
   // Auto-trigger micro analysis when user is actively using the page and assets are throttled.
   // Fires at most once per configured LLM interval — the server re-checks pendingAnalysis before
@@ -888,6 +892,11 @@ function IntelFeedContent({
   const hasError = !!error;
   const isEmpty = !fetching && !error && filteredItems.length === 0;
 
+  const latestItem = useMemo(
+    () => (items.length > 0 ? items.reduce((a, b) => (a.ingestedAt > b.ingestedAt ? a : b)) : null),
+    [items],
+  );
+
   return (
     <>
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -898,6 +907,14 @@ function IntelFeedContent({
             <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-tertiary px-1.5 text-[10px] font-bold text-text-secondary">
               {totalCount}
             </span>
+            {latestItem && (
+              <Link
+                to="/settings#intelligence-schedule"
+                className="ml-auto text-[10px] font-medium uppercase tracking-wider text-text-muted transition-colors hover:text-text-secondary"
+              >
+                <LastUpdateLabel ingestedAt={latestItem.ingestedAt} />
+              </Link>
+            )}
           </div>
 
           <div className="flex gap-5 border-b border-border px-4">
@@ -995,16 +1012,6 @@ function IntelFeedContent({
               <span>{pendingUpdate.symbol} removed from feed</span>
             </div>
           )}
-          {/* Throttle banner — shown when assets have new signals but LLM interval not yet elapsed */}
-          {schedulerData &&
-            schedulerData.schedulerStatus.pendingCount > 0 &&
-            schedulerData.schedulerStatus.throttledCount > 0 && (
-              <ThrottleBanner
-                throttledCount={schedulerData.schedulerStatus.throttledCount}
-                assets={schedulerData.schedulerStatus.assets}
-                now={nowMs}
-              />
-            )}
           {isLoading ? (
             <div className="flex items-center justify-center pt-12">
               <Spinner size="md" label="Loading intel..." />
@@ -1148,63 +1155,6 @@ function IntelFeedContent({
 
       <FeedDetailModal open={modalData !== null} onClose={() => setModalData(null)} data={modalData} />
     </>
-  );
-}
-
-/* ── Throttle banner ─────────────────────────────────────────────────── */
-
-function ThrottleBanner({
-  throttledCount,
-  assets,
-  now,
-}: {
-  throttledCount: number;
-  assets: SchedulerAssetStatus[];
-  now: number;
-}) {
-  // Find the asset whose next eligible time is soonest
-  const nextLabel = useMemo(() => {
-    const soonestMs = assets
-      .filter((a) => a.lastLlmAt !== null)
-      .map((a) => new Date(a.nextLlmEligibleAt).getTime() - now)
-      .filter((ms) => ms > 0)
-      .sort((a, b) => a - b)[0];
-    return soonestMs != null ? formatMinutes(soonestMs) : null;
-  }, [assets, now]);
-
-  return (
-    <div className="mx-0.5 mt-3 flex items-center gap-2.5 rounded-lg border border-border-light bg-bg-tertiary px-3 py-2 text-xs text-text-muted">
-      <ClockMiniIcon />
-      <span>
-        AI analysis paused for{' '}
-        <span className="font-medium text-text-secondary">
-          {throttledCount} asset{throttledCount !== 1 ? 's' : ''}
-        </span>
-        {nextLabel ? (
-          <>
-            {' '}
-            · next in <span className="font-medium text-text-secondary">{nextLabel}</span>
-          </>
-        ) : null}
-      </span>
-    </div>
-  );
-}
-
-function formatMinutes(ms: number): string {
-  const totalMin = Math.ceil(ms / 60_000);
-  if (totalMin < 60) return `${totalMin}m`;
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
-}
-
-function ClockMiniIcon() {
-  return (
-    <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <circle cx="12" cy="12" r="9" />
-      <path strokeLinecap="round" d="M12 7v5l3 2" />
-    </svg>
   );
 }
 

@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import WorldClock from './world-clock';
-import { getTimezone } from '../../lib/timezone';
 
 const segmentLabels: Record<string, string> = {
   '': 'Overview',
@@ -13,38 +12,6 @@ const segmentLabels: Record<string, string> = {
   profile: 'Profile',
   settings: 'Settings',
 };
-
-function HeaderClock() {
-  const [, setTick] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 1_000);
-    return () => clearInterval(id);
-  }, []);
-
-  const tz = getTimezone();
-  const now = new Date();
-
-  const datePart = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz,
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  }).format(now);
-
-  const timePart = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz,
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  }).format(now);
-
-  return (
-    <span className="text-xs tabular-nums text-text-muted">
-      {datePart} &middot; {timePart}
-    </span>
-  );
-}
 
 export default function AppHeader() {
   const { pathname } = useLocation();
@@ -99,9 +66,6 @@ export default function AppHeader() {
       </nav>
 
       <div className="flex items-center gap-3">
-        {/* Live date & time */}
-        <HeaderClock />
-
         {/* World clock trigger */}
         <button
           onClick={() => setClockOpen(true)}

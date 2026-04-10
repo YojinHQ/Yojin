@@ -64,7 +64,7 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted">{data.source}</span>
         <div className="flex items-center gap-3">
-          <span className="text-2xs text-text-muted">{data.time}</span>
+          <span className="text-2xs text-text-muted">LAST UPDATE: {data.time}</span>
           <button
             onClick={onClose}
             className="cursor-pointer text-text-muted transition-colors hover:text-text-primary"
