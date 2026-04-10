@@ -5,17 +5,28 @@ import { cn } from '../../lib/utils';
 import { useAssetDetailModal } from '../../lib/asset-detail-modal-context';
 import { useFeatureStatus } from '../../lib/feature-status';
 import { usePortfolio, useQuote, useOnPriceMove } from '../../api';
-import type { Quote, PositionInsight, InsightRating } from '../../api/types';
+import type {
+  Quote,
+  PositionInsight,
+  InsightRating,
+  LatestInsightReportQueryResult,
+  SignalSummary,
+  MicroInsightQueryResult,
+} from '../../api/types';
 import { groupPositions } from './position-table';
 import { getPlatformMeta } from '../platforms/platform-meta';
-import { LATEST_INSIGHT_REPORT_QUERY, SIGNALS_QUERY, PRICE_HISTORY_QUERY } from '../../api/documents';
+import {
+  LATEST_INSIGHT_REPORT_QUERY,
+  SIGNALS_QUERY,
+  PRICE_HISTORY_QUERY,
+  MICRO_INSIGHT_QUERY,
+} from '../../api/documents';
 import type {
-  LatestInsightReportQueryResult,
-  SignalsQueryResult,
-  SignalsVariables,
-  Signal,
   PriceHistoryQueryResult,
   PriceHistoryQueryVariables,
+  Signal,
+  SignalsQueryResult,
+  SignalsVariables,
 } from '../../api/types';
 import { PriceChart } from '../charts/price-chart';
 import Card from '../common/card';
@@ -118,17 +129,6 @@ const ratingLabel: Record<InsightRating, string> = {
   NEUTRAL: 'Neutral',
   BEARISH: 'Bearish',
   VERY_BEARISH: 'Very Bearish',
-};
-
-const signalTypeVariant: Record<string, BadgeVariant> = {
-  NEWS: 'info',
-  FUNDAMENTAL: 'success',
-  SENTIMENT: 'warning',
-  TECHNICAL: 'neutral',
-  MACRO: 'error',
-  FILINGS: 'neutral',
-  SOCIALS: 'info',
-  TRADING_LOGIC_TRIGGER: 'warning',
 };
 
 const sentimentVariant: Record<string, BadgeVariant> = {
@@ -241,10 +241,20 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
   const isLive = priceMoveSub.fetching && !!latestTick;
 
   const [insightResult] = useQuery<LatestInsightReportQueryResult>({ query: LATEST_INSIGHT_REPORT_QUERY });
-  const positionInsight = useMemo<PositionInsight | undefined>(
-    () => insightResult.data?.latestInsightReport?.positions.find((p) => p.symbol === symbol),
-    [insightResult.data, symbol],
-  );
+  const latestInsightRun = useMemo(() => {
+    const report = insightResult.data?.latestInsightReport;
+    const insight = report?.positions.find((p) => p.symbol === symbol);
+    return report && insight ? { createdAt: report.createdAt, insight } : null;
+  }, [insightResult.data, symbol]);
+  const latestInsight = latestInsightRun?.insight;
+
+  const microVars = useMemo(() => ({ symbol }), [symbol]);
+  const [microResult] = useQuery<MicroInsightQueryResult>({
+    query: MICRO_INSIGHT_QUERY,
+    variables: microVars,
+    pause: !jintelConfigured,
+  });
+  const microActions = microResult.data?.microInsight?.assetActions ?? [];
 
   const signalsVars = useMemo<SignalsVariables>(
     () => ({
@@ -262,7 +272,6 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
     () => (signalsResult.data?.curatedSignals ?? []).map((c) => c.signal),
     [signalsResult.data?.curatedSignals],
   );
-  const signals = useMemo(() => allSignals.filter((s) => s.type !== 'NEWS').slice(0, 10), [allSignals]);
   const newsSignals = useMemo(() => allSignals.filter((s) => s.type === 'NEWS').slice(0, 10), [allSignals]);
 
   const loading = portfolioResult.fetching && !portfolioResult.data;
@@ -301,9 +310,9 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
             <h2 id="asset-detail-title" className="text-xl font-semibold text-text-primary">
               {symbol}
             </h2>
-            {positionInsight && (
-              <Badge variant={ratingVariant[positionInsight.rating]} size="md">
-                {ratingLabel[positionInsight.rating]}
+            {latestInsight && (
+              <Badge variant={ratingVariant[latestInsight.rating]} size="md">
+                {ratingLabel[latestInsight.rating]}
               </Badge>
             )}
             {position?.underlying.map((p) => (
@@ -467,61 +476,51 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
       </Card>
 
       {/* Insight Thesis */}
-      {positionInsight && (
+      {latestInsightRun && (
         <Card title="AI Analysis">
-          <div className="space-y-3">
-            <p className="text-sm text-text-secondary leading-relaxed">{positionInsight.thesis}</p>
-            {positionInsight.risks.length > 0 && (
-              <div>
-                <h4 className="text-xs font-medium text-text-muted uppercase tracking-wider mb-1">Risks</h4>
-                <ul className="space-y-1">
-                  {positionInsight.risks.map((r, i) => (
-                    <li key={i} className="text-sm text-text-secondary flex items-start gap-1.5">
-                      <span className="text-error mt-0.5 text-xs">&#9679;</span>
-                      {r}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {positionInsight.opportunities.length > 0 && (
-              <div>
-                <h4 className="text-xs font-medium text-text-muted uppercase tracking-wider mb-1">Opportunities</h4>
-                <ul className="space-y-1">
-                  {positionInsight.opportunities.map((o, i) => (
-                    <li key={i} className="text-sm text-text-secondary flex items-start gap-1.5">
-                      <span className="text-success mt-0.5 text-xs">&#9679;</span>
-                      {o}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {positionInsight.conviction > 0 && (
-              <p className="text-xs text-text-muted">
-                Conviction: {(positionInsight.conviction * 100).toFixed(0)}%
-                {positionInsight.priceTarget != null && ` \u00B7 Target: ${fmtCurrency(positionInsight.priceTarget)}`}
-              </p>
-            )}
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+              <span>Updated {timeAgo(latestInsightRun.createdAt)}</span>
+              <span>&middot;</span>
+              <span>{new Date(latestInsightRun.createdAt).toLocaleString()}</span>
+              {latestInsightRun.insight.carriedForward && (
+                <Badge variant="neutral" size="xs">
+                  Carried Forward
+                </Badge>
+              )}
+            </div>
+            <InsightAnalysisBody insight={latestInsightRun.insight} />
           </div>
         </Card>
       )}
 
-      {/* Signals & News */}
+      {/* Actions & News */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card title="Recent Signals">
-          {signals.length > 0 ? (
+        <Card
+          title="Actions"
+          headerAction={
+            microActions.length > 0 ? (
+              <span className="text-2xs text-text-muted">
+                {microActions.length} {microActions.length === 1 ? 'action' : 'actions'}
+              </span>
+            ) : undefined
+          }
+        >
+          {microActions.length > 0 ? (
             <ul className="space-y-2">
-              {signals.map((sig) => (
-                <SignalRow key={sig.id} signal={sig} />
+              {microActions.map((text, i) => (
+                <li key={i} className="flex items-start gap-2 border-b border-border-light py-2 last:border-0">
+                  <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-primary" />
+                  <p className="text-sm leading-relaxed text-text-secondary">{text}</p>
+                </li>
               ))}
             </ul>
-          ) : signalsResult.fetching ? (
+          ) : microResult.fetching ? (
             <div className="flex items-center justify-center py-6">
               <Spinner size="sm" />
             </div>
           ) : (
-            <p className="text-sm text-text-muted py-4 text-center">No recent signals</p>
+            <p className="py-4 text-center text-sm text-text-muted">No pending actions</p>
           )}
         </Card>
 
@@ -570,40 +569,97 @@ function QuoteDetails({ quote }: { quote: Quote }) {
   );
 }
 
-function SignalRow({ signal }: { signal: Signal }) {
-  const destination = signal.link ?? `/insights?tab=all&highlight=${signal.id}`;
-  const isExternal = !!signal.link;
-
+function InsightAnalysisBody({ insight, compact = false }: { insight: PositionInsight; compact?: boolean }) {
   return (
-    <li className="flex items-start gap-2 py-1.5 border-b border-border-light last:border-0">
-      <div className="flex-1 min-w-0">
-        {isExternal ? (
-          <a
-            href={destination}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-text-primary hover:text-accent-primary truncate block cursor-pointer"
-          >
-            {signal.title}
-          </a>
-        ) : (
-          <Link to={destination} className="text-sm text-text-primary hover:text-accent-primary truncate block">
-            {signal.title}
-          </Link>
-        )}
-        <div className="flex items-center gap-2 mt-0.5">
-          <Badge variant={signalTypeVariant[signal.type] ?? 'neutral'} size="xs">
-            {signal.type}
-          </Badge>
-          {signal.sentiment && (
-            <Badge variant={sentimentVariant[signal.sentiment] ?? 'neutral'} size="xs">
-              {signal.sentiment}
-            </Badge>
+    <div className={cn('space-y-3', compact && 'space-y-2.5')}>
+      <p className="text-sm leading-relaxed text-text-secondary">{insight.thesis}</p>
+
+      {insight.keySignals.length > 0 && (
+        <div>
+          <h4 className="mb-1 text-xs font-medium uppercase tracking-wider text-text-muted">Key Signals</h4>
+          <div className="space-y-2">
+            {insight.keySignals.map((signal) => (
+              <InsightSignalSummaryRow key={signal.signalId} signal={signal} compact={compact} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(insight.risks.length > 0 || insight.opportunities.length > 0) && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {insight.risks.length > 0 && (
+            <div>
+              <h4 className="mb-1 text-xs font-medium uppercase tracking-wider text-text-muted">Risks</h4>
+              <ul className="space-y-1">
+                {insight.risks.map((risk, index) => (
+                  <li key={`${risk}-${index}`} className="flex items-start gap-1.5 text-sm text-text-secondary">
+                    <span className="mt-0.5 text-xs text-error">&#9679;</span>
+                    {risk}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
-          <span className="text-2xs text-text-muted">{timeAgo(signal.publishedAt)}</span>
+
+          {insight.opportunities.length > 0 && (
+            <div>
+              <h4 className="mb-1 text-xs font-medium uppercase tracking-wider text-text-muted">Opportunities</h4>
+              <ul className="space-y-1">
+                {insight.opportunities.map((opportunity, index) => (
+                  <li key={`${opportunity}-${index}`} className="flex items-start gap-1.5 text-sm text-text-secondary">
+                    <span className="mt-0.5 text-xs text-success">&#9679;</span>
+                    {opportunity}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {insight.conviction > 0 && (
+        <p className="text-xs text-text-muted">
+          Conviction: {(insight.conviction * 100).toFixed(0)}%
+          {insight.priceTarget != null && ` \u00B7 Target: ${fmtCurrency(insight.priceTarget)}`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function InsightSignalSummaryRow({ signal, compact = false }: { signal: SignalSummary; compact?: boolean }) {
+  return (
+    <div className={cn('rounded-lg border border-border-light p-3', compact && 'px-2.5 py-2')}>
+      <div className="flex items-start gap-2">
+        <Badge
+          variant={signal.impact === 'POSITIVE' ? 'success' : signal.impact === 'NEGATIVE' ? 'error' : 'neutral'}
+          size="xs"
+        >
+          {signal.impact}
+        </Badge>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-text-primary">{signal.title}</p>
+          {signal.detail && <p className="mt-1 text-xs leading-relaxed text-text-secondary">{signal.detail}</p>}
+          {signal.url && (
+            <a
+              href={signal.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-flex items-center gap-1 text-2xs text-accent-primary hover:underline"
+            >
+              View source
+              <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+                />
+              </svg>
+            </a>
+          )}
         </div>
       </div>
-    </li>
+    </div>
   );
 }
 
