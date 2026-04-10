@@ -54,7 +54,7 @@ try {
   await download(dmgUrl, dmgPath);
 
   // Mount DMG
-  const mountOutput = execFileSync('hdiutil', ['attach', dmgPath, '-nobrowse', '-quiet'], {
+  const mountOutput = execFileSync('hdiutil', ['attach', dmgPath, '-nobrowse'], {
     encoding: 'utf8',
   });
   const mountPoint = mountOutput
