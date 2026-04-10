@@ -147,7 +147,7 @@ describe('mergeColdPositions', () => {
     expect(aaplPositions[0].carriedForward).toBeUndefined(); // original, not carried forward
   });
 
-  it('skips cold positions without previous insights', async () => {
+  it('adds baseline insight for cold positions without previous insights', async () => {
     const report = makeReport([makeInsight('HOT')]);
     await store.save(report);
 
@@ -158,8 +158,13 @@ describe('mergeColdPositions', () => {
 
     const merged = await mergeColdPositions(store, cold);
 
-    expect(merged!.positions).toHaveLength(2); // HOT + OLD
-    expect(merged!.positions.some((p) => p.symbol === 'NEW')).toBe(false);
+    expect(merged!.positions).toHaveLength(3); // HOT + NEW (baseline) + OLD
+    const newPos = merged!.positions.find((p) => p.symbol === 'NEW');
+    expect(newPos).toBeDefined();
+    expect(newPos!.carriedForward).toBe(true);
+    expect(newPos!.rating).toBe('NEUTRAL');
+    expect(newPos!.conviction).toBe(0.3);
+    expect(newPos!.thesis).toBe('Awaiting deeper analysis — low recent activity.');
   });
 
   it('returns original report when all cold are already present', async () => {
