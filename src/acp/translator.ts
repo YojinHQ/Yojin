@@ -1,16 +1,12 @@
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import type { AgentSideConnection } from '@agentclientprotocol/sdk';
 
 import { createEventMapper } from './event-mapper.js';
 import type { RuntimeBridge } from './runtime-bridge.js';
 import type { AcpSessionStore } from './session-store.js';
 import { createSubsystemLogger } from '../logging/logger.js';
+import { resolvePackageVersion } from '../paths.js';
 
-const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../package.json');
-const { version: PKG_VERSION } = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version: string };
+const PKG_VERSION = resolvePackageVersion();
 
 const PROTOCOL_VERSION = 1;
 const logger = createSubsystemLogger('acp');
