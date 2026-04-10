@@ -652,7 +652,12 @@ export class Scheduler {
         }
       }
       if (microSkillInputs.length > 0) {
-        void this.evaluateMicroSkills(microSkillInputs); // fire-and-forget
+        logger.debug('Evaluating micro skill triggers', {
+          symbols: microSkillInputs.map((i) => i.symbol),
+        });
+        void this.evaluateMicroSkills(microSkillInputs).catch((err) => {
+          logger.error('evaluateMicroSkills failed', { error: err instanceof Error ? err.message : String(err) });
+        });
       }
 
       // Regenerate snap from micro insights (immediate feedback before macro)

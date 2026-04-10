@@ -34,6 +34,9 @@ docs/superpowers/
 apps/web/dist/
 storybook-static/
 
+# Desktop app build output (Swift Package Manager)
+apps/desktop/.build/
+
 # Plans
 plans/
 
