@@ -52,7 +52,7 @@ import { CurationConfigSchema } from '../signals/curation/types.js';
 import { QualityAgent } from '../signals/quality-agent.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
 
-const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../package.json');
+const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../package.json');
 const { version: PKG_VERSION } = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version: string };
 
 export async function runMain(args: string[]): Promise<void> {
