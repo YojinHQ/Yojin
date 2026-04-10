@@ -90,7 +90,15 @@ export function StrategySources() {
     const trimmed = url.trim();
     if (!trimmed) return;
 
-    const res = await addSource({ url: trimmed });
+    const normalizedUrl = trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
+    try {
+      new URL(normalizedUrl);
+    } catch {
+      setError('Invalid URL. Use a GitHub repository URL (e.g. https://github.com/owner/repo).');
+      return;
+    }
+
+    const res = await addSource({ url: normalizedUrl });
     if (res.error) {
       setError(extractGqlError(res.error));
     } else {
