@@ -1049,6 +1049,7 @@ export const LATEST_INSIGHT_REPORT_QUERY = gql`
         opportunities
         memoryContext
         priceTarget
+        carriedForward
       }
       portfolio {
         overallHealth

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router';
 import { useMutation, useQuery } from 'urql';
 import Card from '../common/card';
 import Button from '../common/button';
@@ -44,7 +45,11 @@ export function IntelligenceScheduleCard() {
   const [saved, setSavedState] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [glowing, setGlowing] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const glowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
 
   const [{ data, fetching }] = useQuery<BriefingConfigQueryResult>({
     query: BRIEFING_CONFIG_QUERY,
@@ -64,6 +69,19 @@ export function IntelligenceScheduleCard() {
       }, 0);
     }
   }, [config]);
+
+  useEffect(() => {
+    if (location.hash !== '#intelligence-schedule') return;
+    const rafId = requestAnimationFrame(() => {
+      cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setGlowing(true);
+      glowTimerRef.current = setTimeout(() => setGlowing(false), 2500);
+    });
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (glowTimerRef.current) clearTimeout(glowTimerRef.current);
+    };
+  }, [location.hash]);
 
   function handleSelect(hours: number) {
     setSelectedHours(hours);
@@ -106,85 +124,91 @@ export function IntelligenceScheduleCard() {
   const estCallsPerDay = avgSignaledAssets * cyclesPerDay;
 
   return (
-    <Card className="overflow-hidden p-0">
-      {/* Header */}
-      <div className="flex items-center gap-4 px-5 py-4">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-primary/10">
-          <ClockIcon />
-        </div>
-        <div>
-          <h2 className="font-headline text-lg text-text-primary">Intelligence Schedule</h2>
-          <p className="text-sm text-text-muted">Control how often Yojin runs AI analysis on your assets.</p>
-        </div>
-      </div>
-
-      {/* LLM interval picker */}
-      <div className="border-t border-border px-5 py-4 space-y-4">
-        <div>
-          <p className="text-sm font-medium text-text-primary mb-1">Analysis frequency per asset</p>
-          <p className="text-xs text-text-muted mb-3">
-            Yojin only runs analysis when new signals arrive. This cap prevents re-analyzing the same asset too often on
-            busy news days.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {LLM_INTERVAL_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                aria-pressed={selectedHours === opt.value}
-                onClick={() => handleSelect(opt.value)}
-                className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-                  selectedHours === opt.value
-                    ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
-                    : 'border-border bg-bg-secondary text-text-secondary hover:border-accent-primary/50 hover:text-text-primary'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+    <div
+      id="intelligence-schedule"
+      ref={cardRef}
+      className={glowing ? 'rounded-xl animate-[card-highlight-glow_2.5s_ease-out_forwards]' : 'rounded-xl'}
+    >
+      <Card className="overflow-hidden p-0">
+        {/* Header */}
+        <div className="flex items-center gap-4 px-5 py-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-primary/10">
+            <ClockIcon />
+          </div>
+          <div>
+            <h2 className="font-headline text-lg text-text-primary">Intelligence Schedule</h2>
+            <p className="text-sm text-text-muted">Control how often Yojin runs AI analysis on your assets.</p>
           </div>
         </div>
 
-        {/* Estimate */}
-        <div className="rounded-lg bg-bg-secondary border border-border px-4 py-3 space-y-1.5">
-          <p className="text-xs text-text-muted">
-            <span className="font-medium text-text-secondary">Estimated LLM calls: </span>~{estCallsPerDay} per day
-            <span className="ml-2 text-text-muted/70">
-              (signal-gated · ~{avgSignaledAssets} active assets · {cyclesPerDay}×/day)
-            </span>
-          </p>
-          {selectedHours < 1 && (
-            <p className="text-xs text-warning">
-              Sub-hour intervals increase LLM costs significantly. Only use if you're actively monitoring during market
-              hours.
+        {/* LLM interval picker */}
+        <div className="border-t border-border px-5 py-4 space-y-4">
+          <div>
+            <p className="text-sm font-medium text-text-primary mb-1">Analysis frequency per asset</p>
+            <p className="text-xs text-text-muted mb-3">
+              Yojin only runs analysis when new signals arrive. This cap prevents re-analyzing the same asset too often
+              on busy news days.
             </p>
-          )}
-        </div>
+            <div className="flex flex-wrap gap-2">
+              {LLM_INTERVAL_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  aria-pressed={selectedHours === opt.value}
+                  onClick={() => handleSelect(opt.value)}
+                  className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                    selectedHours === opt.value
+                      ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
+                      : 'border-border bg-bg-secondary text-text-secondary hover:border-accent-primary/50 hover:text-text-primary'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-        {error && <p className="text-sm text-error">{error}</p>}
-
-        {/* Save button — only shown when briefing is configured and dirty */}
-        {config && (
-          <div className="flex items-center gap-3">
-            <Button variant="primary" size="sm" onClick={handleSave} disabled={saving || !dirty || fetching}>
-              {saving ? 'Saving…' : saved ? 'Saved' : 'Save'}
-            </Button>
-            {!dirty && !saving && (
-              <p className="text-xs text-text-muted">
-                Analysis runs every <span className="font-medium text-text-secondary">{selectedHours}h</span> per asset
-                when new signals arrive.
+          {/* Estimate */}
+          <div className="rounded-lg bg-bg-secondary border border-border px-4 py-3 space-y-1.5">
+            <p className="text-xs text-text-muted">
+              <span className="font-medium text-text-secondary">Estimated LLM calls: </span>~{estCallsPerDay} per day
+              <span className="ml-2 text-text-muted/70">
+                (signal-gated · ~{avgSignaledAssets} active assets · {cyclesPerDay}×/day)
+              </span>
+            </p>
+            {selectedHours < 1 && (
+              <p className="text-xs text-warning">
+                Sub-hour intervals increase LLM costs significantly. Only use if you're actively monitoring during
+                market hours.
               </p>
             )}
           </div>
-        )}
 
-        {!config && !fetching && (
-          <p className="text-xs text-text-muted">
-            Configure your daily briefing schedule first to enable this setting.
-          </p>
-        )}
-      </div>
-    </Card>
+          {error && <p className="text-sm text-error">{error}</p>}
+
+          {/* Save button — only shown when briefing is configured and dirty */}
+          {config && (
+            <div className="flex items-center gap-3">
+              <Button variant="primary" size="sm" onClick={handleSave} disabled={saving || !dirty || fetching}>
+                {saving ? 'Saving…' : saved ? 'Saved' : 'Save'}
+              </Button>
+              {!dirty && !saving && (
+                <p className="text-xs text-text-muted">
+                  Analysis runs every <span className="font-medium text-text-secondary">{selectedHours}h</span> per
+                  asset when new signals arrive.
+                </p>
+              )}
+            </div>
+          )}
+
+          {!config && !fetching && (
+            <p className="text-xs text-text-muted">
+              Configure your daily briefing schedule first to enable this setting.
+            </p>
+          )}
+        </div>
+      </Card>
+    </div>
   );
 }
 

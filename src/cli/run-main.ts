@@ -56,10 +56,24 @@ import { CurationConfigSchema } from '../signals/curation/types.js';
 import { QualityAgent } from '../signals/quality-agent.js';
 import { runSecretCommand } from '../trust/vault/cli.js';
 
-const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../package.json');
+const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../package.json');
 const { version: PKG_VERSION } = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version: string };
 
 export async function runMain(args: string[]): Promise<void> {
+  // `--port <n>` overrides YOJIN_PORT for the current run. We propagate via
+  // the env var so the rest of the config pipeline (loadConfig → channels[web]
+  // → web channel setupAdapter) picks it up with no extra wiring.
+  const portIdx = args.indexOf('--port');
+  if (portIdx !== -1) {
+    const raw = args[portIdx + 1];
+    const port = Number(raw);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      console.error(`Invalid --port value: "${raw ?? ''}". Must be an integer between 1 and 65535.`);
+      process.exit(1);
+    }
+    process.env.YOJIN_PORT = String(port);
+  }
+
   const command = args[0] ?? 'start';
 
   switch (command) {
@@ -353,14 +367,23 @@ async function startGateway(): Promise<void> {
     extraPlugins: [slackPlugin, telegramPlugin, whatsAppPlugin],
   });
 
-  // Graceful shutdown
+  // Graceful shutdown — first SIGINT tries clean stop, second forces exit
+  let shuttingDown = false;
   const shutdown = async () => {
+    if (shuttingDown) {
+      process.exit(1);
+    }
+    shuttingDown = true;
     scheduler.stop();
-    await gateway.stop();
+    try {
+      await gateway.stop();
+    } catch {
+      // Best-effort — don't block exit
+    }
     process.exit(0);
   };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => void shutdown());
+  process.on('SIGTERM', () => void shutdown());
 
   await gateway.start();
   setChannelRegistry(gateway.getRegistry());
@@ -464,7 +487,11 @@ function printHelp(): void {
 Yojin — Your personal AI finance agent
 
 Commands:
-  yojin                Start Yojin (server + dashboard)
+  yojin [options]      Start Yojin (server + dashboard)
+    --port <n>           Preferred port (default: 3000). Falls back to the
+                         next free port if busy. Also settable via YOJIN_PORT.
+    --verbose, -v        Stream structured logs to the console instead of
+                         the splash (useful for debugging startup).
   yojin chat [options] Chat with Yojin in your terminal
     --model <model>      Model to use (default: claude-opus-4-6)
     --provider <id>      Provider to use (default: anthropic)

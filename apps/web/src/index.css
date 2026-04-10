@@ -36,6 +36,7 @@
   --animate-badge-in: badge-in 0.3s ease-out both;
   --animate-price-up: price-up-glow 4s ease-out forwards;
   --animate-price-down: price-down-glow 4s ease-out forwards;
+  --animate-card-highlight: card-highlight-glow 2.5s ease-out forwards;
 }
 
 /* Chat — user message bubble */
@@ -353,6 +354,29 @@
     box-shadow:
       0 0 0 0 rgba(239, 68, 68, 0),
       inset 0 0 0 1px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes card-highlight-glow {
+  0% {
+    box-shadow:
+      0 0 0 2px rgba(255, 90, 94, 0.7),
+      0 0 24px 6px rgba(255, 90, 94, 0.35);
+  }
+  40% {
+    box-shadow:
+      0 0 0 2px rgba(255, 90, 94, 0.4),
+      0 0 32px 8px rgba(255, 90, 94, 0.2);
+  }
+  70% {
+    box-shadow:
+      0 0 0 1px rgba(255, 90, 94, 0.2),
+      0 0 16px 4px rgba(255, 90, 94, 0.1);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(255, 90, 94, 0),
+      0 0 0 0 rgba(255, 90, 94, 0);
   }
 }
 

@@ -9,7 +9,7 @@ import type { RuntimeBridge } from './runtime-bridge.js';
 import type { AcpSessionStore } from './session-store.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 
-const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../package.json');
+const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../package.json');
 const { version: PKG_VERSION } = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version: string };
 
 const PROTOCOL_VERSION = 1;

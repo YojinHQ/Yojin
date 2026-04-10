@@ -741,6 +741,7 @@ export interface PositionInsight {
   opportunities: string[];
   memoryContext: string | null;
   priceTarget: number | null;
+  carriedForward?: boolean;
 }
 
 export interface PortfolioItem {

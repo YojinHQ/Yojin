@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useMutation, useQuery } from 'urql';
 import {
   ACTIONS_QUERY,
@@ -16,7 +16,6 @@ import type {
   FeedTarget,
   IntelFeedQueryResult,
   IntelFeedQueryVariables,
-  SchedulerAssetStatus,
   SchedulerStatusQueryResult,
 } from '../../api/types';
 import { cn, timeAgo } from '../../lib/utils';
@@ -27,6 +26,7 @@ import { FeatureCardGate } from '../common/feature-gate';
 import FeedDetailModal from './feed-detail-modal';
 import type { FeedDetailData } from './feed-detail-modal';
 import Spinner from '../common/spinner';
+import { SymbolLogo } from '../common/symbol-logo';
 
 type ItemType = 'alert' | 'insight' | 'action';
 type FilterTab = 'all' | 'alerts' | 'insights' | 'actions';
@@ -88,18 +88,6 @@ function classifySignal(signal: { outputType?: string | null; severity: IntelFee
   return 'insight';
 }
 
-const categoryIconBg: Record<ItemType, { default: string; expanded: string }> = {
-  alert: { default: 'bg-warning/10', expanded: 'bg-warning/20' },
-  insight: { default: 'bg-success/10', expanded: 'bg-success/20' },
-  action: { default: 'bg-market/10', expanded: 'bg-market/20' },
-};
-
-const categoryIconText: Record<ItemType, string> = {
-  alert: 'text-warning',
-  insight: 'text-success',
-  action: 'text-market',
-};
-
 const categoryLabel: Record<ItemType, string> = {
   alert: 'ALERT',
   insight: 'INSIGHT',
@@ -115,144 +103,6 @@ const filterTabs: { key: FilterTab; label: string }[] = [
 
 /* ── Icons ──────────────────────────────────────────────────────────── */
 
-function ItemIcon({ icon, type, expanded }: { icon: IconName; type: ItemType; expanded: boolean }) {
-  const strokeWidth = expanded ? '2.5' : '2';
-  const svgClass = cn('h-3.5 w-3.5', categoryIconText[type]);
-
-  const icons: Record<IconName, React.ReactNode> = {
-    rebalance: (
-      <svg
-        className={svgClass}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M21 2v6h-6" />
-        <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-        <path d="M3 22v-6h6" />
-        <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-      </svg>
-    ),
-    dollar: (
-      <svg
-        className={svgClass}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <line x1="12" y1="1" x2="12" y2="23" />
-        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-      </svg>
-    ),
-    box: (
-      <svg
-        className={svgClass}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-        <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-        <line x1="12" y1="22.08" x2="12" y2="12" />
-      </svg>
-    ),
-    warehouse: (
-      <svg
-        className={svgClass}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z" />
-        <path d="M6 18h12" />
-        <path d="M6 14h12" />
-        <rect x="6" y="10" width="12" height="12" rx="1" />
-      </svg>
-    ),
-    clock: (
-      <svg
-        className={svgClass}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <polyline points="12 6 12 12 16 14" />
-      </svg>
-    ),
-    trending: (
-      <svg
-        className={svgClass}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-        <polyline points="16 7 22 7 22 13" />
-      </svg>
-    ),
-    bubble: (
-      <svg
-        className={svgClass}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
-        <path d="M8 12h.01" />
-        <path d="M12 12h.01" />
-        <path d="M16 12h.01" />
-      </svg>
-    ),
-    'trending-up': (
-      <svg
-        className={svgClass}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M7 17 17 7" />
-        <polyline points="7 7 17 7 17 17" />
-      </svg>
-    ),
-  };
-
-  return (
-    <div
-      className={cn(
-        'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors',
-        expanded ? categoryIconBg[type].expanded : categoryIconBg[type].default,
-      )}
-    >
-      {icons[icon]}
-    </div>
-  );
-}
-
 function AgentIcon() {
   return (
     <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
@@ -265,15 +115,65 @@ function AgentIcon() {
   );
 }
 
-function SectionHeader({ label }: { label: string }) {
+function SectionHeader({
+  label,
+  selectMode,
+  selectedCount,
+  onSelectToggle,
+  onDismissSelected,
+}: {
+  label: string;
+  selectMode: boolean;
+  selectedCount: number;
+  onSelectToggle: () => void;
+  onDismissSelected: () => void;
+}) {
   return (
     <div className="mb-2.5 flex items-center gap-2.5 px-1 pt-4">
       <span className="whitespace-nowrap text-2xs font-semibold uppercase tracking-[0.12em] text-text-muted">
         {label}
       </span>
       <div className="h-px flex-1 bg-border" />
+      {selectMode ? (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onSelectToggle}
+            className="cursor-pointer rounded-md border border-border bg-bg-secondary px-2.5 py-1 text-2xs font-semibold uppercase tracking-[0.08em] text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onDismissSelected}
+            disabled={selectedCount === 0}
+            className="cursor-pointer rounded-md border border-error/40 bg-error/15 px-2.5 py-1 text-2xs font-semibold uppercase tracking-[0.08em] text-error transition-colors hover:bg-error/25 disabled:cursor-default disabled:opacity-40"
+          >
+            Dismiss{selectedCount > 0 ? ` (${selectedCount})` : ''}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onSelectToggle}
+          className="cursor-pointer whitespace-nowrap text-2xs font-semibold uppercase tracking-[0.12em] text-text-muted transition-colors hover:text-text-secondary"
+        >
+          Select
+        </button>
+      )}
     </div>
   );
+}
+
+/* ── Last update label ──────────────────────────────────────────────── */
+
+function LastUpdateLabel({ ingestedAt }: { ingestedAt: string }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  return <>Last Update: {timeAgo(ingestedAt)}</>;
 }
 
 /* ── Card ──────────────────────────────────────────────────────────── */
@@ -282,6 +182,7 @@ function IntelFeedCard({
   item,
   expanded,
   isNew,
+  selectMode,
   selected,
   onToggle,
   onToggleSelect,
@@ -292,6 +193,7 @@ function IntelFeedCard({
   item: IntelFeedItem;
   expanded: boolean;
   isNew: boolean;
+  selectMode: boolean;
   selected: boolean;
   onToggle: () => void;
   onToggleSelect: () => void;
@@ -303,13 +205,17 @@ function IntelFeedCard({
     <div
       className={cn(
         'relative rounded-xl border transition-colors',
-        selected ? 'border-accent-primary/40 bg-accent-primary/5' : 'border-border-light bg-bg-tertiary/60',
-        !selected && (expanded ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'),
+        selected
+          ? 'border-accent-primary/40 bg-accent-primary/5'
+          : item.type === 'insight'
+            ? 'border-success/25 bg-success/[0.08]'
+            : 'border-border-light bg-bg-tertiary/60',
+        !selectMode && (expanded ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'),
         isNew &&
           (item.type === 'alert' ? 'motion-safe:animate-new-event-alert' : 'motion-safe:animate-new-event-insight'),
       )}
     >
-      {isNew && !selected && (
+      {isNew && (
         <span
           className={cn(
             'absolute -top-2 -right-2 z-10 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wider text-white shadow-sm motion-safe:animate-badge-in',
@@ -320,55 +226,47 @@ function IntelFeedCard({
         </span>
       )}
       {/* Collapsed header — always visible */}
-      <div className="flex w-full items-center gap-3 px-3 py-2.5">
+      <div className="flex w-full items-center gap-3 px-3 py-4">
         <button
           type="button"
-          aria-expanded={expanded}
-          onClick={onToggle}
+          aria-expanded={selectMode ? undefined : expanded}
+          aria-pressed={selectMode ? selected : undefined}
+          aria-label={selectMode ? `${selected ? 'Deselect' : 'Select'} ${item.title}` : undefined}
+          onClick={selectMode ? onToggleSelect : onToggle}
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
         >
-          <ItemIcon icon={item.icon} type={item.type} expanded={expanded} />
-          <div className="min-w-0 flex-1">
-            <span
+          <SymbolLogo symbol={item.ticker} size="sm" className="flex-shrink-0" />
+          <p className="min-w-0 flex-1 line-clamp-2 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
+          {selectMode ? (
+            <div
               className={cn(
-                'inline-block rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.08em]',
-                item.type === 'alert'
-                  ? 'bg-warning/15 text-warning'
-                  : item.type === 'action'
-                    ? 'bg-market/15 text-market'
-                    : 'bg-success/15 text-success',
+                'flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-colors',
+                selected
+                  ? 'border-accent-primary bg-accent-primary'
+                  : 'border-border bg-transparent hover:border-text-muted',
               )}
             >
-              {item.ticker}
-            </span>
-            <p className="mt-0.5 line-clamp-2 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
-            {item.skillName && <span className="mt-0.5 text-[10px] font-medium text-market/80">{item.skillName}</span>}
-          </div>
-          <span className="flex-shrink-0 text-2xs text-text-muted">{item.publishedTime}</span>
-        </button>
-        <button
-          type="button"
-          aria-label={selected ? 'Deselect' : 'Select'}
-          onClick={onToggleSelect}
-          className={cn(
-            'flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-colors',
-            selected
-              ? 'border-accent-primary bg-accent-primary'
-              : 'border-border bg-transparent hover:border-text-muted',
-          )}
-        >
-          {selected && (
-            <svg
-              className="h-2.5 w-2.5 text-white"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M4.5 12.75l6 6 9-13.5" />
-            </svg>
+              {selected && (
+                <svg
+                  className="h-2.5 w-2.5 text-white"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-shrink-0 flex-col items-end gap-0.5">
+              <span className="inline-block rounded bg-bg-secondary px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.08em] text-text-muted">
+                {item.signalType.replace(/_/g, ' ')}
+              </span>
+              <span className="text-2xs text-text-muted">{item.publishedTime}</span>
+            </div>
           )}
         </button>
       </div>
@@ -524,8 +422,9 @@ function IntelFeedContent({
   const newIdTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [, dismissSignal] = useMutation(DISMISS_SIGNAL_MUTATION);
   const [, dismissAction] = useMutation(DISMISS_ACTION_MUTATION);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [, batchDismissSignals] = useMutation(BATCH_DISMISS_SIGNALS_MUTATION);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // ── Scan lifecycle state ────────────────────────────────────────────
   const [scanState, setScanState] = useState<{
@@ -595,12 +494,6 @@ function IntelFeedContent({
     requestPolicy: 'cache-and-network',
   });
   const [, triggerMicroAnalysis] = useMutation(TRIGGER_MICRO_ANALYSIS_MUTATION);
-
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
 
   // Auto-trigger micro analysis when user is actively using the page and assets are throttled.
   // Fires at most once per configured LLM interval — the server re-checks pendingAnalysis before
@@ -883,6 +776,8 @@ function IntelFeedContent({
     setPrevViewKey(viewKey);
     setDisplayedCount(PAGE_SIZE);
     setUnseenImportantIds(new Set());
+    setSelectMode(false);
+    setSelectedIds(new Set());
   }
 
   // Jump the scroll container back to the top on view change. Without this,
@@ -973,6 +868,11 @@ function IntelFeedContent({
   const hasError = !!(error || actionsError);
   const isEmpty = !fetching && !hasError && filteredItems.length === 0;
 
+  const latestItem = useMemo(
+    () => (items.length > 0 ? items.reduce((a, b) => (a.ingestedAt > b.ingestedAt ? a : b)) : null),
+    [items],
+  );
+
   return (
     <>
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -983,6 +883,14 @@ function IntelFeedContent({
             <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-tertiary px-1.5 text-[10px] font-bold text-text-secondary">
               {totalCount}
             </span>
+            {latestItem && (
+              <Link
+                to="/settings#intelligence-schedule"
+                className="ml-auto text-[10px] font-medium uppercase tracking-wider text-text-muted transition-colors hover:text-text-secondary"
+              >
+                <LastUpdateLabel ingestedAt={latestItem.ingestedAt} />
+              </Link>
+            )}
           </div>
 
           <div className="flex gap-5 border-b border-border px-4">
@@ -992,6 +900,7 @@ function IntelFeedContent({
                 onClick={() => {
                   setActiveFilter(tab.key);
                   setExpandedId(null);
+                  setSelectMode(false);
                   setSelectedIds(new Set());
                 }}
                 className={cn(
@@ -1083,16 +992,6 @@ function IntelFeedContent({
               <span>{pendingUpdate.symbol} removed from feed</span>
             </div>
           )}
-          {/* Throttle banner — shown when assets have new signals but LLM interval not yet elapsed */}
-          {schedulerData &&
-            schedulerData.schedulerStatus.pendingCount > 0 &&
-            schedulerData.schedulerStatus.throttledCount > 0 && (
-              <ThrottleBanner
-                throttledCount={schedulerData.schedulerStatus.throttledCount}
-                assets={schedulerData.schedulerStatus.assets}
-                now={nowMs}
-              />
-            )}
           {isLoading ? (
             <div className="flex items-center justify-center pt-12">
               <Spinner size="md" label="Loading intel..." />
@@ -1165,16 +1064,48 @@ function IntelFeedContent({
                         ? 'Actions'
                         : 'Insights'
                 }
+                selectMode={selectMode}
+                selectedCount={selectedIds.size}
+                onSelectToggle={() => {
+                  setSelectMode((prev) => !prev);
+                  setSelectedIds(new Set());
+                  setExpandedId(null);
+                }}
+                onDismissSelected={() => {
+                  const ids = [...selectedIds];
+                  const actionIds = ids
+                    .filter((id) => id.startsWith('action:'))
+                    .map((id) => id.replace(/^action:/, ''));
+                  const signalIds = ids.filter((id) => !id.startsWith('action:'));
+                  if (actionIds.length > 0) {
+                    void Promise.all(actionIds.map((id) => dismissAction({ id }))).then((results) => {
+                      const failed = results.filter((r) => r.error);
+                      if (failed.length > 0) console.error(`${failed.length} action dismiss(es) failed`);
+                      reexecuteActions({ requestPolicy: 'network-only' });
+                    });
+                  }
+                  if (signalIds.length > 0) {
+                    void batchDismissSignals({ signalIds }).then((result) => {
+                      if (result.error || result.data?.batchDismissSignals !== true) {
+                        console.error('Batch dismiss failed', result.error?.message ?? 'Mutation returned false');
+                        return;
+                      }
+                      reexecute({ requestPolicy: 'network-only' });
+                    });
+                  }
+                  setSelectMode(false);
+                  setSelectedIds(new Set());
+                }}
               />
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {visibleItems.map((item) => (
                   <IntelFeedCard
                     key={item.id}
                     item={item}
                     expanded={expandedId === item.id}
                     isNew={newIds.has(item.id)}
+                    selectMode={selectMode}
                     selected={selectedIds.has(item.id)}
-                    onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
                     onToggleSelect={() =>
                       setSelectedIds((prev) => {
                         const next = new Set(prev);
@@ -1183,6 +1114,7 @@ function IntelFeedContent({
                         return next;
                       })
                     }
+                    onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
                     onDismiss={() => {
                       if (expandedId === item.id) setExpandedId(null);
                       if (item.isAction) {
@@ -1226,109 +1158,8 @@ function IntelFeedContent({
         </div>
       </div>
 
-      {/* Batch dismiss action bar — appears when any items are checked */}
-      {selectedIds.size > 0 && (
-        <div className="sticky bottom-0 z-20 flex items-center justify-between gap-3 border-t border-border bg-bg-secondary px-4 py-3">
-          <span className="text-xs text-text-muted">{selectedIds.size} selected</span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSelectedIds(new Set())}
-              className="cursor-pointer text-xs font-medium text-text-muted transition-colors hover:text-text-secondary"
-            >
-              Clear
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const ids = [...selectedIds];
-                setSelectedIds(new Set());
-                const actionIds = ids.filter((id) => id.startsWith('action:')).map((id) => id.replace(/^action:/, ''));
-                const signalIds = ids.filter((id) => !id.startsWith('action:'));
-                if (actionIds.length > 0) {
-                  void Promise.all(actionIds.map((id) => dismissAction({ id }))).then((results) => {
-                    const failed = results.filter((r) => r.error);
-                    if (failed.length > 0) console.error(`${failed.length} action dismiss(es) failed`);
-                    reexecuteActions({ requestPolicy: 'network-only' });
-                  });
-                }
-                if (signalIds.length > 0) {
-                  void batchDismissSignals({ signalIds }).then((result) => {
-                    if (result.error) {
-                      console.error('Batch dismiss failed', result.error.message);
-                      return;
-                    }
-                    reexecute({ requestPolicy: 'network-only' });
-                  });
-                }
-              }}
-              className="cursor-pointer rounded-lg border border-error/30 bg-error/10 px-3 py-1.5 text-xs font-medium text-error transition-colors hover:bg-error/20"
-            >
-              Dismiss {selectedIds.size}
-            </button>
-          </div>
-        </div>
-      )}
-
       <FeedDetailModal open={modalData !== null} onClose={() => setModalData(null)} data={modalData} />
     </>
-  );
-}
-
-/* ── Throttle banner ─────────────────────────────────────────────────── */
-
-function ThrottleBanner({
-  throttledCount,
-  assets,
-  now,
-}: {
-  throttledCount: number;
-  assets: SchedulerAssetStatus[];
-  now: number;
-}) {
-  // Find the asset whose next eligible time is soonest
-  const nextLabel = useMemo(() => {
-    const soonestMs = assets
-      .filter((a) => a.lastLlmAt !== null)
-      .map((a) => new Date(a.nextLlmEligibleAt).getTime() - now)
-      .filter((ms) => ms > 0)
-      .sort((a, b) => a - b)[0];
-    return soonestMs != null ? formatMinutes(soonestMs) : null;
-  }, [assets, now]);
-
-  return (
-    <div className="mx-0.5 mt-3 flex items-center gap-2.5 rounded-lg border border-border-light bg-bg-tertiary px-3 py-2 text-xs text-text-muted">
-      <ClockMiniIcon />
-      <span>
-        AI analysis paused for{' '}
-        <span className="font-medium text-text-secondary">
-          {throttledCount} asset{throttledCount !== 1 ? 's' : ''}
-        </span>
-        {nextLabel ? (
-          <>
-            {' '}
-            · next in <span className="font-medium text-text-secondary">{nextLabel}</span>
-          </>
-        ) : null}
-      </span>
-    </div>
-  );
-}
-
-function formatMinutes(ms: number): string {
-  const totalMin = Math.ceil(ms / 60_000);
-  if (totalMin < 60) return `${totalMin}m`;
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
-}
-
-function ClockMiniIcon() {
-  return (
-    <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <circle cx="12" cy="12" r="9" />
-      <path strokeLinecap="round" d="M12 7v5l3 2" />
-    </svg>
   );
 }
 
@@ -1382,7 +1213,8 @@ function MockIntelFeed() {
                   <div className="h-3 w-3 rounded-sm bg-warning/30" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <span className="inline-block rounded bg-warning/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.08em] text-warning">
+                  <span className="inline-flex items-center gap-1 rounded bg-bg-secondary px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.08em] text-text-primary">
+                    <span className="h-3 w-3 flex-shrink-0 rounded-full bg-bg-tertiary" />
                     {item.ticker}
                   </span>
                   <p className="mt-0.5 text-sm font-medium leading-snug text-text-primary">{item.title}</p>

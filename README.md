@@ -24,7 +24,15 @@ npm install -g @yojinhq/yojin # Install globally
 yojin                         # Start the backend + bundled dashboard
 ```
 
-Open `http://localhost:3000` for the dashboard. The first run walks you through connecting an LLM provider (Anthropic API key or OAuth) and generating your Strategist persona.
+When Yojin is ready, it prints a small splash with the dashboard URL, the GraphQL endpoint, and the log file path — open the dashboard URL to land on the onboarding flow. The first run walks you through connecting an LLM provider (Anthropic API key or OAuth) and generating your Strategist persona.
+
+Yojin listens on port `3000` by default. If that port is already in use, it automatically falls back to the next free port and tells you in the splash. Pin a specific port with:
+
+```bash
+yojin --port 3010            # or: YOJIN_PORT=3010 yojin
+```
+
+Pass `--verbose` (or `-v`) to stream structured logs to the terminal instead of the splash — useful when debugging startup issues.
 
 Platform scraping (Robinhood, IBKR, Coinbase, Schwab, Fidelity, Binance) is optional and needs Playwright's Chromium:
 
@@ -34,6 +42,24 @@ npx playwright install chromium
 ```
 
 Chat, insights, and manual portfolio entry work without it.
+
+### Desktop App (macOS)
+
+A native menu bar app that lives in your toolbar. Click the Yojin icon to start/stop the server and open the dashboard.
+
+```bash
+cd apps/desktop
+./scripts/build.sh      # Compiles the Swift app
+./scripts/install.sh    # Installs to /Applications + auto-start on login
+```
+
+Once installed, the Yojin hand icon appears in your menu bar with:
+- **Status indicator** — green dot when running, grey when stopped
+- **Open Dashboard** — opens the web UI in your browser
+- **Start / Stop** — toggle the server
+- Auto-starts on login via LaunchAgent
+
+To uninstall (from `apps/desktop`): `./scripts/uninstall.sh`
 
 ### Docker (recommended for long-running)
 
@@ -74,14 +100,17 @@ pnpm chat
 On first launch, Yojin bootstraps itself: connects an LLM provider (paste an Anthropic API key or run the OAuth flow) and generates a personalized Strategist persona based on your investment style. No manual config files needed.
 
 ```text
-yojin                Start the backend server (API + GraphQL)
-yojin chat           Chat with Yojin in your terminal
-yojin setup          Connect your Claude account (OAuth flow)
-yojin web            Start the web dashboard only
-yojin secret <cmd>   Manage encrypted credentials
-yojin acp            Start ACP (Agent Client Protocol) server
-yojin version        Print version
-yojin help           Show help
+yojin                    Start the backend server + bundled dashboard
+  --port <n>               Preferred port (default 3000, auto-falls back if busy)
+  --verbose, -v            Stream structured logs instead of the splash
+yojin chat               Chat with Yojin in your terminal
+yojin setup              Connect your Claude account (OAuth flow)
+yojin insights           Run the multi-agent insight workflow once
+yojin web                Start the web dashboard only
+yojin secret <cmd>       Manage encrypted credentials
+yojin acp                Start ACP (Agent Client Protocol) server
+yojin version            Print version
+yojin help               Show help
 ```
 
 ### Dev Commands
@@ -427,7 +456,8 @@ yojin/
 │   ├── plugin-sdk/     # Plugin SDK exports
 │   └── plugins/        # ProviderPlugin + ChannelPlugin interfaces, registry
 ├── apps/
-│   └── web/            # React 19 + Vite 8 + Tailwind CSS 4 dashboard
+│   ├── web/            # React 19 + Vite 8 + Tailwind CSS 4 dashboard
+│   └── desktop/        # Native macOS menu bar app (Swift)
 ├── providers/          # LLM provider plugins (anthropic/)
 ├── channels/           # Messaging channels (slack/, telegram/, whatsapp/, web/)
 ├── data/               # Runtime state — JSONL, configs, snapshots (gitignored)

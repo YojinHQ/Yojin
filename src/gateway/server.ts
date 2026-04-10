@@ -86,7 +86,9 @@ export class Gateway {
     const providers = this.registry.getAllProviders().length;
     const channels = this.registry.getAllChannels().length;
     this.log.info(`Gateway started — ${providers} provider(s), ${channels} channel(s)`);
-    console.log(`Yojin gateway started — ${providers} provider(s), ${channels} channel(s)`);
+    // The user-facing "ready" message lives in channels/web/src/channel.ts
+    // printSplash() — it runs after the HTTP server is actually listening
+    // and includes the bound port, which only the web channel knows.
   }
 
   /** Route an incoming message through AgentRuntime. */
@@ -148,7 +150,7 @@ export class Gateway {
     this.log.info('Gateway shutting down…');
     await this.registry.shutdownAll();
     this.log.info('Gateway stopped');
-    console.log('Yojin gateway stopped');
+    console.log('\nYojin stopped.');
   }
 
   getRegistry(): PluginRegistry {
