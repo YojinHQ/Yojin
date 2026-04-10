@@ -22,7 +22,6 @@ import { join } from 'node:path';
 import type { Entity, JintelClient } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
-import type { ActionStore } from './actions/action-store.js';
 import type { Orchestrator } from './agents/orchestrator.js';
 import { emitProgress } from './agents/orchestrator.js';
 import type { ProviderRouter } from './ai-providers/router.js';
@@ -42,11 +41,13 @@ import type { TickerProfileStore } from './profiles/profile-store.js';
 import type { SignalArchive } from './signals/archive.js';
 import type { SignalIngestor } from './signals/ingestor.js';
 import type { Signal } from './signals/types.js';
-import { buildPortfolioContext } from './skills/portfolio-context-builder.js';
+import { buildPortfolioContext, buildSingleTickerContext } from './skills/portfolio-context-builder.js';
 import type { PortfolioContext, SkillEvaluator } from './skills/skill-evaluator.js';
+import type { SkillEvaluation } from './skills/types.js';
 import { snapFromInsight } from './snap/snap-from-insight.js';
 import { snapFromMicro } from './snap/snap-from-micro.js';
 import type { SnapStore } from './snap/snap-store.js';
+import type { SummaryStore } from './summaries/summary-store.js';
 import type { WatchlistStore } from './watchlist/watchlist-store.js';
 
 const logger = createSubsystemLogger('scheduler');
@@ -107,8 +108,8 @@ export interface SchedulerOptions {
   reflectionEngine?: ReflectionEngine;
   /** Skill evaluator — evaluates active skills after curation. */
   skillEvaluator?: SkillEvaluator;
-  /** Action store — persists actions created from fired skill triggers. */
-  actionStore?: ActionStore;
+  /** Summary store — persists summaries created from fired skill triggers. */
+  summaryStore?: SummaryStore;
   /** Portfolio snapshot store — used to build PortfolioContext for skill evaluation. */
   snapshotStore?: PortfolioSnapshotStore;
   /** Snap store — snap brief is regenerated after each curation cycle. */
@@ -153,8 +154,8 @@ const MACRO_INTERVAL_MS = 2 * 60 * 60 * 1000;
  */
 const MICRO_TRIGGER_MACRO_COOLDOWN_MS = MACRO_INTERVAL_MS;
 
-/** Default expiry window for actions created from skill triggers. */
-const ACTION_EXPIRY_HOURS = 24;
+/** Default expiry window for summaries created from skill triggers. */
+const SUMMARY_EXPIRY_HOURS = 24;
 
 /** Default micro research interval (5 minutes). */
 const DEFAULT_MICRO_INTERVAL_MS = 5 * 60 * 1000;
@@ -211,7 +212,7 @@ export class Scheduler {
   private readonly checkIntervalMs: number;
   private readonly reflectionEngine?: ReflectionEngine;
   private readonly skillEvaluator?: SkillEvaluator;
-  private readonly actionStore?: ActionStore;
+  private readonly summaryStore?: SummaryStore;
   private readonly snapshotStore?: PortfolioSnapshotStore;
   private readonly snapStore?: SnapStore;
   private readonly insightStore?: InsightStore;
@@ -256,7 +257,7 @@ export class Scheduler {
     this.checkIntervalMs = options.checkIntervalMs ?? 60_000;
     this.reflectionEngine = options.reflectionEngine;
     this.skillEvaluator = options.skillEvaluator;
-    this.actionStore = options.actionStore;
+    this.summaryStore = options.summaryStore;
     this.snapshotStore = options.snapshotStore;
     this.snapStore = options.snapStore;
     this.insightStore = options.insightStore;
@@ -637,6 +638,23 @@ export class Scheduler {
         }
       }
 
+      // Evaluate per-asset skill triggers for tickers that completed micro research
+      const microSkillInputs = [];
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        const asset = assetsReadyForLlm[i];
+        if (result?.status === 'fulfilled' && result.value.entity && asset) {
+          microSkillInputs.push({
+            symbol: asset.symbol,
+            entity: result.value.entity,
+            signals: result.value.signals ?? [],
+          });
+        }
+      }
+      if (microSkillInputs.length > 0) {
+        void this.evaluateMicroSkills(microSkillInputs); // fire-and-forget
+      }
+
       // Regenerate snap from micro insights (immediate feedback before macro)
       await this.regenerateSnapFromMicro();
 
@@ -729,7 +747,7 @@ export class Scheduler {
    *   1. Fetch CLI/RSS/MCP data sources
    *   2. Signal assessment (RA + Strategist via full-curation workflow)
    *   3. ProcessInsights (full multi-agent analysis)
-   *   4. Skill evaluation → Actions
+   *   4. Skill evaluation → Summaries
    *   5. Snap brief regeneration
    *   6. Reflection sweep
    */
@@ -789,7 +807,7 @@ export class Scheduler {
       // 2. ProcessInsights (full multi-agent analysis)
       await this.runInsightsWorkflow('Macro flow — portfolio-wide analysis');
 
-      // 3. Skill evaluation → create Actions
+      // 3. Skill evaluation → create Summaries
       await this.evaluateSkills();
 
       // 4. Snap brief regeneration.
@@ -947,7 +965,7 @@ export class Scheduler {
 
   /**
    * After curation, evaluate active skills against current portfolio state
-   * and create Actions for any triggers that fire.
+   * and create Summaries for any triggers that fire.
    */
   /**
    * Fetch live quotes + technicals from Jintel and build a full PortfolioContext.
@@ -1032,7 +1050,7 @@ export class Scheduler {
   }
 
   async evaluateSkills(): Promise<void> {
-    if (!this.skillEvaluator || !this.actionStore) return;
+    if (!this.skillEvaluator || !this.summaryStore) return;
 
     // Resolve snapshot store — prefer the top-level option, fall back to curation pipeline's store
     const store = this.snapshotStore;
@@ -1045,24 +1063,105 @@ export class Scheduler {
     }
 
     const context = await this.buildEnrichedContext(snapshot);
-    const evaluations = this.skillEvaluator.evaluate(context);
+    let evaluations = this.skillEvaluator.evaluate(context);
 
     if (evaluations.length === 0) {
       logger.info('No skill triggers fired');
       return;
     }
 
-    logger.info(`${evaluations.length} skill trigger(s) fired — creating actions`);
+    // Dedup: filter out triggers that already have a PENDING summary from micro flow
+    const beforeDedup = evaluations.length;
+    const dedupResults = await Promise.all(
+      evaluations.map(async (ev) => ({
+        evaluation: ev,
+        pending: (await this.summaryStore?.hasPendingTrigger(ev.triggerId)) ?? false,
+      })),
+    );
+    evaluations = dedupResults.filter((r) => !r.pending).map((r) => r.evaluation);
+
+    if (beforeDedup !== evaluations.length) {
+      logger.info(`Deduped ${beforeDedup - evaluations.length} trigger(s) already fired by micro flow`);
+    }
+
+    if (evaluations.length === 0) {
+      logger.info('All skill triggers already fired by micro flow — nothing new');
+      return;
+    }
+
+    await this.processSkillEvaluations(evaluations);
+  }
+
+  /**
+   * Evaluate per-asset skill triggers for tickers that just completed micro research.
+   * Runs fire-and-forget after micro batch results come back — does not block the micro flow.
+   */
+  private async evaluateMicroSkills(
+    results: Array<{ symbol: string; entity: Entity; signals: Signal[] }>,
+  ): Promise<void> {
+    if (!this.skillEvaluator || !this.summaryStore || !this.snapshotStore) return;
+
+    const snapshot = await this.snapshotStore.getLatest();
+    if (!snapshot || snapshot.positions.length === 0) return;
+
+    const totalValue = snapshot.totalValue || 0;
+    const allEvaluations: SkillEvaluation[] = [];
+
+    for (const { symbol, entity, signals } of results) {
+      const ticker = symbol.toUpperCase();
+      const position = snapshot.positions.find((p) => p.symbol.toUpperCase() === ticker);
+      const marketValue = position?.marketValue ?? 0;
+
+      // Build a lightweight single-ticker context from the Entity data we already have
+      const quote = entity.market?.quote;
+      if (!quote) continue; // no quote data — can't evaluate
+
+      const ctx = buildSingleTickerContext(
+        ticker,
+        entity,
+        { price: quote.price, changePercent: quote.changePercent },
+        { marketValue, totalValue },
+        signals,
+      );
+
+      const evaluations = this.skillEvaluator.evaluateForTickers(ctx, [ticker]);
+
+      // Dedup against existing pending summaries
+      for (const ev of evaluations) {
+        const alreadyPending = await this.summaryStore.hasPendingTrigger(ev.triggerId);
+        if (!alreadyPending) {
+          allEvaluations.push(ev);
+        } else {
+          logger.debug('Micro skill trigger skipped — already pending', { triggerId: ev.triggerId });
+        }
+      }
+    }
+
+    if (allEvaluations.length === 0) return;
+
+    logger.info(`Micro flow: ${allEvaluations.length} skill trigger(s) fired`, {
+      triggers: allEvaluations.map((e) => `${e.skillName}:${e.context.ticker}`),
+    });
+
+    await this.processSkillEvaluations(allEvaluations);
+  }
+
+  /**
+   * Shared logic: for each fired skill evaluation, generate LLM reasoning
+   * and create a PENDING summary (Action). Used by both macro and micro flows.
+   */
+  private async processSkillEvaluations(evaluations: SkillEvaluation[]): Promise<void> {
+    if (!this.summaryStore || evaluations.length === 0) return;
 
     if (this.eventLog) {
       const names = evaluations.map((e) => e.skillName).join(', ');
       await this.eventLog.append({
-        type: 'action',
+        type: 'summary',
         data: { message: `${evaluations.length} skill trigger${evaluations.length !== 1 ? 's' : ''} fired: ${names}` },
       });
     }
 
-    const expiresAt = new Date(Date.now() + ACTION_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + SUMMARY_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
     const now = new Date().toISOString();
 
     for (const evaluation of evaluations) {
@@ -1081,21 +1180,24 @@ export class Scheduler {
       }
 
       // LLM reasoning: ask the Strategist to analyze this trigger and recommend action
+      let headline = '';
       let reasoning = '';
       if (this.providerRouter) {
         logger.info('Requesting LLM reasoning for skill trigger', { skillId: evaluation.skillId, ticker });
         try {
           const llmResult = await this.providerRouter.completeWithTools({
             model: 'sonnet',
-            system: `You are a trading strategist. A strategy trigger has fired. Analyze the situation and provide a clear, actionable recommendation.
+            system: `You are a trading strategist. A strategy trigger has fired. Analyze and recommend a specific action.
 
-Be specific about:
-1. Why this trigger matters right now (connect to current market context)
-2. What the user should DO (specific action: buy, sell, trim, hold, investigate further)
-3. Key risks to consider before acting
-4. Suggested position sizing or timing if applicable
+Your response MUST start with a one-line headline in this exact format:
+ACTION: <BUY|SELL|TRIM|HOLD|REVIEW> <TICKER> — <one-sentence reason>
 
-Write in direct, professional language. No hedging or disclaimers. Be concise but thorough.`,
+Then provide your analysis:
+1. Why this trigger matters right now
+2. Key risks before acting
+3. Position sizing or timing guidance
+
+Be direct and concise. No hedging or disclaimers.`,
             messages: [
               {
                 role: 'user',
@@ -1107,20 +1209,30 @@ Trigger data: ${contextParts.join(', ')}
 Strategy rules:
 ${evaluation.skillContent}
 
-Provide your analysis and recommendation.`,
+Provide your ACTION headline and analysis.`,
               },
             ],
             maxTokens: 512,
           });
-          reasoning = llmResult.content
+          const fullText = llmResult.content
             .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
             .map((b) => b.text)
             .join('');
-          if (reasoning) {
+          if (fullText) {
+            // Parse headline from first line (ACTION: BUY AAPL — reason)
+            const lines = fullText.split('\n').filter(Boolean);
+            const actionMatch = lines[0]?.match(/^ACTION:\s*(.+)/i);
+            if (actionMatch) {
+              headline = actionMatch[1].trim();
+              reasoning = lines.slice(1).join('\n').trim();
+            } else {
+              reasoning = fullText;
+            }
             logger.info('LLM reasoning generated for skill trigger', {
               skillId: evaluation.skillId,
               ticker,
-              length: reasoning.length,
+              headline: headline || '(no headline parsed)',
+              length: fullText.length,
             });
           }
         } catch (err) {
@@ -1131,17 +1243,21 @@ Provide your analysis and recommendation.`,
         }
       }
 
-      // Fallback to static content if LLM unavailable
+      // Fallback when LLM unavailable or didn't produce structured output
+      if (!headline) {
+        headline = `REVIEW ${ticker ?? 'portfolio'} — ${evaluation.triggerDescription}`;
+      }
       if (!reasoning) {
-        const thesisMatch = evaluation.skillContent.match(/##\s*Thesis\s*\n+([\s\S]*?)(?=\n##|\n---|$)/);
-        reasoning = thesisMatch?.[1]?.trim().split('\n\n')[0] ?? evaluation.triggerDescription;
+        reasoning = evaluation.triggerDescription;
       }
 
-      const result = await this.actionStore.create({
+      const result = await this.summaryStore.create({
         id: randomUUID(),
         skillId: evaluation.skillId,
-        what: `${evaluation.skillName}${ticker ? `: ${ticker}` : ''} — ${evaluation.triggerDescription}`,
+        triggerId: evaluation.triggerId,
+        what: headline,
         why: reasoning,
+        tickers: ticker ? [ticker] : [],
         source: `strategy: ${evaluation.skillName}`,
         riskContext: contextParts.join('\n'),
         status: 'PENDING',
@@ -1150,18 +1266,18 @@ Provide your analysis and recommendation.`,
       });
 
       if (result.success) {
-        logger.info('Action created from skill trigger', {
-          actionId: result.data.id,
+        logger.info('Summary created from skill trigger', {
+          summaryId: result.data.id,
           skillId: evaluation.skillId,
           triggerType: evaluation.triggerType,
         });
         this.notificationBus?.publish({
-          type: 'action.created',
-          actionId: result.data.id,
+          type: 'summary.created',
+          summaryId: result.data.id,
           ticker: evaluation.context.ticker as string | undefined,
         });
       } else {
-        logger.warn('Failed to create action from skill trigger', {
+        logger.warn('Failed to create summary from skill trigger', {
           error: result.error,
           skillId: evaluation.skillId,
         });

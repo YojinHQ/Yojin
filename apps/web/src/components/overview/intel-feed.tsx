@@ -30,7 +30,7 @@ import { SymbolLogo } from '../common/symbol-logo';
 
 type ItemType = 'alert' | 'insight' | 'action';
 type FilterTab = 'all' | 'alerts' | 'insights' | 'actions';
-type IconName = 'rebalance' | 'dollar' | 'box' | 'warehouse' | 'clock' | 'trending' | 'bubble' | 'trending-up';
+type IconName = 'rebalance' | 'dollar' | 'box' | 'warehouse' | 'clock' | 'trending' | 'bubble' | 'trending-up' | 'zap';
 
 export interface FeedPendingUpdate {
   symbol: string;
@@ -77,6 +77,7 @@ const signalTypeIcon: Record<string, IconName> = {
   FILINGS: 'box',
   SOCIALS: 'bubble',
   TRADING_LOGIC_TRIGGER: 'clock',
+  ACTION: 'zap',
 };
 
 /** Promote higher-severity items into the alerts lane.
@@ -236,7 +237,7 @@ function IntelFeedCard({
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
         >
           <SymbolLogo symbol={item.ticker} size="sm" className="flex-shrink-0" />
-          <p className="min-w-0 flex-1 line-clamp-2 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
+          <p className="min-w-0 flex-1 line-clamp-3 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
           {selectMode ? (
             <div
               className={cn(
@@ -598,16 +599,16 @@ function IntelFeedContent({
         id: `summary:${summary.id}`,
         type: 'action' as const,
         severity: summary.severityLabel as IntelFeedItem['severity'],
-        signalType: 'SUMMARY',
-        ticker: skillName ?? 'SUMMARY',
-        tickers: [],
+        signalType: 'ACTION',
+        ticker: summary.tickers[0] ?? skillName ?? 'Action',
+        tickers: summary.tickers,
         sentiment: null,
         title: summary.what,
         time: timeAgo(summary.createdAt),
         publishedAt: summary.createdAt,
         ingestedAt: summary.createdAt,
         publishedTime: timeAgo(summary.createdAt),
-        icon: 'clock' as IconName,
+        icon: 'zap' as IconName,
         description: summary.why,
         source: summary.source,
         link: null,

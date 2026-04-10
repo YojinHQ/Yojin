@@ -1108,8 +1108,8 @@ export const INSIGHT_REPORTS_QUERY = gql`
 // Queries — Snap (Strategist brief)
 // ---------------------------------------------------------------------------
 
-// Snap.actionItems is intentionally NOT fetched. The Actions card reads from
-// the `actions(status: PENDING)` query, which owns the actionable bullet list.
+// Snap.actionItems is intentionally NOT fetched. The Summaries card reads from
+// the `summaries(status: PENDING)` query, which owns the summary bullet list.
 // Keeping snap.actionItems out of this query avoids duplicate information on
 // the dashboard and shrinks the payload.
 export const SNAP_QUERY = gql`
@@ -1536,18 +1536,19 @@ export const IMPORT_SKILL_MUTATION = gql`
 `;
 
 // ---------------------------------------------------------------------------
-// Actions — the TLDR/priority surface. Ranked by severity and gated by the
+// Summaries — the TLDR/priority surface. Ranked by severity and gated by the
 // micro-runner's supersede logic; new critical items auto-evict weaker ones
 // for the same ticker. See src/insights/micro-runner.ts.
 // ---------------------------------------------------------------------------
 
-export const ACTION_FIELDS = gql`
-  fragment ActionFields on Action {
+export const SUMMARY_FIELDS = gql`
+  fragment SummaryFields on Summary {
     id
     signalId
     skillId
     what
     why
+    tickers
     source
     riskContext
     severity
@@ -1561,40 +1562,40 @@ export const ACTION_FIELDS = gql`
   }
 `;
 
-export const ACTIONS_QUERY = gql`
-  query Actions($status: ActionStatus, $since: String, $limit: Int, $dismissed: Boolean) {
-    actions(status: $status, since: $since, limit: $limit, dismissed: $dismissed) {
-      ...ActionFields
+export const SUMMARIES_QUERY = gql`
+  query Summaries($status: SummaryStatus, $since: String, $limit: Int, $dismissed: Boolean) {
+    summaries(status: $status, since: $since, limit: $limit, dismissed: $dismissed) {
+      ...SummaryFields
     }
   }
-  ${ACTION_FIELDS}
+  ${SUMMARY_FIELDS}
 `;
 
-export const APPROVE_ACTION_MUTATION = gql`
-  mutation ApproveAction($id: ID!) {
-    approveAction(id: $id) {
-      ...ActionFields
+export const APPROVE_SUMMARY_MUTATION = gql`
+  mutation ApproveSummary($id: ID!) {
+    approveSummary(id: $id) {
+      ...SummaryFields
     }
   }
-  ${ACTION_FIELDS}
+  ${SUMMARY_FIELDS}
 `;
 
-export const REJECT_ACTION_MUTATION = gql`
-  mutation RejectAction($id: ID!) {
-    rejectAction(id: $id) {
-      ...ActionFields
+export const REJECT_SUMMARY_MUTATION = gql`
+  mutation RejectSummary($id: ID!) {
+    rejectSummary(id: $id) {
+      ...SummaryFields
     }
   }
-  ${ACTION_FIELDS}
+  ${SUMMARY_FIELDS}
 `;
 
-export const DISMISS_ACTION_MUTATION = gql`
-  mutation DismissAction($id: ID!) {
-    dismissAction(id: $id) {
-      ...ActionFields
+export const DISMISS_SUMMARY_MUTATION = gql`
+  mutation DismissSummary($id: ID!) {
+    dismissSummary(id: $id) {
+      ...SummaryFields
     }
   }
-  ${ACTION_FIELDS}
+  ${SUMMARY_FIELDS}
 `;
 
 export const STRATEGY_SOURCE_FIELDS = gql`

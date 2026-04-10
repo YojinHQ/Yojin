@@ -524,7 +524,7 @@ export const typeDefs = /* GraphQL */ `
   enum SignalOutputType {
     INSIGHT
     ALERT
-    ACTION
+    SUMMARY
   }
 
   type Signal {
@@ -559,27 +559,28 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # ---------------------------------------------------------------------------
-  # Actions (approval workflow)
+  # Summaries (approval workflow)
   # ---------------------------------------------------------------------------
 
-  enum ActionStatus {
+  enum SummaryStatus {
     PENDING
     APPROVED
     REJECTED
     EXPIRED
   }
 
-  type Action {
+  type Summary {
     id: ID!
     signalId: ID
     skillId: ID
     what: String!
     why: String!
+    tickers: [String!]!
     source: String!
     riskContext: String
     severity: Float
     severityLabel: String!
-    status: ActionStatus!
+    status: SummaryStatus!
     expiresAt: String!
     createdAt: String!
     resolvedAt: String
@@ -1176,7 +1177,7 @@ export const typeDefs = /* GraphQL */ `
   enum ActivityEventType {
     TRADE
     SYSTEM
-    ACTION
+    SUMMARY
     ALERT
     INSIGHT
   }
@@ -1245,8 +1246,8 @@ export const typeDefs = /* GraphQL */ `
     notificationPreferences: [NotificationPreferences!]!
     snap: Snap
     activityLog(types: [ActivityEventType!], since: String, limit: Int): [ActivityEvent!]!
-    actions(status: ActionStatus, since: String, limit: Int, dismissed: Boolean): [Action!]!
-    action(id: ID!): Action
+    summaries(status: SummaryStatus, since: String, limit: Int, dismissed: Boolean): [Summary!]!
+    summary(id: ID!): Summary
     skills(category: SkillCategory, active: Boolean, style: String, query: String): [Skill!]!
     skill(id: ID!): Skill
     exportSkill(id: ID!): String!
@@ -1323,9 +1324,9 @@ export const typeDefs = /* GraphQL */ `
     refreshIntelFeed: RefreshIntelFeedResult!
     addToWatchlist(symbol: String!, name: String!, assetClass: AssetClass!): WatchlistResult!
     removeFromWatchlist(symbol: String!): WatchlistResult!
-    approveAction(id: ID!): Action!
-    rejectAction(id: ID!): Action!
-    dismissAction(id: ID!): Action!
+    approveSummary(id: ID!): Summary!
+    rejectSummary(id: ID!): Summary!
+    dismissSummary(id: ID!): Summary!
     toggleSkill(id: ID!, active: Boolean!): Skill!
     createSkill(input: CreateSkillInput!): Skill!
     updateSkill(id: ID!, input: UpdateSkillInput!): Skill!

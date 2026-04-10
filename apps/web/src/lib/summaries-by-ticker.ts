@@ -1,11 +1,11 @@
 /**
- * Shared helpers for reading the Actions feed by ticker.
+ * Shared helpers for reading the Summaries feed by ticker.
  *
- * Used by the Actions card (yojin-snap-card) and the positions preview hover
- * popover — both need to map `action.source` → ticker and sort severity-first.
+ * Used by the Summaries card (yojin-snap-card) and the positions preview hover
+ * popover — both need to map `summary.source` → ticker and sort severity-first.
  */
 
-import type { Action } from '../api/types';
+import type { Summary } from '../api/types';
 
 /** Extract ticker from `source: "micro-observation: AAPL"`. */
 export function extractTickerFromSource(source: string): string | null {
@@ -30,18 +30,18 @@ export function insightsHrefForTicker(ticker: string): string {
 }
 
 /**
- * Group actions into ticker-keyed buckets. Each bucket is sorted by severity
- * DESC, then createdAt DESC. Actions with no ticker in the source land under
+ * Group summaries into ticker-keyed buckets. Each bucket is sorted by severity
+ * DESC, then createdAt DESC. Summaries with no ticker in the source land under
  * the empty-string key. Callers that only need per-ticker lookups (e.g. the
  * positions hover popover) should use `map.get(symbol)`; callers that need
- * the full list (the Actions card) should iterate and layer their own sort.
+ * the full list (the Summaries card) should iterate and layer their own sort.
  */
-export function groupActionsByTicker(actions: readonly Action[]): Map<string, Action[]> {
-  const byTicker = new Map<string, Action[]>();
-  for (const action of actions) {
-    const key = extractTickerFromSource(action.source) ?? '';
+export function groupSummariesByTicker(summaries: readonly Summary[]): Map<string, Summary[]> {
+  const byTicker = new Map<string, Summary[]>();
+  for (const summary of summaries) {
+    const key = summary.tickers?.[0] ?? extractTickerFromSource(summary.source) ?? '';
     const bucket = byTicker.get(key) ?? [];
-    bucket.push(action);
+    bucket.push(summary);
     byTicker.set(key, bucket);
   }
   for (const items of byTicker.values()) {

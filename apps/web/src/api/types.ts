@@ -1107,22 +1107,23 @@ export interface CurationWorkflowStatusQueryResult {
 }
 
 // ---------------------------------------------------------------------------
-// Actions
+// Summaries
 // ---------------------------------------------------------------------------
 
-export type ActionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
+export type SummaryStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
 
-export interface Action {
+export interface Summary {
   id: string;
   signalId: string | null;
   skillId: string | null;
   what: string;
   why: string;
+  tickers: string[];
   source: string;
   riskContext: string | null;
   severity: number | null;
   severityLabel: string;
-  status: ActionStatus;
+  status: SummaryStatus;
   expiresAt: string;
   createdAt: string;
   resolvedAt: string | null;
@@ -1130,30 +1131,30 @@ export interface Action {
   dismissedAt: string | null;
 }
 
-export interface ActionsQueryResult {
-  actions: Action[];
+export interface SummariesQueryResult {
+  summaries: Summary[];
 }
-export interface ActionsQueryVariables {
-  status?: ActionStatus;
+export interface SummariesQueryVariables {
+  status?: SummaryStatus;
   since?: string;
   limit?: number;
   dismissed?: boolean;
 }
 
-export interface ApproveActionVariables {
+export interface ApproveSummaryVariables {
   id: string;
 }
 
-export interface ApproveActionMutationResult {
-  approveAction: Action;
+export interface ApproveSummaryMutationResult {
+  approveSummary: Summary;
 }
 
-export interface RejectActionVariables {
+export interface RejectSummaryVariables {
   id: string;
 }
 
-export interface RejectActionMutationResult {
-  rejectAction: Action;
+export interface RejectSummaryMutationResult {
+  rejectSummary: Summary;
 }
 
 // ---------------------------------------------------------------------------
