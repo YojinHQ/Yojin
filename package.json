@@ -26,7 +26,8 @@
     "apps/web/dist/",
     "yojin.mjs",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "scripts/postinstall-desktop.mjs"
   ],
   "exports": {
     ".": "./dist/src/index.js",
@@ -36,6 +37,7 @@
   "scripts": {
     "build": "tsc",
     "build:release": "rm -rf dist apps/web/dist && tsc && pnpm --filter @yojin/web build",
+    "postinstall": "node scripts/postinstall-desktop.mjs || true",
     "prepublishOnly": "pnpm build:release && node scripts/verify-release.mjs",
     "dev": "concurrently -n server,web -c blue,magenta \"pnpm dev:be\" \"pnpm dev:fe\"",
     "chat": "node --disable-warning=DEP0040 --import tsx/esm src/entry.ts chat",

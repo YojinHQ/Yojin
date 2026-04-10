@@ -1,0 +1,37 @@
+name: Desktop Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build universal binary
+        working-directory: apps/desktop
+        run: |
+          swift build -c release --arch arm64 --arch x86_64
+
+      - name: Assemble .app bundle
+        working-directory: apps/desktop
+        run: ./scripts/build.sh
+
+      - name: Create DMG
+        working-directory: apps/desktop
+        run: ./scripts/create-dmg.sh
+
+      - name: Upload DMG to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            apps/desktop/.build/Yojin.dmg \
+            --clobber

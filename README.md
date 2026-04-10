@@ -43,6 +43,24 @@ npx playwright install chromium
 
 Chat, insights, and manual portfolio entry work without it.
 
+### Desktop App (macOS)
+
+A native menu bar app that lives in your toolbar. Click the Yojin icon to start/stop the server and open the dashboard.
+
+```bash
+cd apps/desktop
+./scripts/build.sh      # Compiles the Swift app
+./scripts/install.sh    # Installs to /Applications + auto-start on login
+```
+
+Once installed, the Yojin hand icon appears in your menu bar with:
+- **Status indicator** — green dot when running, grey when stopped
+- **Open Dashboard** — opens the web UI in your browser
+- **Start / Stop** — toggle the server
+- Auto-starts on login via LaunchAgent
+
+To uninstall (from `apps/desktop`): `./scripts/uninstall.sh`
+
 ### Docker (recommended for long-running)
 
 One command gives you the web UI, API, and channel integrations (Slack, etc.):
@@ -438,7 +456,8 @@ yojin/
 │   ├── plugin-sdk/     # Plugin SDK exports
 │   └── plugins/        # ProviderPlugin + ChannelPlugin interfaces, registry
 ├── apps/
-│   └── web/            # React 19 + Vite 8 + Tailwind CSS 4 dashboard
+│   ├── web/            # React 19 + Vite 8 + Tailwind CSS 4 dashboard
+│   └── desktop/        # Native macOS menu bar app (Swift)
 ├── providers/          # LLM provider plugins (anthropic/)
 ├── channels/           # Messaging channels (slack/, telegram/, whatsapp/, web/)
 ├── data/               # Runtime state — JSONL, configs, snapshots (gitignored)
