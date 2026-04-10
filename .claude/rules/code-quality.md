@@ -55,6 +55,12 @@ Extend via interfaces, not modification:
 
 - **Every early return from a multi-step pipeline must advance all completion flags.** When a pipeline has an `allItemsComplete()` handoff (e.g. micro→macro) and items can be skipped by intermediate gates (signal-gate, interval-gate, budget-gate), the early return must still mark those items as complete. Otherwise quiet items permanently block the handoff after `resetFlags()`. Rule: if an item passes through a stage without doing work (gated out), set `item.completedToday = true` (or equivalent) before returning, the same as if it had succeeded.
 
+## Module-Level Path Resolution
+
+- **Never hardcode relative depths from `import.meta.url` to the project root.** Code at `src/x/y/file.ts` sits 2 levels below the repo root, but the same file compiled to `dist/src/x/y/file.js` sits 3 levels below. A hardcoded `../../../package.json` is correct for one and ENOENT for the other. Vitest imports source files directly; `node dist/src/entry.js` imports compiled files. Any module-level `readFileSync`/`resolve` using the wrong depth crashes on import — a "fix" that flips the wrong way breaks whichever environment wasn't tested.
+- **Use `resolvePackageRoot()` / `resolvePackageVersion()` from `src/paths.ts`.** These helpers inspect whether `import.meta.url` lives under `dist/` and return the correct project root in either environment. Build other paths on top of them (e.g. `resolve(resolvePackageRoot(), 'apps/web')`) rather than recomputing your own `../..` chain per file. If a new caller emerges, prefer extending the helper over copy-pasting the detection logic.
+- **Module-level side effects break test imports.** Top-level `readFileSync`, synchronous env-var reads, or any code that can throw at import time runs the moment a test file imports the module — even if the test never exercises the failing path. Prefer lazy initialization (inside a method or memoized function) so the blast radius of a bad path stays out of unrelated tests.
+
 ## Missing Data Defaults
 
 - **Don't default missing data to values that satisfy conditions.** Using `?? 0` for a numeric lookup that feeds a threshold comparison (e.g. `value ?? 0` into `value <= threshold`) will fire the condition when data is absent. Skip the check (`return null`) when the input is `undefined` — absent data means "can't evaluate", not "value is zero".
