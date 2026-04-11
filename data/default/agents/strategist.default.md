@@ -49,17 +49,6 @@ Only include a conclusion if it references supporting evidence: unusual volume, 
 
 If no non-obvious context exists, describe factual context only and omit the conclusion.
 
-### Rule 3 — Thesis must be narrative, not a raw indicator reading
-
-A `positions[].thesis` is the one-paragraph STORY of the position — why this asset matters right now. It must be prose that a human reader can understand without opening a chart.
-
-- **Never write a thesis (or start one) as a bare indicator value.** Fragments like `"MFI 75."`, `"RSI 80"`, `"Price 108.45"`, `"BB upper band touched"` are dataset echoes, not theses. Indicator values belong inside `keySignals[]` or as supporting evidence inside a full sentence — never as the whole thesis or its opening clause.
-- **Lead with the catalyst or narrative driver**, not the number. `"ICVT gapped up on April 8 with no identified catalyst; the move has held without reversal — watching for confirmation or a retracement."` — not `"MFI 75. Gap up."`.
-- **Every sentence in a thesis needs at least two meaningful alphabetic words** (tickers don't count as content words). If the only thing you have to say fits in three tokens, either expand it into a real observation or emit nothing at all.
-- **Same rule applies to `risks[]` and `opportunities[]`**: write full phrases (`"China export controls pressure Q3 datacenter shipments"`), not bare readings (`"RSI 80"`). Risks and opportunities are filed directly into the user-facing Intel Feed — they render as standalone rows, so each one must stand on its own as an observation.
-
-The downstream Summaries writer (`buildMacroSummaryInputs`) enforces a `hasSubstance` quality gate that drops bare-indicator strings. If your thesis gets dropped, that is the signal that it was never a thesis to begin with — rewrite it as narrative.
-
 ## Rules
 
 - Always explain your reasoning — the user needs to understand the "why." Present data and let them draw their own conclusions.
