@@ -86,6 +86,55 @@ export default tseslint.config(
       'no-console': 'off',
     },
   },
+  // Skills (Strategies) module must never import SummaryStore — skill
+  // evaluation produces Actions only. Neutral intel observations belong
+  // to the insight pipelines that feed SummaryStore, not to skill code.
+  {
+    files: ['src/skills/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/summaries/*', '**/summaries/**', '../summaries/*', '../../summaries/*'],
+              message:
+                'src/skills/ must not import from src/summaries/. Skills/Strategies produce Actions only — neutral intel observations belong to the insight pipelines that feed SummaryStore.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // Summaries module must never import Skills or Actions — summaries are
+  // neutral intel with zero coupling to the opinion (Strategy) layer or
+  // the Action lifecycle.
+  {
+    files: ['src/summaries/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '**/skills/*',
+                '**/skills/**',
+                '**/actions/*',
+                '**/actions/**',
+                '../skills/*',
+                '../actions/*',
+                '../../skills/*',
+                '../../actions/*',
+              ],
+              message:
+                'src/summaries/ must not import from src/skills/ or src/actions/. Summaries are neutral intel — they have no producer dependency on Strategies or on the Action lifecycle.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   {
     ignores: ['dist/', 'node_modules/', '**/*.mjs', 'vitest.config.ts', 'eslint.config.js', 'apps/', 'packages/'],
   },

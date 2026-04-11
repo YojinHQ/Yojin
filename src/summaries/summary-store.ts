@@ -27,6 +27,16 @@ const logger = createSubsystemLogger('summary-store');
 
 const DEFAULT_DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Strategy-layer fields that must NEVER appear on a Summary. Summaries are
+ * neutral intel; any record carrying these fields is being written to the
+ * wrong store (it belongs in `ActionStore`). Enforced at runtime as a
+ * last-line-of-defence: the ESLint `no-restricted-imports` boundary rule in
+ * `eslint.config.js` prevents `src/summaries/` from importing `src/skills/`
+ * or `src/actions/` in the first place.
+ */
+const FORBIDDEN_STRATEGY_FIELDS = ['skillId', 'strategyId', 'triggerId'] as const;
+
 export interface SummaryStoreOptions {
   dir: string; // e.g. 'data/summaries'
   /** Dedup window in milliseconds. Defaults to 24 hours. */
@@ -58,6 +68,22 @@ export class SummaryStore {
    * record is returned as the winner.
    */
   async create(summary: Summary): Promise<SummaryResult<Summary>> {
+    // Runtime boundary check: reject any record carrying Strategy-layer
+    // fields. Zod would normally strip unknown keys during parse, so this
+    // must happen BEFORE safeParse to surface the architectural violation
+    // instead of silently dropping the field.
+    const record = summary as unknown as Record<string, unknown>;
+    for (const field of FORBIDDEN_STRATEGY_FIELDS) {
+      if (record[field] !== undefined) {
+        const error =
+          `Refusing to write Summary with '${field}' field — Summaries are neutral intel ` +
+          `and must not carry Strategy-layer identifiers. Skill/Strategy-triggered records ` +
+          `belong in ActionStore, not SummaryStore.`;
+        logger.error('SummaryStore.create rejected Strategy-layer field', { field, id: record.id });
+        return { success: false, error };
+      }
+    }
+
     const parsed = SummarySchema.safeParse(summary);
     if (!parsed.success) {
       return { success: false, error: `Invalid summary: ${parsed.error.message}` };

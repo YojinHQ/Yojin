@@ -138,6 +138,54 @@ describe('SummaryStore.create — content-hash dedup', () => {
   });
 });
 
+describe('SummaryStore.create — Strategy-layer boundary', () => {
+  let dir: string;
+  let store: SummaryStore;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'summary-store-boundary-'));
+    store = new SummaryStore({ dir });
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('rejects a record carrying skillId', async () => {
+    const tainted = { ...makeSummary(), skillId: 'skill-123' } as unknown as Summary;
+    const res = await store.create(tainted);
+    expect(res.success).toBe(false);
+    if (res.success) return;
+    expect(res.error).toContain('skillId');
+    expect(res.error).toContain('ActionStore');
+
+    const all = await store.query({});
+    expect(all).toHaveLength(0);
+  });
+
+  it('rejects a record carrying strategyId', async () => {
+    const tainted = { ...makeSummary(), strategyId: 'strat-abc' } as unknown as Summary;
+    const res = await store.create(tainted);
+    expect(res.success).toBe(false);
+    if (res.success) return;
+    expect(res.error).toContain('strategyId');
+  });
+
+  it('rejects a record carrying triggerId', async () => {
+    const tainted = { ...makeSummary(), triggerId: 'trig-xyz' } as unknown as Summary;
+    const res = await store.create(tainted);
+    expect(res.success).toBe(false);
+    if (res.success) return;
+    expect(res.error).toContain('triggerId');
+  });
+
+  it('accepts a clean Summary (regression guard)', async () => {
+    const clean = makeSummary();
+    const res = await store.create(clean);
+    expect(res.success).toBe(true);
+  });
+});
+
 describe('SummaryStore.query', () => {
   let dir: string;
   let store: SummaryStore;
