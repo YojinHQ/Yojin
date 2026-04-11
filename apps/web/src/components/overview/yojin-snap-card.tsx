@@ -82,7 +82,10 @@ export function YojinSnapCard() {
     });
   }, [summaries]);
 
-  const totalSummaries = summaries?.length ?? 0;
+  // Count only the summaries that survived the grouping filter (the mapping
+  // layer drops portfolio-level sentinel rows). Using `summaries.length`
+  // directly would report a higher total than the user can actually see.
+  const totalSummaries = useMemo(() => grouped.reduce((sum, g) => sum + g.whats.length, 0), [grouped]);
 
   // Click "+N more" to open the full per-ticker list in a modal.
   const [selectedKey, setSelectedKey] = useState<string | null>(null);

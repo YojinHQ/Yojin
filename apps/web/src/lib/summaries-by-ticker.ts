@@ -7,6 +7,15 @@
 
 import type { Summary } from '../api/types';
 
+/**
+ * Sentinel ticker the macro insight pipeline uses for portfolio-level items
+ * (top risks, top opportunities, action items) — see
+ * `persistMacroSummaries()` in `src/scheduler.ts` and the schema comment on
+ * `SummarySchema.ticker`. The display layer drops this bucket so the
+ * sentinel does not leak through as a fake tradeable symbol.
+ */
+const PORTFOLIO_SENTINEL_TICKER = 'PORTFOLIO';
+
 /** Map a 0–1 severity score to a bullet color class (matches the analyzer prompt's ladder). */
 export function severityBulletColor(severity: number | null): string {
   if (severity === null) return 'bg-text-muted';
@@ -28,10 +37,16 @@ export function insightsHrefForTicker(ticker: string): string {
  * DESC, then createdAt DESC. Callers that only need per-ticker lookups (e.g.
  * the positions hover popover) should use `map.get(symbol)`; callers that need
  * the full list (the Summaries card) should iterate and layer their own sort.
+ *
+ * Portfolio-level summaries (ticker === PORTFOLIO_SENTINEL_TICKER) are
+ * dropped here so the sentinel never leaks into display components as a
+ * fake tradeable symbol. See CLAUDE.md: "Sentinel fallbacks must not leak
+ * into display data."
  */
 export function groupSummariesByTicker(summaries: readonly Summary[]): Map<string, Summary[]> {
   const byTicker = new Map<string, Summary[]>();
   for (const summary of summaries) {
+    if (summary.ticker === PORTFOLIO_SENTINEL_TICKER) continue;
     const bucket = byTicker.get(summary.ticker) ?? [];
     bucket.push(summary);
     byTicker.set(summary.ticker, bucket);
