@@ -4,7 +4,7 @@
  * contain BUY/SELL recommendations and have no approval lifecycle. They are
  * the Intel Feed content layer.
  *
- * Summaries NEVER come from Strategies/Strategies — strategy-triggered records are
+ * Summaries NEVER come from Strategies — strategy-triggered records are
  * Actions and live in src/actions/. If a producer mentions strategyId, it's
  * writing to the wrong store.
  *
@@ -25,6 +25,15 @@ import { DateTimeField, IdField, ScoreRange } from '../types/base.js';
 /** Which flow produced this summary. */
 export const SummaryFlowSchema = z.enum(['MACRO', 'MICRO']);
 export type SummaryFlow = z.infer<typeof SummaryFlowSchema>;
+
+/**
+ * Sentinel ticker used for portfolio-wide summaries (cross-cutting risks,
+ * opportunities, action items that span multiple positions or macro themes).
+ * Producers must only use this for genuinely cross-cutting observations;
+ * single-ticker content belongs under that ticker. The display layer strips
+ * this bucket to avoid rendering the sentinel as a fake tradeable symbol.
+ */
+export const PORTFOLIO_TICKER = 'PORTFOLIO';
 
 // ---------------------------------------------------------------------------
 // Summary — the core entity

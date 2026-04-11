@@ -8,11 +8,13 @@
 import type { Summary } from '../api/types';
 
 /**
- * Sentinel ticker the macro insight pipeline uses for portfolio-level items
- * (top risks, top opportunities, action items) — see
- * `persistMacroSummaries()` in `src/scheduler.ts` and the schema comment on
- * `SummarySchema.ticker`. The display layer drops this bucket so the
- * sentinel does not leak through as a fake tradeable symbol.
+ * Portfolio-wide sentinel ticker — mirrors `PORTFOLIO_TICKER` exported from
+ * the backend at `src/summaries/types.ts`. Producer is
+ * `buildMacroSummaryInputs` in `src/insights/macro-summary-builder.ts`.
+ * The display layer drops this bucket so the sentinel does not leak through
+ * as a fake tradeable symbol (CLAUDE.md: "Sentinel fallbacks must not leak
+ * into display data"). Duplicated as a literal because the backend constant
+ * is in a different workspace package.
  */
 const PORTFOLIO_SENTINEL_TICKER = 'PORTFOLIO';
 

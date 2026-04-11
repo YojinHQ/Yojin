@@ -30,6 +30,7 @@ import type { ProviderRouter } from './ai-providers/router.js';
 import type { EventLog } from './core/event-log.js';
 import type { NotificationBus } from './core/notification-bus.js';
 import type { InsightStore } from './insights/insight-store.js';
+import { buildMacroSummaryInputs } from './insights/macro-summary-builder.js';
 import type { MicroInsightStore } from './insights/micro-insight-store.js';
 import { runMicroResearch } from './insights/micro-runner.js';
 import type { MicroInsight, MicroInsightSource } from './insights/micro-types.js';
@@ -162,19 +163,6 @@ const MICRO_TRIGGER_MACRO_COOLDOWN_MS = MACRO_INTERVAL_MS;
 
 /** Default expiry window for summaries created from strategy triggers. */
 const ACTION_EXPIRY_HOURS = 24;
-
-/**
- * Extract the first sentence from a multi-sentence thesis, capped at a
- * reasonable display length. Used when flattening a position thesis into a
- * one-line Summary observation.
- */
-function firstSentence(text: string, maxLen = 240): string {
-  const trimmed = text.trim();
-  if (!trimmed) return '';
-  const match = trimmed.match(/^[^.!?]*[.!?]/);
-  const candidate = match ? match[0].trim() : trimmed;
-  return candidate.length <= maxLen ? candidate : candidate.slice(0, maxLen - 1) + '…';
-}
 
 /** Default micro research interval (5 minutes). */
 const DEFAULT_MICRO_INTERVAL_MS = 5 * 60 * 1000;
@@ -1104,60 +1092,20 @@ export class Scheduler {
 
   /**
    * Persist neutral intel observations from an InsightReport as Summaries.
-   * Covers per-position theses and portfolio-level items. Dedup by
-   * contentHash ensures observations already emitted by the micro flow are
-   * not duplicated in the feed.
+   * Covers per-position thesis + risks + opportunities (filed under the real
+   * ticker) and portfolio-level items (filed under the PORTFOLIO sentinel).
+   * Placement is delegated to `buildMacroSummaryInputs` so the contract is
+   * unit-testable. Dedup by contentHash ensures observations already emitted
+   * by the micro flow are not duplicated in the feed.
    */
   private async persistMacroSummaries(report: InsightReport): Promise<void> {
     if (!this.summaryStore) return;
 
-    const createdAt = report.createdAt;
-
-    // Per-position thesis as one Summary each
-    for (const position of report.positions) {
-      const ticker = position.symbol.toUpperCase();
-      const thesis = firstSentence(position.thesis);
-      if (!thesis) continue;
-
-      const contentHash = computeSummaryContentHash(ticker, 'MACRO', thesis);
-      const sourceSignalIds = [...new Set(position.keySignals.map((s) => s.signalId).concat(position.allSignalIds))];
-      const result = await this.summaryStore.create({
-        id: randomUUID(),
-        ticker,
-        what: thesis,
-        flow: 'MACRO',
-        severity: position.conviction,
-        sourceSignalIds,
-        contentHash,
-        createdAt,
-      });
+    const inputs = buildMacroSummaryInputs(report);
+    for (const input of inputs) {
+      const result = await this.summaryStore.create({ id: randomUUID(), ...input });
       if (!result.success) {
-        logger.warn('Failed to persist macro position summary', { ticker, error: result.error });
-      }
-    }
-
-    // Portfolio-level items (risks, opportunities, action items) use ticker='PORTFOLIO'
-    const portfolioItems: Array<{ text: string; signalIds: string[] }> = [
-      ...report.portfolio.topRisks,
-      ...report.portfolio.topOpportunities,
-      ...report.portfolio.actionItems,
-    ];
-    for (const item of portfolioItems) {
-      const what = item.text.trim();
-      if (!what) continue;
-
-      const contentHash = computeSummaryContentHash('PORTFOLIO', 'MACRO', what);
-      const result = await this.summaryStore.create({
-        id: randomUUID(),
-        ticker: 'PORTFOLIO',
-        what,
-        flow: 'MACRO',
-        sourceSignalIds: item.signalIds ?? [],
-        contentHash,
-        createdAt,
-      });
-      if (!result.success) {
-        logger.warn('Failed to persist macro portfolio summary', { error: result.error });
+        logger.warn('Failed to persist macro summary', { ticker: input.ticker, error: result.error });
       }
     }
   }
