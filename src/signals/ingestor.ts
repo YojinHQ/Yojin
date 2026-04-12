@@ -405,6 +405,12 @@ export class SignalIngestor {
   private classifyType(input: RawSignalInput): SignalType {
     const text = `${input.title} ${input.content ?? ''}`.toLowerCase();
 
+    // Regulatory — sanctions, OFAC, compliance, enforcement actions
+    // Note: bare "pep" excluded — collides with PepsiCo ticker (PEP). Use full phrase only.
+    if (/\b(sanctions?|ofac|sdn list|enforcement action|regulatory action|politically exposed person)\b/.test(text)) {
+      return 'REGULATORY';
+    }
+
     // Filings — SEC, regulatory submissions
     if (/\b(10-k|10-q|8-k|s-1|13f|sec filing|proxy statement|annual report|form 4|insider filing)\b/.test(text)) {
       return 'FILINGS';

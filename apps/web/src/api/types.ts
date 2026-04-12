@@ -54,6 +54,7 @@ export type SignalType =
   | 'MACRO'
   | 'FILINGS'
   | 'SOCIALS'
+  | 'REGULATORY'
   | 'TRADING_LOGIC_TRIGGER';
 export type SignalSentiment = 'BULLISH' | 'BEARISH' | 'MIXED' | 'NEUTRAL';
 export type SourceType = 'API' | 'RSS' | 'SCRAPER' | 'ENRICHMENT';

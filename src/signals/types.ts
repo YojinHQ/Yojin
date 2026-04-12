@@ -28,6 +28,7 @@ export const SignalTypeSchema = z.enum([
   'MACRO',
   'FILINGS',
   'SOCIALS',
+  'REGULATORY',
   'TRADING_LOGIC_TRIGGER',
 ]);
 export type SignalType = z.infer<typeof SignalTypeSchema>;

@@ -77,6 +77,7 @@ const signalTypeIcon: Record<string, IconName> = {
   SENTIMENT: 'bubble',
   FILINGS: 'box',
   SOCIALS: 'bubble',
+  REGULATORY: 'box',
   TRADING_LOGIC_TRIGGER: 'clock',
   ACTION: 'zap',
 };

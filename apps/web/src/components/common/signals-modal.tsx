@@ -17,6 +17,7 @@ const typeVariant: Record<string, BadgeVariant> = {
   MACRO: 'error',
   FILINGS: 'neutral',
   SOCIALS: 'info',
+  REGULATORY: 'error',
   TRADING_LOGIC_TRIGGER: 'warning',
 };
 

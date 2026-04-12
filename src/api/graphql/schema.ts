@@ -49,6 +49,7 @@ export const typeDefs = /* GraphQL */ `
     MACRO
     FILINGS
     SOCIALS
+    REGULATORY
     TRADING_LOGIC_TRIGGER
   }
 

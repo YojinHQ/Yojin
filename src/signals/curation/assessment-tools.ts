@@ -55,7 +55,7 @@ export function createAssessmentTools(options: AssessmentToolsOptions): ToolDefi
             actionability: z.number().min(0).max(1).describe('How actionable is this signal (0-1)'),
             signalType: SignalTypeSchema.optional().describe(
               'Reclassified signal type if the heuristic got it wrong. ' +
-                'NEWS | FUNDAMENTAL | SENTIMENT | TECHNICAL | MACRO | FILINGS | SOCIALS | TRADING_LOGIC_TRIGGER',
+                'NEWS | FUNDAMENTAL | SENTIMENT | TECHNICAL | MACRO | FILINGS | SOCIALS | REGULATORY | TRADING_LOGIC_TRIGGER',
             ),
           }),
         )

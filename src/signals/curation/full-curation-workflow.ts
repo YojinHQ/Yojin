@@ -139,6 +139,7 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
             `   - TECHNICAL: moving averages, RSI, MACD, support/resistance, breakout, volume, price targets\n` +
             `   - SENTIMENT: analyst ratings, upgrades/downgrades, social buzz, fear/greed, investor mood\n` +
             `   - FILINGS: SEC filings, proxy statements, insider transactions, regulatory filings\n` +
+            `   - REGULATORY: OFAC/SDN sanctions, compliance actions, enforcement, PEP flags\n` +
             `   - SOCIALS: social media activity, viral posts, influencer mentions, Reddit/Twitter/TikTok\n` +
             `   - NEWS: general market news, industry developments, product launches, partnerships, leadership\n` +
             `   - TRADING_LOGIC_TRIGGER: price alerts, stop-loss triggers, rebalancing signals\n\n` +

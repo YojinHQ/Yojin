@@ -34,7 +34,7 @@ import { collectInsightSignalIds } from '../lib/insight-signals';
 // Constants
 // ---------------------------------------------------------------------------
 
-const SIGNAL_TYPES = ['ALL', 'NEWS', 'FUNDAMENTAL', 'SENTIMENT', 'TECHNICAL', 'MACRO'] as const;
+const SIGNAL_TYPES = ['ALL', 'NEWS', 'FUNDAMENTAL', 'SENTIMENT', 'TECHNICAL', 'MACRO', 'REGULATORY'] as const;
 
 const DATE_RANGES = [
   { label: '24h', value: '1' },
@@ -71,6 +71,7 @@ const typeVariant: Record<string, BadgeVariant> = {
   MACRO: 'error',
   FILINGS: 'neutral',
   SOCIALS: 'info',
+  REGULATORY: 'error',
   TRADING_LOGIC_TRIGGER: 'warning',
 };
 
@@ -89,6 +90,7 @@ const signalTypeVariant: Record<string, BadgeVariant> = {
   MACRO: 'error',
   FILINGS: 'neutral',
   SOCIALS: 'info',
+  REGULATORY: 'error',
   TRADING_LOGIC_TRIGGER: 'warning',
 };
 

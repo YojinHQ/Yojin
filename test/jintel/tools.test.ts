@@ -6,7 +6,7 @@ import type { Entity, JintelClient, JintelResult, MarketQuote, SanctionsMatch } 
 import { JintelAuthError } from '@yojinhq/jintel-client';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createJintelTools } from '../../src/jintel/tools.js';
+import { createJintelTools, riskSignalsToRaw } from '../../src/jintel/tools.js';
 import { PortfolioSnapshotStore } from '../../src/portfolio/snapshot-store.js';
 import type { RawSignalInput, SignalIngestor } from '../../src/signals/ingestor.js';
 
@@ -198,7 +198,7 @@ describe('jintel tools', () => {
       expect(result.content).toContain('REGULATORY_ACTION');
     });
 
-    it('ingests risk signals as SENTIMENT type', async () => {
+    it('ingests risk signals as REGULATORY type', async () => {
       const client = createMockClient();
       const ingestor = createMockIngestor();
       const tool = findTool('enrich_entity', client, ingestor);
@@ -208,11 +208,10 @@ describe('jintel tools', () => {
       expect(ingestor.ingest).toHaveBeenCalledTimes(1);
       const ingestCall = ingestor.ingest.mock.calls[0][0] as RawSignalInput[];
 
-      // 2 risk signals
+      // 2 risk signals (REGULATORY_ACTION + LITIGATION → both REGULATORY)
       expect(ingestCall).toHaveLength(2);
 
-      // Check risk items (should be SENTIMENT)
-      const riskItems = ingestCall.filter((i) => i.type === 'SENTIMENT');
+      const riskItems = ingestCall.filter((i) => i.type === 'REGULATORY');
       expect(riskItems).toHaveLength(2);
 
       const mediumRisk = riskItems.find((i) => i.title.includes('MEDIUM'));
@@ -223,6 +222,58 @@ describe('jintel tools', () => {
       const highRisk = riskItems.find((i) => i.title.includes('HIGH'));
       expect(highRisk).toBeDefined();
       expect(highRisk!.confidence).toBe(0.85);
+    });
+  });
+
+  describe('riskSignalsToRaw', () => {
+    it('maps SANCTIONS/REGULATORY_ACTION/LITIGATION/PEP to REGULATORY', () => {
+      const signals = riskSignalsToRaw(
+        [
+          { type: 'REGULATORY_ACTION', severity: 'HIGH', description: 'Fine', source: 'SEC', date: null },
+          { type: 'LITIGATION', severity: 'HIGH', description: 'Lawsuit', source: 'Court', date: null },
+          { type: 'PEP', severity: 'HIGH', description: 'PEP flag', source: 'DB', date: null },
+          { type: 'SANCTIONS', severity: 'HIGH', description: 'SDN hit', source: 'OFAC', date: null },
+        ],
+        ['AAPL'],
+      );
+      expect(signals).toHaveLength(4);
+      expect(signals.every((s) => s.type === 'REGULATORY')).toBe(true);
+    });
+
+    it('maps ADVERSE_MEDIA to SENTIMENT', () => {
+      const signals = riskSignalsToRaw(
+        [{ type: 'ADVERSE_MEDIA', severity: 'MEDIUM', description: 'Bad press', source: 'News', date: null }],
+        ['AAPL'],
+      );
+      expect(signals).toHaveLength(1);
+      expect(signals[0].type).toBe('SENTIMENT');
+    });
+
+    it('filters out SANCTIONS with severity below HIGH', () => {
+      const signals = riskSignalsToRaw(
+        [
+          { type: 'SANCTIONS', severity: 'MEDIUM', description: 'Fuzzy match', source: 'OFAC', date: null },
+          { type: 'SANCTIONS', severity: 'LOW', description: 'Weak match', source: 'OFAC', date: null },
+          { type: 'SANCTIONS', severity: 'HIGH', description: 'Strong match', source: 'OFAC', date: null },
+          { type: 'SANCTIONS', severity: 'CRITICAL', description: 'Exact match', source: 'OFAC', date: null },
+        ],
+        ['MP'],
+      );
+      // Only HIGH and CRITICAL pass the filter
+      expect(signals).toHaveLength(2);
+      expect(signals[0].title).toContain('Strong match');
+      expect(signals[1].title).toContain('Exact match');
+    });
+
+    it('does not filter non-SANCTIONS risk signals by severity', () => {
+      const signals = riskSignalsToRaw(
+        [
+          { type: 'LITIGATION', severity: 'LOW', description: 'Minor suit', source: 'Court', date: null },
+          { type: 'REGULATORY_ACTION', severity: 'MEDIUM', description: 'Warning', source: 'SEC', date: null },
+        ],
+        ['AAPL'],
+      );
+      expect(signals).toHaveLength(2);
     });
   });
 
