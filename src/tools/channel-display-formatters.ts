@@ -6,9 +6,48 @@
  * in their sendMessage implementation.
  */
 
-import type { DisplayCardData } from './display-data.js';
+import type { DisplayCardData, StrategyProposalData } from './display-data.js';
 import { fmtCurrency, fmtPnl, pnlEmoji } from './display-format-helpers.js';
 import { escapeHtml } from '../formatting/index.js';
+
+function formatStrategyProposalPlain(d: StrategyProposalData, escape: (s: string) => string = (s) => s): string {
+  const lines = [
+    `Strategy Proposal: ${escape(d.name)}`,
+    '',
+    escape(d.description),
+    '',
+    `Category: ${escape(d.category)} | Style: ${escape(d.style)}`,
+  ];
+  if (d.tickers.length > 0) lines.push(`Tickers: ${d.tickers.map(escape).join(', ')}`);
+  if (d.maxPositionSize !== undefined) {
+    lines.push(`Max Position Size: ${(d.maxPositionSize * 100).toFixed(0)}%`);
+  }
+  lines.push('', 'Triggers:');
+  for (const t of d.triggers) lines.push(`  ${escape(t.type)}: ${escape(t.description)}`);
+  return lines.join('\n');
+}
+
+function formatStrategyProposalTelegram(d: StrategyProposalData): string {
+  const esc = escapeHtml;
+  const lines = [
+    `\u{1F4A1} <b>Strategy Proposal:</b> ${esc(d.name)}`,
+    '',
+    esc(d.description),
+    '',
+    `<b>Category:</b> ${esc(d.category)} | <b>Style:</b> ${esc(d.style)}`,
+  ];
+  if (d.tickers.length > 0) {
+    lines.push(`<b>Tickers:</b> ${d.tickers.map((t) => `<code>${esc(t)}</code>`).join(', ')}`);
+  }
+  if (d.maxPositionSize !== undefined) {
+    lines.push(`<b>Max Position Size:</b> ${(d.maxPositionSize * 100).toFixed(0)}%`);
+  }
+  lines.push('', '<b>Triggers:</b>');
+  for (const t of d.triggers) {
+    lines.push(`  \u2022 <code>${esc(t.type)}</code>: ${esc(t.description)}`);
+  }
+  return lines.join('\n');
+}
 
 // ---------------------------------------------------------------------------
 // Slack (mrkdwn)
@@ -91,6 +130,9 @@ export function formatDisplayCardForSlack(card: DisplayCardData): string {
       }
       return lines.join('\n');
     }
+
+    case 'strategy-proposal':
+      return formatStrategyProposalPlain(card.data);
   }
 }
 
@@ -187,6 +229,9 @@ export function formatDisplayCardForTelegram(card: DisplayCardData): string {
       }
       return lines.join('\n');
     }
+
+    case 'strategy-proposal':
+      return formatStrategyProposalTelegram(card.data);
   }
 }
 
@@ -273,5 +318,8 @@ export function formatDisplayCardForWhatsApp(card: DisplayCardData): string {
       }
       return lines.join('\n');
     }
+
+    case 'strategy-proposal':
+      return formatStrategyProposalPlain(card.data);
   }
 }

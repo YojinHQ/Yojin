@@ -50,13 +50,13 @@ describe('buildContext', () => {
     // + 1 assessment tool (save_signal_assessment)
     // + 2 data source query tools (query_data_source, list_data_sources)
     // + 2 memory tools (store_signal_memory, recall_signal_memories)
-    // + 4 display tools (display_portfolio_overview, display_positions_list, display_allocation, display_morning_briefing)
+    // + 5 display tools (display_portfolio_overview, display_positions_list, display_allocation, display_morning_briefing, display_propose_strategy)
     // + 5 strategy tools (list_strategies, get_strategy, activate_strategy, deactivate_strategy, get_strategy_evaluations)
     // + 2 new Jintel tools (get_financials, get_executives)
     // + 1 new Jintel tool (get_institutional_holdings)
     // + 2 new Jintel tools (get_ownership, get_top_holders)
-    // = 69
-    expect(schemas.length).toBe(69);
+    // = 70
+    expect(schemas.length).toBe(70);
 
     const names = schemas.map((s) => s.name).sort();
     expect(names).toContain('get_current_time');
@@ -101,6 +101,7 @@ describe('buildContext', () => {
     expect(names).toContain('display_positions_list');
     expect(names).toContain('display_allocation');
     expect(names).toContain('display_morning_briefing');
+    expect(names).toContain('display_propose_strategy');
   });
 
   it('registers 6 agent profiles', async () => {

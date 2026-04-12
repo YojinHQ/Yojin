@@ -34,6 +34,8 @@ export function createStrategistProfile(): AgentProfile {
       'activate_strategy',
       'deactivate_strategy',
       'get_strategy_evaluations',
+      // Strategy proposal (display tool)
+      'display_propose_strategy',
       // Utility
       'get_current_time',
       'calculate',

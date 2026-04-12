@@ -3,6 +3,7 @@ import { useMutation, useQuery } from 'urql';
 import { cn } from '../../lib/utils';
 import { useChatContext } from '../../lib/chat-context';
 import { SESSIONS_QUERY, CREATE_SESSION_MUTATION, DELETE_SESSION_MUTATION } from '../../lib/session-queries';
+import { STRATEGY_STUDIO_PREFIX } from '../strategies/strategy-studio.js';
 
 interface SessionSummary {
   id: string;
@@ -107,7 +108,7 @@ export function SessionSidebar({ collapsed = false, onToggle }: SessionSidebarPr
     }
   }, [sessionVersion, reexecuteQuery]);
 
-  const sessions = data?.sessions ?? [];
+  const sessions = (data?.sessions ?? []).filter((s) => !s.threadId.startsWith(STRATEGY_STUDIO_PREFIX));
   const groups = groupByDate(sessions);
 
   const handleNewSession = useCallback(async () => {

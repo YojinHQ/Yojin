@@ -118,6 +118,7 @@ import { createDisplayTools } from './tools/display-tools.js';
 import { createErrorAnalysisTools } from './tools/error-analysis.js';
 import { createPortfolioReasoningTools } from './tools/portfolio-reasoning.js';
 import { createPortfolioTools } from './tools/portfolio-tools.js';
+import { createProposeStrategyTool } from './tools/propose-strategy.js';
 import { createSecurityAuditTools } from './tools/security-audit.js';
 import { FileAuditLog } from './trust/audit/audit-log.js';
 import { ChatPiiScanner } from './trust/pii/chat-scanner.js';
@@ -695,6 +696,8 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   for (const tool of createStrategyTools({ strategyStore, strategyEvaluator })) {
     toolRegistry.register(tool);
   }
+
+  toolRegistry.register(createProposeStrategyTool());
 
   // Platform tools (3 tools if ConnectionManager available)
   if (connectionManager) {

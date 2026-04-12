@@ -8,6 +8,9 @@
 
 import { z } from 'zod';
 
+import { DataCapabilitySchema } from '../strategies/capabilities.js';
+import { StrategyCategorySchema, TriggerTypeSchema } from '../strategies/types.js';
+
 // ---------------------------------------------------------------------------
 // Portfolio Overview
 // ---------------------------------------------------------------------------
@@ -87,6 +90,30 @@ export const MorningBriefingDataSchema = z.object({
 export type MorningBriefingData = z.infer<typeof MorningBriefingDataSchema>;
 
 // ---------------------------------------------------------------------------
+// Strategy Proposal
+// ---------------------------------------------------------------------------
+
+export const StrategyProposalDataSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  category: StrategyCategorySchema,
+  style: z.string().min(1),
+  requires: z.array(DataCapabilitySchema),
+  content: z.string().min(1),
+  triggers: z.array(
+    z.object({
+      type: TriggerTypeSchema,
+      description: z.string().min(1),
+      params: z.record(z.string(), z.unknown()).optional(),
+    }),
+  ),
+  tickers: z.array(z.string()),
+  maxPositionSize: z.number().min(0).max(1).optional(),
+});
+
+export type StrategyProposalData = z.infer<typeof StrategyProposalDataSchema>;
+
+// ---------------------------------------------------------------------------
 // Discriminated union
 // ---------------------------------------------------------------------------
 
@@ -94,4 +121,5 @@ export type DisplayCardData =
   | { type: 'portfolio-overview'; data: PortfolioOverviewData }
   | { type: 'positions-list'; data: PositionsListData }
   | { type: 'allocation'; data: AllocationData }
-  | { type: 'morning-briefing'; data: MorningBriefingData };
+  | { type: 'morning-briefing'; data: MorningBriefingData }
+  | { type: 'strategy-proposal'; data: StrategyProposalData };
