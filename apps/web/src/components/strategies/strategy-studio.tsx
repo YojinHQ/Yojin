@@ -69,15 +69,33 @@ function strategyToFormData(strategy: Strategy): StrategyFormData {
   };
 }
 
+const CREATE_PROMPT =
+  '[STRATEGY STUDIO — CREATE MODE]\n' +
+  'Help me create a new trading strategy. Ask clarifying questions to understand my goal — ' +
+  'what I want to capture or protect against, which assets, what thresholds.\n\n' +
+  'Recognize which archetype I am aiming for:\n' +
+  '- **Technical:** indicator/price-based (RSI, MACD, momentum, drawdown). If my intent maps to an existing template, propose forking it.\n' +
+  '- **Copy Trading:** "trade like [person/fund]". Use `search_entities` to find the fund, then `get_institutional_holdings` with their CIK to fetch their real 13F portfolio. Use the actual holdings to populate the strategy ticker list and inform triggers.\n' +
+  '- **Index Replication / Thematic Allocation:** "build me [index/theme]" or "put X% in [theme]". Suggest a concrete basket of companies with weight targets and concentration drift triggers.\n\n' +
+  'Once you have enough information, call `display_propose_strategy` with a complete strategy. ' +
+  "Generate a full markdown body (thesis, entry/exit rules, risk management) — don't leave it to the user.";
+
+const EDIT_PROMPT_PREFIX =
+  '[STRATEGY STUDIO — EDIT MODE]\n' +
+  'I want to edit this strategy. Help me refine it — I can edit the form directly or ask you for changes. ' +
+  'When I ask for modifications, call `display_propose_strategy` with the updated strategy. ' +
+  'You can also proactively suggest improvements.\n\nCurrent strategy: ';
+
+const FORK_PROMPT_PREFIX =
+  '[STRATEGY STUDIO — FORK MODE]\n' +
+  'I want to fork this strategy as a starting point for a new one. ' +
+  'Help me customize it. When I ask for changes, call `display_propose_strategy` with the updated strategy.\n\nOriginal strategy: ';
+
 function buildInitialMessage(strategy: Strategy | null | undefined, editMode: boolean | undefined): string {
-  if (!strategy) {
-    return '[STRATEGY STUDIO \u2014 CREATE MODE] Help me create a new trading strategy. Ask me about my goals, preferred style, and which tickers I want to trade.';
-  }
+  if (!strategy) return CREATE_PROMPT;
   const data = JSON.stringify(strategyToFormData(strategy));
-  if (editMode) {
-    return `[STRATEGY STUDIO \u2014 EDIT MODE] I want to edit this strategy: ${strategy.name}. Current data: ${data}`;
-  }
-  return `[STRATEGY STUDIO \u2014 FORK MODE] I want to fork this strategy: ${strategy.name}. Current data: ${data}`;
+  if (editMode) return `${EDIT_PROMPT_PREFIX}${data}`;
+  return `${FORK_PROMPT_PREFIX}${data}`;
 }
 
 export default function StrategyStudio({ open, onClose, strategy, editMode }: StrategyStudioProps) {
