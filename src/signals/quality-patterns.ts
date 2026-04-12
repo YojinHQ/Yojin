@@ -35,7 +35,7 @@ export const JUNK_DOMAIN_RE =
  * "Bitcoin crosses $69K amid altcoin gains", "BTC near $67,969, up 0.32% intraday".
  */
 export const JUNK_TITLE_RE =
-  /__\w+__|stock quote price|stock quotes? from|stock price|in real time$|tradingview|quote & history|price and forecast|price chart|commission-free|buy and sell|closed at \$|what you need to know$|spy vs\.? spy|song and lyrics|official music video|official video|official audio|full album|definition and meaning|definition of\b|meaning of\b|\bdefinition\b.*\bdictionary\b|\b(?:at|near|crosses?|hits?|reaches?)\s+\$[\d,K.]+|\bup\s+\d+\.?\d*%\s+intraday|\bprices?\s+(?:up|down)\s+on\b/i;
+  /__\w+__|stock quote price|stock quotes? from|stock price|in real time$|tradingview|quote & history|price and forecast|price chart|commission-free|buy and sell|closed at \$|what you need to know$|spy vs\.? spy|song and lyrics|official music video|official video|official audio|full album|definition and meaning|definition of\b|meaning of\b|\bdefinition\b.*\bdictionary\b|\b(?:at|near|crosses?|hits?|reaches?)\s+\$[\d,K.]+|\bup\s+\d+\.?\d*%\s+intraday|\bprices?\s+(?:up|down)\s+on\b|price today.+live price|live price.+(?:chart|marketcap)|price.+chart\s*&\s*price history|\bto\s+USD\s+live\s+price\b|^\s*[\d,.]+\s*\|\s*[A-Z]{2,6}\s+[A-Z]{2,6}\s*\||\b[A-Z]{2,6}\s+to\s+[A-Z]{2,6}\s*[-–]\s*(?:binance|coinbase|kraken|bybit|okx|kucoin|huobi|bitfinex|gemini|bitstamp)/i;
 
 // ---------------------------------------------------------------------------
 // Content patterns — body-level junk detection

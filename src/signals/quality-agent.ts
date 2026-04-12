@@ -185,7 +185,7 @@ Evaluate this signal and respond with a JSON object only — no markdown, no ext
 - A price/quote obviously wrong for the asset (ETH at $19, BTC at $50)
 CRITICAL: if your tier2 would say "not related to [company]" or "this is about [something else]", the verdict MUST be DROP.
 
-**DROP with dropReason "irrelevant"** when the content is NOT about finance, markets, or the company/asset. Examples: music, entertainment, sports, recipes, games, website boilerplate, navigation menus, cookie notices, tracking pixels.
+**DROP with dropReason "irrelevant"** when the content is NOT about finance, markets, or the company/asset. Examples: music, entertainment, sports, recipes, games, website boilerplate, navigation menus, cookie notices, tracking pixels, exchange trading pair pages ("2134.38 | ETH USDT | Ethereum to USDT - Binance Spot"), price-tracker landing pages ("Bitcoin price today, BTC to USD live price, marketcap and chart"), Yahoo/CoinDesk/CoinMarketCap generic price pages ("Ethereum ETH (ETH-USD) Live Price, News, Chart & Price History - Yahoo Finance"). These are website page titles scraped from price-tracking sites, not articles — always DROP.
 
 **DROP with dropReason "duplicate"** when the signal covers the SAME event already in <recent_signals>. CRITICAL: different headlines about the same underlying fact = duplicate. Examples of duplicates:
 - "Google, Broadcom sign five-year AI chip deal" and "Broadcom Signs Multi-Year AI Chip Deals With Google" — same deal, different wording

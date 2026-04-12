@@ -26,6 +26,11 @@ export const DEFAULT_SPAM_PATTERNS = [
   '^\\d+ (?:best|top) stocks? to (?:buy|sell|watch)',
   'stocks? everyone is (?:buying|talking)',
   '^is .+ (?:a buy|a sell|still a buy)\\??$',
+  'price today.+live price',
+  'live price.+(?:chart|marketcap)',
+  'price.+chart\\s*&\\s*price history',
+  '\\bto\\s+USD\\s+live\\s+price\\b',
+  '^\\s*[\\d,.]+\\s*\\|\\s*[A-Z]{2,6}\\s+[A-Z]{2,6}\\s*\\|',
 ];
 
 export interface FilterSignalsOptions {
