@@ -3,13 +3,13 @@ import { useState } from 'react';
 import Button from '../components/common/button';
 import ActiveRulesView from '../components/strategies/active-rules-view.js';
 import ImportStrategyModal from '../components/strategies/import-strategy-modal.js';
-import StrategyEditorModal from '../components/strategies/strategy-editor-modal.js';
+import { StrategyStudio } from '../components/strategies/strategy-studio.js';
 import { StrategySources } from '../components/strategies/strategy-sources.js';
 
 export default function Strategies() {
   const [importOpen, setImportOpen] = useState(false);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editorKey, setEditorKey] = useState(0);
+  const [studioOpen, setStudioOpen] = useState(false);
+  const [studioKey, setStudioKey] = useState(0);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -22,8 +22,8 @@ export default function Strategies() {
           </Button>
           <Button
             onClick={() => {
-              setEditorKey((k) => k + 1);
-              setEditorOpen(true);
+              setStudioKey((k) => k + 1);
+              setStudioOpen(true);
             }}
           >
             Create
@@ -39,7 +39,7 @@ export default function Strategies() {
       </div>
 
       <ImportStrategyModal open={importOpen} onClose={() => setImportOpen(false)} />
-      <StrategyEditorModal key={editorKey} open={editorOpen} onClose={() => setEditorOpen(false)} />
+      <StrategyStudio key={studioKey} open={studioOpen} onClose={() => setStudioOpen(false)} />
     </div>
   );
 }

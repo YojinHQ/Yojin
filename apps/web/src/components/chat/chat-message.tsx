@@ -88,18 +88,9 @@ export default function ChatMessage({
           ))}
           {isAuthExpired && <AuthExpiredCard />}
           {content && !isAuthExpired && (!toolCards || toolCards.length === 0) && (
-            <>
-              {streaming ? (
-                <span className="chat-assistant-text whitespace-pre-wrap text-base leading-7">
-                  {content}
-                  <span className="inline-block w-1.5 animate-pulse text-text-muted">▍</span>
-                </span>
-              ) : (
-                <div className="chat-assistant-prose prose max-w-none text-base leading-7 prose-headings:mb-2 prose-headings:mt-6 prose-p:my-3.5 prose-li:my-1 prose-a:break-all prose-a:text-success prose-a:no-underline hover:prose-a:underline prose-code:rounded prose-code:px-1.5 prose-code:py-0.5 prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:rounded-xl prose-pre:text-sm">
-                  <Markdown>{content}</Markdown>
-                </div>
-              )}
-            </>
+            <div className="chat-assistant-prose prose prose-invert max-w-none text-base leading-7 prose-headings:mb-2 prose-headings:mt-6 prose-p:my-3.5 prose-li:my-1 prose-a:break-all prose-a:text-success prose-a:no-underline hover:prose-a:underline prose-code:rounded prose-code:px-1.5 prose-code:py-0.5 prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:rounded-xl prose-pre:text-sm">
+              <Markdown>{streaming ? `${content}▍` : content}</Markdown>
+            </div>
           )}
           {piiProtected && piiTypes && piiTypes.length > 0 && (
             <div className="inline-flex items-center gap-1.5 self-start px-1">

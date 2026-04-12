@@ -9,7 +9,7 @@ import Modal from '../common/modal.js';
 import Button from '../common/button.js';
 import Badge from '../common/badge.js';
 import Spinner from '../common/spinner.js';
-import StrategyEditorModal from './strategy-editor-modal.js';
+import { StrategyStudio } from './strategy-studio.js';
 
 interface StrategyDetailModalProps {
   open: boolean;
@@ -33,6 +33,8 @@ export default function StrategyDetailModal({ open, strategyId, onClose }: Strat
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
+  const [forking, setForking] = useState(false);
+  const [forkKey, setForkKey] = useState(1000); // offset from editorKey to prevent key collisions
   const [error, setError] = useState<string | null>(null);
 
   const strategy = result.data?.strategy;
@@ -168,6 +170,16 @@ export default function StrategyDetailModal({ open, strategyId, onClose }: Strat
               </Button>
               <Button
                 size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setForkKey((k) => k + 1);
+                  setForking(true);
+                }}
+              >
+                Fork
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => {
                   setEditorKey((k) => k + 1);
                   setEditing(true);
@@ -182,7 +194,14 @@ export default function StrategyDetailModal({ open, strategyId, onClose }: Strat
             <div className="bg-error/10 border border-error/30 rounded-lg px-3 py-2 text-error text-sm">{error}</div>
           )}
 
-          <StrategyEditorModal key={editorKey} open={editing} strategy={strategy} onClose={() => setEditing(false)} />
+          <StrategyStudio
+            key={editorKey}
+            open={editing}
+            strategy={strategy}
+            editMode
+            onClose={() => setEditing(false)}
+          />
+          <StrategyStudio key={forkKey} open={forking} strategy={strategy} onClose={() => setForking(false)} />
         </div>
       )}
     </Modal>

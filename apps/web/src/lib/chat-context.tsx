@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useClient, useMutation, useSubscription } from 'urql';
 import { ACTIVE_SESSION_QUERY, SESSION_DETAIL_QUERY } from './session-queries';
+import { SEND_MESSAGE_MUTATION, CHAT_SUBSCRIPTION } from './chat-documents.js';
 
 export interface ToolCardRef {
   tool: string;
@@ -16,7 +17,7 @@ export interface ChatMessage {
   toolCards?: ToolCardRef[];
 }
 
-interface ChatEvent {
+export interface ChatEvent {
   type: 'THINKING' | 'TOOL_USE' | 'TEXT_DELTA' | 'MESSAGE_COMPLETE' | 'PII_REDACTED' | 'ERROR' | 'TOOL_CARD';
   threadId: string;
   delta?: string;
@@ -28,35 +29,6 @@ interface ChatEvent {
   piiTypesFound?: string[];
   toolCard?: ToolCardRef;
 }
-
-const SEND_MESSAGE_MUTATION = `
-  mutation SendMessage($threadId: String!, $message: String!, $imageBase64: String, $imageMediaType: String) {
-    sendMessage(threadId: $threadId, message: $message, imageBase64: $imageBase64, imageMediaType: $imageMediaType) {
-      threadId
-      messageId
-    }
-  }
-`;
-
-const CHAT_SUBSCRIPTION = `
-  subscription OnChatMessage($threadId: String!) {
-    onChatMessage(threadId: $threadId) {
-      type
-      threadId
-      delta
-      accumulatedText
-      messageId
-      content
-      error
-      toolName
-      piiTypesFound
-      toolCard {
-        tool
-        params
-      }
-    }
-  }
-`;
 
 export interface ChatImageData {
   base64: string;

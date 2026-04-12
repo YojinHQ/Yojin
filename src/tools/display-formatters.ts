@@ -11,6 +11,7 @@ import type {
   MorningBriefingData,
   PortfolioOverviewData,
   PositionsListData,
+  StrategyProposalData,
 } from './display-data.js';
 import { fmtCurrency, fmtPnl } from './display-format-helpers.js';
 
@@ -79,6 +80,31 @@ function formatAllocation(data: AllocationData): string {
   return lines.join('\n');
 }
 
+function formatStrategyProposal(data: StrategyProposalData): string {
+  const lines = [
+    `Strategy Proposal: ${data.name}`,
+    '',
+    data.description,
+    '',
+    `Category: ${data.category} | Style: ${data.style}`,
+  ];
+
+  if (data.tickers.length > 0) {
+    lines.push(`Tickers: ${data.tickers.join(', ')}`);
+  }
+
+  if (data.maxPositionSize !== undefined) {
+    lines.push(`Max Position Size: ${(data.maxPositionSize * 100).toFixed(0)}%`);
+  }
+
+  lines.push('', 'Triggers:');
+  for (const t of data.triggers) {
+    lines.push(`  ${t.type}: ${t.description}`);
+  }
+
+  return lines.join('\n');
+}
+
 function formatMorningBriefing(data: MorningBriefingData): string {
   const direction = data.totalPnl >= 0 ? 'Up' : 'Down';
   const lines = [
@@ -117,5 +143,7 @@ export function formatDisplayCard(card: DisplayCardData): string {
       return formatAllocation(card.data);
     case 'morning-briefing':
       return formatMorningBriefing(card.data);
+    case 'strategy-proposal':
+      return formatStrategyProposal(card.data);
   }
 }
