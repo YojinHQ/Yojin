@@ -42,11 +42,12 @@ const logger = createSubsystemLogger('jintel-signal-fetcher');
 // discussions: HN stories → NEWS signals (tech/investor community commentary).
 // financials/executives: equity-only; server returns null for crypto/ETF.
 // predictions intentionally excluded — too niche for automated runs, agent-only.
+// research excluded — Exa-backed, returns low-quality web search results (score 0,
+// no URLs, duplicate "Market Snapshot" titles). Available on-demand via get_research tool.
 const ENRICHMENT_FIELDS = [
   'market',
   'technicals',
   'news',
-  'research',
   'sentiment',
   'regulatory',
   'social',
