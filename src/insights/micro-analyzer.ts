@@ -65,6 +65,7 @@ Content priorities:
 - Lead with the most impactful narrative — real events, earnings, analyst actions, corporate developments, macro shifts. Use technicals as supporting context, not the headline.
 - assetActions must be NEWS and EVENTS only. Say "Truist cuts price target to $323 amid macro headwinds" not "RSI at 38.5 approaching oversold". Never put technical indicators, Bollinger Bands, MACD, RSI, or moving averages in assetActions.
 - Never put meta-commentary about data quality in assetActions. "No fund-level catalyst in dataset" is not an action — skip it.
+- NEVER write summaries that say "no developments are present" or "nothing to report". If there is genuinely nothing material, return an empty assetActions array. Silence is better than a summary that says "we have nothing".
 - If all available data is low-quality promotional content, say so in the thesis and lower conviction accordingly.
 - Be concise. Every field should be information-dense.`;
 
