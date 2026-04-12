@@ -9,7 +9,7 @@
  * injecting into an agent's context without overflow.
  */
 
-import type { Entity, JintelClient, MarketQuote } from '@yojinhq/jintel-client';
+import type { EnrichOptions, Entity, JintelClient, MarketQuote } from '@yojinhq/jintel-client';
 import { buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
 import type { InsightStore } from './insight-store.js';
@@ -79,6 +79,10 @@ export interface DataBrief {
   researchReports: ResearchBrief[];
   // Institutional holdings (13F)
   institutionalHoldings: InstitutionalHoldingBrief[];
+  // Ownership breakdown
+  ownership: OwnershipBrief | null;
+  // Top institutional holders
+  topHolders: TopHolderBrief[];
   // Ticker profile (per-asset institutional knowledge)
   profile: TickerProfileBrief | null;
 }
@@ -152,6 +156,22 @@ interface ResearchBrief {
 interface InstitutionalHoldingBrief {
   issuerName: string;
   titleOfClass: string;
+  value: number;
+  shares: number;
+  reportDate: string;
+}
+
+interface OwnershipBrief {
+  insiderOwnership: number | null;
+  institutionOwnership: number | null;
+  institutionsCount: number | null;
+  outstandingShares: number | null;
+  floatShares: number | null;
+  shortPercentOfFloat: number | null;
+}
+
+interface TopHolderBrief {
+  filerName: string;
   value: number;
   shares: number;
   reportDate: string;
@@ -358,6 +378,27 @@ export function formatBriefsForContext(briefs: DataBrief[]): string {
       }
     }
 
+    // Ownership breakdown
+    if (b.ownership) {
+      const o = b.ownership;
+      const ownerParts: string[] = [];
+      if (o.insiderOwnership != null) ownerParts.push(`Insider: ${(o.insiderOwnership * 100).toFixed(1)}%`);
+      if (o.institutionOwnership != null)
+        ownerParts.push(`Institutional: ${(o.institutionOwnership * 100).toFixed(1)}%`);
+      if (o.institutionsCount != null) ownerParts.push(`${o.institutionsCount} institutions`);
+      if (o.floatShares != null) ownerParts.push(`Float: ${formatLargeNumber(o.floatShares)}`);
+      if (o.shortPercentOfFloat != null) ownerParts.push(`Short/float: ${(o.shortPercentOfFloat * 100).toFixed(1)}%`);
+      if (ownerParts.length > 0) lines.push(`Ownership: ${ownerParts.join(' | ')}`);
+    }
+
+    // Top institutional holders
+    if (b.topHolders.length > 0) {
+      lines.push(`Top holders (${b.topHolders[0].reportDate}):`);
+      for (const h of b.topHolders.slice(0, 5)) {
+        lines.push(`  - ${h.filerName}: ${formatLargeNumber(h.shares)} shares, $${formatLargeNumber(h.value * 1000)}`);
+      }
+    }
+
     // Institutional holdings (13F — top positions by value)
     if (b.institutionalHoldings.length > 0) {
       lines.push(`Institutional holdings (13F, ${b.institutionalHoldings[0].reportDate}):`);
@@ -497,17 +538,23 @@ export function formatRiskMetrics(briefs: DataBrief[]): string {
 // Unified Jintel enrichment — single query for ALL signal types
 // ---------------------------------------------------------------------------
 
-/** Batch enrich query: market + risk + regulatory + technicals + sentiment + news + research + holdings. */
-const BATCH_ENRICH_QUERY = buildBatchEnrichQuery([
-  'market',
-  'risk',
-  'regulatory',
-  'technicals',
-  'sentiment',
-  'news',
-  'research',
-  'institutionalHoldings',
-]);
+/** Batch enrich query: market + risk + regulatory + technicals + sentiment + news + research + ownership data. */
+const BATCH_ENRICH_OPTS: EnrichOptions = { topHolders: { limit: 10 } };
+const BATCH_ENRICH_QUERY = buildBatchEnrichQuery(
+  [
+    'market',
+    'risk',
+    'regulatory',
+    'technicals',
+    'sentiment',
+    'news',
+    'research',
+    'institutionalHoldings',
+    'ownership',
+    'topHolders',
+  ],
+  BATCH_ENRICH_OPTS,
+);
 
 /**
  * Batch enrich tickers with ALL fields (market, risk, regulatory, news)
@@ -761,6 +808,22 @@ export function buildBrief(
     institutionalHoldings: (entity?.institutionalHoldings ?? []).slice(0, 10).map((h) => ({
       issuerName: h.issuerName,
       titleOfClass: h.titleOfClass,
+      value: h.value,
+      shares: h.shares,
+      reportDate: h.reportDate,
+    })),
+    ownership: entity?.ownership
+      ? {
+          insiderOwnership: entity.ownership.insiderOwnership ?? null,
+          institutionOwnership: entity.ownership.institutionOwnership ?? null,
+          institutionsCount: entity.ownership.institutionsCount ?? null,
+          outstandingShares: entity.ownership.outstandingShares ?? null,
+          floatShares: entity.ownership.floatShares ?? null,
+          shortPercentOfFloat: entity.ownership.shortPercentOfFloat ?? null,
+        }
+      : null,
+    topHolders: (entity?.topHolders ?? []).slice(0, 10).map((h) => ({
+      filerName: h.filerName,
       value: h.value,
       shares: h.shares,
       reportDate: h.reportDate,

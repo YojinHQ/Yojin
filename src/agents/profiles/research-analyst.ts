@@ -30,6 +30,8 @@ export function createResearchAnalystProfile(): AgentProfile {
       'get_financials',
       'get_executives',
       'get_institutional_holdings',
+      'get_ownership',
+      'get_top_holders',
       'get_gdp',
       'get_inflation',
       'get_interest_rates',

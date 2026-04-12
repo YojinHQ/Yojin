@@ -54,8 +54,9 @@ describe('buildContext', () => {
     // + 5 strategy tools (list_strategies, get_strategy, activate_strategy, deactivate_strategy, get_strategy_evaluations)
     // + 2 new Jintel tools (get_financials, get_executives)
     // + 1 new Jintel tool (get_institutional_holdings)
-    // = 67
-    expect(schemas.length).toBe(67);
+    // + 2 new Jintel tools (get_ownership, get_top_holders)
+    // = 69
+    expect(schemas.length).toBe(69);
 
     const names = schemas.map((s) => s.name).sort();
     expect(names).toContain('get_current_time');
