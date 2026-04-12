@@ -406,11 +406,8 @@ export class SignalIngestor {
     const text = `${input.title} ${input.content ?? ''}`.toLowerCase();
 
     // Regulatory — sanctions, OFAC, compliance, enforcement actions
-    if (
-      /\b(sanctions?|ofac|sdn list|compliance|enforcement action|regulatory action|pep|politically exposed)\b/.test(
-        text,
-      )
-    ) {
+    // Note: bare "pep" excluded — collides with PepsiCo ticker (PEP). Use full phrase only.
+    if (/\b(sanctions?|ofac|sdn list|enforcement action|regulatory action|politically exposed person)\b/.test(text)) {
       return 'REGULATORY';
     }
 

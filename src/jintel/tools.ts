@@ -257,8 +257,12 @@ function formatEnrichment(entity: Entity): string {
 
   if (entity.risk) {
     const { overallScore, signals } = entity.risk;
-    const signalLines = signals.map((s) => `- [${s.severity}] ${s.type}: ${s.description}`);
-    sections.push(`## Risk (score: ${overallScore})\n${signalLines.join('\n')}`);
+    // Filter out low-severity SANCTIONS (fuzzy false positives) from agent-facing output too
+    const filtered = signals.filter((s) => !(s.type === 'SANCTIONS' && !MIN_SANCTIONS_SEVERITY.has(s.severity)));
+    if (filtered.length) {
+      const signalLines = filtered.map((s) => `- [${s.severity}] ${s.type}: ${s.description}`);
+      sections.push(`## Risk (score: ${overallScore})\n${signalLines.join('\n')}`);
+    }
   }
 
   if (entity.regulatory) {
