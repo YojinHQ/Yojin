@@ -4,7 +4,7 @@ interface StrategyProposalCardProps {
   triggerCount?: number;
 }
 
-export default function StrategyProposalCard({ name, category, triggerCount }: StrategyProposalCardProps) {
+export function StrategyProposalCard({ name, category, triggerCount }: StrategyProposalCardProps) {
   return (
     <div className="rounded-xl border border-accent-primary/30 bg-accent-primary/5 px-5 py-3 flex items-center gap-3">
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-primary/20 text-accent-primary">

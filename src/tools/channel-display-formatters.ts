@@ -10,11 +10,16 @@ import type { DisplayCardData, StrategyProposalData } from './display-data.js';
 import { fmtCurrency, fmtPnl, pnlEmoji } from './display-format-helpers.js';
 import { escapeHtml } from '../formatting/index.js';
 
-function formatStrategyProposalPlain(d: StrategyProposalData): string {
-  const lines = [`Strategy Proposal: ${d.name}`, '', d.description, `Category: ${d.category} | Style: ${d.style}`];
-  if (d.tickers.length > 0) lines.push(`Tickers: ${d.tickers.join(', ')}`);
+function formatStrategyProposalPlain(d: StrategyProposalData, escape: (s: string) => string = (s) => s): string {
+  const lines = [
+    `Strategy Proposal: ${escape(d.name)}`,
+    '',
+    escape(d.description),
+    `Category: ${escape(d.category)} | Style: ${escape(d.style)}`,
+  ];
+  if (d.tickers.length > 0) lines.push(`Tickers: ${d.tickers.map(escape).join(', ')}`);
   lines.push('', 'Triggers:');
-  for (const t of d.triggers) lines.push(`  ${t.type}: ${t.description}`);
+  for (const t of d.triggers) lines.push(`  ${escape(t.type)}: ${escape(t.description)}`);
   return lines.join('\n');
 }
 
@@ -200,7 +205,7 @@ export function formatDisplayCardForTelegram(card: DisplayCardData): string {
     }
 
     case 'strategy-proposal':
-      return formatStrategyProposalPlain(card.data);
+      return formatStrategyProposalPlain(card.data, esc);
   }
 }
 

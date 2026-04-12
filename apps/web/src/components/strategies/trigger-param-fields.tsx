@@ -380,7 +380,7 @@ function CustomFields() {
 
 // --- Main component ---
 
-export default function TriggerParamFields({ type, params, onChange }: TriggerParamFieldsProps) {
+export function TriggerParamFields({ type, params, onChange }: TriggerParamFieldsProps) {
   switch (type) {
     case 'PRICE_MOVE':
       return <PriceMoveFields params={params} onChange={onChange} />;

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import Button from '../components/common/button';
 import ActiveRulesView from '../components/strategies/active-rules-view.js';
 import ImportStrategyModal from '../components/strategies/import-strategy-modal.js';
-import StrategyStudio from '../components/strategies/strategy-studio.js';
+import { StrategyStudio } from '../components/strategies/strategy-studio.js';
 import { StrategySources } from '../components/strategies/strategy-sources.js';
 
 export default function Strategies() {

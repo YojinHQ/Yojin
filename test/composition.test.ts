@@ -101,6 +101,7 @@ describe('buildContext', () => {
     expect(names).toContain('display_positions_list');
     expect(names).toContain('display_allocation');
     expect(names).toContain('display_morning_briefing');
+    expect(names).toContain('display_propose_strategy');
   });
 
   it('registers 6 agent profiles', async () => {

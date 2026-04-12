@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import Button from '../common/button.js';
 import { useCreateStrategy, useUpdateStrategy } from '../../api/hooks/index.js';
 import { cn } from '../../lib/utils.js';
-import TriggerParamFields from './trigger-param-fields.js';
+import { TriggerParamFields } from './trigger-param-fields.js';
 import type { TriggerParams } from './trigger-param-fields.js';
 
 export interface StrategyFormData {
@@ -76,7 +76,7 @@ Describe the strategy rationale...
 ## Risk Management
 Position sizing, max drawdown, etc.`;
 
-export default function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyFormPanelProps) {
+export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyFormPanelProps) {
   const isEdit = !!editId;
   const [showPreview, setShowPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);

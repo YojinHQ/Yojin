@@ -7,8 +7,8 @@ import { cn } from '../../lib/utils.js';
 import Modal from '../common/modal.js';
 import ChatMessageComponent from '../chat/chat-message.js';
 import ChatInput from '../chat/chat-input.js';
-import SuggestionChips from './suggestion-chips.js';
-import StrategyFormPanel from './strategy-form-panel.js';
+import { SuggestionChips } from './suggestion-chips.js';
+import { StrategyFormPanel } from './strategy-form-panel.js';
 import type { StrategyFormData } from './strategy-form-panel.js';
 import type { Strategy } from './types.js';
 
@@ -78,7 +78,7 @@ function buildInitialMessage(strategy: Strategy | null | undefined, editMode: bo
   return `${FORK_PROMPT_PREFIX}${data}`;
 }
 
-export default function StrategyStudio({ open, onClose, strategy, editMode }: StrategyStudioProps) {
+export function StrategyStudio({ open, onClose, strategy, editMode }: StrategyStudioProps) {
   const [threadId] = useState(() => `strategy-studio-${Date.now()}`);
 
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -119,6 +119,12 @@ export default function StrategyStudio({ open, onClose, strategy, editMode }: St
       if (card.tool === 'propose-strategy') {
         try {
           const proposed = JSON.parse(card.params) as Partial<StrategyFormData>;
+          if (proposed.triggers) {
+            proposed.triggers = proposed.triggers.map((t) => ({ ...t, params: t.params ?? {} }));
+          }
+          if (proposed.requires) {
+            proposed.requires = proposed.requires.map((r) => r.toUpperCase());
+          }
           setFormData((prev) => ({ ...prev, ...proposed }));
           setFormVisible(true);
         } catch (err) {

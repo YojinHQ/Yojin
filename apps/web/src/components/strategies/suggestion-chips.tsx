@@ -48,14 +48,14 @@ function buildDynamicChips(snapshot: PortfolioSnapshot): string[] {
 
   const concentrated = weights.find((w) => w.weight > 0.15);
   if (concentrated) {
-    const thresholdPct = Math.round(concentrated.weight * 100) + 5;
+    const thresholdPct = Math.min(100, Math.round(concentrated.weight * 100) + 5);
     chips.push(`Rebalance when ${concentrated.symbol} exceeds ${thresholdPct}%`);
   }
 
   return chips;
 }
 
-export default function SuggestionChips({ onSelect }: SuggestionChipsProps) {
+export function SuggestionChips({ onSelect }: SuggestionChipsProps) {
   const [portfolioResult] = usePortfolio();
   const snapshot = portfolioResult.data?.portfolio ?? null;
 

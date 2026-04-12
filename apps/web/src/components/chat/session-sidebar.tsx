@@ -107,7 +107,7 @@ export function SessionSidebar({ collapsed = false, onToggle }: SessionSidebarPr
     }
   }, [sessionVersion, reexecuteQuery]);
 
-  const sessions = (data?.sessions ?? []).filter((s) => !s.threadId.startsWith('strategy-studio-'));
+  const sessions = data?.sessions ?? [];
   const groups = groupByDate(sessions);
 
   const handleNewSession = useCallback(async () => {

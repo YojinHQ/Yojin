@@ -9,7 +9,7 @@ import Modal from '../common/modal.js';
 import Button from '../common/button.js';
 import Badge from '../common/badge.js';
 import Spinner from '../common/spinner.js';
-import StrategyStudio from './strategy-studio.js';
+import { StrategyStudio } from './strategy-studio.js';
 
 interface StrategyDetailModalProps {
   open: boolean;

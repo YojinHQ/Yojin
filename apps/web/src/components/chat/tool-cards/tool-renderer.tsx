@@ -2,7 +2,7 @@ import PositionsListCard from './positions-list-card';
 import PortfolioOverviewCard from './portfolio-overview-card';
 import AllocationCard from './allocation-card';
 import MorningBriefingCard from './morning-briefing-card';
-import StrategyProposalCard from './strategy-proposal-card';
+import { StrategyProposalCard } from './strategy-proposal-card';
 
 interface ToolRendererProps {
   tool: string;
@@ -19,14 +19,22 @@ export default function ToolRenderer({ tool, params }: ToolRendererProps) {
   let card: React.ReactNode;
 
   switch (tool) {
-    case 'positions-list':
-      card = (
-        <PositionsListCard variant={((params.variant as string) ?? 'all') as 'top' | 'worst' | 'movers' | 'all'} />
-      );
+    case 'positions-list': {
+      const validVariants = ['top', 'worst', 'movers', 'all'] as const;
+      const variant = validVariants.includes(params.variant as (typeof validVariants)[number])
+        ? (params.variant as (typeof validVariants)[number])
+        : 'all';
+      card = <PositionsListCard variant={variant} />;
       break;
-    case 'portfolio-overview':
-      card = <PortfolioOverviewCard period={((params.period as string) ?? 'today') as 'today' | 'week' | 'ytd'} />;
+    }
+    case 'portfolio-overview': {
+      const validPeriods = ['today', 'week', 'ytd'] as const;
+      const period = validPeriods.includes(params.period as (typeof validPeriods)[number])
+        ? (params.period as (typeof validPeriods)[number])
+        : 'today';
+      card = <PortfolioOverviewCard period={period} />;
       break;
+    }
     case 'allocation':
       card = <AllocationCard />;
       break;
