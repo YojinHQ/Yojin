@@ -15,9 +15,13 @@ function formatStrategyProposalPlain(d: StrategyProposalData, escape: (s: string
     `Strategy Proposal: ${escape(d.name)}`,
     '',
     escape(d.description),
+    '',
     `Category: ${escape(d.category)} | Style: ${escape(d.style)}`,
   ];
   if (d.tickers.length > 0) lines.push(`Tickers: ${d.tickers.map(escape).join(', ')}`);
+  if (d.maxPositionSize !== undefined) {
+    lines.push(`Max Position Size: ${(d.maxPositionSize * 100).toFixed(0)}%`);
+  }
   lines.push('', 'Triggers:');
   for (const t of d.triggers) lines.push(`  ${escape(t.type)}: ${escape(t.description)}`);
   return lines.join('\n');
@@ -34,6 +38,9 @@ function formatStrategyProposalTelegram(d: StrategyProposalData): string {
   ];
   if (d.tickers.length > 0) {
     lines.push(`<b>Tickers:</b> ${d.tickers.map((t) => `<code>${esc(t)}</code>`).join(', ')}`);
+  }
+  if (d.maxPositionSize !== undefined) {
+    lines.push(`<b>Max Position Size:</b> ${(d.maxPositionSize * 100).toFixed(0)}%`);
   }
   lines.push('', '<b>Triggers:</b>');
   for (const t of d.triggers) {

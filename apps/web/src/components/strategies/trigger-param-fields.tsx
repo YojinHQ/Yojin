@@ -28,14 +28,14 @@ const DIRECTION_OPTIONS = [
 ];
 
 const INDICATOR_OPTIONS = [
-  { value: 'rsi', label: 'RSI' },
-  { value: 'macd', label: 'MACD' },
-  { value: 'bb', label: 'Bollinger Bands' },
-  { value: 'ema', label: 'EMA' },
-  { value: 'sma', label: 'SMA' },
-  { value: 'atr', label: 'ATR' },
-  { value: 'vwma', label: 'VWMA' },
-  { value: 'mfi', label: 'MFI' },
+  { value: 'RSI', label: 'RSI' },
+  { value: 'MACD', label: 'MACD' },
+  { value: 'BB', label: 'Bollinger Bands' },
+  { value: 'EMA', label: 'EMA' },
+  { value: 'SMA', label: 'SMA' },
+  { value: 'ATR', label: 'ATR' },
+  { value: 'VWMA', label: 'VWMA' },
+  { value: 'MFI', label: 'MFI' },
 ];
 
 const METRIC_OPTIONS = [
@@ -200,8 +200,8 @@ function PriceMoveFields({ params, onChange }: { params: TriggerParams; onChange
       />
       <NumberInput
         label="Lookback"
-        value={params.lookbackMonths as number | undefined}
-        onChange={(v) => onChange(set(params, 'lookbackMonths', v))}
+        value={params.lookback_months as number | undefined}
+        onChange={(v) => onChange(set(params, 'lookback_months', v))}
         placeholder="3"
         suffix="months"
         min={1}
@@ -227,9 +227,9 @@ function IndicatorThresholdFields({
         options={INDICATOR_OPTIONS}
       />
       <NumberInput
-        label="Level"
-        value={params.level as number | undefined}
-        onChange={(v) => onChange(set(params, 'level', v))}
+        label="Threshold"
+        value={params.threshold as number | undefined}
+        onChange={(v) => onChange(set(params, 'threshold', v))}
         placeholder="70"
         step={1}
       />
@@ -331,15 +331,15 @@ function ConcentrationDriftFields({
 }
 
 function SignalPresentFields({ params, onChange }: { params: TriggerParams; onChange: (p: TriggerParams) => void }) {
-  const signalTypes = Array.isArray(params.signalTypes) ? (params.signalTypes as string[]) : [];
-  const minSentiment = typeof params.minSentiment === 'number' ? params.minSentiment : undefined;
+  const signalTypes = Array.isArray(params.signal_types) ? (params.signal_types as string[]) : [];
+  const minSentiment = typeof params.min_sentiment === 'number' ? params.min_sentiment : undefined;
 
   return (
     <div className="space-y-3">
       <MultiSelectChips
         label="Signal Types"
         selected={signalTypes}
-        onChange={(v) => onChange(set(params, 'signalTypes', v))}
+        onChange={(v) => onChange(set(params, 'signal_types', v))}
         options={SIGNAL_TYPE_OPTIONS}
       />
       <div className="grid grid-cols-2 gap-2">
@@ -352,7 +352,7 @@ function SignalPresentFields({ params, onChange }: { params: TriggerParams; onCh
               max={1}
               step={0.05}
               value={minSentiment ?? 0}
-              onChange={(e) => onChange(set(params, 'minSentiment', Number(e.target.value)))}
+              onChange={(e) => onChange(set(params, 'min_sentiment', Number(e.target.value)))}
               className="flex-1 accent-accent-primary"
             />
             <span className="text-xs text-text-muted tabular-nums w-8 text-right">
@@ -362,8 +362,8 @@ function SignalPresentFields({ params, onChange }: { params: TriggerParams; onCh
         </div>
         <NumberInput
           label="Lookback"
-          value={params.lookbackHours as number | undefined}
-          onChange={(v) => onChange(set(params, 'lookbackHours', v))}
+          value={params.lookback_hours as number | undefined}
+          onChange={(v) => onChange(set(params, 'lookback_hours', v))}
           placeholder="24"
           suffix="hours"
           min={1}
