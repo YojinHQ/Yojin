@@ -297,6 +297,44 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     expect(newsSignals).toHaveLength(1);
   });
 
+  it('keeps article mentioning company name without ticker (Nvidia → NVDA)', () => {
+    const entity = makeEntity({
+      name: 'NVIDIA Corporation',
+      news: [
+        {
+          title: 'Nvidia reports record data center revenue',
+          link: 'https://example.com/nvidia-earnings',
+          snippet: 'Nvidia beat expectations with $35B in data center sales.',
+          source: 'Reuters',
+        },
+      ],
+    });
+
+    const signals = enrichmentToSignals(entity, ['NVDA']);
+    const newsSignals = signals.filter((s) => s.sourceName?.includes('Jintel News'));
+
+    expect(newsSignals).toHaveLength(1);
+  });
+
+  it('keeps article mentioning company name with corporate suffix stripped (Tesla Inc → TSLA)', () => {
+    const entity = makeEntity({
+      name: 'Tesla Inc',
+      news: [
+        {
+          title: 'Tesla Cybertruck deliveries accelerate in Q2',
+          link: 'https://example.com/tesla',
+          snippet: 'Tesla delivered 50,000 Cybertrucks in the quarter.',
+          source: 'Bloomberg',
+        },
+      ],
+    });
+
+    const signals = enrichmentToSignals(entity, ['TSLA']);
+    const newsSignals = signals.filter((s) => s.sourceName?.includes('Jintel News'));
+
+    expect(newsSignals).toHaveLength(1);
+  });
+
   it('drops research article with no ticker or entity name reference', () => {
     const entity = makeEntity({
       name: 'Firefly Aerospace',

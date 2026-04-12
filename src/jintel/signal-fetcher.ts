@@ -148,6 +148,32 @@ export async function fetchJintelSignals(
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Corporate suffixes stripped before matching entity name words against text. */
+const CORPORATE_SUFFIX_RE =
+  /\b(?:inc\.?|corp\.?|corporation|ltd\.?|limited|llc|plc|co\.?|company|holdings|technologies|technology|aerospace|pharmaceuticals|therapeutics|biosciences|group|partners|capital|ventures|financial|services|solutions|systems|enterprises|international|global|the)\b/gi;
+
+/** Generic words that appear in many entity names and would match too broadly. */
+const GENERIC_NAME_WORDS = new Set([
+  'new',
+  'first',
+  'american',
+  'national',
+  'united',
+  'general',
+  'digital',
+  'energy',
+  'power',
+  'health',
+  'bank',
+  'fund',
+  'trust',
+  'real',
+  'gold',
+  'silver',
+  'iron',
+  'steel',
+]);
+
 /**
  * Deterministic ticker-content relevance check.
  *
@@ -200,18 +226,31 @@ function isTickerContentMismatch(text: string, tickers: string[], entityName: st
   }
 
   // Check 2: Does the text mention the entity name (company name)?
+  // Entity names from Jintel often include corporate suffixes ("NVIDIA Corporation",
+  // "Apple Inc", "Firefly Aerospace Inc") but articles typically use just the
+  // distinctive part ("Nvidia", "Apple", "Firefly"). Check the full name first,
+  // then fall back to individual distinctive words.
   if (entityName) {
-    const nameLower = entityName.toLowerCase();
     const textLower = text.toLowerCase();
-    // For multi-word names, check containment directly
+
+    // Full name match
+    const nameLower = entityName.toLowerCase();
     if (nameLower.length >= 4 && textLower.includes(nameLower)) {
-      return false; // Company name found
+      return false;
     }
-    // For short names, use word boundary
-    if (nameLower.length < 4) {
-      const escapedName = nameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const nameRe = new RegExp(`\\b${escapedName}\\b`, 'i');
-      if (nameRe.test(text)) return false;
+
+    // Strip corporate suffixes and check distinctive words individually.
+    // "NVIDIA Corporation" → ["nvidia"] → check each ≥4-char word
+    const nameWords = nameLower
+      .replace(CORPORATE_SUFFIX_RE, '')
+      .trim()
+      .split(/\s+/)
+      .filter((w) => w.length >= 4 && !GENERIC_NAME_WORDS.has(w));
+
+    for (const word of nameWords) {
+      const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const wordRe = new RegExp(`\\b${escapedWord}\\b`, 'i');
+      if (wordRe.test(text)) return false;
     }
   }
 
