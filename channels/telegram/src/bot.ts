@@ -3,10 +3,12 @@ import { Bot, InlineKeyboard } from 'grammy';
 
 import { QUICK_ACTIONS } from '../../../src/channels/quick-actions.js';
 import { createSubsystemLogger } from '../../../src/logging/logger.js';
+import type { ChatTemplate } from '../../../src/tools/chat-template-data.js';
+import { formatChatTemplateForTelegram } from '../../../src/tools/chat-template-formatters.js';
 
 const logger = createSubsystemLogger('telegram-bot');
 
-const VALID_ACTIONS = new Set(['approve', 'reject', 'details', 'action-approve', 'action-reject', 'quick']);
+const VALID_ACTIONS = new Set(['approve', 'reject', 'details', 'action-approve', 'action-reject', 'quick', 'tpl']);
 
 export interface CallbackData {
   action: string;
@@ -49,12 +51,28 @@ export function buildQuickActionsKeyboard(): InlineKeyboard {
   return kb;
 }
 
+/** Default Query Builder template shown on /start. */
+export const START_QUERY_BUILDER_TEMPLATE: ChatTemplate = {
+  type: 'query-builder',
+  data: {
+    title: "Let's knock something off your list",
+    suggestions: [
+      { id: 'portfolio', icon: 'portfolio', label: 'My Portfolio', query: 'How is my portfolio performing today?' },
+      { id: 'research', icon: 'research', label: 'Research a Stock', query: 'Give me a complete analysis' },
+      { id: 'risk', icon: 'risk', label: 'Risk Check', query: 'Analyze my portfolio risk' },
+      { id: 'news', icon: 'news', label: "What's Happening", query: 'What should I pay attention to today?' },
+    ],
+  },
+};
+
 export interface BotDeps {
   token: string;
   onTextMessage: (chatId: number, userId: number, userName: string, text: string) => Promise<void>;
   onApprovalCallback?: (requestId: string, approved: boolean) => void;
   onActionCallback?: (actionId: string, approved: boolean) => Promise<void>;
   onApprovalDetails?: (requestId: string) => Promise<string>;
+  /** Resolve a template callback_data payload to the query text to dispatch. */
+  onTemplateCallback?: (callbackId: string) => string | undefined;
 }
 
 export function createBot(deps: BotDeps): Bot {
@@ -63,9 +81,14 @@ export function createBot(deps: BotDeps): Bot {
 
   bot.command('start', async (ctx) => {
     logger.info('Telegram /start', { chatId: ctx.chat.id, userId: ctx.from?.id });
-    await ctx.reply("<b>Welcome to Yojin!</b> Your chat is now linked.\n\nLet's knock something off your list:", {
+
+    // Send welcome text then the Query Builder template with inline keyboard
+    await ctx.reply('<b>Welcome to Yojin!</b> Your chat is now linked.', { parse_mode: 'HTML' });
+
+    const result = formatChatTemplateForTelegram(START_QUERY_BUILDER_TEMPLATE);
+    await ctx.reply(result.text, {
       parse_mode: 'HTML',
-      reply_markup: buildQuickActionsKeyboard(),
+      ...(result.replyMarkup ? { reply_markup: result.replyMarkup } : {}),
     });
   });
 
@@ -123,6 +146,19 @@ export function createBot(deps: BotDeps): Bot {
         await ctx.answerCallbackQuery();
         const chatId = ctx.chat?.id ?? ctx.from.id;
         await deps.onTextMessage(chatId, ctx.from.id, ctx.from.first_name ?? String(ctx.from.id), quickAction.prompt);
+        break;
+      }
+
+      case 'tpl': {
+        // data.id is the full payload after "tpl:" e.g. "qb:portfolio"
+        const query = deps.onTemplateCallback?.(data.id);
+        if (!query) {
+          await ctx.answerCallbackQuery({ text: 'Unknown action' });
+          break;
+        }
+        await ctx.answerCallbackQuery();
+        const tplChatId = ctx.chat?.id ?? ctx.from.id;
+        await deps.onTextMessage(tplChatId, ctx.from.id, ctx.from.first_name ?? String(ctx.from.id), query);
         break;
       }
 

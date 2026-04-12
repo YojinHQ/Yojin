@@ -8,6 +8,7 @@
 
 import type { ZodSchema } from 'zod';
 
+import type { ChatTemplate } from '../tools/chat-template-data.js';
 import type { DisplayCardData } from '../tools/display-data.js';
 
 // ---------------------------------------------------------------------------
@@ -134,6 +135,8 @@ export interface OutgoingMessage {
   metadata?: Record<string, unknown>;
   /** Display cards for channels that support rich formatting (Slack, Telegram, etc.). */
   displayCards?: DisplayCardData[];
+  /** Interactive chat templates for channels that support buttons/keyboards. */
+  templates?: ChatTemplate[];
 }
 
 export interface ChannelMessagingAdapter {

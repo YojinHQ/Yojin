@@ -1,6 +1,6 @@
 import type { Bot } from 'grammy';
 
-import { buildActionKeyboard, buildApprovalKeyboard, createBot } from './bot.js';
+import { START_QUERY_BUILDER_TEMPLATE, buildActionKeyboard, buildApprovalKeyboard, createBot } from './bot.js';
 import { chunkMessage, escapeHtml, formatAction, formatInsight, formatSnap } from './formatting.js';
 import type { ActionStore } from '../../../src/actions/action-store.js';
 import { isNotificationEnabled } from '../../../src/api/graphql/resolvers/channels.js';
@@ -20,6 +20,7 @@ import type {
 } from '../../../src/plugins/types.js';
 import type { SnapStore } from '../../../src/snap/snap-store.js';
 import { formatDisplayCardForTelegram } from '../../../src/tools/channel-display-formatters.js';
+import { formatChatTemplateForTelegram } from '../../../src/tools/chat-template-formatters.js';
 import type { ApprovalGate } from '../../../src/trust/approval/approval-gate.js';
 import type { SecretVault } from '../../../src/trust/vault/types.js';
 
@@ -42,6 +43,53 @@ export function buildTelegramChannel(deps: TelegramChannelDeps = {}): ChannelPlu
   const messageHandlers: MessageHandler[] = [];
   const unsubscribers: Array<() => void> = [];
 
+  /**
+   * Maps template callback_data payloads (e.g. "qb:portfolio") to the query
+   * text that should be dispatched as a synthetic message. Populated when
+   * templates are sent; the bot's callback_query handler looks up entries here.
+   */
+  const templateCallbackMap = new Map<string, string>();
+
+  function registerTemplateCallbacks(
+    templates: import('../../../src/tools/chat-template-data.js').ChatTemplate[],
+  ): void {
+    for (const tpl of templates) {
+      switch (tpl.type) {
+        case 'query-builder':
+          for (const s of tpl.data.suggestions) {
+            templateCallbackMap.set(`qb:${s.id}`, s.query);
+          }
+          break;
+        case 'option-selector':
+          for (const o of tpl.data.options) {
+            templateCallbackMap.set(`os:${o.id}`, o.label);
+          }
+          break;
+        case 'waterfall-step':
+          for (const o of tpl.data.options) {
+            templateCallbackMap.set(`wf:${tpl.data.flowId}:${tpl.data.stepId}:${o.id}`, o.label);
+          }
+          break;
+        case 'manual-position-step':
+          if (tpl.data.presets) {
+            for (const preset of tpl.data.presets) {
+              templateCallbackMap.set(`mp:${tpl.data.step}:${preset}`, preset);
+            }
+          }
+          if (tpl.data.step === 'confirm') {
+            templateCallbackMap.set('mp:confirm:yes', 'Confirm adding position');
+            templateCallbackMap.set('mp:confirm:no', 'Cancel');
+          }
+          break;
+        case 'briefing-hero':
+          if (tpl.data.ctaActionId) {
+            templateCallbackMap.set(`bh:${tpl.data.ctaActionId}`, tpl.data.ctaLabel ?? 'View briefing');
+          }
+          break;
+      }
+    }
+  }
+
   const messagingAdapter: ChannelMessagingAdapter = {
     async sendMessage(msg: OutgoingMessage): Promise<void> {
       if (!bot) throw new Error('Telegram bot not initialized');
@@ -50,16 +98,33 @@ export function buildTelegramChannel(deps: TelegramChannelDeps = {}): ChannelPlu
       if (!chatId) throw new Error('No Telegram chat ID available');
 
       let text = msg.text;
+      const hasRichContent = !!(msg.displayCards?.length || msg.templates?.length);
       if (msg.displayCards?.length) {
         const formatted = msg.displayCards.map((c) => formatDisplayCardForTelegram(c)).join('\n\n');
         const escapedText = escapeHtml(msg.text);
         text = escapedText ? `${escapedText}\n\n${formatted}` : formatted;
       }
 
-      const parseMode = msg.displayCards?.length ? ('HTML' as const) : undefined;
-      const chunks = chunkMessage(text);
-      for (const chunk of chunks) {
-        await bot.api.sendMessage(Number(chatId), chunk, parseMode ? { parse_mode: parseMode } : undefined);
+      const parseMode = hasRichContent ? ('HTML' as const) : undefined;
+
+      // Send plain text / display cards as chunked messages
+      if (text) {
+        const chunks = chunkMessage(text);
+        for (const chunk of chunks) {
+          await bot.api.sendMessage(Number(chatId), chunk, parseMode ? { parse_mode: parseMode } : undefined);
+        }
+      }
+
+      // Send each chat template as a separate message with its inline keyboard
+      if (msg.templates?.length) {
+        registerTemplateCallbacks(msg.templates);
+        for (const tpl of msg.templates) {
+          const result = formatChatTemplateForTelegram(tpl);
+          await bot.api.sendMessage(Number(chatId), result.text, {
+            parse_mode: 'HTML',
+            ...(result.replyMarkup ? { reply_markup: result.replyMarkup } : {}),
+          });
+        }
       }
     },
 
@@ -139,7 +204,11 @@ export function buildTelegramChannel(deps: TelegramChannelDeps = {}): ChannelPlu
           const request = pending.find((r) => r.id === requestId);
           return request ? `${request.action}: ${request.description}` : 'Request not found or expired.';
         },
+        onTemplateCallback: (callbackId) => templateCallbackMap.get(callbackId),
       });
+
+      // Pre-register /start query builder callbacks so they're available immediately
+      registerTemplateCallbacks([START_QUERY_BUILDER_TEMPLATE]);
 
       if (deps.notificationBus) {
         subscribeToNotifications(deps.notificationBus);
