@@ -92,19 +92,30 @@ export function extractLead(text: string, maxLen = 400): string {
 }
 
 /**
- * Quality gate for Summary.what text. Rejects bare-indicator or metadata
- * strings like "MFI 75.", "RSI 80", "Price 108.45" that carry no narrative.
+ * Quality gate for Summary.what text. Rejects:
+ *  1. Bare-indicator or metadata strings like "MFI 75.", "RSI 80".
+ *  2. "Nothing to report" summaries where the LLM explicitly says it has
+ *     no material content (e.g. "No ETH-specific fundamental developments
+ *     are present in the current dataset").
  *
- * Rule: a usable observation must contain at least two alphabetic word
- * tokens of 3+ letters. That lets through "Gap up on no catalyst"
- * (2 alpha runs: "Gap", "catalyst") and "Convertible bond inflows" while
- * blocking "MFI 75." (1 alpha run: "MFI") and "RSI 80" (1 alpha run).
+ * Rule 1: a usable observation must contain at least two alphabetic word
+ * tokens of 3+ letters.
+ *
+ * Rule 2: reject text that matches common "nothing to report" patterns —
+ * the LLM saying it has no news is not intel.
  *
  * The gate is applied at the summary producer layer — not at the SummaryStore
  * — so the store stays a pure persistence layer and the policy is owned by
  * the pipelines that produce observations.
  */
+
+/** Patterns that indicate the LLM is saying "I have nothing to report". */
+const NOTHING_TO_REPORT_RE =
+  /\bno\b.{0,60}\b(?:developments?|news|catalysts?|events?|updates?|data|content|information)\b.{0,40}\b(?:are |is |were |was )?(?:present|available|found|identified|detected|observed|noted)\b|\bno\b.{0,30}\b(?:specific|material|notable|significant|meaningful|substantive|actionable)\b.{0,40}\b(?:developments?|news|catalysts?|events?|updates?)\b|\brecent (?:news|data|content) is (?:unrelated|irrelevant)\b|\bnothing (?:material|notable|significant) to report\b|\bnot present in the (?:current |available )?dataset\b/i;
+
 export function hasSubstance(text: string): boolean {
   const alphaWords = text.match(/[A-Za-z]{3,}/g);
-  return (alphaWords?.length ?? 0) >= 2;
+  if ((alphaWords?.length ?? 0) < 2) return false;
+  if (NOTHING_TO_REPORT_RE.test(text)) return false;
+  return true;
 }

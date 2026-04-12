@@ -72,4 +72,24 @@ describe('hasSubstance', () => {
     expect(hasSubstance('')).toBe(false);
     expect(hasSubstance('80 75 108')).toBe(false);
   });
+
+  it('rejects "nothing to report" summaries', () => {
+    expect(
+      hasSubstance(
+        'No ETH-specific fundamental developments (protocol news, regulatory filings, major institutional actions) are present in the current dataset; recent news is unrelated macro/political content',
+      ),
+    ).toBe(false);
+    expect(hasSubstance('No specific developments or catalysts were identified for this asset')).toBe(false);
+    expect(hasSubstance('No material news or events are available for AAPL this period')).toBe(false);
+    expect(hasSubstance('No notable catalysts found in the current dataset')).toBe(false);
+    expect(hasSubstance('recent news is unrelated to this ticker')).toBe(false);
+    expect(hasSubstance('Nothing material to report for this position')).toBe(false);
+    expect(hasSubstance('No significant updates are present for BTC')).toBe(false);
+  });
+
+  it('accepts real summaries that happen to mention "no" in a different context', () => {
+    expect(hasSubstance('Truist cuts AAPL PT to $323 with no upside catalyst cited')).toBe(true);
+    expect(hasSubstance('Bitcoin ETF sees no outflows for fifth consecutive day')).toBe(true);
+    expect(hasSubstance('Company reports no layoffs despite industry trend')).toBe(true);
+  });
 });
