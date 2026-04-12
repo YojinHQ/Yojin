@@ -11,6 +11,14 @@ import type { Alert, ChatEvent, PortfolioSnapshot, PriceEvent } from './types.js
 import type { WorkflowProgressEvent } from '../../agents/orchestrator.js';
 import type { ConnectionEvent } from '../../scraper/types.js';
 
+export interface DeepAnalysisEvent {
+  type: 'TEXT_DELTA' | 'COMPLETE' | 'ERROR';
+  symbol: string;
+  delta?: string;
+  content?: string;
+  error?: string;
+}
+
 export type PubSubEvents = {
   alert: [Alert];
   portfolioUpdate: [PortfolioSnapshot];
@@ -19,6 +27,7 @@ export type PubSubEvents = {
   [key: `chat:${string}`]: [ChatEvent];
   [key: `connectionStatus:${string}`]: [ConnectionEvent];
   [key: `channelPairing:${string}`]: [{ status: string; qrData?: string; error?: string }];
+  [key: `deepAnalysis:${string}`]: [DeepAnalysisEvent];
 };
 
 export const pubsub = createPubSub<PubSubEvents>();

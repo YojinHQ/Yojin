@@ -22,6 +22,7 @@ import { setEventLog } from '../api/graphql/resolvers/activity-log.js';
 import { setAiConfigClaudeCodeProvider, setAiConfigProviderRouter } from '../api/graphql/resolvers/ai-config.js';
 import { setChannelRegistry } from '../api/graphql/resolvers/channels.js';
 import { setCurationOrchestrator, setCurationPipelineDeps } from '../api/graphql/resolvers/curated-signals.js';
+import { setDeepAnalysisDeps } from '../api/graphql/resolvers/deep-analysis.js';
 import { setInsightsOrchestrator } from '../api/graphql/resolvers/insights.js';
 import { setMicroInsightStore } from '../api/graphql/resolvers/micro-insights.js';
 import {
@@ -240,6 +241,20 @@ async function startGateway(): Promise<void> {
     },
   });
   setInsightsOrchestrator(orchestrator);
+
+  // Wire deep analysis (on-demand single-position deep dive)
+  setDeepAnalysisDeps({
+    insightStore: services.insightStore,
+    providerRouter,
+    gathererOptions: {
+      snapshotStore: services.snapshotStore,
+      signalArchive: services.signalArchive,
+      insightStore: services.insightStore,
+      getJintelClient: () => services.jintelToolOptions.client,
+      memoryStores: services.memoryStores,
+      profileStore: services.profileStore,
+    },
+  });
 
   // Register full-curation workflow (Tier 1 + Tier 2) for the UI button
   const { loadJsonConfig, AlertsConfigSchema } = await import('../config/config.js');

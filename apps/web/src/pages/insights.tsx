@@ -23,6 +23,7 @@ import type {
   PositionInsight,
   Signal,
 } from '../api/types';
+import { DeepAnalysis } from '../components/insights/deep-analysis';
 import Badge from '../components/common/badge';
 import type { BadgeVariant } from '../components/common/badge';
 import Card from '../components/common/card';
@@ -549,6 +550,7 @@ function InsightsContent() {
                         name={position?.name ?? insight?.name ?? ticker}
                         signals={signals}
                         insight={insight}
+                        insightReportId={report?.id}
                         onViewAll={navigateToSignals}
                         onViewSignal={(id) => {
                           setHighlightId(id);
@@ -777,6 +779,7 @@ function PositionSignalCard({
   name,
   signals,
   insight,
+  insightReportId,
   onViewAll,
   onViewSignal,
   autoExpand = false,
@@ -785,6 +788,7 @@ function PositionSignalCard({
   name: string;
   signals: Signal[];
   insight?: PositionInsight;
+  insightReportId?: string;
   onViewAll: (ticker: string) => void;
   onViewSignal: (signalId: string) => void;
   autoExpand?: boolean;
@@ -884,6 +888,9 @@ function PositionSignalCard({
         <div className="mt-3 border-t border-border pt-3 space-y-3">
           {/* Analysis thesis — the "why" */}
           {insight && <p className="text-sm text-text-primary leading-relaxed">{insight.thesis}</p>}
+
+          {/* Deep analysis — on-demand deep dive */}
+          {insight && insightReportId && <DeepAnalysis symbol={ticker} insightReportId={insightReportId} />}
 
           {/* Key signals from analysis — with contextualized detail */}
           {insight && insight.keySignals.length > 0 && (

@@ -802,6 +802,28 @@ export interface InsightsWorkflowStatusQueryResult {
 }
 
 // ---------------------------------------------------------------------------
+// Deep Analysis (on-demand single-position deep dive)
+// ---------------------------------------------------------------------------
+
+export type DeepAnalysisEventType = 'TEXT_DELTA' | 'COMPLETE' | 'ERROR';
+
+export interface DeepAnalysisEvent {
+  type: DeepAnalysisEventType;
+  symbol: string;
+  delta?: string;
+  content?: string;
+  error?: string;
+}
+
+export interface DeepAnalyzePositionMutationResult {
+  deepAnalyzePosition: boolean;
+}
+
+export interface OnDeepAnalysisSubscriptionResult {
+  onDeepAnalysis: DeepAnalysisEvent;
+}
+
+// ---------------------------------------------------------------------------
 // Snap (Strategist brief)
 // ---------------------------------------------------------------------------
 

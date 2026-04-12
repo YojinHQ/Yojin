@@ -66,6 +66,7 @@ import {
   removeDataSourceResolver,
   toggleDataSourceResolver,
 } from './resolvers/data-sources.js';
+import { deepAnalyzePositionMutation, onDeepAnalysisSubscription } from './resolvers/deep-analysis.js';
 import { fetchDataSourceResolver } from './resolvers/fetch-data-source.js';
 import {
   getInsightsWorkflowStatus,
@@ -283,6 +284,7 @@ const schema = createSchema({
       removeAiCredential: removeAiCredentialMutation,
       triggerMicroAnalysis: triggerMicroAnalysisMutation,
       triggerStrategyEvaluation: triggerStrategyEvaluationMutation,
+      deepAnalyzePosition: deepAnalyzePositionMutation,
     },
     Subscription: {
       onAlert: onAlertSubscription,
@@ -292,6 +294,7 @@ const schema = createSchema({
       onConnectionStatus: onConnectionStatusSubscription,
       onWorkflowProgress: onWorkflowProgressSubscription,
       onChannelPairing: onChannelPairingSubscription,
+      onDeepAnalysis: onDeepAnalysisSubscription,
     },
   },
 });

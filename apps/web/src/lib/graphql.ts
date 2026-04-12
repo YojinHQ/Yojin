@@ -74,6 +74,7 @@ const cache = cacheExchange({
     BriefingConfig: () => null, // singleton — no id field
     SchedulerStatus: () => null, // singleton — no id field
     SchedulerAssetStatus: () => null, // embedded — keyed by symbol+source in parent
+    DeepAnalysisEvent: () => null, // subscription event — no stable identity
   },
   updates: {
     Mutation: {

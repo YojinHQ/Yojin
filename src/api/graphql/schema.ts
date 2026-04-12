@@ -905,6 +905,33 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # ---------------------------------------------------------------------------
+  # Deep Analysis (on-demand single-position deep dive)
+  # ---------------------------------------------------------------------------
+
+  enum DeepAnalysisEventType {
+    TEXT_DELTA
+    COMPLETE
+    ERROR
+  }
+
+  type DeepAnalysisEvent {
+    type: DeepAnalysisEventType!
+    symbol: String!
+    """
+    Incremental text chunk (TEXT_DELTA) or full analysis text (COMPLETE).
+    """
+    delta: String
+    """
+    Full accumulated text — sent with COMPLETE events.
+    """
+    content: String
+    """
+    Error message — sent with ERROR events.
+    """
+    error: String
+  }
+
+  # ---------------------------------------------------------------------------
   # Snap (Strategist brief)
   # ---------------------------------------------------------------------------
 
@@ -1363,6 +1390,11 @@ export const typeDefs = /* GraphQL */ `
     resetOnboarding: Boolean!
     validateJintelKey(apiKey: String!): ValidateJintelKeyResult!
     processInsights: InsightReport
+    """
+    Trigger on-demand deep analysis for a single position. Returns immediately;
+    results stream via the onDeepAnalysis subscription.
+    """
+    deepAnalyzePosition(symbol: String!, insightReportId: ID!): Boolean!
     runFullCuration: Boolean!
     refreshIntelFeed: RefreshIntelFeedResult!
     addToWatchlist(symbol: String!, name: String!, assetClass: AssetClass!): WatchlistResult!
@@ -1416,5 +1448,6 @@ export const typeDefs = /* GraphQL */ `
     onConnectionStatus(platform: String!): ConnectionEvent!
     onWorkflowProgress(workflowId: String!): WorkflowProgressEvent!
     onChannelPairing(id: ID!): PairingEvent!
+    onDeepAnalysis(symbol: String!): DeepAnalysisEvent!
   }
 `;

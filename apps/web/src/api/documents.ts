@@ -1105,6 +1105,28 @@ export const INSIGHT_REPORTS_QUERY = gql`
 `;
 
 // ---------------------------------------------------------------------------
+// Mutations + Subscriptions — Deep Analysis
+// ---------------------------------------------------------------------------
+
+export const DEEP_ANALYZE_POSITION_MUTATION = gql`
+  mutation DeepAnalyzePosition($symbol: String!, $insightReportId: ID!) {
+    deepAnalyzePosition(symbol: $symbol, insightReportId: $insightReportId)
+  }
+`;
+
+export const ON_DEEP_ANALYSIS_SUBSCRIPTION = gql`
+  subscription OnDeepAnalysis($symbol: String!) {
+    onDeepAnalysis(symbol: $symbol) {
+      type
+      symbol
+      delta
+      content
+      error
+    }
+  }
+`;
+
+// ---------------------------------------------------------------------------
 // Queries — Snap (Strategist brief)
 // ---------------------------------------------------------------------------
 
