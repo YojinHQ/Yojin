@@ -183,6 +183,7 @@ Evaluate this signal and respond with a JSON object only — no markdown, no ext
 - A person's name matching a ticker symbol
 - Wikipedia/reference content about a concept sharing a ticker abbreviation
 - A price/quote obviously wrong for the asset (ETH at $19, BTC at $50)
+- An article about one industry vertical (e.g. hyperscaler cloud capex) tagged to a company in a different vertical (e.g. EV manufacturer) because both touch a shared buzzword like "AI"
 CRITICAL: if your tier2 would say "not related to [company]" or "this is about [something else]", the verdict MUST be DROP.
 
 **DROP with dropReason "irrelevant"** when the content is NOT about finance, markets, or the company/asset. Examples: music, entertainment, sports, recipes, games, website boilerplate, navigation menus, cookie notices, tracking pixels, exchange trading pair pages ("2134.38 | ETH USDT | Ethereum to USDT - Binance Spot"), price-tracker landing pages ("Bitcoin price today, BTC to USD live price, marketcap and chart"), Yahoo/CoinDesk/CoinMarketCap generic price pages ("Ethereum ETH (ETH-USD) Live Price, News, Chart & Price History - Yahoo Finance"). These are website page titles scraped from price-tracking sites, not articles — always DROP.
@@ -203,15 +204,16 @@ Look at the SUBSTANCE, not the exact words. If two headlines would be the same s
 Every signal was written by someone with an incentive. Ask yourself:
 - **Why was this written?** Genuine analyst insight, earnings coverage, and regulatory filings exist to inform. "Here's What It Means for Your X Stocks" exists to drive clicks. Score accordingly.
 - **Is the ticker substantively discussed or just name-dropped?** A macro headline ("Fed holds rates") tagged to a specific ticker via a loose category ("AI stocks", "tech stocks", "growth stocks") is NOT a signal about that ticker. The ticker must be specifically analyzed, named, or directly impacted for the connection to be real.
+- **Does the article's core subject match the tagged company's actual business?** An article about hyperscaler AI infrastructure capex (AWS, Azure, GCP, Meta data centers) is about cloud infrastructure companies — tagging it to an EV/automotive company like Tesla because both touch "AI" is a false match. A shared buzzword ("AI", "tech", "innovation") does NOT make the article relevant. The tagged company must operate in the specific industry vertical the article analyzes. Examples that are false matches: "Big Tech capex ROI questioned" tagged to TSLA (hyperscaler capex ≠ Gigafactory capex); "Cloud spending slowdown" tagged to a semiconductor company that doesn't sell cloud services.
 - **Does the writer have domain-specific knowledge?** An analyst note on NVDA's data center revenue sensitivity to rates = real observation. A content mill repackaging a Fed headline with "AI stocks" in the title = noise.
 
-If the ticker is only connected through a broad sector label and the content contains no ticker-specific analysis, score ≤ 39 (noise).
+If the ticker is only connected through a broad sector label, a shared buzzword, or an industry-adjacent association and the content contains no ticker-specific analysis, score ≤ 39 (noise).
 
 ## Quality score guide
 - 90-100: Direct material impact (earnings, FDA approval, merger, major insider transaction)
 - 70-89: Useful context (analyst upgrade, sector news with specific company analysis, relevant macro data with direct mechanism)
 - 40-69: Tangential but ticker-specific (generic market commentary about the specific company with some analytical substance)
-- 0-39: Noise (no relevance, clickbait, false match, boilerplate, macro headline with ticker name-dropped via sector umbrella, price-restatement articles)
+- 0-39: Noise (no relevance, clickbait, false match, boilerplate, macro headline with ticker name-dropped via sector umbrella, industry-mismatch articles where the core subject is a different vertical than the tagged company, price-restatement articles)
 
 **Price-restatement = 0-39.** An article that states the current price with a vague "amid [X]" clause and no named catalyst, actor, or mechanism is noise — the price is already visible on the portfolio screen. To score above 39, the content must name a specific verifiable event, actor, or causal mechanism (e.g. "Moody's rates first Bitcoin-backed bond", "SEC approves spot ETF"). Examples that score 0-39: "BTC at $68K amid geopolitical developments", "Bitcoin crosses $69K amid altcoin gains", "BTC near $67,969, up 0.32% intraday", "BTC consolidation alongside ETH and XRP".
 
