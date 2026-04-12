@@ -65,9 +65,16 @@ export const FALSE_MATCH_TEXT_RE =
  * summary admits the signal is unverifiable, anecdotal, or speculative but still
  * returns verdict=KEEP. Applied in QualityAgent.parseResponse() to override verdict
  * to DROP with dropReason=low_quality.
+ *
+ * Patterns are narrowed to avoid false-positives on legitimate denial/refutation
+ * news (e.g. "Tesla denied an unverified claim", "management found no evidence of
+ * a breach"). "unverified claim" uses a negative lookbehind for denial verbs;
+ * "no evidence" requires a follow-up indicating the signal's own support is weak.
+ * Dead-post markers ([removed], [deleted], post/source unavailable) are included
+ * to catch social signals whose backing content has been taken down.
  */
 export const SELF_INVALIDATING_RE =
-  /\blacks (?:independent )?verification\b|\bunverified claim\b|\bremains? speculative\b|\brel(?:y|ies) on anecdotal\b|\bno (?:independent )?confirmation\b|\bcannot be (?:verified|substantiated|corroborated)\b|\bself[- ]reported (?:and )?unverified\b|\bno (?:supporting )?evidence\b|\bbased on (?:a single|one) (?:user'?s?|person'?s?) (?:observation|claim|report)\b/i;
+  /\blacks (?:independent )?verification\b|(?<!(?:denied|refuted|dismissed|rejected) (?:an? )?)\bunverified claim\b|\bremains? speculative\b|\brel(?:y|ies) on anecdotal\b|\bno (?:independent )?confirmation from (?:the )?(?:company|management)\b|\bcannot be (?:verified|substantiated|corroborated)\b|\bself[- ]reported (?:and )?unverified\b|\bno (?:supporting )?evidence (?:to (?:support|back|substantiate)|beyond|for (?:the |this ))\b|\bbased on (?:a single|one) (?:user'?s?|person'?s?) (?:observation|claim|report)\b|\[(?:removed|deleted)\]|\b(?:post|source) (?:(?:is|has been|was) )?(?:unavailable|removed|deleted)\b/i;
 
 /**
  * Broader false-match pattern including explicit "false match" / "false positive" labels.
