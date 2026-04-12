@@ -7,7 +7,7 @@
  */
 
 import type { SummaryStore } from '../../../summaries/summary-store.js';
-import type { Summary, SummaryFlow } from '../../../summaries/types.js';
+import { type Summary, type SummaryFlow, hasSubstance } from '../../../summaries/types.js';
 
 function deriveSeverityLabel(severity: number | undefined): string {
   if (severity == null) return 'MEDIUM';
@@ -73,12 +73,15 @@ export async function summariesResolver(
     limit: args.limit ?? 50,
   });
 
-  return summaries.map(toGql);
+  // Filter out legacy low-substance summaries that were persisted before
+  // the hasSubstance gate was added to the producer pipelines.
+  return summaries.filter((s) => hasSubstance(s.what)).map(toGql);
 }
 
 export async function summaryResolver(_parent: unknown, args: { id: string }): Promise<SummaryGql | null> {
   if (!store) return null;
 
   const summary = await store.getById(args.id);
-  return summary ? toGql(summary) : null;
+  if (!summary || !hasSubstance(summary.what)) return null;
+  return toGql(summary);
 }
