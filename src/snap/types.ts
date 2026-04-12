@@ -8,6 +8,7 @@
 import { z } from 'zod';
 
 import type { MicroInsight } from '../insights/micro-types.js';
+import { MicroInsightSourceSchema } from '../insights/micro-types.js';
 import { IdField } from '../types/base.js';
 
 export const SnapActionItemSchema = z.object({
@@ -28,7 +29,7 @@ export type AssetSnap = z.infer<typeof AssetSnapSchema>;
 export function assetSnapsFromMicro(microInsights: Iterable<MicroInsight>): AssetSnap[] {
   const result: AssetSnap[] = [];
   for (const mi of microInsights) {
-    if (mi.source === 'portfolio' && mi.assetSnap.length > 0) {
+    if (mi.source === MicroInsightSourceSchema.enum.portfolio && mi.assetSnap.length > 0) {
       result.push({ symbol: mi.symbol, snap: mi.assetSnap, rating: mi.rating, generatedAt: mi.generatedAt });
     }
   }

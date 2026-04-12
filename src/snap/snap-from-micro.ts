@@ -11,6 +11,7 @@ import type { Snap } from './types.js';
 import { assetSnapsFromMicro } from './types.js';
 import type { ProviderRouter } from '../ai-providers/router.js';
 import type { MicroInsight } from '../insights/micro-types.js';
+import { MicroInsightSourceSchema } from '../insights/micro-types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 
 const logger = createSubsystemLogger('snap-from-micro');
@@ -54,7 +55,7 @@ export async function snapFromMicro(
   previousSnap?: Snap | null,
 ): Promise<Snap | null> {
   const insights = [...microInsights.values()].filter(
-    (mi) => mi.source === 'portfolio' && mi.assetSnap.length > 0 && mi.conviction > 0,
+    (mi) => mi.source === MicroInsightSourceSchema.enum.portfolio && mi.assetSnap.length > 0 && mi.conviction > 0,
   );
   if (insights.length === 0) return null;
 
