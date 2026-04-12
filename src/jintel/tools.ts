@@ -23,11 +23,13 @@ import {
   type HackerNewsStory,
   INFLATION,
   INTEREST_RATES,
+  type InstitutionalHolding,
   JintelAuthError,
   type JintelClient,
   type JintelResult,
   type MarketQuote,
   type NewsArticle,
+  type OwnershipBreakdown,
   type PredictionMarket,
   type ResearchResult,
   type RiskSignal,
@@ -40,6 +42,7 @@ import {
   type Social,
   type SocialSentiment,
   type TickerPriceHistory,
+  type TopHolder,
   buildEnrichQuery,
 } from '@yojinhq/jintel-client';
 import { z } from 'zod';
@@ -91,6 +94,9 @@ const JINTEL_QUERY_KIND = z.enum([
   'short_interest',
   'financials',
   'executives',
+  'institutional_holdings',
+  'ownership',
+  'top_holders',
 ]);
 
 type JintelQueryKind = z.infer<typeof JINTEL_QUERY_KIND>;
@@ -108,6 +114,9 @@ const ENRICHMENT_FIELDS = z.enum([
   'social',
   'predictions',
   'discussions',
+  'institutionalHoldings',
+  'ownership',
+  'topHolders',
 ]);
 
 const SEVERITY_CONFIDENCE: Record<string, number> = {
@@ -318,6 +327,18 @@ function formatEnrichment(entity: Entity): string {
     sections.push(`## Discussions\n${formatDiscussions(entity.discussions)}`);
   }
 
+  if (entity.institutionalHoldings?.length) {
+    sections.push(`## Institutional Holdings (13F)\n${formatInstitutionalHoldings(entity.institutionalHoldings)}`);
+  }
+
+  if (entity.ownership) {
+    sections.push(`## Ownership Breakdown\n${formatOwnership(entity.ownership)}`);
+  }
+
+  if (entity.topHolders?.length) {
+    sections.push(`## Top Institutional Holders\n${formatTopHolders(entity.topHolders)}`);
+  }
+
   // financials & executives are planned jintel-client fields (not yet in Entity type).
   // Access via cast until the client ships these as first-class enrichment fields.
   const ext = entity as Entity & { financials?: FinancialStatements; executives?: KeyExecutive[] };
@@ -455,6 +476,53 @@ function formatShortInterest(reports: ShortInterestReport[]): string {
       if (r.shortInterest != null) parts.push(`Shares short: ${formatNumber(r.shortInterest)}`);
       if (r.daysToCover != null) parts.push(`Days to cover: ${r.daysToCover.toFixed(1)}`);
       if (r.change != null) parts.push(`Change: ${r.change >= 0 ? '+' : ''}${formatNumber(r.change)}`);
+      return parts.join(' | ');
+    })
+    .join('\n');
+}
+
+function formatInstitutionalHoldings(holdings: InstitutionalHolding[]): string {
+  if (holdings.length === 0) return 'No institutional holdings data available.';
+  return holdings
+    .map((h) => {
+      const parts = [`${h.issuerName} (${h.titleOfClass})`];
+      parts.push(`CUSIP: ${h.cusip}`);
+      parts.push(`Value: $${formatNumber(h.value * 1000)}`);
+      parts.push(`Shares: ${formatNumber(h.shares)}`);
+      parts.push(`Discretion: ${h.investmentDiscretion}`);
+      parts.push(`Report: ${h.reportDate} | Filed: ${h.filingDate}`);
+      return parts.join(' | ');
+    })
+    .join('\n');
+}
+
+function formatOwnership(o: OwnershipBreakdown): string {
+  const lines: string[] = [`Symbol: ${o.symbol}`];
+  if (o.insiderOwnership != null) lines.push(`Insider ownership: ${(o.insiderOwnership * 100).toFixed(2)}%`);
+  if (o.institutionOwnership != null)
+    lines.push(`Institution ownership: ${(o.institutionOwnership * 100).toFixed(2)}%`);
+  if (o.institutionFloatOwnership != null)
+    lines.push(`Institution float ownership: ${(o.institutionFloatOwnership * 100).toFixed(2)}%`);
+  if (o.institutionsCount != null) lines.push(`Institutions: ${o.institutionsCount}`);
+  if (o.outstandingShares != null) lines.push(`Outstanding shares: ${formatNumber(o.outstandingShares)}`);
+  if (o.floatShares != null) lines.push(`Float shares: ${formatNumber(o.floatShares)}`);
+  if (o.shortInterest != null) lines.push(`Short interest: ${formatNumber(o.shortInterest)}`);
+  if (o.shortPercentOfFloat != null) lines.push(`Short % of float: ${(o.shortPercentOfFloat * 100).toFixed(2)}%`);
+  if (o.daysToCover != null) lines.push(`Days to cover: ${o.daysToCover.toFixed(1)}`);
+  if (o.shortInterestPrevMonth != null)
+    lines.push(`Short interest prev month: ${formatNumber(o.shortInterestPrevMonth)}`);
+  return lines.join('\n');
+}
+
+function formatTopHolders(holders: TopHolder[]): string {
+  if (holders.length === 0) return 'No top holders data available.';
+  return holders
+    .map((h) => {
+      const parts = [h.filerName];
+      parts.push(`CIK: ${h.cik}`);
+      parts.push(`Value: $${formatNumber(h.value * 1000)}`);
+      parts.push(`Shares: ${formatNumber(h.shares)}`);
+      parts.push(`Report: ${h.reportDate} | Filed: ${h.filingDate}`);
       return parts.join(' | ');
     })
     .join('\n');
@@ -1115,6 +1183,92 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     },
   };
 
+  const getInstitutionalHoldings: ToolDefinition = {
+    name: 'get_institutional_holdings',
+    description:
+      'Get 13F institutional holdings for a filer by SEC CIK number. Returns the latest 13F-HR filing portfolio ' +
+      'showing all equity positions reported to the SEC.\n\n' +
+      'Use when the user asks about what a fund/institution holds, e.g. "What does Berkshire Hathaway own?" ' +
+      'or "Show me Bridgewater\'s portfolio". Requires the filer\'s CIK (Central Index Key) from SEC EDGAR.',
+    parameters: z.object({
+      cik: z.string().min(1).describe('SEC CIK number of the filer (e.g. "0001067983" for Berkshire Hathaway)'),
+      since: z.string().optional().describe('ISO timestamp — only return holdings from filings after this date'),
+      until: z.string().optional().describe('ISO timestamp — only return holdings from filings before this date'),
+      limit: z.number().int().min(1).max(200).optional().describe('Max holdings to return (default: all)'),
+    }),
+    async execute(params: { cik: string; since?: string; until?: string; limit?: number }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const filter: { since?: string; until?: string; limit?: number; sort?: 'ASC' | 'DESC' } = { sort: 'DESC' };
+      if (params.since) filter.since = params.since;
+      if (params.until) filter.until = params.until;
+      if (params.limit) filter.limit = params.limit;
+      const result = await safeCall(() => client.institutionalHoldings(params.cik, filter));
+      if (!result.ok) return result.toolResult;
+      const handled = handleResult(result.data);
+      if (!handled.ok) return handled.toolResult;
+      const holdings = handled.data as InstitutionalHolding[];
+      return {
+        content: `# Institutional Holdings (13F) — CIK ${params.cik}\n\n${formatInstitutionalHoldings(holdings)}`,
+      };
+    },
+  };
+
+  const getOwnership: ToolDefinition = {
+    name: 'get_ownership',
+    description:
+      'Get ownership breakdown for a ticker — insider vs institutional ownership percentages, shares outstanding, ' +
+      'float, short interest, and days to cover.\n\n' +
+      'Use when the user asks about who owns a stock, insider ownership, institutional ownership, or float analysis.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, TSLA, NVDA)'),
+    }),
+    async execute(params: { ticker: string }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const ticker = params.ticker.toUpperCase();
+      const result = await safeCall(() => client.enrichEntity(ticker, ['ownership'] as EnrichmentField[]));
+      if (!result.ok) return result.toolResult;
+      const handled = handleResult(result.data);
+      if (!handled.ok) return handled.toolResult;
+      const entity = handled.data as Entity;
+      if (!entity.ownership) {
+        return { content: `No ownership data available for ${ticker}.` };
+      }
+      return { content: `# ${entity.name ?? ticker} — Ownership Breakdown\n\n${formatOwnership(entity.ownership)}` };
+    },
+  };
+
+  const getTopHolders: ToolDefinition = {
+    name: 'get_top_holders',
+    description:
+      'Get top institutional holders of a ticker from 13F filings. Returns the largest institutional positions ' +
+      'with filer name, CIK, value, shares, and filing dates.\n\n' +
+      'Use when the user asks "who are the biggest holders of X?", "which institutions own Y?", or ' +
+      '"show me the top shareholders".',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, TSLA, NVDA)'),
+      limit: z.number().int().min(1).max(100).optional().describe('Max holders to return (default 20)'),
+    }),
+    async execute(params: { ticker: string; limit?: number }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const ticker = params.ticker.toUpperCase();
+      const query = buildEnrichQuery(['topHolders'] as EnrichmentField[], {
+        topHolders: params.limit ? { limit: params.limit } : undefined,
+      });
+      const result = await safeCall(() => client.request<Entity>(query, { id: ticker }));
+      if (!result.ok) return result.toolResult;
+      const entity = result.data;
+      if (!entity.topHolders?.length) {
+        return { content: `No top holders data available for ${ticker}.` };
+      }
+      return {
+        content: `# ${entity.name ?? ticker} — Top Institutional Holders\n\n${formatTopHolders(entity.topHolders)}`,
+      };
+    },
+  };
+
   const getFamaFrench: ToolDefinition = {
     name: 'get_fama_french',
     description:
@@ -1302,13 +1456,16 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     name: 'jintel_query',
     description:
       'Generic Jintel query tool for quotes, fundamentals, market data, history, news, research, sentiment, ' +
-      'technicals, derivatives, risk, regulatory, short_interest, financials, or executives. Use this when you want ' +
-      'one Jintel-backed entry point instead of choosing a more specialized tool.',
+      'technicals, derivatives, risk, regulatory, short_interest, financials, executives, institutional_holdings, ' +
+      'ownership, or top_holders. Use this when you want one Jintel-backed entry point instead of choosing a more specialized tool.',
     parameters: z.object({
       kind: JINTEL_QUERY_KIND.describe(
-        'What to fetch: quote, market, fundamentals, history, news, research, sentiment, technicals, derivatives, risk, regulatory, short_interest, financials, or executives',
+        'What to fetch: quote, market, fundamentals, history, news, research, sentiment, technicals, derivatives, risk, regulatory, short_interest, financials, executives, institutional_holdings, ownership, or top_holders',
       ),
-      ticker: z.string().optional().describe('Single ticker symbol (e.g. AAPL, BTC, NVDA)'),
+      ticker: z
+        .string()
+        .optional()
+        .describe('Single ticker symbol (e.g. AAPL, BTC, NVDA) or CIK for institutional_holdings'),
       tickers: z.array(z.string()).optional().describe('Ticker batch for quote/history queries'),
       range: z.string().optional().describe('History range for history queries (default "1y")'),
       interval: z.string().optional().describe('History interval for history queries (default "1d")'),
@@ -1366,6 +1523,12 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
           return getFinancials.execute({ ticker: singleTicker });
         case 'executives':
           return getExecutives.execute({ ticker: singleTicker });
+        case 'institutional_holdings':
+          return getInstitutionalHoldings.execute({ cik: singleTicker });
+        case 'ownership':
+          return getOwnership.execute({ ticker: singleTicker });
+        case 'top_holders':
+          return getTopHolders.execute({ ticker: singleTicker });
       }
 
       return { content: `Unsupported Jintel query kind: ${params.kind}`, isError: true };
@@ -1513,5 +1676,8 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     getDiscussions,
     getFinancials,
     getExecutives,
+    getInstitutionalHoldings,
+    getOwnership,
+    getTopHolders,
   ];
 }

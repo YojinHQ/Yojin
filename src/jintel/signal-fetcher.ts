@@ -6,8 +6,8 @@
  */
 
 import type {
-  ArraySubGraphOptions,
   EconomicDataPoint,
+  EnrichOptions,
   Entity,
   JintelClient,
   SP500DataPoint,
@@ -51,6 +51,9 @@ const ENRICHMENT_FIELDS = [
   'regulatory',
   'social',
   'discussions',
+  'institutionalHoldings',
+  'ownership',
+  'topHolders',
 ] as const;
 
 // Quality thresholds — filter low-engagement social posts to keep signal-to-noise high
@@ -84,11 +87,12 @@ export async function fetchJintelSignals(
 ): Promise<JintelFetchResult> {
   if (tickers.length === 0) return { ingested: 0, duplicates: 0, tickers: 0 };
 
-  const subGraphOpts: ArraySubGraphOptions = { sort: 'DESC', ...(options?.since ? { since: options.since } : {}) };
-  const query = buildBatchEnrichQuery([...ENRICHMENT_FIELDS], subGraphOpts);
+  const arrayFilter = { sort: 'DESC' as const, ...(options?.since ? { since: options.since } : {}) };
+  const enrichOpts: EnrichOptions = { filter: arrayFilter, topHolders: { limit: 20 } };
+  const query = buildBatchEnrichQuery([...ENRICHMENT_FIELDS], enrichOpts);
   // Build filter variable to pass alongside the query — must match $filter: ArrayFilterInput declaration
-  const filter: Record<string, unknown> = { sort: subGraphOpts.sort };
-  if (subGraphOpts.since) filter.since = subGraphOpts.since;
+  const filter: Record<string, unknown> = { sort: arrayFilter.sort };
+  if (arrayFilter.since) filter.since = arrayFilter.since;
 
   let totalIngested = 0;
   let totalDuplicates = 0;
@@ -661,6 +665,88 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       type: SignalType.FUNDAMENTAL,
       tickers,
       confidence: 0.8,
+    });
+  }
+
+  // 15. Institutional holdings (13F) — equity only; null for crypto/ETF.
+  // Stable title for content-hash dedup. 13F filings update quarterly.
+  // Value is reported in thousands of USD — multiply for display.
+  const holdings = entity.institutionalHoldings;
+  if (holdings?.length) {
+    const topHoldings = holdings.slice(0, 10);
+    const lines = topHoldings.map((h) => {
+      return `${h.issuerName} (${h.titleOfClass}): ${formatNumber(h.shares)} shares, $${formatNumber(h.value * 1000)} | Filed: ${h.filingDate}`;
+    });
+    if (holdings.length > 10) {
+      lines.push(`... and ${holdings.length - 10} more holdings`);
+    }
+    const reportDate = holdings[0].reportDate;
+    signals.push({
+      sourceId: 'jintel-institutional-holdings',
+      sourceName: 'Jintel 13F Holdings',
+      sourceType: SourceType.ENRICHMENT,
+      reliability: 0.95,
+      title: `${entity.name ?? tickers[0]} Institutional Holdings (13F)`,
+      content: lines.join('\n'),
+      publishedAt: reportDate.includes('T') ? reportDate : `${reportDate}T00:00:00Z`,
+      type: SignalType.FUNDAMENTAL,
+      tickers,
+      confidence: 0.95,
+      metadata: { reportDate, filingDate: holdings[0].filingDate, holdingCount: holdings.length },
+    });
+  }
+
+  // 16. Ownership breakdown — insider/institutional ownership percentages, float, short interest.
+  // Stable title for content-hash dedup. Ownership data changes slowly (quarterly filings).
+  const ownership = entity.ownership;
+  if (ownership) {
+    const parts: string[] = [];
+    if (ownership.insiderOwnership != null) parts.push(`Insider: ${(ownership.insiderOwnership * 100).toFixed(2)}%`);
+    if (ownership.institutionOwnership != null)
+      parts.push(`Institutional: ${(ownership.institutionOwnership * 100).toFixed(2)}%`);
+    if (ownership.institutionsCount != null) parts.push(`Institutions: ${ownership.institutionsCount}`);
+    if (ownership.outstandingShares != null) parts.push(`Outstanding: ${formatNumber(ownership.outstandingShares)}`);
+    if (ownership.floatShares != null) parts.push(`Float: ${formatNumber(ownership.floatShares)}`);
+    if (ownership.shortPercentOfFloat != null)
+      parts.push(`Short % of float: ${(ownership.shortPercentOfFloat * 100).toFixed(2)}%`);
+    if (parts.length > 0) {
+      signals.push({
+        sourceId: 'jintel-ownership',
+        sourceName: 'Jintel Ownership',
+        sourceType: SourceType.ENRICHMENT,
+        reliability: 0.9,
+        title: `${entity.name ?? tickers[0]} Ownership Breakdown`,
+        content: parts.join('\n'),
+        publishedAt: now,
+        type: SignalType.FUNDAMENTAL,
+        tickers,
+        confidence: 0.9,
+      });
+    }
+  }
+
+  // 17. Top institutional holders — largest 13F filers holding this ticker.
+  // Stable title for content-hash dedup. Top holders change quarterly.
+  const topHolders = entity.topHolders;
+  if (topHolders?.length) {
+    const lines = topHolders
+      .slice(0, 10)
+      .map((h) => `${h.filerName}: ${formatNumber(h.shares)} shares, $${formatNumber(h.value * 1000)}`);
+    if (topHolders.length > 10) {
+      lines.push(`... and ${topHolders.length - 10} more holders`);
+    }
+    signals.push({
+      sourceId: 'jintel-top-holders',
+      sourceName: 'Jintel Top Holders',
+      sourceType: SourceType.ENRICHMENT,
+      reliability: 0.9,
+      title: `${entity.name ?? tickers[0]} Top Institutional Holders`,
+      content: lines.join('\n'),
+      publishedAt: now,
+      type: SignalType.FUNDAMENTAL,
+      tickers,
+      confidence: 0.9,
+      metadata: { holderCount: topHolders.length, reportDate: topHolders[0].reportDate },
     });
   }
 

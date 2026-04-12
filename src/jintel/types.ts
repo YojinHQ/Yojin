@@ -15,6 +15,8 @@ export type {
   FamaFrenchSeries,
   FactorDataPoint,
   HackerNewsStory,
+  InstitutionalHolding,
+  OwnershipBreakdown,
   PredictionMarket,
   PriceEvent,
   PriceEventType,
@@ -22,6 +24,7 @@ export type {
   Social,
   SocialSentiment,
   TechnicalIndicators,
+  TopHolder,
   USMarketStatus,
 } from '@yojinhq/jintel-client';
 
