@@ -76,6 +76,7 @@ import { ApiAdapter } from './data-sources/adapters/api-adapter.js';
 import { CliAdapter } from './data-sources/adapters/cli-adapter.js';
 import { loadDataSourceConfigs } from './data-sources/config-loader.js';
 import { DataSourceRegistry } from './data-sources/registry.js';
+import { DreamRunner } from './dream/dream-runner.js';
 import { GuardRunner } from './guards/guard-runner.js';
 import { POSTURE_CONFIGS } from './guards/posture.js';
 import { createDefaultGuards } from './guards/registry.js';
@@ -176,6 +177,7 @@ export interface YojinServices {
   strategyEvaluator: StrategyEvaluator;
   watchlistStore: WatchlistStore;
   watchlistEnrichment: WatchlistEnrichment;
+  dreamRunner: DreamRunner;
   brain: {
     persona: PersonaManager;
     frontalLobe: FrontalLobe;
@@ -737,6 +739,16 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   // 10. PluginRegistry (empty — caller loads provider/channel plugins)
   const pluginRegistry = new PluginRegistry();
 
+  // 11. DreamRunner — background data consolidation
+  const dreamRunner = new DreamRunner(dataRoot, {
+    signalArchive,
+    assessmentStore,
+    insightStore,
+    snapStore,
+    profileStore,
+    snapshotStore,
+  });
+
   return {
     config,
     toolRegistry,
@@ -770,6 +782,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     strategyEvaluator,
     watchlistStore,
     watchlistEnrichment,
+    dreamRunner,
     brain: {
       persona,
       frontalLobe,
