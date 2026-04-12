@@ -39,8 +39,8 @@ const INDICATOR_OPTIONS = [
 ];
 
 const METRIC_OPTIONS = [
-  { value: 'priceToBook', label: 'Price-to-Book' },
-  { value: 'bookValue', label: 'Book Value' },
+  { value: 'priceToBook', label: 'Price-to-Book (P/B)' },
+  { value: 'roe', label: 'ROE' },
   { value: 'sue', label: 'SUE' },
   { value: 'sentiment_momentum_24h', label: 'Sentiment Momentum 24h' },
 ];

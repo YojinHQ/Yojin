@@ -2,10 +2,11 @@ import PositionsListCard from './positions-list-card';
 import PortfolioOverviewCard from './portfolio-overview-card';
 import AllocationCard from './allocation-card';
 import MorningBriefingCard from './morning-briefing-card';
+import StrategyProposalCard from './strategy-proposal-card';
 
 interface ToolRendererProps {
   tool: string;
-  params: Record<string, string>;
+  params: Record<string, unknown>;
 }
 
 /**
@@ -19,10 +20,12 @@ export default function ToolRenderer({ tool, params }: ToolRendererProps) {
 
   switch (tool) {
     case 'positions-list':
-      card = <PositionsListCard variant={(params.variant as 'top' | 'worst' | 'movers' | 'all') ?? 'all'} />;
+      card = (
+        <PositionsListCard variant={((params.variant as string) ?? 'all') as 'top' | 'worst' | 'movers' | 'all'} />
+      );
       break;
     case 'portfolio-overview':
-      card = <PortfolioOverviewCard period={(params.period as 'today' | 'week' | 'ytd') ?? 'today'} />;
+      card = <PortfolioOverviewCard period={((params.period as string) ?? 'today') as 'today' | 'week' | 'ytd'} />;
       break;
     case 'allocation':
       card = <AllocationCard />;
@@ -31,7 +34,14 @@ export default function ToolRenderer({ tool, params }: ToolRendererProps) {
       card = <MorningBriefingCard />;
       break;
     case 'propose-strategy':
-      return null;
+      card = (
+        <StrategyProposalCard
+          name={params.name as string | undefined}
+          category={params.category as string | undefined}
+          triggerCount={Array.isArray(params.triggers) ? params.triggers.length : undefined}
+        />
+      );
+      break;
     default:
       return (
         <div className="rounded-xl border border-border bg-bg-card px-6 py-4">

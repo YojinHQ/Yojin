@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 import Button from '../common/button.js';
@@ -82,6 +82,15 @@ export default function StrategyFormPanel({ data, onChange, editId, onSaved }: S
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [tickerRaw, setTickerRaw] = useState(() => data.tickers.join(', '));
+  const tickerInputFocused = useRef(false);
+
+  useEffect(() => {
+    if (!tickerInputFocused.current) {
+      setTickerRaw(data.tickers.join(', '));
+    }
+  }, [data.tickers]);
+
   const [, createStrategy] = useCreateStrategy();
   const [, updateStrategy] = useUpdateStrategy();
 
@@ -114,12 +123,13 @@ export default function StrategyFormPanel({ data, onChange, editId, onSaved }: S
     update({ requires: next });
   }
 
-  function handleTickersChange(raw: string) {
-    const parsed = raw
+  function commitTickers() {
+    const parsed = tickerRaw
       .split(',')
-      .map((t) => t.trim())
+      .map((t) => t.trim().toUpperCase())
       .filter(Boolean);
     update({ tickers: parsed });
+    setTickerRaw(parsed.join(', '));
   }
 
   async function handleSave() {
@@ -159,7 +169,6 @@ export default function StrategyFormPanel({ data, onChange, editId, onSaved }: S
     }
   }
 
-  const tickerDisplay = data.tickers.join(', ');
   const posPercent = data.maxPositionSize !== undefined ? Math.round(data.maxPositionSize * 100) : 0;
 
   return (
@@ -293,8 +302,15 @@ export default function StrategyFormPanel({ data, onChange, editId, onSaved }: S
           <label className={labelClass}>Tickers</label>
           <input
             type="text"
-            value={tickerDisplay}
-            onChange={(e) => handleTickersChange(e.target.value)}
+            value={tickerRaw}
+            onChange={(e) => setTickerRaw(e.target.value)}
+            onFocus={() => {
+              tickerInputFocused.current = true;
+            }}
+            onBlur={() => {
+              tickerInputFocused.current = false;
+              commitTickers();
+            }}
             placeholder="AAPL, NVDA, BTC (comma-separated)"
             className={inputClass}
           />

@@ -17,7 +17,7 @@ export interface ChatMessage {
   toolCards?: ToolCardRef[];
 }
 
-interface ChatEvent {
+export interface ChatEvent {
   type: 'THINKING' | 'TOOL_USE' | 'TEXT_DELTA' | 'MESSAGE_COMPLETE' | 'PII_REDACTED' | 'ERROR' | 'TOOL_CARD';
   threadId: string;
   delta?: string;

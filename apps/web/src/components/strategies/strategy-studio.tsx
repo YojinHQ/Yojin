@@ -2,35 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useSubscription } from 'urql';
 
 import { SEND_MESSAGE_MUTATION, CHAT_SUBSCRIPTION } from '../../lib/chat-documents.js';
+import type { ChatMessage as ChatMsg, ChatEvent, ToolCardRef } from '../../lib/chat-context.js';
 import { cn } from '../../lib/utils.js';
 import Modal from '../common/modal.js';
-import ChatMessage from '../chat/chat-message.js';
+import ChatMessageComponent from '../chat/chat-message.js';
 import ChatInput from '../chat/chat-input.js';
 import SuggestionChips from './suggestion-chips.js';
 import StrategyFormPanel from './strategy-form-panel.js';
 import type { StrategyFormData } from './strategy-form-panel.js';
 import type { Strategy } from './types.js';
-import type { ToolCardRef } from '../../lib/chat-context.js';
-
-interface ChatMsg {
-  id: string;
-  role: 'assistant' | 'user';
-  content: string;
-  toolCards?: ToolCardRef[];
-}
-
-interface ChatEvent {
-  type: 'THINKING' | 'TOOL_USE' | 'TEXT_DELTA' | 'MESSAGE_COMPLETE' | 'PII_REDACTED' | 'ERROR' | 'TOOL_CARD';
-  threadId: string;
-  delta?: string;
-  accumulatedText?: string;
-  messageId?: string;
-  content?: string;
-  error?: string;
-  toolName?: string;
-  piiTypesFound?: string[];
-  toolCard?: ToolCardRef;
-}
 
 export interface StrategyStudioProps {
   open: boolean;
@@ -109,6 +89,7 @@ export default function StrategyStudio({ open, onClose, strategy, editMode }: St
   );
   const [formVisible, setFormVisible] = useState(() => !!strategy);
 
+  const [initialResponseReceived, setInitialResponseReceived] = useState(false);
   const completedIdsRef = useRef(new Set<string>());
   const toolCardsRef = useRef<ToolCardRef[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -140,8 +121,8 @@ export default function StrategyStudio({ open, onClose, strategy, editMode }: St
           const proposed = JSON.parse(card.params) as Partial<StrategyFormData>;
           setFormData((prev) => ({ ...prev, ...proposed }));
           setFormVisible(true);
-        } catch {
-          // ignore malformed JSON
+        } catch (err) {
+          console.error('Failed to parse strategy proposal params', err);
         }
       }
     } else if (event.type === 'TEXT_DELTA') {
@@ -155,6 +136,7 @@ export default function StrategyStudio({ open, onClose, strategy, editMode }: St
       const msgId = event.messageId ?? crypto.randomUUID();
       if (completedIdsRef.current.has(msgId)) return data;
       completedIdsRef.current.add(msgId);
+      setInitialResponseReceived(true);
       const toolCards = toolCardsRef.current.length > 0 ? [...toolCardsRef.current] : undefined;
       setMessages((prev) => [...prev, { id: msgId, role: 'assistant', content: event.content ?? '', toolCards }]);
       setStreamingContent('');
@@ -165,6 +147,7 @@ export default function StrategyStudio({ open, onClose, strategy, editMode }: St
         if (completedIdsRef.current.has(event.messageId)) return data;
         completedIdsRef.current.add(event.messageId);
       }
+      setInitialResponseReceived(true);
       setMessages((prev) => [
         ...prev,
         {
@@ -183,12 +166,13 @@ export default function StrategyStudio({ open, onClose, strategy, editMode }: St
 
   useSubscription({ query: CHAT_SUBSCRIPTION, variables: { threadId }, pause: !open }, handleSubscription);
 
-  // Send initial context message on mount
   useEffect(() => {
     if (!open || hasSentInitialRef.current) return;
     hasSentInitialRef.current = true;
+    const handle = setTimeout(() => setIsLoading(true), 0);
     const msg = buildInitialMessage(strategy, editMode);
     void sendMessageMutation({ threadId, message: msg });
+    return () => clearTimeout(handle);
   }, [open, strategy, editMode, threadId, sendMessageMutation]);
 
   const handleSend = useCallback(
@@ -214,6 +198,8 @@ export default function StrategyStudio({ open, onClose, strategy, editMode }: St
     onClose();
   }, [onClose]);
 
+  const showChips = messages.length === 0 && !isLoading && !initialResponseReceived;
+
   return (
     <Modal open={open} onClose={onClose} maxWidth="max-w-6xl" className="flex h-[85vh] flex-col overflow-hidden p-0">
       {/* Header */}
@@ -238,9 +224,9 @@ export default function StrategyStudio({ open, onClose, strategy, editMode }: St
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
             {messages.map((msg) => (
-              <ChatMessage key={msg.id} role={msg.role} content={msg.content} toolCards={msg.toolCards} />
+              <ChatMessageComponent key={msg.id} role={msg.role} content={msg.content} toolCards={msg.toolCards} />
             ))}
-            {streamingContent && <ChatMessage role="assistant" content={streamingContent} streaming />}
+            {streamingContent && <ChatMessageComponent role="assistant" content={streamingContent} streaming />}
             {isLoading && !streamingContent && (
               <div className="flex items-center gap-1.5 py-2">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-text-muted" />
@@ -253,7 +239,7 @@ export default function StrategyStudio({ open, onClose, strategy, editMode }: St
 
           {/* Suggestion Chips + Input */}
           <div className="border-t border-border px-4 py-3">
-            {messages.length === 0 && !isLoading && <SuggestionChips onSelect={handleChipSelect} />}
+            {showChips && <SuggestionChips onSelect={handleChipSelect} />}
             <ChatInput
               onSend={handleSend}
               disabled={isLoading}
