@@ -2,13 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useMutation, useQuery } from 'urql';
 import {
+  ACTIONS_QUERY,
   BATCH_DISMISS_SIGNALS_MUTATION,
+  DISMISS_ACTION_MUTATION,
   DISMISS_SIGNAL_MUTATION,
   INTEL_FEED_QUERY,
   SCHEDULER_STATUS_QUERY,
   TRIGGER_MICRO_ANALYSIS_MUTATION,
 } from '../../api/documents';
 import type {
+  ActionsQueryResult,
+  ActionsQueryVariables,
   FeedTarget,
   IntelFeedQueryResult,
   IntelFeedQueryVariables,
@@ -24,8 +28,8 @@ import type { FeedDetailData } from './feed-detail-modal';
 import Spinner from '../common/spinner';
 import { SymbolLogo } from '../common/symbol-logo';
 
-type ItemType = 'alert' | 'insight';
-type FilterTab = 'all' | 'alerts' | 'insights';
+type ItemType = 'alert' | 'insight' | 'action';
+type FilterTab = 'all' | 'alerts' | 'insights' | 'actions';
 type IconName = 'rebalance' | 'dollar' | 'box' | 'warehouse' | 'clock' | 'trending' | 'bubble' | 'trending-up' | 'zap';
 
 export interface FeedPendingUpdate {
@@ -57,6 +61,11 @@ interface IntelFeedItem {
   source: string | null;
   link: string | null;
   data?: DataRow[];
+  isAction?: boolean;
+  verdict?: 'BUY' | 'SELL' | 'TRIM' | 'HOLD' | 'REVIEW';
+  strategyName?: string;
+  riskContext?: string;
+  expiresAt?: string;
 }
 
 /** Map signal type to an icon name. */
@@ -84,12 +93,14 @@ function classifySignal(signal: { outputType?: string | null; severity: IntelFee
 const categoryLabel: Record<ItemType, string> = {
   alert: 'ALERT',
   insight: 'INSIGHT',
+  action: 'ACTION',
 };
 
 const filterTabs: { key: FilterTab; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'alerts', label: 'Alerts' },
   { key: 'insights', label: 'Insights' },
+  { key: 'actions', label: 'Actions' },
 ];
 
 /* ── Icons ──────────────────────────────────────────────────────────── */
@@ -198,9 +209,11 @@ function IntelFeedCard({
         'relative rounded-xl border transition-colors',
         selected
           ? 'border-accent-primary/40 bg-accent-primary/5'
-          : item.type === 'insight'
-            ? 'border-success/25 bg-success/[0.08]'
-            : 'border-border-light bg-bg-tertiary/60',
+          : item.verdict === 'BUY'
+            ? 'border-success/30 bg-success/[0.06]'
+            : item.verdict === 'SELL' || item.verdict === 'TRIM'
+              ? 'border-error/30 bg-error/[0.06]'
+              : 'border-border-light bg-bg-tertiary/60',
         !selectMode && (expanded ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'),
         isNew &&
           (item.type === 'alert' ? 'motion-safe:animate-new-event-alert' : 'motion-safe:animate-new-event-insight'),
@@ -210,10 +223,16 @@ function IntelFeedCard({
         <span
           className={cn(
             'absolute -top-2 -right-2 z-10 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wider text-white shadow-sm motion-safe:animate-badge-in',
-            item.type === 'alert' ? 'bg-warning' : 'bg-success',
+            item.verdict === 'BUY'
+              ? 'bg-success'
+              : item.verdict === 'SELL' || item.verdict === 'TRIM'
+                ? 'bg-error'
+                : item.type === 'alert'
+                  ? 'bg-warning'
+                  : 'bg-success',
           )}
         >
-          NEW
+          {item.verdict ?? 'NEW'}
         </span>
       )}
       {/* Collapsed header — always visible */}
@@ -227,7 +246,25 @@ function IntelFeedCard({
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
         >
           <SymbolLogo symbol={item.ticker} size="sm" className="flex-shrink-0" />
-          <p className="min-w-0 flex-1 line-clamp-3 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
+          <div className="min-w-0 flex-1">
+            {item.verdict && (
+              <span
+                className={cn(
+                  'mb-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wider',
+                  item.verdict === 'BUY'
+                    ? 'bg-success/15 text-success'
+                    : item.verdict === 'SELL' || item.verdict === 'TRIM'
+                      ? 'bg-error/15 text-error'
+                      : item.verdict === 'HOLD'
+                        ? 'bg-warning/15 text-warning'
+                        : 'bg-info/15 text-info',
+                )}
+              >
+                {item.verdict}
+              </span>
+            )}
+            <p className="line-clamp-3 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
+          </div>
           {selectMode ? (
             <div
               className={cn(
@@ -402,6 +439,7 @@ function IntelFeedContent({
   const initialIdsRef = useRef<Set<string> | null>(null);
   const newIdTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [, dismissSignal] = useMutation(DISMISS_SIGNAL_MUTATION);
+  const [, dismissAction] = useMutation(DISMISS_ACTION_MUTATION);
   const [, batchDismissSignals] = useMutation(BATCH_DISMISS_SIGNALS_MUTATION);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -437,6 +475,19 @@ function IntelFeedContent({
   const [{ data, fetching, error }, reexecute] = useQuery<IntelFeedQueryResult, IntelFeedQueryVariables>({
     query: INTEL_FEED_QUERY,
     variables: { limit: FETCH_LIMIT, feedTarget },
+    requestPolicy: 'cache-and-network',
+  });
+
+  const actionQueryVars = useMemo<ActionsQueryVariables>(
+    () => ({ status: 'PENDING', limit: FETCH_LIMIT, dismissed: false }),
+    [],
+  );
+  const [{ data: actionsData, error: actionsError }, reexecuteActions] = useQuery<
+    ActionsQueryResult,
+    ActionsQueryVariables
+  >({
+    query: ACTIONS_QUERY,
+    variables: actionQueryVars,
     requestPolicy: 'cache-and-network',
   });
 
@@ -501,9 +552,10 @@ function IntelFeedContent({
   useEffect(() => {
     const id = setInterval(() => {
       reexecute({ requestPolicy: 'network-only' });
+      reexecuteActions({ requestPolicy: 'network-only' });
     }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [reexecute]);
+  }, [reexecute, reexecuteActions]);
 
   // Map API data into IntelFeedItem[]
   const items: IntelFeedItem[] = useMemo(() => {
@@ -554,9 +606,34 @@ function IntelFeedContent({
       };
     });
 
-    signalItems.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-    return signalItems;
-  }, [data]);
+    const actionItems: IntelFeedItem[] = (actionsData?.actions ?? []).map((action) => ({
+      id: `action:${action.id}`,
+      type: 'action' as const,
+      severity: action.severityLabel as IntelFeedItem['severity'],
+      signalType: 'ACTION',
+      ticker: action.tickers[0] ?? action.strategyName,
+      tickers: action.tickers,
+      sentiment: null,
+      title: action.what,
+      time: timeAgo(action.createdAt),
+      publishedAt: action.createdAt,
+      ingestedAt: action.createdAt,
+      publishedTime: timeAgo(action.createdAt),
+      icon: 'zap' as IconName,
+      description: action.why,
+      source: action.strategyName,
+      link: null,
+      isAction: true,
+      verdict: action.verdict,
+      strategyName: action.strategyName,
+      riskContext: action.riskContext ?? undefined,
+      expiresAt: action.expiresAt,
+    }));
+
+    const merged = [...signalItems, ...actionItems];
+    merged.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+    return merged;
+  }, [data, actionsData]);
 
   useEffect(() => {
     latestItemsRef.current = items;
@@ -693,6 +770,7 @@ function IntelFeedContent({
     if (activeFilter === 'all') return items;
     if (activeFilter === 'alerts') return items.filter((item) => item.type === 'alert');
     if (activeFilter === 'insights') return items.filter((item) => item.type === 'insight');
+    if (activeFilter === 'actions') return items.filter((item) => item.type === 'action');
     return items;
   }, [items, activeFilter]);
   const totalCount = filteredItems.length;
@@ -766,14 +844,25 @@ function IntelFeedContent({
   }, [hasMore]);
 
   function openModal(item: IntelFeedItem) {
-    const displaySource = item.source ?? item.signalType;
+    const displaySource = item.isAction ? (item.strategyName ?? 'Action') : (item.source ?? item.signalType);
     setModalData({
       title: item.title,
       source: displaySource,
       time: item.publishedTime,
       link: item.link,
-      tag: categoryLabel[item.type],
-      tagVariant: item.type === 'alert' ? 'warning' : 'success',
+      tag: item.verdict ?? categoryLabel[item.type],
+      tagVariant:
+        item.verdict === 'BUY'
+          ? 'success'
+          : item.verdict === 'SELL' || item.verdict === 'TRIM'
+            ? 'error'
+            : item.verdict === 'HOLD'
+              ? 'warning'
+              : item.verdict === 'REVIEW'
+                ? 'info'
+                : item.type === 'alert'
+                  ? 'warning'
+                  : 'success',
       sentiment:
         item.sentiment === 'bullish' || item.sentiment === 'bearish' || item.sentiment === 'neutral'
           ? item.sentiment
@@ -782,14 +871,22 @@ function IntelFeedContent({
         const row = item.data?.find((r) => r.label === 'Confidence');
         return row ? Math.round(parseFloat(row.value)) : undefined;
       })(),
-      keyPoints: item.description ? [item.description] : [],
-      analysis: item.description || item.title,
+      keyPoints: item.isAction ? [] : item.description ? [item.description] : [],
+      analysis: item.isAction ? item.description || '' : item.description || item.title,
       relatedTickers: item.tickers,
+      actionMeta: item.isAction
+        ? {
+            strategyName: item.strategyName ?? null,
+            severity: item.severity,
+            riskContext: item.riskContext ?? null,
+            expiresAt: item.expiresAt ?? '',
+          }
+        : undefined,
     });
   }
 
   const isLoading = fetching && !data;
-  const hasError = !!error;
+  const hasError = !!(error || actionsError);
   const isEmpty = !fetching && !hasError && filteredItems.length === 0;
 
   const latestItem = useMemo(
@@ -934,7 +1031,7 @@ function IntelFeedContent({
               </svg>
               <div>
                 <p className="text-sm text-text-muted">Failed to load intel</p>
-                <p className="mt-1 text-xs text-text-muted">{error?.message}</p>
+                <p className="mt-1 text-xs text-text-muted">{(error ?? actionsError)?.message}</p>
               </div>
               <button
                 onClick={() => reexecute({ requestPolicy: 'network-only' })}
@@ -970,7 +1067,15 @@ function IntelFeedContent({
           ) : (
             <div>
               <SectionHeader
-                label={activeFilter === 'all' ? 'All' : activeFilter === 'alerts' ? 'Alerts' : 'Insights'}
+                label={
+                  activeFilter === 'all'
+                    ? 'All'
+                    : activeFilter === 'alerts'
+                      ? 'Alerts'
+                      : activeFilter === 'actions'
+                        ? 'Actions'
+                        : 'Insights'
+                }
                 selectMode={selectMode}
                 selectedCount={selectedIds.size}
                 onSelectToggle={() => {
@@ -979,7 +1084,16 @@ function IntelFeedContent({
                   setExpandedId(null);
                 }}
                 onDismissSelected={() => {
-                  const signalIds = [...selectedIds];
+                  const ids = [...selectedIds];
+                  const actionIds = ids
+                    .filter((id) => id.startsWith('action:'))
+                    .map((id) => id.replace(/^action:/, ''));
+                  const signalIds = ids.filter((id) => !id.startsWith('action:'));
+                  if (actionIds.length > 0) {
+                    void Promise.all(actionIds.map((id) => dismissAction({ id }))).then(() => {
+                      reexecuteActions({ requestPolicy: 'network-only' });
+                    });
+                  }
                   if (signalIds.length > 0) {
                     void batchDismissSignals({ signalIds }).then((result) => {
                       if (result.error || result.data?.batchDismissSignals !== true) {
@@ -1013,6 +1127,17 @@ function IntelFeedContent({
                     onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
                     onDismiss={() => {
                       if (expandedId === item.id) setExpandedId(null);
+                      if (item.isAction) {
+                        const actionId = item.id.replace(/^action:/, '');
+                        void dismissAction({ id: actionId }).then((result) => {
+                          if (result.error) {
+                            console.error('Dismiss action failed', result.error.message);
+                            return;
+                          }
+                          reexecuteActions({ requestPolicy: 'network-only' });
+                        });
+                        return;
+                      }
                       void dismissSignal({ signalId: item.id }).then((result) => {
                         if (result.error) {
                           console.error('Dismiss failed', result.error.message);
