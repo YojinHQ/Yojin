@@ -221,7 +221,21 @@ function isTickerContentMismatch(text: string, tickers: string[], entityName: st
     // the original text. "PLTR expands..." is an intentional ticker reference;
     // "Flash Lite" is a product name where "Lite" coincidentally matches LITE.
     const allCapsRe = new RegExp(`(?<![A-Z0-9])${escaped}(?![A-Z0-9])`);
-    if (allCapsRe.test(text)) return false; // ALL-CAPS match — intentional ticker reference
+    if (allCapsRe.test(text)) {
+      // Long tickers (≥5 chars) — ALL-CAPS is high-confidence
+      if (base.length >= 5) return false;
+
+      // Short tickers (≤4 chars) — check product name context.
+      // "Flash LITE", "Gemini PRO", "GPT PLUS" are product edition names that
+      // collide with real tickers. Count product-context hits vs total ALL-CAPS
+      // hits; only trust the match if it appears outside product context too.
+      const pWords =
+        'flash|gemini|gpt|claude|copilot|bard|llama|mistral|phi|codex|whisper|pixel|galaxy|kindle|echo|alexa|siri|iphone|ipad|macbook|surface|xbox|playstation|model|version|edition|tier';
+      const pRe = new RegExp(`\\b(?:${pWords})\\s+${escaped}(?![A-Z0-9])`, 'gi');
+      const pHits = [...text.matchAll(pRe)].length;
+      const acHits = [...text.matchAll(new RegExp(`(?<![A-Z0-9])${escaped}(?![A-Z0-9])`, 'g'))].length;
+      if (acHits > pHits) return false;
+    }
 
     // Case-insensitive match (e.g. "Lite" in "Flash Lite") — for short tickers
     // (≤4 chars), this is unreliable as it catches product names, abbreviations,
@@ -617,7 +631,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       publishedAt: story.date ?? now,
       type: SignalType.NEWS,
       tickers,
-      confidence: Math.min(0.85, 0.5 + story.points / 200),
+      confidence: Math.min(0.7, 0.4 + story.points / 300),
       metadata: { hnUrl: story.hnUrl, articleUrl: story.url, points: story.points, numComments: story.numComments },
     });
   }

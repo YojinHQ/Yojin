@@ -278,6 +278,72 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     expect(hnSignals).toHaveLength(1); // "PLTR" in ALL-CAPS → intentional ticker reference
   });
 
+  it('drops HN discussion where ALL-CAPS ticker is in product name context ("Flash LITE" → LITE)', () => {
+    const entity = makeEntity({
+      name: 'Lumentum Holdings',
+      discussions: [
+        {
+          objectId: 'hn-789',
+          title: 'Flash LITE benchmark results surprise researchers',
+          url: 'https://example.com/flash-lite',
+          hnUrl: 'https://news.ycombinator.com/item?id=789',
+          points: 80,
+          numComments: 40,
+          topComments: [{ text: 'Gemini 2.5 Flash LITE is surprisingly capable for the price' }],
+        },
+      ],
+    });
+
+    const signals = enrichmentToSignals(entity, ['LITE']);
+    const hnSignals = signals.filter((s) => s.sourceName === 'Hacker News');
+
+    expect(hnSignals).toHaveLength(0);
+  });
+
+  it('keeps short ALL-CAPS ticker when it also appears outside product context', () => {
+    const entity = makeEntity({
+      name: 'Lumentum Holdings',
+      discussions: [
+        {
+          objectId: 'hn-790',
+          title: 'LITE earnings beat expectations, LITE guidance raised despite Flash Lite competition',
+          url: 'https://example.com/lite-earnings',
+          hnUrl: 'https://news.ycombinator.com/item?id=790',
+          points: 60,
+          numComments: 20,
+        },
+      ],
+    });
+
+    const signals = enrichmentToSignals(entity, ['LITE']);
+    const hnSignals = signals.filter((s) => s.sourceName === 'Hacker News');
+
+    expect(hnSignals).toHaveLength(1);
+  });
+
+  it('caps HN discussion confidence at 0.7', () => {
+    const entity = makeEntity({
+      name: 'Apple',
+      discussions: [
+        {
+          objectId: 'hn-conf-1',
+          title: 'Apple announces new M5 chip',
+          url: 'https://example.com/m5',
+          hnUrl: 'https://news.ycombinator.com/item?id=99999',
+          points: 500,
+          numComments: 200,
+          topComments: [{ text: 'This is a game changer for Apple silicon' }],
+        },
+      ],
+    });
+
+    const signals = enrichmentToSignals(entity, ['AAPL']);
+    const hnSignals = signals.filter((s) => s.sourceName === 'Hacker News');
+
+    expect(hnSignals).toHaveLength(1);
+    expect(hnSignals[0].confidence).toBeLessThanOrEqual(0.7);
+  });
+
   it('keeps 5-char ticker on bare word-boundary match without entity name', () => {
     const entity = makeEntity({
       name: 'NovaBay Pharmaceuticals',

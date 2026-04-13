@@ -224,11 +224,18 @@ Distinguish between population-level data and n=1 observations. A single user re
 - **n=1 anecdotes** (one user's reported experience, a single forum post about personal usage, one customer's migration story): score ≤ 30. These are not verifiable, not representative, and not actionable — regardless of how many upvotes or engagement the post received.
 - A signal that frames an individual anecdote as if it were a trend ("users are switching from X to Y" based on one comment) is actively misleading — score ≤ 20.
 
+## Discussion sources (Hacker News, forums)
+
+Discussion threads are community commentary, not verified reporting. They are inherently speculative — disagreement is the norm, not a signal deficiency. Score discussion-sourced signals conservatively:
+- A discussion where comments contest, rebut, or qualify the thesis: score ≤ 45. Pushback means the claim has not reached community consensus.
+- A discussion presenting speculative analysis without primary data (metrics, filings, named sources): score ≤ 50.
+- Only discussions that surface verifiable data, expert analysis, or first-hand industry knowledge with broad agreement should score above 60.
+
 ## Quality score guide
 - 90-100: Direct material impact (earnings, FDA approval, merger, major insider transaction)
 - 70-89: Useful context (analyst upgrade, sector news with specific company analysis, relevant macro data with direct mechanism)
 - 40-69: Tangential but ticker-specific (generic market commentary about the specific company with some analytical substance)
-- 0-39: Noise (no relevance, clickbait, false match, boilerplate, macro headline with ticker name-dropped via sector umbrella, industry-mismatch articles where the core subject is a different vertical than the tagged company, price-restatement articles, self-invalidating claims that admit lack of verification, social posts from low-SNR sources without verifiable data, n=1 individual anecdotes presented as market signals)
+- 0-39: Noise (no relevance, clickbait, false match, boilerplate, macro headline with ticker name-dropped via sector umbrella, industry-mismatch articles where the core subject is a different vertical than the tagged company, price-restatement articles, self-invalidating claims that admit lack of verification, social posts from low-SNR sources without verifiable data, n=1 individual anecdotes presented as market signals, contested discussion threads where commenters rebut the thesis)
 
 **Price-restatement = 0-39.** An article that states the current price with a vague "amid [X]" clause and no named catalyst, actor, or mechanism is noise — the price is already visible on the portfolio screen. To score above 39, the content must name a specific verifiable event, actor, or causal mechanism (e.g. "Moody's rates first Bitcoin-backed bond", "SEC approves spot ETF"). Examples that score 0-39: "BTC at $68K amid geopolitical developments", "Bitcoin crosses $69K amid altcoin gains", "BTC near $67,969, up 0.32% intraday", "BTC consolidation alongside ETH and XRP".
 
