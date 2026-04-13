@@ -74,7 +74,7 @@ export const FALSE_MATCH_TEXT_RE =
  * to catch social signals whose backing content has been taken down.
  */
 export const SELF_INVALIDATING_RE =
-  /\blacks (?:independent )?verification\b|(?<!(?:denied|refuted|dismissed|rejected) (?:an? )?)\bunverified claim\b|\bremains? speculative\b|\brel(?:y|ies) on anecdotal\b|\bno (?:independent )?confirmation from (?:the )?(?:company|management)\b|\bcannot be (?:verified|substantiated|corroborated)\b|\bself[- ]reported (?:and )?unverified\b|\bno (?:supporting )?evidence (?:to (?:support|back|substantiate)|beyond|for (?:the |this ))\b|\bbased on (?:a single|one) (?:user'?s?|person'?s?) (?:observation|claim|report)\b|\[(?:removed|deleted)\]|\b(?:post|source) (?:(?:is|has been|was) )?(?:unavailable|removed|deleted)\b/i;
+  /\blacks (?:independent )?verification\b|(?<!(?:denied|refuted|dismissed|rejected) (?:an? )?)\bunverified claim\b|\bremains? speculative\b|\brel(?:y|ies) on anecdotal\b|\banecdotal (?:customer |user |individual )?(?:commentary|observation|evidence|report|claim|feedback|account)\b|\bnot (?:verified|confirmed) (?:market )?data\b|\bno (?:independent )?confirmation from (?:the )?(?:company|management)\b|\bcannot be (?:verified|substantiated|corroborated)\b|\bself[- ]reported (?:and )?unverified\b|\bno (?:supporting )?evidence (?:to (?:support|back|substantiate)|beyond|for (?:the |this ))\b|\bbased on (?:a single|one) (?:user'?s?|person'?s?) (?:observation|claim|report)\b|\[(?:removed|deleted)\]|\b(?:post|source) (?:(?:is|has been|was) )?(?:unavailable|removed|deleted)\b/i;
 
 /**
  * Broader false-match pattern including explicit "false match" / "false positive" labels.
