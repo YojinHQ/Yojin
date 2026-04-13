@@ -32,6 +32,7 @@ const EMPTY_FORM: StrategyFormData = {
   triggers: [{ type: 'PRICE_MOVE', description: '', params: {} }],
   tickers: [],
   maxPositionSize: undefined,
+  targetAllocation: undefined,
 };
 
 function parseParams(raw: string | null | undefined): Record<string, unknown> {
@@ -62,6 +63,7 @@ function strategyToFormData(strategy: Strategy): StrategyFormData {
     })),
     tickers: [...strategy.tickers],
     maxPositionSize: strategy.maxPositionSize ?? undefined,
+    targetAllocation: strategy.targetAllocation ?? undefined,
   };
 }
 

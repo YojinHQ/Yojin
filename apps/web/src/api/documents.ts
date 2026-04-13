@@ -1470,6 +1470,7 @@ export const STRATEGIES_QUERY = gql`
         params
       }
       maxPositionSize
+      targetAllocation
       tickers
     }
   }
@@ -1495,6 +1496,7 @@ export const STRATEGY_QUERY = gql`
         params
       }
       maxPositionSize
+      targetAllocation
       tickers
     }
   }

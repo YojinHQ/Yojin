@@ -1388,6 +1388,7 @@ export interface Strategy {
   content: string;
   triggers: StrategyTrigger[];
   maxPositionSize?: number | null;
+  targetAllocation?: number | null;
   tickers: string[];
 }
 

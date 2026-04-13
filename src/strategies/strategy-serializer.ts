@@ -14,6 +14,7 @@ const FrontmatterSchema = z.object({
   triggers: z.array(StrategyTriggerSchema).min(1),
   tickers: z.array(z.string()).default([]),
   maxPositionSize: z.number().min(0).max(1).optional(),
+  targetAllocation: z.number().min(0).max(1).optional(),
 });
 
 export function slugify(name: string): string {
@@ -58,6 +59,7 @@ export function parseFromMarkdown(md: string): Strategy {
     content,
     triggers: frontmatter.triggers,
     maxPositionSize: frontmatter.maxPositionSize,
+    targetAllocation: frontmatter.targetAllocation,
     tickers: frontmatter.tickers,
   });
 
@@ -86,6 +88,10 @@ export function serializeToMarkdown(strategy: Strategy): string {
 
   if (strategy.maxPositionSize !== undefined) {
     frontmatter['maxPositionSize'] = strategy.maxPositionSize;
+  }
+
+  if (strategy.targetAllocation !== undefined) {
+    frontmatter['targetAllocation'] = strategy.targetAllocation;
   }
 
   const yamlStr = yaml.stringify(frontmatter, { lineWidth: 0 });

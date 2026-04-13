@@ -30,6 +30,7 @@ export const TriggerTypeSchema = z.enum([
   'EARNINGS_PROXIMITY', // Days until earnings report
   'METRIC_THRESHOLD', // Numeric metric (SUE, sentiment momentum, P/B, ...) crosses a value
   'SIGNAL_PRESENT', // A recent Signal of given types/sentiment exists for the ticker
+  'ALLOCATION_DRIFT', // Strategy allocation deviates from target
   'CUSTOM', // User-defined expression
 ]);
 export type TriggerType = z.infer<typeof TriggerTypeSchema>;
@@ -62,6 +63,8 @@ export const StrategySchema = z.object({
   triggers: z.array(StrategyTriggerSchema).min(1),
   /** Max position size as fraction of portfolio (0-1). Guard enforced. */
   maxPositionSize: z.number().min(0).max(1).optional(),
+  /** Target portfolio allocation as fraction (0-1). Budget for sizing recommendations. */
+  targetAllocation: z.number().min(0).max(1).optional(),
   /** Tickers this strategy applies to. Empty = all portfolio tickers. */
   tickers: z.array(IdField).default([]),
 });

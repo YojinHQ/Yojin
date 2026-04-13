@@ -391,6 +391,39 @@ function SignalPresentFields({ params, onChange }: { params: TriggerParams; onCh
   );
 }
 
+const DRIFT_DIRECTION_OPTIONS = [
+  { value: 'both', label: 'Both' },
+  { value: 'under', label: 'Under only' },
+  { value: 'over', label: 'Over only' },
+];
+
+function AllocationDriftFields({ params, onChange }: { params: TriggerParams; onChange: (p: TriggerParams) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <NumberInput
+        label="Drift Threshold"
+        value={
+          (params.driftThreshold as number | undefined) !== undefined
+            ? (params.driftThreshold as number) * 100
+            : undefined
+        }
+        onChange={(v) => onChange(set(params, 'driftThreshold', v !== undefined ? v / 100 : undefined))}
+        placeholder="5"
+        suffix="%"
+        min={0}
+        max={50}
+        step={1}
+      />
+      <SelectInput
+        label="Direction"
+        value={params.direction as string | undefined}
+        onChange={(v) => onChange(set(params, 'direction', v))}
+        options={DRIFT_DIRECTION_OPTIONS}
+      />
+    </div>
+  );
+}
+
 function CustomFields() {
   return <p className="text-xs text-text-muted italic">Custom triggers are evaluated by the LLM at runtime</p>;
 }
@@ -413,6 +446,8 @@ export function TriggerParamFields({ type, params, onChange }: TriggerParamField
       return <ConcentrationDriftFields params={params} onChange={onChange} />;
     case 'SIGNAL_PRESENT':
       return <SignalPresentFields params={params} onChange={onChange} />;
+    case 'ALLOCATION_DRIFT':
+      return <AllocationDriftFields params={params} onChange={onChange} />;
     case 'CUSTOM':
       return <CustomFields />;
     default:

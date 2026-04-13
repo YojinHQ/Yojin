@@ -14,7 +14,7 @@ import { SignalTypeSchema } from '../signals/types.js';
 import type { Signal, SignalType } from '../signals/types.js';
 
 /** Triggers that require the full portfolio context and can only run during macro flow. */
-const MACRO_ONLY_TRIGGERS: ReadonlySet<TriggerType> = new Set(['CONCENTRATION_DRIFT', 'CUSTOM']);
+const MACRO_ONLY_TRIGGERS: ReadonlySet<TriggerType> = new Set(['CONCENTRATION_DRIFT', 'ALLOCATION_DRIFT', 'CUSTOM']);
 
 const logger = createSubsystemLogger('strategy-evaluator');
 
@@ -40,6 +40,8 @@ export interface PortfolioContext {
   metrics: Record<string, Record<string, number>>;
   /** Recent signals per ticker, pre-fetched and grouped (24h lookback). */
   signals: Record<string, Signal[]>;
+  /** Per-strategy allocation info: strategyId → { target, actual, tickers }. Computed by scheduler. */
+  strategyAllocations?: Record<string, { target: number; actual: number; tickers: string[] }>;
 }
 
 export class StrategyEvaluator {
@@ -49,6 +51,11 @@ export class StrategyEvaluator {
     this.strategyStore = strategyStore;
   }
 
+  /** Expose active strategies for callers that need to compute allocation context. */
+  getActiveStrategies() {
+    return this.strategyStore.getActive();
+  }
+
   /** Evaluate all active strategies against current portfolio context. */
   evaluate(ctx: PortfolioContext): StrategyEvaluation[] {
     const activeStrategies = this.strategyStore.getActive();
@@ -56,10 +63,31 @@ export class StrategyEvaluator {
 
     for (const strategy of activeStrategies) {
       const applicableTickers = strategy.tickers.length > 0 ? strategy.tickers : Object.keys(ctx.weights);
+      const alloc = ctx.strategyAllocations?.[strategy.id];
 
       for (const trigger of strategy.triggers) {
+        // ALLOCATION_DRIFT is strategy-level, not per-ticker — evaluate once
+        if (trigger.type === 'ALLOCATION_DRIFT') {
+          const fired = this.checkTrigger(trigger, '', ctx, strategy.id);
+          if (fired) {
+            const allocTickers = alloc?.tickers ?? applicableTickers;
+            evaluations.push({
+              strategyId: strategy.id,
+              strategyName: strategy.name,
+              triggerId: `${strategy.id}-ALLOCATION_DRIFT-portfolio`,
+              triggerType: trigger.type,
+              triggerDescription: trigger.description,
+              context: { ticker: allocTickers.join(','), ...fired, ...this.allocationContext(alloc) },
+              strategyContent: strategy.content,
+              evaluatedAt: new Date().toISOString(),
+            });
+            logger.info(`Strategy trigger fired: ${strategy.name} [ALLOCATION_DRIFT]`);
+          }
+          continue;
+        }
+
         for (const ticker of applicableTickers) {
-          const fired = this.checkTrigger(trigger, ticker, ctx);
+          const fired = this.checkTrigger(trigger, ticker, ctx, strategy.id);
           if (fired) {
             evaluations.push({
               strategyId: strategy.id,
@@ -67,7 +95,7 @@ export class StrategyEvaluator {
               triggerId: `${strategy.id}-${trigger.type}-${ticker}`,
               triggerType: trigger.type,
               triggerDescription: trigger.description,
-              context: { ticker, ...fired },
+              context: { ticker, ...fired, ...this.allocationContext(alloc) },
               strategyContent: strategy.content,
               evaluatedAt: new Date().toISOString(),
             });
@@ -103,8 +131,9 @@ export class StrategyEvaluator {
         // Skip PRICE_MOVE with lookback_months (needs 1-year price history)
         if (trigger.type === 'PRICE_MOVE' && trigger.params?.['lookback_months'] != null) continue;
 
+        const alloc = ctx.strategyAllocations?.[strategy.id];
         for (const ticker of applicableTickers) {
-          const fired = this.checkTrigger(trigger, ticker, ctx);
+          const fired = this.checkTrigger(trigger, ticker, ctx, strategy.id);
           if (fired) {
             evaluations.push({
               strategyId: strategy.id,
@@ -112,7 +141,7 @@ export class StrategyEvaluator {
               triggerId: `${strategy.id}-${trigger.type}-${ticker}`,
               triggerType: trigger.type,
               triggerDescription: trigger.description,
-              context: { ticker, ...fired },
+              context: { ticker, ...fired, ...this.allocationContext(alloc) },
               strategyContent: strategy.content,
               evaluatedAt: new Date().toISOString(),
             });
@@ -155,10 +184,23 @@ ${sections.join('\n\n---\n\n')}`;
   // Private trigger checks
   // ---------------------------------------------------------------------------
 
+  /** Build allocation context fields for injection into evaluation context. */
+  private allocationContext(
+    alloc: { target: number; actual: number; tickers: string[] } | undefined,
+  ): Record<string, unknown> {
+    if (!alloc) return {};
+    return {
+      targetAllocation: alloc.target,
+      actualAllocation: alloc.actual,
+      allocationRemaining: Math.max(0, alloc.target - alloc.actual),
+    };
+  }
+
   private checkTrigger(
     trigger: StrategyTrigger,
     ticker: string,
     ctx: PortfolioContext,
+    strategyId?: string,
   ): Record<string, unknown> | null {
     const params = trigger.params ?? {};
 
@@ -254,6 +296,27 @@ ${sections.join('\n\n---\n\n')}`;
           signalType: matched.type,
           signalTitle: matched.title,
           sentimentScore: matched.sentimentScore ?? null,
+        };
+      }
+
+      case 'ALLOCATION_DRIFT': {
+        if (!strategyId) return null;
+        const alloc = ctx.strategyAllocations?.[strategyId];
+        if (!alloc) return null; // no targetAllocation set — can't evaluate
+        const driftThreshold = Number(params['driftThreshold'] ?? 0.05);
+        const direction = String(params['direction'] ?? 'both');
+        const drift = alloc.actual - alloc.target;
+        const absDrift = Math.abs(drift);
+        if (absDrift < driftThreshold) return null;
+        if (direction === 'over' && drift <= 0) return null;
+        if (direction === 'under' && drift >= 0) return null;
+        return {
+          targetAllocation: alloc.target,
+          actualAllocation: alloc.actual,
+          drift,
+          driftThreshold,
+          direction,
+          strategyTickers: alloc.tickers,
         };
       }
 

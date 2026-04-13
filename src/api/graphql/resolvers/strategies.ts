@@ -102,6 +102,7 @@ interface CreateStrategyInput {
   triggers: StrategyTriggerInput[];
   tickers?: string[];
   maxPositionSize?: number;
+  targetAllocation?: number;
 }
 
 interface UpdateStrategyInput {
@@ -114,6 +115,7 @@ interface UpdateStrategyInput {
   triggers?: StrategyTriggerInput[];
   tickers?: string[];
   maxPositionSize?: number;
+  targetAllocation?: number;
 }
 
 function mapTriggersFromInput(triggers: StrategyTriggerInput[]): Strategy['triggers'] {
@@ -162,6 +164,7 @@ export function resolveCreateStrategy(_: unknown, args: { input: CreateStrategyI
     triggers: mapTriggersFromInput(input.triggers),
     tickers: input.tickers ?? [],
     ...(input.maxPositionSize !== undefined ? { maxPositionSize: input.maxPositionSize } : {}),
+    ...(input.targetAllocation !== undefined ? { targetAllocation: input.targetAllocation } : {}),
   };
   strategyStore.create(strategy);
   return toGraphQL(strategy);
@@ -180,6 +183,7 @@ export function resolveUpdateStrategy(_: unknown, args: { id: string; input: Upd
   if (input.triggers !== undefined) fields.triggers = mapTriggersFromInput(input.triggers);
   if (input.tickers !== undefined) fields.tickers = input.tickers;
   if (input.maxPositionSize !== undefined) fields.maxPositionSize = input.maxPositionSize;
+  if (input.targetAllocation !== undefined) fields.targetAllocation = input.targetAllocation;
   const updated = strategyStore.update(id, fields);
   return toGraphQL(updated);
 }
@@ -224,6 +228,7 @@ function toGraphQL(strategy: Strategy): unknown {
       params: t.params ? JSON.stringify(t.params) : null,
     })),
     maxPositionSize: strategy.maxPositionSize ?? null,
+    targetAllocation: strategy.targetAllocation ?? null,
     tickers: strategy.tickers,
   };
 }

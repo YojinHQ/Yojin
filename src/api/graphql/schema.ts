@@ -1182,6 +1182,7 @@ export const typeDefs = /* GraphQL */ `
     content: String!
     triggers: [StrategyTrigger!]!
     maxPositionSize: Float
+    targetAllocation: Float
     tickers: [String!]!
   }
 
@@ -1201,6 +1202,7 @@ export const typeDefs = /* GraphQL */ `
     triggers: [StrategyTriggerInput!]!
     tickers: [String!]
     maxPositionSize: Float
+    targetAllocation: Float
   }
 
   input UpdateStrategyInput {
@@ -1213,6 +1215,7 @@ export const typeDefs = /* GraphQL */ `
     triggers: [StrategyTriggerInput!]
     tickers: [String!]
     maxPositionSize: Float
+    targetAllocation: Float
   }
 
   # ---------------------------------------------------------------------------
