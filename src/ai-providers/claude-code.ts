@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -131,6 +131,8 @@ export class ClaudeCodeProvider implements AIProvider {
   /** Tracks where the OAuth token was sourced so refresh only retries viable paths. */
   private oauthSource: 'env' | 'keychain' | null = null;
   private tokenRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  /** The current OAuth token in use — compared during refresh to skip stale bridge file tokens. */
+  private currentToken: string | null = null;
 
   constructor() {
     const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
@@ -157,6 +159,7 @@ export class ClaudeCodeProvider implements AIProvider {
     if (fileToken) {
       this.authMode = 'oauth';
       this.oauthSource = 'keychain';
+      this.currentToken = fileToken;
       this.client = new Anthropic({
         apiKey: null,
         authToken: fileToken,
@@ -172,6 +175,7 @@ export class ClaudeCodeProvider implements AIProvider {
     if (envToken && isOAuthToken(envToken)) {
       this.authMode = 'oauth';
       this.oauthSource = 'env';
+      this.currentToken = envToken;
       this.client = new Anthropic({
         apiKey: null,
         authToken: envToken,
@@ -187,6 +191,7 @@ export class ClaudeCodeProvider implements AIProvider {
     if (keychainToken) {
       this.authMode = 'oauth';
       this.oauthSource = 'keychain';
+      this.currentToken = keychainToken;
       this.client = new Anthropic({
         apiKey: null,
         authToken: keychainToken,
@@ -208,6 +213,7 @@ export class ClaudeCodeProvider implements AIProvider {
   configureOAuthToken(token: string): void {
     this.authMode = 'oauth';
     this.oauthSource = 'env';
+    this.currentToken = token;
     this.client = new Anthropic({
       apiKey: null,
       authToken: token,
@@ -545,11 +551,19 @@ export class ClaudeCodeProvider implements AIProvider {
     if (this.tokenRefreshTimer) return;
     this.tokenRefreshTimer = setInterval(() => {
       void (async () => {
-        // Try keychain bridge file first (Docker), then macOS Keychain (local dev).
-        const token = (await readTokenFromKeychainFile()) ?? (await readTokenFromKeychain());
-        if (token) {
-          this.client = new Anthropic({ apiKey: null, authToken: token, defaultHeaders: OAUTH_HEADERS });
+        // Try keychain bridge file first, then macOS Keychain.
+        // If the bridge file is stale (same token), prefer the Keychain and sync.
+        const fileToken = await readTokenFromKeychainFile();
+        const keychainToken = await readTokenFromKeychain();
+        const freshToken = keychainToken && keychainToken !== fileToken ? keychainToken : (fileToken ?? keychainToken);
+        if (freshToken) {
+          this.currentToken = freshToken;
+          this.client = new Anthropic({ apiKey: null, authToken: freshToken, defaultHeaders: OAUTH_HEADERS });
           logger.info('Proactively re-read OAuth token from keychain');
+          // If keychain had a newer token than the bridge file, sync it.
+          if (keychainToken && keychainToken !== fileToken) {
+            await this.syncBridgeFile(keychainToken);
+          }
         } else {
           logger.warn('Keychain has no OAuth token — user must re-login via Claude Code CLI');
         }
@@ -570,15 +584,44 @@ export class ClaudeCodeProvider implements AIProvider {
    * the user is prompted to reconnect).
    */
   private async refreshOAuthToken(): Promise<boolean> {
-    // Try keychain bridge file first (Docker), then macOS Keychain (local dev).
-    const keychainToken = (await readTokenFromKeychainFile()) ?? (await readTokenFromKeychain());
-    if (keychainToken) {
-      this.client = new Anthropic({ apiKey: null, authToken: keychainToken, defaultHeaders: OAUTH_HEADERS });
-      logger.info('Re-read OAuth token from keychain');
+    const failedToken = this.currentToken;
+
+    // Try keychain bridge file first — but skip if it returns the same token that just failed.
+    const fileToken = await readTokenFromKeychainFile();
+    if (fileToken && fileToken !== failedToken) {
+      this.currentToken = fileToken;
+      this.client = new Anthropic({ apiKey: null, authToken: fileToken, defaultHeaders: OAUTH_HEADERS });
+      logger.info('Re-read OAuth token from keychain bridge file');
       return true;
     }
-    logger.warn('OAuth re-read failed: no token in keychain — user must re-login via Claude Code CLI');
+
+    // Fall through to macOS Keychain — the source of truth for locally-running Claude Code CLI.
+    const keychainToken = await readTokenFromKeychain();
+    if (keychainToken && keychainToken !== failedToken) {
+      this.currentToken = keychainToken;
+      this.client = new Anthropic({ apiKey: null, authToken: keychainToken, defaultHeaders: OAUTH_HEADERS });
+      logger.info('Re-read OAuth token from macOS Keychain (bridge file was stale)');
+      // Sync the bridge file so subsequent reads don't hit the stale path again.
+      await this.syncBridgeFile(keychainToken);
+      return true;
+    }
+
+    logger.warn('OAuth re-read failed: no fresh token in keychain — user must re-login via Claude Code CLI');
     return false;
+  }
+
+  /**
+   * Write a token to the keychain bridge file so future reads (including after
+   * restart) pick up the fresh value without needing another 401 → fallback cycle.
+   */
+  private async syncBridgeFile(token: string): Promise<void> {
+    const yojinHome = process.env.YOJIN_HOME ?? join(homedir(), '.yojin');
+    try {
+      await writeFile(join(yojinHome, '.keychain-token'), token, 'utf-8');
+      logger.info('Synced fresh token to keychain bridge file');
+    } catch {
+      // Best-effort — the file may not be writable (e.g. read-only Docker mount).
+    }
   }
 
   private async completeWithOAuth(
