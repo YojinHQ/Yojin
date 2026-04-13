@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 import { useStrategy, useExportStrategy, useDeleteStrategy } from '../../api/hooks/index.js';
@@ -10,6 +10,140 @@ import Button from '../common/button.js';
 import Badge from '../common/badge.js';
 import Spinner from '../common/spinner.js';
 import { StrategyStudio } from './strategy-studio.js';
+import { cn } from '../../lib/utils.js';
+
+/* ── Section parser ─────────────────────────────────────────────── */
+
+interface ContentSection {
+  heading: string;
+  body: string;
+}
+
+/** Map raw markdown headings to friendly labels */
+const FRIENDLY_LABELS: Record<string, string> = {
+  thesis: 'How It Works',
+  'how it works': 'How It Works',
+  'signal construction': 'Signal Construction',
+  'entry rules': 'When to Enter',
+  'when to enter': 'When to Enter',
+  'exit rules': 'When to Exit',
+  'when to exit': 'When to Exit',
+  'risk controls': 'Risk Controls',
+};
+
+/** Icons per section (SVG path data for a 20x20 viewBox) */
+const SECTION_ICONS: Record<string, React.ReactNode> = {
+  'How It Works': (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"
+      />
+    </svg>
+  ),
+  'Signal Construction': (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
+      />
+    </svg>
+  ),
+  'When to Enter': (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 8.689c0-.864.933-1.406 1.683-.977l7.108 4.061a1.125 1.125 0 0 1 0 1.954l-7.108 4.061A1.125 1.125 0 0 1 3 16.811V8.69ZM12.75 8.689c0-.864.933-1.406 1.683-.977l7.108 4.061a1.125 1.125 0 0 1 0 1.954l-7.108 4.061a1.125 1.125 0 0 1-1.683-.977V8.69Z"
+      />
+    </svg>
+  ),
+  'When to Exit': (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9"
+      />
+    </svg>
+  ),
+  'Risk Controls': (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"
+      />
+    </svg>
+  ),
+};
+
+function parseContentSections(content: string): ContentSection[] {
+  const sections: ContentSection[] = [];
+  // Split on ## headings, keeping the heading text
+  const parts = content.split(/^## /m);
+
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+
+    const newlineIdx = trimmed.indexOf('\n');
+    if (newlineIdx === -1) continue;
+
+    const rawHeading = trimmed.slice(0, newlineIdx).trim();
+    // Skip H1 headings (strategy name — already shown in modal title)
+    if (rawHeading.startsWith('# ')) continue;
+
+    const body = trimmed.slice(newlineIdx + 1).trim();
+    if (!body) continue;
+
+    const heading = FRIENDLY_LABELS[rawHeading.toLowerCase()] ?? rawHeading;
+    sections.push({ heading, body });
+  }
+
+  return sections;
+}
+
+/* ── Collapsible section ────────────────────────────────────────── */
+
+function SectionPanel({ section, defaultOpen }: { section: ContentSection; defaultOpen: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const icon = SECTION_ICONS[section.heading];
+
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          'flex w-full items-center gap-2 px-4 py-3 text-left transition-colors',
+          'hover:bg-bg-hover cursor-pointer',
+          open ? 'bg-bg-tertiary' : 'bg-bg-card',
+        )}
+        aria-expanded={open}
+      >
+        {icon && <span className="text-accent-primary">{icon}</span>}
+        <span className="flex-1 text-sm font-medium text-text-primary">{section.heading}</span>
+        <svg
+          className={cn('h-4 w-4 text-text-muted transition-transform', open && 'rotate-180')}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+      {open && (
+        <div className="strategy-prose px-4 py-3 prose prose-invert prose-sm max-w-none">
+          <ReactMarkdown>{section.body}</ReactMarkdown>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface StrategyDetailModalProps {
   open: boolean;
@@ -38,6 +172,10 @@ export default function StrategyDetailModal({ open, strategyId, onClose }: Strat
   const [error, setError] = useState<string | null>(null);
 
   const strategy = result.data?.strategy;
+  const sections = useMemo(
+    () => (strategy?.content ? parseContentSections(strategy.content) : []),
+    [strategy?.content],
+  );
 
   async function handleCopy() {
     setCopying(true);
@@ -148,13 +286,14 @@ export default function StrategyDetailModal({ open, strategyId, onClose }: Strat
             </div>
           )}
 
-          {/* Strategy Content */}
-          <div>
-            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">Strategy</h3>
-            <div className="max-h-[300px] overflow-y-auto rounded-lg bg-bg-tertiary p-4 prose prose-invert prose-sm max-w-none">
-              <ReactMarkdown>{strategy.content}</ReactMarkdown>
+          {/* Strategy Content — structured sections */}
+          {sections.length > 0 && (
+            <div className="space-y-2">
+              {sections.map((section) => (
+                <SectionPanel key={section.heading} section={section} defaultOpen={false} />
+              ))}
             </div>
-          </div>
+          )}
 
           {/* Actions */}
           <div className="flex items-center justify-between border-t border-border pt-2">
