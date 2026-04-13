@@ -71,7 +71,7 @@ const CREATE_PROMPT =
   'what I want to capture or protect against, which assets, what thresholds.\n\n' +
   'Recognize which archetype I am aiming for:\n' +
   '- **Technical:** indicator/price-based (RSI, MACD, momentum, drawdown). If my intent maps to an existing template, propose forking it.\n' +
-  '- **Copy Trading:** "trade like [person/fund]". Use `search_entities` to find the fund, then `get_institutional_holdings` with their CIK to fetch their real 13F portfolio. Use the actual holdings to populate the strategy ticker list and inform triggers.\n' +
+  '- **Copy Trading:** "trade like [person/fund]". CRITICAL: search for the EXACT investor/fund the user named — never substitute a different one. Use `search_entities` to find that specific fund, then `get_institutional_holdings` with their CIK to fetch their real 13F portfolio. Use the actual holdings to populate the strategy ticker list and inform triggers. If the user says "Buffett", look up Berkshire Hathaway — not ARK, not any other fund.\n' +
   '- **Index Replication / Thematic Allocation:** "build me [index/theme]" or "put X% in [theme]". Suggest a concrete basket of companies with weight targets and concentration drift triggers.\n\n' +
   'Once you have enough information, call `display_propose_strategy` with a complete strategy. ' +
   "Generate a full markdown body (thesis, entry/exit rules, risk management) — don't leave it to the user.";
