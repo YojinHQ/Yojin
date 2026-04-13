@@ -239,12 +239,15 @@ function isTickerContentMismatch(text: string, tickers: string[], entityName: st
   // distinctive part ("Nvidia", "Apple", "Firefly"). Check the full name first,
   // then fall back to individual distinctive words.
   if (entityName) {
-    const textLower = text.toLowerCase();
-
-    // Full name match
+    // Full name match — use word boundary to avoid substring matches
+    // (e.g. "Open" inside "OpenAI", "Ally" inside "Allyson")
     const nameLower = entityName.toLowerCase();
-    if (nameLower.length >= 4 && textLower.includes(nameLower)) {
-      return false;
+    if (nameLower.length >= 4) {
+      const escapedName = nameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const nameRe = new RegExp(`\\b${escapedName}\\b`, 'i');
+      if (nameRe.test(text)) {
+        return false;
+      }
     }
 
     // Strip corporate suffixes and check distinctive words individually.
@@ -542,6 +545,8 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
   if (social) {
     for (const post of social.reddit ?? []) {
       if (post.score < SOCIAL_MIN_REDDIT_SCORE) continue;
+      const postText = `${post.title} ${post.text}`;
+      if (isTickerContentMismatch(postText, tickers, entityName)) continue;
       // Link posts point to an external article; self-posts point to reddit.com.
       // Attribute link posts to the original source so the user knows where the
       // information actually comes from, with "(via r/...)" for provenance.
@@ -575,6 +580,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     const extSocial = social as Social & { redditComments?: RedditComment[] };
     for (const comment of extSocial.redditComments ?? []) {
       if (comment.score < SOCIAL_MIN_REDDIT_COMMENT_SCORE) continue;
+      if (isTickerContentMismatch(comment.body, tickers, entityName)) continue;
       signals.push({
         sourceId: `jintel-social-reddit-comment-${comment.id}`,
         sourceName: `Jintel Social (r/${comment.subreddit} comment)`,
