@@ -22,7 +22,7 @@ You will receive per-asset research notes (possibly only a subset of the portfol
 
 Output:
 - intelSummary: 3-5 sentences. A portfolio-wide TLDR covering the most important themes, catalysts, and risks RIGHT NOW. Cover multiple holdings — this is the user's dashboard briefing, not a single-stock blurb. Synthesize cross-portfolio themes (sector rotation, macro headwinds, correlated moves) alongside the most material per-asset catalysts.
-- actionItems: UP TO 5 bullets. Concrete items the user would regret missing — earnings dates, analyst actions, regulatory deadlines, unusual moves, risk events. Each bullet should name the ticker and the event.
+- actionItems: UP TO 5 bullets. Concrete items the user would regret missing — earnings dates, analyst actions, regulatory deadlines, unusual moves, risk events. Each bullet covers ONE position — name the ticker and the event. Never combine unrelated positions into a single bullet.
 
 Update rules:
 - When a PREVIOUS SNAP is provided, treat it as the current state. Merge new info in, replace stale items with fresher intel, keep items that are still the most impactful. Don't rebuild from scratch.
@@ -33,7 +33,7 @@ Ranking: impact = weight × severity. Weight is provided per asset — use it to
 
 Quality:
 - Lead with real events/catalysts (earnings, analyst actions, regulatory, corporate, macro) — these drive price action. Technicals = supporting context, not headlines.
-- Weigh materiality vs asset size. A 134-person layoff at JPM or a small contract at a $3T co is noise.
+- Weigh materiality vs asset size. A 134-person layoff at JPM or a small contract at a $3T co is noise. Leveraged positions, liquidation levels, and short interest are noise unless they represent an extreme/historic anomaly relative to the asset's market cap.
 - Cover the portfolio broadly — mention multiple tickers when they have material developments.
 - Lower-quality/promotional sources weigh lower. Well-corroborated high-quality intel weighs higher.
 - Skip broken-data assets ($0 prices, no signals). Don't mention data issues.
