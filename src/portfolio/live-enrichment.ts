@@ -85,12 +85,18 @@ export function isUSMarketOpen(): boolean {
   return minutes >= 570 && minutes < 960; // 9:30 (570) to 16:00 (960)
 }
 
-/** Check if today is a US weekday (Mon–Fri). Used to decide intraday vs multi-day sparkline range. */
-function isUSWeekday(): boolean {
+/** Check if the US equity market has been open today (Mon–Fri, after 9:30 AM ET).
+ *  Pre-market (before 9:30 AM ET on a weekday) returns false because a `1d` range
+ *  would only contain pre-market candles that the regular-hours filter strips out,
+ *  leaving an empty sparkline. Returning false widens the range to 5d so the
+ *  previous session's price action is visible instead. */
+function isUSMarketSessionAvailable(): boolean {
   const now = new Date();
   const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const day = et.getDay();
-  return day !== 0 && day !== 6;
+  if (day === 0 || day === 6) return false;
+  const minutes = et.getHours() * 60 + et.getMinutes();
+  return minutes >= 570; // 9:30 AM ET
 }
 
 /** Parse a candle timestamp as UTC. The Jintel API returns UTC timestamps
@@ -164,10 +170,11 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
   const equitySymbols = symbols.filter((s) => !cryptoSet.has(s));
   const cryptoSymbols = symbols.filter((s) => cryptoSet.has(s));
 
-  const weekday = isUSWeekday();
-  // On weekdays fetch today's session; on weekends/holidays widen to 5d so
-  // buildSparkline can find the most recent complete trading session.
-  const equityRange = weekday ? '1d' : '5d';
+  const marketSessionAvailable = isUSMarketSessionAvailable();
+  // During/after regular hours fetch today's session; before market open,
+  // weekends, and holidays widen to 5d so buildSparkline can find the most
+  // recent complete trading session.
+  const equityRange = marketSessionAvailable ? '1d' : '5d';
   // Always 5m so weekend/holiday sparklines show the last session's open→close
   // price action at the same resolution as weekday sparklines.
   const equityInterval = '5m';
