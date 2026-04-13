@@ -706,7 +706,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     const reportDate = holdings[0].reportDate;
     signals.push({
       sourceId: 'jintel-institutional-holdings',
-      sourceName: 'Jintel 13F Holdings',
+      sourceName: '13F Filings',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.95,
       title: `${entity.name ?? tickers[0]} Institutional Holdings (13F)`,
@@ -735,7 +735,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     if (parts.length > 0) {
       signals.push({
         sourceId: 'jintel-ownership',
-        sourceName: 'Jintel Ownership',
+        sourceName: 'Ownership Data',
         sourceType: SourceType.ENRICHMENT,
         reliability: 0.9,
         title: `${entity.name ?? tickers[0]} Ownership Breakdown`,
@@ -760,7 +760,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     }
     signals.push({
       sourceId: 'jintel-top-holders',
-      sourceName: 'Jintel Top Holders',
+      sourceName: 'Institutional Holdings',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.9,
       title: `${entity.name ?? tickers[0]} Top Institutional Holders`,
@@ -808,7 +808,7 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
     if (latest?.value != null) {
       signals.push({
         sourceId: 'jintel-macro-gdp',
-        sourceName: 'Jintel Macro',
+        sourceName: 'Macro Data',
         sourceType: SourceType.API,
         reliability: 0.95,
         title: `US Real GDP: ${latest.value.toFixed(1)}% (${latest.date})`,
@@ -828,7 +828,7 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
     if (latest?.value != null) {
       signals.push({
         sourceId: 'jintel-macro-inflation',
-        sourceName: 'Jintel Macro',
+        sourceName: 'Macro Data',
         sourceType: SourceType.API,
         reliability: 0.95,
         title: `US Inflation (CPI): ${latest.value.toFixed(1)}% (${latest.date})`,
@@ -848,7 +848,7 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
     if (latest?.value != null) {
       signals.push({
         sourceId: 'jintel-macro-rates',
-        sourceName: 'Jintel Macro',
+        sourceName: 'Macro Data',
         sourceType: SourceType.API,
         reliability: 0.95,
         title: `US Interest Rate: ${latest.value.toFixed(2)}% (${latest.date})`,
@@ -868,7 +868,7 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
     if (latest) {
       signals.push({
         sourceId: 'jintel-macro-sp500-pe',
-        sourceName: 'Jintel Macro',
+        sourceName: 'Macro Data',
         sourceType: SourceType.API,
         reliability: 0.95,
         title: `S&P 500 P/E Ratio: ${latest.value.toFixed(1)} (${latest.date})`,
@@ -888,7 +888,7 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
     if (latest) {
       signals.push({
         sourceId: 'jintel-macro-sp500-cape',
-        sourceName: 'Jintel Macro',
+        sourceName: 'Macro Data',
         sourceType: SourceType.API,
         reliability: 0.95,
         title: `S&P 500 Shiller P/E (CAPE): ${latest.value.toFixed(1)} (${latest.date})`,
