@@ -732,7 +732,7 @@ export const typeDefs = /* GraphQL */ `
     time: String!
     timezone: String!
     sections: [String!]!
-    microLlmIntervalHours: Int
+    microLlmIntervalHours: Float
   }
 
   type BriefingConfig {
@@ -740,7 +740,7 @@ export const typeDefs = /* GraphQL */ `
     timezone: String!
     sections: [String!]!
     enabled: Boolean!
-    microLlmIntervalHours: Int!
+    microLlmIntervalHours: Float!
   }
 
   type SchedulerAssetStatus {
