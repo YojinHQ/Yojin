@@ -335,6 +335,51 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     expect(newsSignals).toHaveLength(1);
   });
 
+  it('drops news article about OpenAI when ticker is OPEN (Opendoor) — substring false match', () => {
+    const entity = makeEntity({
+      name: 'Opendoor Technologies',
+      news: [
+        {
+          title: 'OpenAI confirms security issue',
+          link: 'https://example.com/openai-security',
+          snippet: 'OpenAI disclosed a security breach affecting ChatGPT user data.',
+          source: 'TechCrunch',
+        },
+      ],
+    });
+
+    const signals = enrichmentToSignals(entity, ['OPEN']);
+    const newsSignals = signals.filter((s) => s.sourceName?.includes('Jintel News'));
+
+    expect(newsSignals).toHaveLength(0);
+  });
+
+  it('drops Reddit post about OpenAI when ticker is OPEN (Opendoor)', () => {
+    const entity = makeEntity({
+      name: 'Opendoor Technologies',
+      social: {
+        reddit: [
+          {
+            id: 'openai-post',
+            title: 'OpenAI confirms security issue in ChatGPT',
+            subreddit: 'technology',
+            author: 'tech_user',
+            score: 200,
+            numComments: 50,
+            url: '',
+            text: 'OpenAI has disclosed a major security vulnerability.',
+            date: '2026-04-10T12:00:00Z',
+          },
+        ],
+      },
+    });
+
+    const signals = enrichmentToSignals(entity, ['OPEN']);
+    const redditSignals = signals.filter((s) => s.sourceId.includes('reddit'));
+
+    expect(redditSignals).toHaveLength(0);
+  });
+
   it('drops research article with no ticker or entity name reference', () => {
     const entity = makeEntity({
       name: 'Firefly Aerospace',

@@ -205,10 +205,14 @@ function matchSignalIds(text: string, insights: MicroInsight[]): string[] {
   }
   // Also match by entity name if the ticker didn't match
   // (e.g. "UnitedHealth" in action text → UNH micro insight)
+  // Uses word-boundary matching to avoid false positives (e.g. "Open" inside "OpenAI")
   if (ids.size === 0) {
     for (const mi of insights) {
-      if (mi.name && mi.name.length > 3 && upper.includes(mi.name.toUpperCase())) {
-        for (const id of mi.topSignalIds) ids.add(id);
+      if (mi.name && mi.name.length > 3) {
+        const escaped = mi.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (new RegExp(`\\b${escaped}\\b`, 'i').test(text)) {
+          for (const id of mi.topSignalIds) ids.add(id);
+        }
       }
     }
   }
