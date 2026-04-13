@@ -246,6 +246,7 @@ async function startGateway(): Promise<void> {
   setDeepAnalysisDeps({
     insightStore: services.insightStore,
     providerRouter,
+    signalArchive: services.signalArchive,
     gathererOptions: {
       snapshotStore: services.snapshotStore,
       signalArchive: services.signalArchive,
