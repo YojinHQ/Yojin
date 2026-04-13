@@ -335,7 +335,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
 
     signals.push({
       sourceId: 'jintel-snapshot',
-      sourceName: 'Jintel',
+      sourceName: 'Market Data',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.95,
       // Stable title for content-hash dedup — live values go in content only
@@ -356,7 +356,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     if (eventDate < sevenDaysAgo) continue;
     signals.push({
       sourceId: 'jintel-key-event',
-      sourceName: 'Jintel Market Events',
+      sourceName: 'Market Events',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.95,
       title: `${entity.name ?? tickers[0]}: ${event.type.replace(/_/g, ' ')} on ${event.date}`,
@@ -388,7 +388,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       }
       signals.push({
         sourceId: 'jintel-short-interest',
-        sourceName: 'Jintel Short Interest',
+        sourceName: 'Short Interest Data',
         sourceType: SourceType.ENRICHMENT,
         reliability: 0.9,
         title: `${entity.name ?? tickers[0]} Short Interest`,
@@ -406,7 +406,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
   for (const filing of entity.regulatory?.filings ?? []) {
     signals.push({
       sourceId: 'jintel-sec',
-      sourceName: 'Jintel SEC',
+      sourceName: 'SEC Filings',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.95,
       title: `${entity.name ?? tickers[0]}: ${filing.type} filed ${filing.date}`,
@@ -424,7 +424,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     const direction = quote.changePercent > 0 ? 'up' : 'down';
     signals.push({
       sourceId: 'jintel-market',
-      sourceName: 'Jintel Market',
+      sourceName: 'Market Data',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.95,
       title: `${entity.name ?? tickers[0]} Significant Price Move`,
@@ -448,7 +448,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     const { sentimentScore } = article;
     signals.push({
       sourceId: `jintel-news-${article.source.toLowerCase().replace(/\s+/g, '-')}`,
-      sourceName: `Jintel News (${article.source})`,
+      sourceName: article.source,
       sourceType: SourceType.API,
       reliability: 0.8,
       title: article.title,
@@ -472,7 +472,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     if (isTickerContentMismatch(`${article.title} ${article.text ?? ''}`, tickers, entityName)) continue;
     signals.push({
       sourceId: 'jintel-research',
-      sourceName: 'Jintel Research',
+      sourceName: 'Research',
       sourceType: SourceType.API,
       reliability: 0.85,
       title: article.title,
@@ -502,7 +502,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     if (parts.length >= 1) {
       signals.push({
         sourceId: 'jintel-technicals',
-        sourceName: 'Jintel Technicals',
+        sourceName: 'Technical Analysis',
         sourceType: SourceType.ENRICHMENT,
         reliability: 0.9,
         // Stable title for content-hash dedup — live indicator values go in content only
@@ -526,7 +526,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     const mentionDir = mentionDelta > 0 ? `+${mentionDelta}` : `${mentionDelta}`;
     signals.push({
       sourceId: 'jintel-sentiment',
-      sourceName: 'Jintel Social Sentiment',
+      sourceName: 'Social Sentiment',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.7,
       title: `${entity.name ?? tickers[0]} Social Sentiment`,
@@ -554,7 +554,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       const isLinkPost = post.url && !REDDIT_DOMAIN_RE.test(post.url);
       const sourceName = isLinkPost
         ? `${extractDomain(post.url)} (via r/${post.subreddit})`
-        : `Jintel Social (r/${post.subreddit})`;
+        : `Reddit (r/${post.subreddit})`;
       signals.push({
         sourceId: `jintel-social-reddit-${post.id}`,
         sourceName,
@@ -583,7 +583,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       if (isTickerContentMismatch(comment.body, tickers, entityName)) continue;
       signals.push({
         sourceId: `jintel-social-reddit-comment-${comment.id}`,
-        sourceName: `Jintel Social (r/${comment.subreddit} comment)`,
+        sourceName: `Reddit (r/${comment.subreddit} comment)`,
         sourceType: SourceType.API,
         reliability: 0.55,
         title: `${entity.name ?? tickers[0]}: r/${comment.subreddit} — ${comment.body.slice(0, 60).trim()}`,
@@ -606,7 +606,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     if (isTickerContentMismatch(storyText, tickers, entityName)) continue;
     signals.push({
       sourceId: `jintel-discussions-hn-${story.objectId}`,
-      sourceName: 'Jintel Discussions (HN)',
+      sourceName: 'Hacker News',
       sourceType: SourceType.API,
       reliability: 0.7,
       title: story.title,
@@ -653,7 +653,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     if (parts.length > 1) {
       signals.push({
         sourceId: 'jintel-financials',
-        sourceName: 'Jintel Financial Statements',
+        sourceName: 'Financial Statements',
         sourceType: SourceType.ENRICHMENT,
         reliability: 0.95,
         title: `${entity.name ?? tickers[0]} Financial Statements`,
@@ -679,7 +679,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     });
     signals.push({
       sourceId: 'jintel-executives',
-      sourceName: 'Jintel Key Executives',
+      sourceName: 'Company Data',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.85,
       title: `${entity.name ?? tickers[0]} Key Executives`,
