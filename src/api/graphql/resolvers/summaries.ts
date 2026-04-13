@@ -7,10 +7,12 @@
  * once during server startup.
  */
 
+import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { SignalArchive } from '../../../signals/archive.js';
 import type { Signal, SignalType } from '../../../signals/types.js';
 import type { SummaryStore } from '../../../summaries/summary-store.js';
 import type { Summary, SummaryFlow } from '../../../summaries/types.js';
+import { PORTFOLIO_TICKER } from '../../../summaries/types.js';
 
 function deriveSeverityLabel(severity: number | undefined): string {
   if (severity == null) return 'MEDIUM';
@@ -25,6 +27,7 @@ function deriveSeverityLabel(severity: number | undefined): string {
 
 let store: SummaryStore | null = null;
 let signalArchive: SignalArchive | null = null;
+let snapshotStore: PortfolioSnapshotStore | null = null;
 
 export function setSummaryStore(s: SummaryStore): void {
   store = s;
@@ -32,6 +35,10 @@ export function setSummaryStore(s: SummaryStore): void {
 
 export function setSummarySignalArchive(a: SignalArchive): void {
   signalArchive = a;
+}
+
+export function setSummarySnapshotStore(s: PortfolioSnapshotStore): void {
+  snapshotStore = s;
 }
 
 // ---------------------------------------------------------------------------
@@ -124,8 +131,19 @@ export async function summariesResolver(
     limit: args.limit ?? 50,
   });
 
-  const signalMap = await batchResolveSourceSignals(summaries);
-  return summaries.map((s) => toGql(s, signalMap));
+  // Filter to portfolio tickers only — watchlist-only tickers produce micro
+  // summaries but those should not appear in the Summaries feed.
+  let filtered = summaries;
+  if (snapshotStore) {
+    const snapshot = await snapshotStore.getLatest();
+    if (snapshot) {
+      const portfolioTickers = new Set(snapshot.positions.map((p) => p.symbol.toUpperCase()));
+      filtered = summaries.filter((s) => s.ticker === PORTFOLIO_TICKER || portfolioTickers.has(s.ticker.toUpperCase()));
+    }
+  }
+
+  const signalMap = await batchResolveSourceSignals(filtered);
+  return filtered.map((s) => toGql(s, signalMap));
 }
 
 export async function summaryResolver(_parent: unknown, args: { id: string }): Promise<SummaryGql | null> {

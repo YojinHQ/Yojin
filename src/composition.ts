@@ -56,7 +56,11 @@ import { setSignalArchive } from './api/graphql/resolvers/signals.js';
 import { setSnapStore } from './api/graphql/resolvers/snap.js';
 import { setStrategyStore } from './api/graphql/resolvers/strategies.js';
 import { setStrategySourceStore, setStrategyStoreForSources } from './api/graphql/resolvers/strategy-sources.js';
-import { setSummarySignalArchive, setSummaryStore } from './api/graphql/resolvers/summaries.js';
+import {
+  setSummarySignalArchive,
+  setSummarySnapshotStore,
+  setSummaryStore,
+} from './api/graphql/resolvers/summaries.js';
 import { setVault, setVaultSecretChangedCallback } from './api/graphql/resolvers/vault.js';
 import {
   setWatchlistEnrichment,
@@ -665,6 +669,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   const summaryStore = new SummaryStore({ dir: `${dataRoot}/summaries` });
   setSummaryStore(summaryStore);
   setSummarySignalArchive(signalArchive);
+  setSummarySnapshotStore(snapshotStore);
 
   // Action store — BUY/SELL/REVIEW outcomes from Strategy/Strategy triggers
   const actionStore = new ActionStore({ dir: `${dataRoot}/actions` });
