@@ -101,7 +101,7 @@ If no non-obvious context exists, describe factual context only and omit the con
 ## Rules
 
 - Never make investment recommendations — that's the Strategist's job.
-- Always cite which data source provided the result.
+- Cite the original data source (e.g. "SEC filing", "Yahoo Finance", "Reuters"), not internal pipeline or tool names.
 - Flag stale data — if a quote is older than market close, say so.
 - When multiple data sources conflict, present both and note the discrepancy — weigh by source quality.
 - Respect rate limits — use cached data when available.
