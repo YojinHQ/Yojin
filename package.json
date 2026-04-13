@@ -76,11 +76,11 @@
     "*.{json,yml,yaml}": "prettier --write"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "0.18.0",
+    "@agentclientprotocol/sdk": "0.18.2",
     "@anthropic-ai/sdk": "0.80.0",
     "@grammyjs/transformer-throttler": "1.2.1",
-    "@hono/node-server": "1.19.11",
-    "@slack/bolt": "4.6.0",
+    "@hono/node-server": "1.19.14",
+    "@slack/bolt": "4.7.0",
     "@whiskeysockets/baileys": "7.0.0-rc.9",
     "@yojinhq/jintel-client": "0.14.0",
     "dotenv": "17.3.1",
@@ -92,31 +92,31 @@
     "tslog": "4.10.2",
     "yaml": "2.8.3",
     "zod": "4.3.6",
-    "zod-to-json-schema": "3.25.1"
+    "zod-to-json-schema": "3.25.2"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@types/node": "25.5.2",
+    "@types/node": "25.6.0",
     "concurrently": "9.2.1",
     "eslint": "10.2.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-import-x": "4.16.2",
-    "eslint-plugin-storybook": "10.3.1",
+    "eslint-plugin-storybook": "10.3.3",
     "husky": "9.1.7",
     "lint-staged": "16.4.0",
     "playwright": "1.58.2",
     "prettier": "3.8.1",
     "tsx": "4.21.0",
     "typescript": "6.0.2",
-    "typescript-eslint": "8.58.0",
-    "vitest": "4.1.2"
+    "typescript-eslint": "8.58.1",
+    "vitest": "4.1.4"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
     ]
   },
-  "packageManager": "pnpm@10.17.1",
+  "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=22.12"
   }
