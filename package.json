@@ -80,7 +80,7 @@
     "@anthropic-ai/sdk": "0.80.0",
     "@grammyjs/transformer-throttler": "1.2.1",
     "@hono/node-server": "1.19.11",
-    "@slack/bolt": "4.6.0",
+    "@slack/bolt": "4.7.0",
     "@whiskeysockets/baileys": "7.0.0-rc.9",
     "@yojinhq/jintel-client": "0.14.0",
     "dotenv": "17.3.1",

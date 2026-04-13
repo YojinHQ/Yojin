@@ -21,8 +21,8 @@ importers:
         specifier: 1.19.11
         version: 1.19.11(hono@4.12.8)
       '@slack/bolt':
-        specifier: 4.6.0
-        version: 4.6.0(@types/express@5.0.6)
+        specifier: 4.7.0
+        version: 4.7.0(@types/express@5.0.6)
       '@whiskeysockets/baileys':
         specifier: 7.0.0-rc.9
         version: 7.0.0-rc.9(sharp@0.34.5)
@@ -1042,8 +1042,8 @@ packages:
       rollup:
         optional: true
 
-  '@slack/bolt@4.6.0':
-    resolution: {integrity: sha512-xPgfUs2+OXSugz54Ky07pA890+Qydk22SYToi8uGpXeHSt1JWwFJkRyd/9Vlg5I1AdfdpGXExDpwnbuN9Q/2dQ==}
+  '@slack/bolt@4.7.0':
+    resolution: {integrity: sha512-Xpf+gKegNvkHpft1z4YiuqZdciJ3tUp1bIRQxylW30Ovf+hzjb0M1zTHVtJsRw9jsjPxHTPoyanEXVvG6qVE1g==}
     engines: {node: '>=18', npm: '>=8.6.0'}
     peerDependencies:
       '@types/express': ^5.0.0
@@ -4733,7 +4733,7 @@ snapshots:
       estree-walker: 2.0.2
       picomatch: 4.0.4
 
-  '@slack/bolt@4.6.0(@types/express@5.0.6)':
+  '@slack/bolt@4.7.0(@types/express@5.0.6)':
     dependencies:
       '@slack/logger': 4.0.1
       '@slack/oauth': 3.0.5
