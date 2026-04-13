@@ -11,6 +11,7 @@ import { gatherDataBriefs } from '../../../insights/data-gatherer.js';
 import { deepAnalyzePosition } from '../../../insights/deep-analyzer.js';
 import type { InsightStore } from '../../../insights/insight-store.js';
 import { createSubsystemLogger } from '../../../logging/logger.js';
+import type { SignalArchive } from '../../../signals/archive.js';
 import type { DeepAnalysisEvent } from '../pubsub.js';
 import { pubsub } from '../pubsub.js';
 
@@ -23,15 +24,18 @@ const logger = createSubsystemLogger('deep-analysis-resolver');
 let insightStore: InsightStore | null = null;
 let providerRouter: ProviderRouter | null = null;
 let gathererOptions: DataGathererOptions | null = null;
+let signalArchive: SignalArchive | null = null;
 
 export function setDeepAnalysisDeps(deps: {
   insightStore: InsightStore;
   providerRouter: ProviderRouter;
   gathererOptions: DataGathererOptions;
+  signalArchive: SignalArchive;
 }): void {
   insightStore = deps.insightStore;
   providerRouter = deps.providerRouter;
   gathererOptions = deps.gathererOptions;
+  signalArchive = deps.signalArchive;
 }
 
 // Track active analyses to prevent concurrent runs for the same symbol
@@ -62,6 +66,7 @@ export function deepAnalyzePositionMutation(
   const router = providerRouter;
   const store = insightStore;
   const opts = gathererOptions;
+  const archive = signalArchive;
 
   void (async () => {
     try {
@@ -102,11 +107,24 @@ export function deepAnalyzePositionMutation(
         return;
       }
 
-      // 3. Run deep analysis with streaming
+      // 3. Fetch full signal objects for this position (includes content, metadata.link)
+      const signalIds = positionInsight.allSignalIds ?? [];
+      const signals = archive && signalIds.length > 0 ? await archive.getByIds(signalIds) : [];
+      if (signals.length > 0) {
+        logger.info('Fetched full signals for deep analysis', {
+          symbol,
+          requested: signalIds.length,
+          found: signals.length,
+          withContent: signals.filter((s) => s.content).length,
+        });
+      }
+
+      // 4. Run deep analysis with streaming + full signal content
       await deepAnalyzePosition({
         providerRouter: router,
         brief,
         insight: positionInsight,
+        signals,
         onDelta: (delta) => {
           pubsub.publish(`deepAnalysis:${symbol}`, {
             type: 'TEXT_DELTA',
