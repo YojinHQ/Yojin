@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 
 import type { AIProvider } from './types.js';
 import type { AgentMessage, ContentBlock, ToolSchema } from '../core/types.js';
@@ -49,7 +50,12 @@ export class CodexProvider implements AIProvider {
 
   async isAvailable(): Promise<boolean> {
     return new Promise((resolve) => {
-      const child = spawn('codex', ['--version'], { timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'] });
+      // shell: true on Windows so the `codex.cmd` PATH shim resolves.
+      const child = spawn('codex', ['--version'], {
+        timeout: 5000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: process.platform === 'win32',
+      });
       child.on('error', () => resolve(false));
       child.on('close', (code) => resolve(code === 0));
     });
@@ -88,8 +94,12 @@ export class CodexProvider implements AIProvider {
     return new Promise((resolve, reject) => {
       const child = spawn('codex', args, {
         timeout: 120_000,
-        cwd: '/tmp',
+        cwd: tmpdir(),
         stdio: ['ignore', 'pipe', 'pipe'],
+        // Windows installs `codex` as a `.cmd` shim that the OS resolver only
+        // finds when invoked through cmd.exe. Node ≥16 escapes args for cmd.exe
+        // when shell is true.
+        shell: process.platform === 'win32',
       });
 
       let fullText = '';

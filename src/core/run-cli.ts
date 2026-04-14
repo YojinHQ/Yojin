@@ -24,6 +24,10 @@ export function runCli(
     const child = spawn(command, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: opts.env,
+      // Windows installs many CLIs (claude, codex, npm, pnpm, etc.) as `.cmd`
+      // PATH shims that the OS resolver only finds when invoked through
+      // cmd.exe. Node ≥16 escapes args for cmd.exe when shell is true.
+      shell: process.platform === 'win32',
     });
 
     let stdout = '';

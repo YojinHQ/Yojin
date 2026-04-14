@@ -10,6 +10,8 @@
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 
+import { buildChromeUserAgent } from './user-agent.js';
+
 const CLAUDE_CODE_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 const OAUTH_TOKEN_URL = 'https://platform.claude.com/v1/oauth/token';
 const OAUTH_REDIRECT_URI = 'https://platform.claude.com/oauth/code/callback';
@@ -67,8 +69,7 @@ export async function exchangeClaudeOAuthCode(params: {
   const headers = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
-    'User-Agent':
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'User-Agent': buildChromeUserAgent('120.0.0.0'),
     Referer: 'https://platform.claude.com/',
     Origin: 'https://platform.claude.com',
   };
@@ -153,6 +154,10 @@ export function runClaudeSetupToken(): Promise<{
     const child = spawn('claude', ['setup-token'], {
       env: { ...process.env, CI: 'true', TERM: 'xterm-256color' },
       stdio: ['pipe', 'pipe', 'pipe'],
+      // Windows installs `claude` as a `.cmd` shim that the OS resolver only
+      // finds when invoked through cmd.exe; without `shell: true` spawn errors
+      // with ENOENT. POSIX runs the binary directly.
+      shell: process.platform === 'win32',
     });
 
     const processChunk = (chunk: string) => {

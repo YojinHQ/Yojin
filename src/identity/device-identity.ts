@@ -79,11 +79,18 @@ export function loadOrCreateDeviceIdentity(dataRoot?: string): DeviceIdentity {
 
   const identity = generate();
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(identity, null, 2) + '\n', { mode: 0o600 });
-  try {
-    fs.chmodSync(filePath, 0o600);
-  } catch {
-    // best-effort
+  // POSIX file modes are no-ops on Windows NTFS — the keypair file relies on
+  // the user's profile directory ACLs there instead. On POSIX we set 0o600 so
+  // the private key is owner-readable only.
+  const isWindows = process.platform === 'win32';
+  const writeOptions = isWindows ? undefined : { mode: 0o600 };
+  fs.writeFileSync(filePath, JSON.stringify(identity, null, 2) + '\n', writeOptions);
+  if (!isWindows) {
+    try {
+      fs.chmodSync(filePath, 0o600);
+    } catch {
+      // best-effort
+    }
   }
 
   return {

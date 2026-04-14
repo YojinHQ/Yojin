@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -269,7 +269,8 @@ export class ClaudeCodeProvider implements AIProvider {
   async isAvailable(): Promise<boolean> {
     if (this.authMode === 'api_key' || this.authMode === 'oauth') return true;
     try {
-      await execFileAsync('claude', ['--version'], { timeout: 5000 });
+      // shell: true on Windows so the `claude.cmd` PATH shim resolves.
+      await execFileAsync('claude', ['--version'], { timeout: 5000, shell: process.platform === 'win32' });
       return true;
     } catch {
       return false;
@@ -769,8 +770,12 @@ export class ClaudeCodeProvider implements AIProvider {
     return new Promise((resolve, reject) => {
       const child = spawn('claude', args, {
         timeout: 120_000,
-        cwd: '/tmp',
+        cwd: tmpdir(),
         stdio: ['pipe', 'pipe', 'pipe'],
+        // Windows installs `claude` as a `.cmd` shim that the OS resolver only
+        // finds when invoked through cmd.exe. Node ≥16 escapes args for cmd.exe
+        // when shell is true.
+        shell: process.platform === 'win32',
       });
 
       let fullText = '';
@@ -875,8 +880,10 @@ export class ClaudeCodeProvider implements AIProvider {
     return new Promise((resolve, reject) => {
       const child = spawn('claude', args, {
         timeout: 120_000,
-        cwd: '/tmp',
+        cwd: tmpdir(),
         stdio: ['pipe', 'pipe', 'pipe'],
+        // See note in streamWithCli — Windows .cmd shims need shell: true.
+        shell: process.platform === 'win32',
       });
 
       let stdout = '';

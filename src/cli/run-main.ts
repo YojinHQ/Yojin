@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path';
 
 import { startChat } from './chat.js';
 import { setupToken } from './setup-token.js';
+import { onShutdownSignal } from './shutdown-signals.js';
 import { createSlackPlugin } from '../../channels/slack/index.js';
 import { createTelegramPlugin } from '../../channels/telegram/index.js';
 import { createWhatsAppPlugin } from '../../channels/whatsapp/index.js';
@@ -397,8 +398,7 @@ async function startGateway(): Promise<void> {
     }
     process.exit(0);
   };
-  process.on('SIGINT', () => void shutdown());
-  process.on('SIGTERM', () => void shutdown());
+  onShutdownSignal(() => void shutdown());
 
   await gateway.start();
   setChannelRegistry(gateway.getRegistry());
@@ -442,8 +442,7 @@ async function startAcp(): Promise<void> {
     await shutdown();
     process.exit(0);
   };
-  process.on('SIGINT', () => void gracefulShutdown());
-  process.on('SIGTERM', () => void gracefulShutdown());
+  onShutdownSignal(() => void gracefulShutdown());
 }
 
 async function runInsights(): Promise<void> {

@@ -50,30 +50,59 @@ export interface SecureInputOptions {
 /**
  * Read a secret value from TTY with echo disabled.
  * Prompts on stderr so the LLM (reading stdout) never sees it.
+ *
+ * Raw mode is supported by Node's TTY on POSIX and on Windows ConPTY (Windows
+ * Terminal, modern PowerShell, VS Code terminal). On legacy consoles or when
+ * stdin is unexpectedly not a real TTY, `setRawMode` throws — we fail closed
+ * rather than fall back to echoed input so a passphrase never leaks to a
+ * recording/screenshot.
  */
 async function defaultReadSecret(prompt: string): Promise<string> {
   process.stderr.write(prompt);
 
   return new Promise((resolve, reject) => {
     const stdin = process.stdin;
+
+    if (typeof stdin.setRawMode !== 'function') {
+      process.stderr.write('\n');
+      reject(new Error('Hidden input is not supported on this terminal (no raw mode).'));
+      return;
+    }
+
     const wasRaw = stdin.isRaw;
     let input = '';
 
-    stdin.setRawMode(true);
+    try {
+      stdin.setRawMode(true);
+    } catch (err) {
+      process.stderr.write('\n');
+      const msg = err instanceof Error ? err.message : String(err);
+      reject(new Error(`Hidden input is not available on this terminal: ${msg}`));
+      return;
+    }
+
     stdin.resume();
     stdin.setEncoding('utf8');
+
+    const restoreRaw = (): void => {
+      try {
+        stdin.setRawMode(wasRaw ?? false);
+      } catch {
+        // best-effort
+      }
+    };
 
     const onData = (char: string): void => {
       const code = char.charCodeAt(0);
 
       if (char === '\r' || char === '\n') {
-        stdin.setRawMode(wasRaw ?? false);
+        restoreRaw();
         stdin.pause();
         stdin.removeListener('data', onData);
         process.stderr.write('\n');
         resolve(input);
       } else if (code === 3) {
-        stdin.setRawMode(wasRaw ?? false);
+        restoreRaw();
         stdin.pause();
         stdin.removeListener('data', onData);
         process.stderr.write('\n');

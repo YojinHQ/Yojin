@@ -82,13 +82,16 @@ class YojinLogger {
     this.logFile = join(this.logDir, `yojin-${ts}.log`);
     writeFileSync(this.logFile, '');
 
-    // Symlink latest.log
-    const latestLink = join(this.logDir, 'latest.log');
-    try {
-      if (existsSync(latestLink)) unlinkSync(latestLink);
-      symlinkSync(this.logFile, latestLink);
-    } catch {
-      // Not critical
+    // Symlink latest.log — skip on Windows where symlinks require admin or
+    // Developer Mode; the try/catch below covers POSIX edge cases (e.g. SIP).
+    if (process.platform !== 'win32') {
+      const latestLink = join(this.logDir, 'latest.log');
+      try {
+        if (existsSync(latestLink)) unlinkSync(latestLink);
+        symlinkSync(this.logFile, latestLink);
+      } catch {
+        // Not critical
+      }
     }
 
     // Configure tslog

@@ -17,6 +17,7 @@ import {
   exchangeClaudeOAuthCode,
   generatePkceParams,
 } from './claude-oauth.js';
+import { buildChromeUserAgent } from './user-agent.js';
 
 // ---------------------------------------------------------------------------
 // Module-level state
@@ -32,9 +33,10 @@ let flowInProgress = false;
 const OAUTH_CALLBACK_URI = 'https://platform.claude.com/oauth/code/callback';
 const OAUTH_SUCCESS_URI = 'https://platform.claude.com/oauth/code/success';
 
-// Chrome user-agent — keep current to avoid Cloudflare flagging outdated browsers
-const CHROME_USER_AGENT =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+// Chrome user-agent — keep current to avoid Cloudflare flagging outdated browsers.
+// Platform label is picked at call time so a Windows host doesn't advertise itself
+// as macOS (which Cloudflare cross-checks against TLS/JS fingerprints).
+const CHROME_USER_AGENT = buildChromeUserAgent('131.0.0.0');
 
 // ---------------------------------------------------------------------------
 // Helpers
