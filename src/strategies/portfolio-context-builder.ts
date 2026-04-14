@@ -13,6 +13,7 @@ import type {
 } from '@yojinhq/jintel-client';
 
 import type { PortfolioContext } from './strategy-evaluator.js';
+import type { AssetClass } from '../api/graphql/types.js';
 import type { Signal } from '../signals/types.js';
 
 /** Single-quarter earnings history row from Jintel fundamentals. */
@@ -22,6 +23,7 @@ interface MinimalPosition {
   symbol: string;
   currentPrice: number;
   marketValue: number;
+  assetClass?: AssetClass;
 }
 
 interface MinimalSnapshot {
@@ -213,6 +215,7 @@ export function buildSingleTickerContext(
   quote: { price: number; changePercent: number },
   snapshot: { marketValue: number; totalValue: number },
   signals: Signal[],
+  assetClass?: AssetClass,
 ): PortfolioContext {
   const weight = snapshot.totalValue > 0 ? snapshot.marketValue / snapshot.totalValue : 0;
   const price = quote.price;
@@ -241,6 +244,7 @@ export function buildSingleTickerContext(
     positionDrawdowns: { [ticker]: drawdown },
     metrics: Object.keys(metricsMap).length > 0 ? { [ticker]: metricsMap } : {},
     signals: { [ticker]: signals },
+    ...(assetClass ? { assetClasses: { [ticker]: assetClass } } : {}),
   };
 }
 
@@ -259,6 +263,7 @@ export function buildPortfolioContext(
   const earningsDays: Record<string, number> = {};
   const positionDrawdowns: Record<string, number> = {};
   const metrics: Record<string, Record<string, number>> = {};
+  const assetClasses: Record<string, AssetClass> = {};
 
   const quoteMap = new Map(quotes.map((q) => [q.ticker, q]));
   const entityMap = new Map(entities.map((e) => [e.tickers?.[0] ?? e.id, e]));
@@ -270,6 +275,8 @@ export function buildPortfolioContext(
     const sym = pos.symbol;
     const quote = quoteMap.get(sym);
     const entity = entityMap.get(sym);
+
+    if (pos.assetClass) assetClasses[sym] = pos.assetClass;
 
     // Weights
     if (totalValue > 0) {
@@ -339,6 +346,7 @@ export function buildPortfolioContext(
     positionDrawdowns,
     metrics,
     signals: signalsByTicker ?? {},
+    ...(Object.keys(assetClasses).length > 0 ? { assetClasses } : {}),
     ...(periodReturns && Object.keys(periodReturns).length > 0 ? { periodReturns } : {}),
   };
 }

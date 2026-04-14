@@ -11,6 +11,7 @@ import { DataCapabilitySchema } from './capabilities.js';
 import type { DataCapability } from './capabilities.js';
 import { TriggerStrengthSchema } from './trigger-strength.js';
 import type { TriggerStrength } from './trigger-strength.js';
+import { AssetClassSchema } from '../api/graphql/types.js';
 import { DateTimeField, IdField } from '../types/base.js';
 
 // ---------------------------------------------------------------------------
@@ -110,6 +111,8 @@ export const StrategySchema = z.object({
   targetAllocation: z.number().min(0).max(1).optional(),
   /** Tickers this strategy applies to. Empty = all portfolio tickers. */
   tickers: z.array(IdField).default([]),
+  /** Asset classes this strategy targets. Empty = all asset classes. */
+  assetClasses: z.array(AssetClassSchema).default([]),
   /** Target allocation for ETF-style strategies (ticker → weight). Read by ALLOCATION_DRIFT. */
   targetWeights: TargetWeightsSchema.optional(),
 });

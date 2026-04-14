@@ -198,6 +198,7 @@ export function resolveCreateStrategy(_: unknown, args: { input: CreateStrategyI
     content: input.content,
     triggerGroups,
     tickers: input.tickers ?? [],
+    assetClasses: [],
     ...(input.maxPositionSize !== undefined ? { maxPositionSize: input.maxPositionSize } : {}),
     ...(input.targetAllocation !== undefined ? { targetAllocation: input.targetAllocation } : {}),
     ...(targetWeights ? { targetWeights } : {}),

@@ -196,6 +196,7 @@ describe('strategy-serializer triggerGroups', () => {
         },
       ],
       tickers: ['AAPL'],
+      assetClasses: [],
     };
 
     const md = serializeToMarkdown(strategy);
