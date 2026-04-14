@@ -48,9 +48,17 @@ function parseArgs(args: string[]): DebugArgs {
     const arg = args[i];
     if (arg === '--dry-run') {
       result.dryRun = true;
-    } else if (arg === '--tickers' && args[i + 1]) {
+    } else if (arg === '--tickers') {
+      if (!args[i + 1] || args[i + 1].startsWith('--')) {
+        console.error('Error: --tickers requires a comma-separated list of symbols');
+        process.exit(1);
+      }
       result.tickers = args[++i].split(',').map((t) => t.trim().toUpperCase());
-    } else if (arg === '--strategy' && args[i + 1]) {
+    } else if (arg === '--strategy') {
+      if (!args[i + 1] || args[i + 1].startsWith('--')) {
+        console.error('Error: --strategy requires a strategy id or name');
+        process.exit(1);
+      }
       result.strategy = args[++i];
     }
   }
@@ -79,7 +87,8 @@ async function tryBuildJintelClient(): Promise<JintelClient | null> {
       timeout: 60_000,
       cache: true,
     });
-  } catch {
+  } catch (err) {
+    logger.debug('Jintel client initialization failed', { error: err instanceof Error ? err.message : String(err) });
     return null;
   }
 }

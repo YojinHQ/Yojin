@@ -98,18 +98,14 @@ function alignedTable(headers: string[], rows: string[][]): string {
   return [headerLine, sepLine, ...bodyLines].join('\n');
 }
 
-/** Approximate display width — emojis count as 2, others as 1. */
+/** Emojis actually used by this renderer — count as display width 2. */
+const WIDE_CHARS = new Set(['✅', '❌', '⚠', '💥', '🔥', '⚪']);
+
+/** Approximate display width — known emojis count as 2, others as 1. */
 function displayWidth(s: string): number {
-  // Simple heuristic: count common emojis (✅❌⚠️💥🔥⚪) as 2 chars each
   let width = 0;
   for (const ch of s) {
-    const code = ch.codePointAt(0) ?? 0;
-    // Emoji ranges (simplified): Miscellaneous Symbols, Dingbats, Emoticons, etc.
-    if (code > 0x2000) {
-      width += 2;
-    } else {
-      width += 1;
-    }
+    width += WIDE_CHARS.has(ch) ? 2 : 1;
   }
   return width;
 }
