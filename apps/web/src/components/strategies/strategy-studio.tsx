@@ -39,6 +39,7 @@ function createEmptyForm(): StrategyFormData {
     ],
     tickers: [],
     maxPositionSize: undefined,
+    targetAllocation: undefined,
     targetWeights: [],
   };
 }
@@ -89,6 +90,7 @@ function strategyToFormData(strategy: Strategy): StrategyFormData {
     })),
     tickers: [...strategy.tickers],
     maxPositionSize: strategy.maxPositionSize ?? undefined,
+    targetAllocation: strategy.targetAllocation ?? undefined,
     targetWeights: parseTargetWeights(strategy.targetWeights),
   };
 }

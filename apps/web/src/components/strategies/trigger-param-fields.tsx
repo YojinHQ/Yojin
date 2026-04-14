@@ -423,26 +423,50 @@ function SignalPresentFields({ params, onChange }: { params: TriggerParams; onCh
   );
 }
 
-function CustomFields() {
-  return <p className="text-xs text-text-muted italic">Custom triggers are evaluated by the LLM at runtime</p>;
-}
+const DRIFT_DIRECTION_OPTIONS = [
+  { value: 'both', label: 'Both' },
+  { value: 'under', label: 'Under only' },
+  { value: 'over', label: 'Over only' },
+];
 
 function AllocationDriftFields({ params, onChange }: { params: TriggerParams; onChange: (p: TriggerParams) => void }) {
-  const displayPercent =
+  const tolerancePercent =
     (params.toleranceBps as number | undefined) !== undefined ? (params.toleranceBps as number) / 100 : undefined;
+  const driftPercent =
+    (params.driftThreshold as number | undefined) !== undefined ? (params.driftThreshold as number) * 100 : undefined;
   return (
     <div className="grid grid-cols-3 gap-2">
       <NumberInput
-        label="Tolerance"
-        value={displayPercent}
+        label="Tolerance (per-ticker)"
+        value={tolerancePercent}
         onChange={(v) => onChange(set(params, 'toleranceBps', v !== undefined ? Math.round(v * 100) : undefined))}
         placeholder="5"
         suffix="%"
         min={0}
         step={0.5}
       />
+      <NumberInput
+        label="Drift Threshold (strategy)"
+        value={driftPercent}
+        onChange={(v) => onChange(set(params, 'driftThreshold', v !== undefined ? v / 100 : undefined))}
+        placeholder="5"
+        suffix="%"
+        min={0}
+        max={50}
+        step={1}
+      />
+      <SelectInput
+        label="Direction"
+        value={params.direction as string | undefined}
+        onChange={(v) => onChange(set(params, 'direction', v))}
+        options={DRIFT_DIRECTION_OPTIONS}
+      />
     </div>
   );
+}
+
+function CustomFields() {
+  return <p className="text-xs text-text-muted italic">Custom triggers are evaluated by the LLM at runtime</p>;
 }
 
 const PERSON_ACTION_OPTIONS = [

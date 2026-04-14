@@ -1412,6 +1412,7 @@ export interface Strategy {
   content: string;
   triggerGroups: TriggerGroup[];
   maxPositionSize?: number | null;
+  targetAllocation?: number | null;
   tickers: string[];
   /** JSON-stringified { ticker: weight } map for ALLOCATION_DRIFT strategies. */
   targetWeights?: string | null;

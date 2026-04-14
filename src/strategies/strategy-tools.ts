@@ -97,6 +97,9 @@ export function createStrategyTools(options: StrategyToolsOptions): ToolDefiniti
         strategy.maxPositionSize !== undefined
           ? `Max position size: ${(strategy.maxPositionSize * 100).toFixed(0)}%`
           : '',
+        strategy.targetAllocation !== undefined
+          ? `Target allocation: ${(strategy.targetAllocation * 100).toFixed(0)}%`
+          : '',
         '',
         `## Capabilities — ${cap.status}`,
         formatCapabilityBreakdown(cap),
@@ -209,7 +212,12 @@ function formatStrategySummary(strategy: Strategy): string {
     `  Category: ${strategy.category} | Style: ${strategy.style} | Active: ${strategy.active}`,
     `  Capabilities: ${cap.status}${cap.missing.length > 0 ? ` (missing: ${cap.missing.join(', ')})` : ''}`,
     `  Trigger groups: ${strategy.triggerGroups.length} (${strategy.triggerGroups.flatMap((g) => g.conditions.map((c) => c.type)).join(', ')})`,
-  ].join('\n');
+    strategy.targetAllocation !== undefined
+      ? `  Target allocation: ${(strategy.targetAllocation * 100).toFixed(0)}%`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function formatCapabilityBreakdown(cap: CapabilityCheckResult): string {

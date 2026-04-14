@@ -111,6 +111,7 @@ interface CreateStrategyInput {
   triggerGroups: TriggerGroupInput[];
   tickers?: string[];
   maxPositionSize?: number;
+  targetAllocation?: number;
   targetWeights?: string;
 }
 
@@ -123,6 +124,7 @@ interface UpdateStrategyInput {
   triggerGroups?: TriggerGroupInput[];
   tickers?: string[];
   maxPositionSize?: number;
+  targetAllocation?: number;
   targetWeights?: string;
 }
 
@@ -197,6 +199,7 @@ export function resolveCreateStrategy(_: unknown, args: { input: CreateStrategyI
     triggerGroups,
     tickers: input.tickers ?? [],
     ...(input.maxPositionSize !== undefined ? { maxPositionSize: input.maxPositionSize } : {}),
+    ...(input.targetAllocation !== undefined ? { targetAllocation: input.targetAllocation } : {}),
     ...(targetWeights ? { targetWeights } : {}),
   };
   strategyStore.create(strategy);
@@ -218,6 +221,7 @@ export function resolveUpdateStrategy(_: unknown, args: { id: string; input: Upd
   }
   if (input.tickers !== undefined) fields.tickers = input.tickers;
   if (input.maxPositionSize !== undefined) fields.maxPositionSize = input.maxPositionSize;
+  if (input.targetAllocation !== undefined) fields.targetAllocation = input.targetAllocation;
   if (input.targetWeights !== undefined) {
     const parsed = parseTargetWeightsInput(input.targetWeights);
     fields.targetWeights = parsed ?? undefined;
@@ -269,6 +273,7 @@ function toGraphQL(strategy: Strategy): unknown {
       })),
     })),
     maxPositionSize: strategy.maxPositionSize ?? null,
+    targetAllocation: strategy.targetAllocation ?? null,
     tickers: strategy.tickers,
     targetWeights: strategy.targetWeights ? JSON.stringify(strategy.targetWeights) : null,
   };

@@ -1077,6 +1077,21 @@ export class Scheduler {
     }
 
     const context = await this.buildEnrichedContext(snapshot);
+
+    // Compute per-strategy allocation data for allocation-aware evaluation
+    const activeStrategies = this.strategyEvaluator.getActiveStrategies();
+    context.strategyAllocations = {};
+    for (const strategy of activeStrategies) {
+      if (strategy.targetAllocation == null) continue;
+      const tickers = strategy.tickers.length > 0 ? strategy.tickers : Object.keys(context.weights);
+      const actual = tickers.reduce((sum, t) => sum + (context.weights[t] ?? 0), 0);
+      context.strategyAllocations[strategy.id] = {
+        target: strategy.targetAllocation,
+        actual,
+        tickers,
+      };
+    }
+
     const evaluations = this.strategyEvaluator.evaluate(context);
 
     if (evaluations.length === 0) {
@@ -1270,7 +1285,7 @@ Be direct and concise. No hedging or disclaimers.`,
 Trigger: ${evaluation.triggerDescription}
 Ticker: ${ticker ?? 'portfolio-wide'}
 Trigger data: ${contextParts.join(', ')}
-
+${this.formatAllocationBudget(evaluation.context)}
 Strategy rules:
 ${evaluation.strategyContent}
 
@@ -1360,6 +1375,15 @@ Provide your ACTION headline and analysis.`,
         });
       }
     }
+  }
+
+  /** Format allocation budget info for the LLM prompt when the strategy has a targetAllocation. */
+  private formatAllocationBudget(context: Record<string, unknown>): string {
+    const target = context.targetAllocation as number | undefined;
+    if (target == null) return '';
+    const actual = (context.actualAllocation as number | undefined) ?? 0;
+    const remaining = (context.allocationRemaining as number | undefined) ?? Math.max(0, target - actual);
+    return `\nAllocation budget: target ${(target * 100).toFixed(0)}% of portfolio, current ${(actual * 100).toFixed(1)}%, remaining ${(remaining * 100).toFixed(1)}%\n`;
   }
 
   // ---------------------------------------------------------------------------

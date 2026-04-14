@@ -30,6 +30,8 @@ export interface PortfolioContext {
   positionDrawdowns: Record<string, number>;
   metrics: Record<string, Record<string, number>>;
   signals: Record<string, Signal[]>;
+  /** Per-strategy allocation info: strategyId → { target, actual, tickers }. Computed by scheduler. */
+  strategyAllocations?: Record<string, { target: number; actual: number; tickers: string[] }>;
 }
 
 export class StrategyEvaluator {
@@ -39,6 +41,11 @@ export class StrategyEvaluator {
 
   constructor(strategyStore: StrategyStore) {
     this.strategyStore = strategyStore;
+  }
+
+  /** Expose active strategies for callers that need to compute allocation context. */
+  getActiveStrategies() {
+    return this.strategyStore.getActive();
   }
 
   /** Evaluate all active strategies against current portfolio context (macro flow). */
@@ -139,7 +146,10 @@ ${sections.join('\n\n---\n\n')}`;
     const fired = this.checkAllConditions(group.conditions, ticker, ctx, strategy);
     if (!fired) return [];
 
-    const mergedContext: Record<string, unknown> = { ticker };
+    const mergedContext: Record<string, unknown> = {
+      ticker,
+      ...this.allocationContext(ctx.strategyAllocations?.[strategy.id]),
+    };
     const conditionResults: Record<string, unknown>[] = [];
     let primaryType: string | undefined;
     for (const result of fired) {
@@ -226,6 +236,18 @@ ${sections.join('\n\n---\n\n')}`;
   // Private — individual trigger checks
   // ---------------------------------------------------------------------------
 
+  /** Build allocation context fields for injection into evaluation context. */
+  private allocationContext(
+    alloc: { target: number; actual: number; tickers: string[] } | undefined,
+  ): Record<string, unknown> {
+    if (!alloc) return {};
+    return {
+      targetAllocation: alloc.target,
+      actualAllocation: alloc.actual,
+      allocationRemaining: Math.max(0, alloc.target - alloc.actual),
+    };
+  }
+
   private checkTrigger(
     trigger: StrategyTrigger,
     ticker: string,
@@ -302,19 +324,39 @@ ${sections.join('\n\n---\n\n')}`;
       }
 
       case 'ALLOCATION_DRIFT': {
-        const target = strategy.targetWeights?.[ticker];
-        if (target == null) return null;
-        const actual = ctx.weights[ticker] ?? 0;
-        const delta = actual - target;
-        const toleranceBps = Number(params['toleranceBps'] ?? 500);
-        const tolerance = toleranceBps / 10_000;
-        if (Math.abs(delta) < tolerance) return null;
+        // Per-ticker ETF-style rebalancing (targetWeights)
+        if (strategy.targetWeights) {
+          const target = strategy.targetWeights[ticker];
+          if (target == null) return null;
+          const actual = ctx.weights[ticker] ?? 0;
+          const delta = actual - target;
+          const toleranceBps = Number(params['toleranceBps'] ?? 500);
+          const tolerance = toleranceBps / 10_000;
+          if (Math.abs(delta) < tolerance) return null;
+          return {
+            target,
+            actual,
+            delta,
+            toleranceBps,
+            direction: delta > 0 ? 'overweight' : 'underweight',
+          };
+        }
+        // Strategy-level allocation drift (targetAllocation budget)
+        const alloc = ctx.strategyAllocations?.[strategy.id];
+        if (!alloc) return null;
+        const driftThreshold = Number(params['driftThreshold'] ?? 0.05);
+        const direction = String(params['direction'] ?? 'both');
+        const drift = alloc.actual - alloc.target;
+        if (Math.abs(drift) < driftThreshold) return null;
+        if (direction === 'over' && drift <= 0) return null;
+        if (direction === 'under' && drift >= 0) return null;
         return {
-          target,
-          actual,
-          delta,
-          toleranceBps,
-          direction: delta > 0 ? 'overweight' : 'underweight',
+          targetAllocation: alloc.target,
+          actualAllocation: alloc.actual,
+          drift,
+          driftThreshold,
+          direction,
+          strategyTickers: alloc.tickers,
         };
       }
 

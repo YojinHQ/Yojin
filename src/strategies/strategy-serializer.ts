@@ -22,6 +22,7 @@ const FrontmatterSchema = z
     triggers: z.array(StrategyTriggerSchema).min(1).optional(),
     tickers: z.array(z.string()).default([]),
     maxPositionSize: z.number().min(0).max(1).optional(),
+    targetAllocation: z.number().min(0).max(1).optional(),
     targetWeights: TargetWeightsSchema.optional(),
   })
   .refine((data) => data.triggerGroups || data.triggers, {
@@ -73,6 +74,7 @@ export function parseFromMarkdown(md: string): Strategy {
     content,
     triggerGroups,
     maxPositionSize: frontmatter.maxPositionSize,
+    targetAllocation: frontmatter.targetAllocation,
     tickers: frontmatter.tickers,
     targetWeights: frontmatter.targetWeights,
   });
@@ -105,6 +107,10 @@ export function serializeToMarkdown(strategy: Strategy): string {
 
   if (strategy.maxPositionSize !== undefined) {
     frontmatter['maxPositionSize'] = strategy.maxPositionSize;
+  }
+
+  if (strategy.targetAllocation !== undefined) {
+    frontmatter['targetAllocation'] = strategy.targetAllocation;
   }
 
   if (strategy.targetWeights) {

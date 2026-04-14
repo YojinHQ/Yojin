@@ -1208,6 +1208,7 @@ export const typeDefs = /* GraphQL */ `
     content: String!
     triggerGroups: [TriggerGroup!]!
     maxPositionSize: Float
+    targetAllocation: Float
     tickers: [String!]!
     """
     JSON-stringified { ticker: weight } map for ETF-style strategies.
@@ -1235,6 +1236,7 @@ export const typeDefs = /* GraphQL */ `
     triggerGroups: [TriggerGroupInput!]!
     tickers: [String!]
     maxPositionSize: Float
+    targetAllocation: Float
     """
     JSON-stringified { ticker: weight } map for ALLOCATION_DRIFT strategies.
     """
@@ -1250,6 +1252,7 @@ export const typeDefs = /* GraphQL */ `
     triggerGroups: [TriggerGroupInput!]
     tickers: [String!]
     maxPositionSize: Float
+    targetAllocation: Float
     """
     JSON-stringified { ticker: weight } map. Pass empty string to clear.
     """

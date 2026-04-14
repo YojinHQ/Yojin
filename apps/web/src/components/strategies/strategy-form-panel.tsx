@@ -23,6 +23,7 @@ export interface StrategyFormData {
   triggerGroups: TriggerGroupFormData[];
   tickers: string[];
   maxPositionSize: number | undefined;
+  targetAllocation: number | undefined;
   targetWeights: { ticker: string; weight: number }[];
 }
 
@@ -250,6 +251,8 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
         tickers: data.tickers.length > 0 ? data.tickers : undefined,
         maxPositionSize:
           data.maxPositionSize !== undefined && !isNaN(data.maxPositionSize) ? data.maxPositionSize : undefined,
+        targetAllocation:
+          data.targetAllocation !== undefined && !isNaN(data.targetAllocation) ? data.targetAllocation : undefined,
         targetWeights: serializeTargetWeights(data.targetWeights),
       };
 
@@ -270,6 +273,11 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
   const posPercent =
     data.maxPositionSize !== undefined && data.maxPositionSize > 0
       ? Math.max(1, Math.round(data.maxPositionSize * 100))
+      : 0;
+
+  const allocPercent =
+    data.targetAllocation !== undefined && data.targetAllocation > 0
+      ? Math.max(1, Math.round(data.targetAllocation * 100))
       : 0;
 
   return (
@@ -403,6 +411,27 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Target Allocation */}
+        <div>
+          <label className={labelClass}>Target Allocation</label>
+          <p className="text-xs text-text-muted mb-1">Budget: what % of your portfolio should this strategy drive?</p>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={allocPercent}
+              onChange={(e) => {
+                const pct = Number(e.target.value);
+                update({ targetAllocation: pct > 0 ? pct / 100 : undefined });
+              }}
+              className="flex-1 accent-accent-primary"
+            />
+            <span className="text-xs text-text-muted tabular-nums w-8 text-right">{allocPercent}%</span>
           </div>
         </div>
 

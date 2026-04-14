@@ -104,6 +104,8 @@ export const StrategySchema = z.object({
   triggerGroups: z.array(TriggerGroupSchema).min(1),
   /** Max position size as fraction of portfolio (0-1). Guard enforced. */
   maxPositionSize: z.number().min(0).max(1).optional(),
+  /** Target portfolio allocation as fraction (0-1). Budget for sizing recommendations. */
+  targetAllocation: z.number().min(0).max(1).optional(),
   /** Tickers this strategy applies to. Empty = all portfolio tickers. */
   tickers: z.array(IdField).default([]),
   /** Target allocation for ETF-style strategies (ticker → weight). Read by ALLOCATION_DRIFT. */
