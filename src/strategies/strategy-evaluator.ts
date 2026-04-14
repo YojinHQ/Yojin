@@ -182,6 +182,15 @@ ${sections.join('\n\n---\n\n')}`;
 
   private snapshotCurrentValues(ctx: PortfolioContext, tickers?: string[]): void {
     const tickersToSnapshot = tickers ?? [...new Set([...Object.keys(ctx.indicators), ...Object.keys(ctx.metrics)])];
+
+    // Macro flow (no ticker filter): prune stale entries for tickers no longer in context
+    if (!tickers) {
+      const activeSet = new Set(tickersToSnapshot);
+      for (const key of this.previousValues.keys()) {
+        if (!activeSet.has(key)) this.previousValues.delete(key);
+      }
+    }
+
     for (const ticker of tickersToSnapshot) {
       const values: Record<string, number> = {};
       const indicators = ctx.indicators[ticker];

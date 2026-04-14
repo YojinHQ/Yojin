@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { StrategySchema } from './types.js';
+import { StrategySchema, StrategyStyleSchema } from './types.js';
 import type { Strategy } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 
@@ -52,23 +52,38 @@ export class StrategyStore {
    * Each old trigger becomes its own single-condition group (preserving OR semantics).
    */
   private migrateIfNeeded(raw: Record<string, unknown>, file: string): Record<string, unknown> {
-    if (raw['triggerGroups']) return raw;
-    const oldTriggers = raw['triggers'];
-    if (!Array.isArray(oldTriggers)) return raw;
-
-    logger.info(`Migrating strategy ${file} from triggers to triggerGroups`);
+    let changed = false;
     const migrated = { ...raw };
-    migrated['triggerGroups'] = oldTriggers.map((t: unknown) => ({
-      label: '',
-      conditions: [t],
-    }));
-    delete migrated['triggers'];
 
-    const filePath = join(this.dir, file);
-    try {
-      writeFileSync(filePath, JSON.stringify(migrated, null, 2), 'utf-8');
-    } catch (err) {
-      logger.warn(`Failed to persist migration for ${file}`, { error: err });
+    // Migrate triggers → triggerGroups
+    if (!migrated['triggerGroups']) {
+      const oldTriggers = migrated['triggers'];
+      if (Array.isArray(oldTriggers)) {
+        logger.info(`Migrating strategy ${file} from triggers to triggerGroups`);
+        migrated['triggerGroups'] = oldTriggers.map((t: unknown) => ({
+          label: '',
+          conditions: [t],
+        }));
+        delete migrated['triggers'];
+        changed = true;
+      }
+    }
+
+    // Coerce free-text style to enum value
+    const validStyles = StrategyStyleSchema.options as readonly string[];
+    if (migrated['style'] !== undefined && !validStyles.includes(migrated['style'] as string)) {
+      logger.info(`Coercing unrecognized style "${migrated['style']}" to "general" in ${file}`);
+      migrated['style'] = 'general';
+      changed = true;
+    }
+
+    if (changed) {
+      const filePath = join(this.dir, file);
+      try {
+        writeFileSync(filePath, JSON.stringify(migrated, null, 2), 'utf-8');
+      } catch (err) {
+        logger.warn(`Failed to persist migration for ${file}`, { error: err });
+      }
     }
 
     return migrated;

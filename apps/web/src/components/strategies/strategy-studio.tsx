@@ -22,23 +22,25 @@ export interface StrategyStudioProps {
 /** Strategy Studio thread prefix — sessions starting with this are filtered from the sidebar. */
 export const STRATEGY_STUDIO_PREFIX = 'strategy-studio-';
 
-const EMPTY_FORM: StrategyFormData = {
-  name: '',
-  description: '',
-  category: 'MARKET',
-  style: '',
-  requires: [],
-  content: '',
-  triggerGroups: [
-    {
-      id: crypto.randomUUID(),
-      label: '',
-      conditions: [{ id: crypto.randomUUID(), type: 'PRICE_MOVE', description: '', params: {} }],
-    },
-  ],
-  tickers: [],
-  maxPositionSize: undefined,
-};
+function createEmptyForm(): StrategyFormData {
+  return {
+    name: '',
+    description: '',
+    category: 'MARKET',
+    style: '',
+    requires: [],
+    content: '',
+    triggerGroups: [
+      {
+        id: crypto.randomUUID(),
+        label: '',
+        conditions: [{ id: crypto.randomUUID(), type: 'PRICE_MOVE', description: '', params: {} }],
+      },
+    ],
+    tickers: [],
+    maxPositionSize: undefined,
+  };
+}
 
 function parseParams(raw: string | null | undefined): Record<string, unknown> {
   if (!raw) return {};
@@ -112,7 +114,7 @@ export function StrategyStudio({ open, onClose, strategy, editMode }: StrategySt
   const [streamingContent, setStreamingContent] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState<StrategyFormData>(() =>
-    strategy ? strategyToFormData(strategy) : { ...EMPTY_FORM },
+    strategy ? strategyToFormData(strategy) : createEmptyForm(),
   );
   const [formVisible, setFormVisible] = useState(() => !!strategy);
 

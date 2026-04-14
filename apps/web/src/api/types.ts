@@ -1380,12 +1380,30 @@ export interface TriggerGroup {
   conditions: StrategyTrigger[];
 }
 
+export type StrategyStyle =
+  | 'MOMENTUM'
+  | 'VALUE'
+  | 'MEAN_REVERSION'
+  | 'SWING'
+  | 'TREND_FOLLOWING'
+  | 'INCOME'
+  | 'GROWTH'
+  | 'DEFENSIVE'
+  | 'CARRY'
+  | 'EVENT_DRIVEN'
+  | 'QUANT'
+  | 'RISK'
+  | 'SENTIMENT'
+  | 'STATISTICAL_ARB'
+  | 'TECHNICAL'
+  | 'GENERAL';
+
 export interface Strategy {
   id: string;
   name: string;
   description: string;
   category: StrategyCategory;
-  style: string;
+  style: StrategyStyle;
   requires: string[];
   active: boolean;
   source: string;
@@ -1403,7 +1421,7 @@ export interface StrategiesQueryResult {
 
 export interface StrategiesQueryVariables {
   category?: StrategyCategory;
-  style?: string;
+  style?: StrategyStyle;
   active?: boolean;
   query?: string;
 }

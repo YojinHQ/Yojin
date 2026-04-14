@@ -75,7 +75,10 @@ const PriceMoveCondition = z.object({
   params: z.object({
     threshold: z.number().describe('Fraction, e.g. -0.05 for 5% drop'),
     direction: PriceDirectionEnum.optional(),
-    lookback_months: z.number().optional().describe('3, 6, or 12'),
+    lookback_months: z
+      .union([z.literal(3), z.literal(6), z.literal(12)])
+      .optional()
+      .describe('3, 6, or 12'),
   }),
 });
 
@@ -171,6 +174,7 @@ const ProposeStrategyParamsSchema = z.object({
 const INDICATOR_KEYWORDS: [RegExp, string][] = [
   [/\bmacd\b.*\bhistogram\b|\bhistogram\b.*\bmacd\b/i, 'MACD'],
   [/\bmacd\b.*\bsignal\b|\bsignal\b.*\bmacd\b/i, 'MACD_SIGNAL'],
+  [/\bmacd\b.*\bline\b|\bline\b.*\bmacd\b/i, 'MACD_LINE'],
   [/\bmacd\b/i, 'MACD'],
   [/\bbollinger\b.*\blower\b|\blower\b.*\bbollinger\b/i, 'BB_LOWER'],
   [/\bbollinger\b.*\bupper\b|\bupper\b.*\bbollinger\b/i, 'BB_UPPER'],

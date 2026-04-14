@@ -50,7 +50,7 @@ const TRIGGER_TYPE_CAPABILITIES: Record<string, DataCapability[]> = {
   CONCENTRATION_DRIFT: ['portfolio'],
   DRAWDOWN: ['market_data', 'portfolio'],
   EARNINGS_PROXIMITY: ['fundamentals'],
-  METRIC_THRESHOLD: ['fundamentals'],
+  METRIC_THRESHOLD: [],
   SIGNAL_PRESENT: ['news'],
   CUSTOM: [],
 };
@@ -96,7 +96,7 @@ export function deriveCapabilities(triggerGroups: TriggerGroup[]): DataCapabilit
       // METRIC_THRESHOLD: derive from metric name
       if (condition.type === 'METRIC_THRESHOLD' && params['metric']) {
         const cap = METRIC_CAPABILITIES[String(params['metric'])];
-        if (cap) caps.add(cap);
+        caps.add(cap ?? 'fundamentals');
       }
     }
   }

@@ -96,7 +96,8 @@ export function parseConfidenceFromResponse(text: string): number {
 const DEFENSIVE_VERDICTS: ReadonlySet<ActionVerdict> = new Set(['TRIM', 'SELL']);
 const RISK_BOOST = 0.3;
 
-/** Compute effective score for conflict resolution. Defensive verdicts get a risk boost. */
+/** Compute effective score for conflict resolution. Defensive verdicts get a risk boost.
+ *  Tie-break: when scores are equal, the newer action wins (latest-wins semantics). */
 export function effectiveScore(confidence: number, verdict: ActionVerdict): number {
   return confidence + (DEFENSIVE_VERDICTS.has(verdict) ? RISK_BOOST : 0);
 }

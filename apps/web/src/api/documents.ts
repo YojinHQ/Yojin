@@ -1451,7 +1451,7 @@ export const ACTIVITY_LOG_QUERY = gql`
 // ---------------------------------------------------------------------------
 
 export const STRATEGIES_QUERY = gql`
-  query Strategies($category: StrategyCategory, $style: String, $active: Boolean, $query: String) {
+  query Strategies($category: StrategyCategory, $style: StrategyStyle, $active: Boolean, $query: String) {
     strategies(category: $category, style: $style, active: $active, query: $query) {
       id
       name

@@ -96,8 +96,8 @@ export function NumberInput({
           type="number"
           value={value ?? ''}
           onChange={(e) => {
-            const raw = e.target.value;
-            onChange(raw === '' ? undefined : Number(raw));
+            const v = e.currentTarget.valueAsNumber;
+            onChange(e.target.value === '' ? undefined : Number.isNaN(v) ? value : v);
           }}
           placeholder={placeholder}
           min={min}

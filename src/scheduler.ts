@@ -1289,7 +1289,11 @@ Provide your ACTION headline and analysis.`,
             const actionMatch = lines[0]?.match(/^ACTION:\s*(.+)/i);
             if (actionMatch) {
               headline = actionMatch[1].trim();
-              reasoning = lines.slice(1).join('\n').trim();
+              reasoning = lines
+                .slice(1)
+                .filter((l) => !/^CONFIDENCE:\s/i.test(l))
+                .join('\n')
+                .trim();
             } else {
               reasoning = fullText;
             }

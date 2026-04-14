@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 import Button from '../common/button.js';
@@ -97,6 +97,12 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
 
   const [tickerRaw, setTickerRaw] = useState(() => data.tickers.join(', '));
   const tickerInputFocused = useRef(false);
+
+  useEffect(() => {
+    if (!tickerInputFocused.current) {
+      setTickerRaw(data.tickers.join(', '));
+    }
+  }, [data.tickers]);
 
   const [, createStrategy] = useCreateStrategy();
   const [, updateStrategy] = useUpdateStrategy();
