@@ -108,3 +108,122 @@ export function deduplicateByTitle(signals: Signal[]): Signal[] {
   }
   return [...byTitle.values()];
 }
+
+// ---------------------------------------------------------------------------
+// Event-based deduplication
+// ---------------------------------------------------------------------------
+
+/** Recognized event categories and their title-keyword patterns.
+ * Order matters — first match wins. More specific categories (FDA, M&A)
+ * are checked before broader ones (EARNINGS) to avoid false matches on
+ * shared keywords like "results" or "approval". */
+const EVENT_PATTERNS: ReadonlyArray<{ category: string; pattern: RegExp }> = [
+  {
+    category: 'FDA',
+    pattern: /\b(fda|clinical\s+trial|phase\s+[1-3]|pdufa)\b/i,
+  },
+  {
+    category: 'MA',
+    pattern: /\b(merger|acquisition|acquir(?:es?|ed|ing)|takeover|buyout)\b/i,
+  },
+  {
+    category: 'OFFERING',
+    pattern: /\b(ipo|(?:public|secondary)\s+offering|shelf\s+registration)\b/i,
+  },
+  {
+    category: 'ANALYST',
+    pattern:
+      /\b(upgrade[ds]?|downgrade[ds]?|price\s+target|initiat(?:es?|ing)|overweight|underweight|outperform|underperform)\b/i,
+  },
+  {
+    category: 'EARNINGS',
+    pattern:
+      /\b(earnings|revenue|eps|guidance|quarterly\s+results|beats?|miss(?:es)?|quarterly|q[1-4]\b|fy\d{2,4}|fiscal|profit|bookings?|backlog|transcript)\b/i,
+  },
+];
+
+/**
+ * Extract an event fingerprint from a signal title.
+ * Returns a category string (e.g. 'EARNINGS', 'ANALYST') that identifies the
+ * type of corporate event. Returns null for general news — only recognized
+ * event categories are fingerprinted to avoid false-positive clustering.
+ */
+export function extractEventFingerprint(title: string): string | null {
+  for (const { category, pattern } of EVENT_PATTERNS) {
+    if (pattern.test(title)) return category;
+  }
+  return null;
+}
+
+/**
+ * Event-based deduplication — groups signals covering the same underlying event
+ * (same ticker, same day, same event category) and keeps only the best signal
+ * per event cluster. Sources from dropped cluster members are merged into the
+ * kept signal so provenance information is preserved.
+ *
+ * Unlike deduplicateByTitle (exact title match), this catches paraphrases:
+ * "AAPL beats Q3 estimates" and "Apple reports strong Q3 earnings" → same event.
+ *
+ * Only clusters signals with a recognized event category (earnings, analyst action,
+ * FDA, M&A, etc.). Signals with no detected event category pass through unchanged
+ * to avoid false-positive grouping of unrelated news.
+ */
+export function deduplicateByEvent(signals: Signal[]): Signal[] {
+  // Build event clusters keyed by "TICKER|DATE|CATEGORY"
+  const clusters = new Map<string, Signal[]>();
+  const unclustered: Signal[] = [];
+
+  for (const signal of signals) {
+    const fingerprint = extractEventFingerprint(signal.title);
+    if (!fingerprint || signal.assets.length === 0) {
+      unclustered.push(signal);
+      continue;
+    }
+
+    const day = signal.publishedAt.slice(0, 10);
+    for (const asset of signal.assets) {
+      const key = `${asset.ticker}|${day}|${fingerprint}`;
+      const group = clusters.get(key);
+      if (group) {
+        group.push(signal);
+      } else {
+        clusters.set(key, [signal]);
+      }
+    }
+  }
+
+  // Pick the best signal from each cluster
+  const kept = new Set<string>();
+  const result: Signal[] = [];
+
+  for (const group of clusters.values()) {
+    // Sort: highest qualityScore → highest confidence → fewest tickers → longest content
+    const sorted = [...group].sort((a, b) => {
+      const qa = a.qualityScore ?? 0;
+      const qb = b.qualityScore ?? 0;
+      if (qa !== qb) return qb - qa;
+      if (a.confidence !== b.confidence) return b.confidence - a.confidence;
+      if (a.assets.length !== b.assets.length) return a.assets.length - b.assets.length;
+      return (b.content?.length ?? 0) - (a.content?.length ?? 0);
+    });
+
+    const best = sorted[0];
+    if (kept.has(best.id)) continue;
+
+    // Merge sources from cluster members into the representative
+    const existingSourceIds = new Set(best.sources.map((s) => s.id));
+    const newSources = sorted.slice(1).flatMap((s) => s.sources.filter((src) => !existingSourceIds.has(src.id)));
+
+    result.push(newSources.length > 0 ? { ...best, sources: [...best.sources, ...newSources] } : best);
+    kept.add(best.id);
+  }
+
+  for (const signal of unclustered) {
+    if (!kept.has(signal.id)) {
+      kept.add(signal.id);
+      result.push(signal);
+    }
+  }
+
+  return result;
+}

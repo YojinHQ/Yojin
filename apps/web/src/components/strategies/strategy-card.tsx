@@ -2,25 +2,13 @@ import { formatStyle } from './types.js';
 import type { Strategy, StrategyCategory } from './types.js';
 import Badge from '../common/badge';
 import type { BadgeVariant } from '../common/badge';
-import { cn } from '../../lib/utils';
+import { cn, formatShortDate } from '../../lib/utils';
 
 const categoryVariant: Record<StrategyCategory, BadgeVariant> = {
   RISK: 'error',
   PORTFOLIO: 'warning',
   MARKET: 'market',
   RESEARCH: 'success',
-};
-
-const sourceLabel: Record<string, string> = {
-  'built-in': 'Built-in',
-  custom: 'Custom',
-  community: 'Community',
-};
-
-const sourceVariant: Record<string, BadgeVariant> = {
-  'built-in': 'neutral',
-  custom: 'warning',
-  community: 'info',
 };
 
 interface StrategyCardProps {
@@ -83,11 +71,8 @@ export default function StrategyCard({ strategy, onToggle, onClick }: StrategyCa
       </div>
 
       <div className="flex items-center gap-2 mt-4 pt-1">
-        <Badge variant={sourceVariant[strategy.source] ?? 'neutral'} className="rounded">
-          {sourceLabel[strategy.source] ?? strategy.source}
-        </Badge>
         <span className="text-text-muted text-2xs">
-          {strategy.createdBy} &bull; {strategy.createdAt}
+          {strategy.createdBy} &bull; {formatShortDate(strategy.createdAt)}
         </span>
       </div>
     </button>

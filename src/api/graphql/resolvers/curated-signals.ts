@@ -21,7 +21,12 @@ import type { SignalAssessment, SignalVerdict, ThesisAlignment } from '../../../
 import { detectConvergence } from '../../../signals/curation/convergence-detector.js';
 import { computeEngagementScore } from '../../../signals/curation/engagement-scorer.js';
 import type { CurationConfig, CurationWeights, FeedTarget } from '../../../signals/curation/types.js';
-import { DEFAULT_SPAM_PATTERNS, deduplicateByTitle, filterSignals } from '../../../signals/signal-filter.js';
+import {
+  DEFAULT_SPAM_PATTERNS,
+  deduplicateByEvent,
+  deduplicateByTitle,
+  filterSignals,
+} from '../../../signals/signal-filter.js';
 import type { Signal, SignalOutputType, SignalType } from '../../../signals/types.js';
 import type { WatchlistStore } from '../../../watchlist/watchlist-store.js';
 
@@ -340,9 +345,15 @@ export async function curatedSignalsResolver(
     }
   }
 
-  // Title dedup per feed target
-  const portfolioSignals = deduplicateByTitle(tagged.filter((t) => t.feedTarget === 'PORTFOLIO').map((t) => t.signal));
-  const watchlistSignals = deduplicateByTitle(tagged.filter((t) => t.feedTarget === 'WATCHLIST').map((t) => t.signal));
+  // Title dedup + event dedup per feed target.
+  // deduplicateByTitle catches exact title matches; deduplicateByEvent catches
+  // paraphrases of the same underlying event (same ticker + day + event category).
+  const portfolioSignals = deduplicateByEvent(
+    deduplicateByTitle(tagged.filter((t) => t.feedTarget === 'PORTFOLIO').map((t) => t.signal)),
+  );
+  const watchlistSignals = deduplicateByEvent(
+    deduplicateByTitle(tagged.filter((t) => t.feedTarget === 'WATCHLIST').map((t) => t.signal)),
+  );
 
   // Rebuild tagged list after dedup
   const dedupedTagged: TaggedSignal[] = [

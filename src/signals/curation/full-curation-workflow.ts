@@ -25,7 +25,7 @@ import type { InsightStore } from '../../insights/insight-store.js';
 import { createSubsystemLogger } from '../../logging/logger.js';
 import type { PortfolioSnapshotStore } from '../../portfolio/snapshot-store.js';
 import type { SignalArchive } from '../archive.js';
-import { DEFAULT_SPAM_PATTERNS, deduplicateByTitle, filterSignals } from '../signal-filter.js';
+import { DEFAULT_SPAM_PATTERNS, deduplicateByEvent, deduplicateByTitle, filterSignals } from '../signal-filter.js';
 import type { Signal } from '../types.js';
 
 const logger = createSubsystemLogger('full-curation');
@@ -256,8 +256,8 @@ export function registerFullCurationWorkflow(orchestrator: Orchestrator, options
         return;
       }
 
-      // Dedup by title and trim to a reasonable batch for agents
-      const deduped = deduplicateByTitle(newSignals);
+      // Dedup by title + event and trim to a reasonable batch for agents
+      const deduped = deduplicateByEvent(deduplicateByTitle(newSignals));
       const trimmed = deduped.sort((a, b) => b.confidence - a.confidence).slice(0, 30);
 
       signalCount = trimmed.length;

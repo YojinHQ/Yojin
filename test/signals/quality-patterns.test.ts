@@ -33,6 +33,22 @@ describe('SELF_INVALIDATING_RE', () => {
     'source unavailable',
     'no evidence for the claim that revenue doubled',
     'no evidence for this assertion',
+    // Anecdotal commentary patterns (broader than "relies on anecdotal")
+    'anecdotal customer commentary about CDN migration',
+    'anecdotal observation from a single forum user',
+    'anecdotal user feedback on product quality',
+    'anecdotal evidence from community forums',
+    // "not verified" patterns
+    'not verified market data from social media',
+    'not confirmed data about user churn',
+    // Contested claim patterns
+    'the claim is contested by multiple commenters',
+    'claim remains contested within the community',
+    'making the claim contested by practitioners',
+    'making the thesis contested among researchers',
+    'the source includes pushback from users',
+    'contested claim about model performance differences',
+    'contested thesis lacking supporting data',
   ];
 
   const shouldNotMatch = [

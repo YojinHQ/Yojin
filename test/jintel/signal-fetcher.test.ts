@@ -27,7 +27,7 @@ describe('enrichmentToSignals — signal type classification', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['AAPL']);
-    const newsSignals = signals.filter((s) => s.sourceName?.includes('Jintel News'));
+    const newsSignals = signals.filter((s) => s.sourceId?.includes('jintel-news'));
 
     expect(newsSignals).toHaveLength(1);
     expect(newsSignals[0].type).toBe('NEWS');
@@ -46,7 +46,7 @@ describe('enrichmentToSignals — signal type classification', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['AAPL']);
-    const researchSignals = signals.filter((s) => s.sourceName === 'Jintel Research');
+    const researchSignals = signals.filter((s) => s.sourceName === 'Research');
 
     expect(researchSignals).toHaveLength(1);
     expect(researchSignals[0].type).toBe('NEWS');
@@ -68,7 +68,7 @@ describe('enrichmentToSignals — signal type classification', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['AAPL']);
-    const filingSignals = signals.filter((s) => s.sourceName === 'Jintel SEC');
+    const filingSignals = signals.filter((s) => s.sourceName === 'SEC Filings');
 
     expect(filingSignals).toHaveLength(1);
     expect(filingSignals[0].type).toBe('FILINGS');
@@ -131,7 +131,7 @@ describe('enrichmentToSignals — signal type classification', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['AAPL']);
-    const newsSignals = signals.filter((s) => s.sourceName?.includes('Jintel News'));
+    const newsSignals = signals.filter((s) => s.sourceId?.includes('jintel-news'));
 
     expect(newsSignals).toHaveLength(1);
     expect(newsSignals[0].type).toBe('NEWS');
@@ -157,7 +157,7 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['LITE']);
-    const hnSignals = signals.filter((s) => s.sourceName === 'Jintel Discussions (HN)');
+    const hnSignals = signals.filter((s) => s.sourceName === 'Hacker News');
 
     expect(hnSignals).toHaveLength(0);
   });
@@ -176,7 +176,7 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['FLY']);
-    const newsSignals = signals.filter((s) => s.sourceName?.includes('Jintel News'));
+    const newsSignals = signals.filter((s) => s.sourceId?.includes('jintel-news'));
 
     expect(newsSignals).toHaveLength(0);
   });
@@ -195,7 +195,7 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['FLY']);
-    const newsSignals = signals.filter((s) => s.sourceName?.includes('Jintel News'));
+    const newsSignals = signals.filter((s) => s.sourceId?.includes('jintel-news'));
 
     expect(newsSignals).toHaveLength(1);
   });
@@ -214,7 +214,7 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['LITE']);
-    const newsSignals = signals.filter((s) => s.sourceName?.includes('Jintel News'));
+    const newsSignals = signals.filter((s) => s.sourceId?.includes('jintel-news'));
 
     expect(newsSignals).toHaveLength(1);
   });
@@ -233,7 +233,7 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['LITE']);
-    const researchSignals = signals.filter((s) => s.sourceName === 'Jintel Research');
+    const researchSignals = signals.filter((s) => s.sourceName === 'Research');
 
     expect(researchSignals).toHaveLength(1);
   });
@@ -252,7 +252,7 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['FLY']);
-    const newsSignals = signals.filter((s) => s.sourceName?.includes('Jintel News'));
+    const newsSignals = signals.filter((s) => s.sourceId?.includes('jintel-news'));
 
     expect(newsSignals).toHaveLength(1);
   });
@@ -273,9 +273,75 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['PLTR']);
-    const hnSignals = signals.filter((s) => s.sourceName === 'Jintel Discussions (HN)');
+    const hnSignals = signals.filter((s) => s.sourceName === 'Hacker News');
 
     expect(hnSignals).toHaveLength(1); // "PLTR" in ALL-CAPS → intentional ticker reference
+  });
+
+  it('drops HN discussion where ALL-CAPS ticker is in product name context ("Flash LITE" → LITE)', () => {
+    const entity = makeEntity({
+      name: 'Lumentum Holdings',
+      discussions: [
+        {
+          objectId: 'hn-789',
+          title: 'Flash LITE benchmark results surprise researchers',
+          url: 'https://example.com/flash-lite',
+          hnUrl: 'https://news.ycombinator.com/item?id=789',
+          points: 80,
+          numComments: 40,
+          topComments: [{ text: 'Gemini 2.5 Flash LITE is surprisingly capable for the price' }],
+        },
+      ],
+    });
+
+    const signals = enrichmentToSignals(entity, ['LITE']);
+    const hnSignals = signals.filter((s) => s.sourceName === 'Hacker News');
+
+    expect(hnSignals).toHaveLength(0);
+  });
+
+  it('keeps short ALL-CAPS ticker when it also appears outside product context', () => {
+    const entity = makeEntity({
+      name: 'Lumentum Holdings',
+      discussions: [
+        {
+          objectId: 'hn-790',
+          title: 'LITE earnings beat expectations, LITE guidance raised despite Flash Lite competition',
+          url: 'https://example.com/lite-earnings',
+          hnUrl: 'https://news.ycombinator.com/item?id=790',
+          points: 60,
+          numComments: 20,
+        },
+      ],
+    });
+
+    const signals = enrichmentToSignals(entity, ['LITE']);
+    const hnSignals = signals.filter((s) => s.sourceName === 'Hacker News');
+
+    expect(hnSignals).toHaveLength(1);
+  });
+
+  it('caps HN discussion confidence at 0.7', () => {
+    const entity = makeEntity({
+      name: 'Apple',
+      discussions: [
+        {
+          objectId: 'hn-conf-1',
+          title: 'Apple announces new M5 chip',
+          url: 'https://example.com/m5',
+          hnUrl: 'https://news.ycombinator.com/item?id=99999',
+          points: 500,
+          numComments: 200,
+          topComments: [{ text: 'This is a game changer for Apple silicon' }],
+        },
+      ],
+    });
+
+    const signals = enrichmentToSignals(entity, ['AAPL']);
+    const hnSignals = signals.filter((s) => s.sourceName === 'Hacker News');
+
+    expect(hnSignals).toHaveLength(1);
+    expect(hnSignals[0].confidence).toBeLessThanOrEqual(0.7);
   });
 
   it('keeps 5-char ticker on bare word-boundary match without entity name', () => {
@@ -292,7 +358,7 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['NBAYF']);
-    const newsSignals = signals.filter((s) => s.sourceName?.includes('Jintel News'));
+    const newsSignals = signals.filter((s) => s.sourceId?.includes('jintel-news'));
 
     expect(newsSignals).toHaveLength(1);
   });
@@ -311,7 +377,7 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['NVDA']);
-    const newsSignals = signals.filter((s) => s.sourceName?.includes('Jintel News'));
+    const newsSignals = signals.filter((s) => s.sourceId?.includes('jintel-news'));
 
     expect(newsSignals).toHaveLength(1);
   });
@@ -330,7 +396,7 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['TSLA']);
-    const newsSignals = signals.filter((s) => s.sourceName?.includes('Jintel News'));
+    const newsSignals = signals.filter((s) => s.sourceId?.includes('jintel-news'));
 
     expect(newsSignals).toHaveLength(1);
   });
@@ -349,7 +415,7 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['OPEN']);
-    const newsSignals = signals.filter((s) => s.sourceName?.includes('Jintel News'));
+    const newsSignals = signals.filter((s) => s.sourceId?.includes('jintel-news'));
 
     expect(newsSignals).toHaveLength(0);
   });
@@ -394,7 +460,7 @@ describe('enrichmentToSignals — ticker-content mismatch filter', () => {
     });
 
     const signals = enrichmentToSignals(entity, ['FLY']);
-    const researchSignals = signals.filter((s) => s.sourceName === 'Jintel Research');
+    const researchSignals = signals.filter((s) => s.sourceName === 'Research');
 
     expect(researchSignals).toHaveLength(0);
   });
@@ -455,7 +521,7 @@ describe('enrichmentToSignals — Reddit source attribution', () => {
     const reddit = signals.filter((s) => s.sourceId.includes('reddit'));
 
     expect(reddit).toHaveLength(1);
-    expect(reddit[0].sourceName).toBe('Jintel Social (r/Bitcoin)');
+    expect(reddit[0].sourceName).toBe('Reddit (r/Bitcoin)');
     expect(reddit[0].type).toBe('SOCIALS');
   });
 
@@ -482,7 +548,7 @@ describe('enrichmentToSignals — Reddit source attribution', () => {
     const reddit = signals.filter((s) => s.sourceId.includes('reddit'));
 
     expect(reddit).toHaveLength(1);
-    expect(reddit[0].sourceName).toBe('Jintel Social (r/CryptoCurrency)');
+    expect(reddit[0].sourceName).toBe('Reddit (r/CryptoCurrency)');
     expect(reddit[0].type).toBe('SOCIALS');
     expect(reddit[0].metadata?.redditPostId).toBeUndefined();
   });

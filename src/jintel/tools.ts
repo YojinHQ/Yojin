@@ -188,7 +188,7 @@ export function riskSignalsToRaw(signals: RiskSignal[], tickers: string[]): RawS
     })
     .map((s) => ({
       sourceId: 'jintel',
-      sourceName: 'Jintel',
+      sourceName: 'Risk Screening',
       sourceType: SourceType.API,
       reliability: 0.8,
       title: `[${s.severity}] ${s.type}: ${s.description}`,
@@ -1075,7 +1075,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       if (options.ingestor) {
         const rawSignals: RawSignalInput[] = entity.news.map((a) => ({
           sourceId: 'jintel',
-          sourceName: a.source || 'Jintel',
+          sourceName: a.source || 'News',
           sourceType: SourceType.API,
           reliability: 0.75,
           title: a.title,

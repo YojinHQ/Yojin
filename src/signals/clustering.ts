@@ -16,6 +16,7 @@ import type { SignalArchive } from './archive.js';
 import type { SignalGroupArchive } from './group-archive.js';
 import type { SignalGroup } from './group-types.js';
 import type { QualityAgent, QualityVerdict } from './quality-agent.js';
+import { deduplicateByEvent } from './signal-filter.js';
 import type { Signal } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 
@@ -82,7 +83,18 @@ export class SignalClustering {
    * Fire-and-forget safe: errors are caught and logged, never thrown.
    */
   async processSignals(signals: Signal[]): Promise<void> {
-    for (const signal of signals) {
+    // Deterministic event dedup — catches "AAPL beats Q3" / "Apple Q3 earnings"
+    // as the same event without an LLM call.
+    const deduped = deduplicateByEvent(signals);
+    if (deduped.length < signals.length) {
+      logger.info('Event pre-clustering reduced signal batch', {
+        before: signals.length,
+        after: deduped.length,
+        saved: signals.length - deduped.length,
+      });
+    }
+
+    for (const signal of deduped) {
       try {
         await this.processOne(signal);
       } catch (error) {

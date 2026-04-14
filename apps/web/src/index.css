@@ -100,6 +100,30 @@
   margin-top: 0.5rem;
 }
 
+/* Strategy section prose — restore list styles stripped by preflight */
+.strategy-prose ol {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.strategy-prose ul {
+  list-style-type: disc;
+  padding-left: 1.5em;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.strategy-prose li {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+}
+
+.strategy-prose li > strong:first-child {
+  color: var(--color-text-primary);
+}
+
 /* Chat grid background */
 .bg-chat-grid {
   background-color: #222624;
