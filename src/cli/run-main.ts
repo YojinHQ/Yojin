@@ -9,6 +9,7 @@ import { join, resolve } from 'node:path';
 import { startChat } from './chat.js';
 import { setupToken } from './setup-token.js';
 import { onShutdownSignal } from './shutdown-signals.js';
+import { runStrategyDebug } from './strategy-debug.js';
 import { createSlackPlugin } from '../../channels/slack/index.js';
 import { createTelegramPlugin } from '../../channels/telegram/index.js';
 import { createWhatsAppPlugin } from '../../channels/whatsapp/index.js';
@@ -100,6 +101,9 @@ export async function runMain(args: string[]): Promise<void> {
       break;
     case 'insights':
       await runInsights();
+      break;
+    case 'eval-strategies':
+      await runStrategyDebug(args.slice(1));
       break;
 
     case 'version':
@@ -511,6 +515,10 @@ Commands:
     --system <prompt>    System prompt
   yojin setup          Connect your Claude account
   yojin insights       Process portfolio insights (multi-agent analysis)
+  yojin eval-strategies  Debug strategy evaluation (trace report)
+    --tickers <syms>       Comma-separated tickers (default: all portfolio)
+    --strategy <id>        Evaluate a single strategy only
+    --dry-run              Skip Jintel fetch, use cached data
 
 Advanced:
   yojin serve          Alias for start

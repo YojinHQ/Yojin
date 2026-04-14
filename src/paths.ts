@@ -49,6 +49,7 @@ export const DATA_SUBDIRS = [
   'data', // General-purpose data storage for data source outputs and imports
   'oauth', // OAuth / pairing state (e.g. WhatsApp Baileys auth)
   'oauth/whatsapp',
+  'debug', // Debug output (strategy eval trace reports, etc.)
 ] as const;
 
 /**
