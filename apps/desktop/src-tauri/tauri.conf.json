@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "ai.yojin.desktop",
   "build": {
-    "frontendDist": "../dist"
+    "frontendDist": "../splash"
   },
   "app": {
     "windows": [],
