@@ -56,6 +56,18 @@ pnpm --filter @yojin/desktop dev
 
 Requires the Rust toolchain (`rustup`) installed locally during development.
 
+#### Legacy Swift menu-bar app (macOS only)
+
+The previous macOS-only Swift menu-bar app still ships from `apps/desktop/` while the Tauri app stabilises:
+
+```bash
+cd apps/desktop
+./scripts/build.sh      # Compiles the Swift app
+./scripts/install.sh    # Installs to /Applications + auto-start on login
+```
+
+Once installed, the Yojin hand icon appears in your menu bar with start/stop/open controls and auto-starts on login via LaunchAgent. To uninstall: `./scripts/uninstall.sh`. New work should target the Tauri app above; the Swift app will be retired once the Tauri build ships signed installers.
+
 ### Docker (recommended for long-running)
 
 One command gives you the web UI, API, and channel integrations (Slack, etc.):

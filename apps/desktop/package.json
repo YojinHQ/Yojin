@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "bundle:node": "node scripts/bundle-node.mjs",
+    "bundle:node:all": "node scripts/bundle-node.mjs --all",
+    "prebuild": "node scripts/bundle-node.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.4.0"

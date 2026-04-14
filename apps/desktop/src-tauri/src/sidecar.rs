@@ -2,7 +2,7 @@ use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 /// Handle to the spawned Node backend. Dropping this struct does **not** kill
 /// the child — call [`SidecarHandle::shutdown`] explicitly from a quit path.
@@ -44,8 +44,9 @@ impl SidecarHandle {
 pub fn spawn(app: &AppHandle) -> Result<SidecarHandle, std::io::Error> {
     let port = pick_free_port()?;
     let entry = resolve_entry_script(app)?;
+    let node = node_command(app);
 
-    let mut command = Command::new(node_command());
+    let mut command = Command::new(&node);
     command
         .arg(&entry)
         .arg("start")
@@ -54,7 +55,11 @@ pub fn spawn(app: &AppHandle) -> Result<SidecarHandle, std::io::Error> {
         .stderr(Stdio::inherit())
         .stdin(Stdio::null());
 
-    log::info!("Spawning Yojin backend: node {} start (YOJIN_PORT={port})", entry.display());
+    log::info!(
+        "Spawning Yojin backend: {} {} start (YOJIN_PORT={port})",
+        node.display(),
+        entry.display()
+    );
     let child = command.spawn()?;
 
     Ok(SidecarHandle {
@@ -70,11 +75,29 @@ fn pick_free_port() -> std::io::Result<u16> {
     Ok(port)
 }
 
-fn node_command() -> String {
-    // For dev builds we expect `node` on PATH.
-    // For prod builds we'll later switch to a bundled Node binary in
-    // resources/sidecar/. Tracked in `apps/desktop/README.md` open items.
-    std::env::var("YOJIN_DESKTOP_NODE").unwrap_or_else(|_| "node".to_string())
+/// Resolution order for the Node runtime that hosts the backend:
+///   1. `YOJIN_DESKTOP_NODE` env var (manual override, takes a full path).
+///   2. Bundled binary in the Tauri resource dir (`sidecar/node[.exe]`) — this
+///      is what end users get from the installer so they don't need Node on
+///      PATH.
+///   3. `node` on PATH (dev fallback).
+fn node_command(app: &AppHandle) -> PathBuf {
+    if let Ok(override_path) = std::env::var("YOJIN_DESKTOP_NODE") {
+        return PathBuf::from(override_path);
+    }
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let bundled = resource_dir.join("sidecar").join(bundled_node_filename());
+        if bundled.exists() {
+            return bundled;
+        }
+    }
+
+    PathBuf::from("node")
+}
+
+fn bundled_node_filename() -> &'static str {
+    if cfg!(windows) { "node.exe" } else { "node" }
 }
 
 fn resolve_entry_script(app: &AppHandle) -> std::io::Result<PathBuf> {

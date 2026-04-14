@@ -1,3 +1,5 @@
 target/
 gen/
 Cargo.lock
+# Bundled Node runtime — downloaded by scripts/bundle-node.mjs as a build step.
+sidecar/

@@ -50,6 +50,25 @@ This launches `tauri dev`, which:
 3. Tray icon appears in the menu bar.
 4. Click *Open Yojin* → window opens at `http://127.0.0.1:<port>`.
 
+## Bundled Node runtime
+
+End users don't need Node installed — `pnpm --filter @yojin/desktop build` runs `scripts/bundle-node.mjs` as a `prebuild` step, which downloads the official Node 22.12.0 distribution for the host platform and drops the `node` binary at `src-tauri/sidecar/node` (`node.exe` on Windows). Tauri then ships that file as a bundle resource.
+
+At runtime, `src-tauri/src/sidecar.rs` resolves the Node command in this order:
+
+1. `YOJIN_DESKTOP_NODE` env var (manual override — full path to a `node` binary).
+2. Bundled binary in the Tauri resource dir (`sidecar/node[.exe]`) — production path.
+3. `node` on `PATH` (dev fallback when no binary has been bundled yet).
+
+Cross-target downloads (CI matrix, releases) — these write platform-suffixed copies (`node-darwin-arm64`, `node-win-x64.exe`, …):
+
+```bash
+pnpm --filter @yojin/desktop bundle:node:all          # all supported targets
+pnpm --filter @yojin/desktop tauri -- bundle:node --target=darwin-arm64
+```
+
+`src-tauri/sidecar/` is gitignored — the binary is downloaded fresh per build.
+
 ## Build (per-platform installers)
 
 ```bash
@@ -64,8 +83,7 @@ pnpm --filter @yojin/desktop build
 
 ## Open items
 
-- [ ] Real tray + bundle icons (placeholders in `src-tauri/icons/`)
-- [ ] Bundle the Node runtime as a sidecar binary for production builds (currently relies on `node` from PATH)
+- [ ] Bundle the Node app itself (compiled `dist/` + `node_modules/`) as a resource so the installer is self-contained — `sidecar.rs` already looks for `sidecar/dist/src/entry.js` in the resource dir
 - [ ] Lazy-download Playwright browsers on first scrape (keeps installer small per `Workstream B / decision 2`)
 - [ ] Codesigning certs (Apple Developer ID + Windows OV)
 - [ ] Auto-update channel (Tauri updater plugin)
