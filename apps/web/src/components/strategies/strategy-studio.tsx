@@ -114,7 +114,7 @@ const EDIT_PROMPT_PREFIX =
 
 const FORK_PROMPT_PREFIX =
   '[STRATEGY STUDIO — FORK MODE]\n' +
-  'I want to fork this as a starting point. Keep replies to 1–2 sentences. ' +
+  'I want to fork this as a starting point. ' +
   'When I ask for changes, call `display_propose_strategy` with the update.\n\nOriginal strategy: ';
 
 function buildInitialMessage(strategy: Strategy | null | undefined, editMode: boolean | undefined): string {
