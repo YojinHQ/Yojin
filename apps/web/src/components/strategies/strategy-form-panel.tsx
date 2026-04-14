@@ -7,6 +7,12 @@ import { cn } from '../../lib/utils.js';
 import { TriggerParamFields } from './trigger-param-fields.js';
 import type { TriggerParams } from './trigger-param-fields.js';
 
+export interface TriggerGroupFormData {
+  id: string;
+  label: string;
+  conditions: { id: string; type: string; description: string; params: TriggerParams }[];
+}
+
 export interface StrategyFormData {
   name: string;
   description: string;
@@ -14,10 +20,11 @@ export interface StrategyFormData {
   style: string;
   requires: string[];
   content: string;
-  triggers: { type: string; description: string; params: TriggerParams }[];
+  triggerGroups: TriggerGroupFormData[];
   tickers: string[];
   maxPositionSize: number | undefined;
   targetAllocation: number | undefined;
+  targetWeights: { ticker: string; weight: number }[];
 }
 
 interface StrategyFormPanelProps {
@@ -31,25 +38,13 @@ const TRIGGER_TYPES = [
   'PRICE_MOVE',
   'INDICATOR_THRESHOLD',
   'CONCENTRATION_DRIFT',
+  'ALLOCATION_DRIFT',
   'DRAWDOWN',
   'EARNINGS_PROXIMITY',
   'METRIC_THRESHOLD',
   'SIGNAL_PRESENT',
-  'ALLOCATION_DRIFT',
+  'PERSON_ACTIVITY',
   'CUSTOM',
-];
-
-const CAPABILITIES = [
-  { value: 'MARKET_DATA', label: 'Market Data' },
-  { value: 'TECHNICALS', label: 'Technicals' },
-  { value: 'NEWS', label: 'News' },
-  { value: 'RESEARCH', label: 'Research' },
-  { value: 'SENTIMENT', label: 'Sentiment' },
-  { value: 'FUNDAMENTALS', label: 'Fundamentals' },
-  { value: 'FILINGS', label: 'Filings' },
-  { value: 'DERIVATIVES', label: 'Derivatives' },
-  { value: 'PORTFOLIO', label: 'Portfolio' },
-  { value: 'MACRO_DATA', label: 'Macro Data' },
 ];
 
 const CATEGORIES = [
@@ -59,10 +54,41 @@ const CATEGORIES = [
   { value: 'RESEARCH', label: 'Research' },
 ];
 
+const STYLES = [
+  { value: 'MOMENTUM', label: 'Momentum' },
+  { value: 'VALUE', label: 'Value' },
+  { value: 'MEAN_REVERSION', label: 'Mean Reversion' },
+  { value: 'SWING', label: 'Swing' },
+  { value: 'TREND_FOLLOWING', label: 'Trend Following' },
+  { value: 'INCOME', label: 'Income' },
+  { value: 'GROWTH', label: 'Growth' },
+  { value: 'DEFENSIVE', label: 'Defensive' },
+  { value: 'CARRY', label: 'Carry' },
+  { value: 'EVENT_DRIVEN', label: 'Event Driven' },
+  { value: 'QUANT', label: 'Quant' },
+  { value: 'RISK', label: 'Risk' },
+  { value: 'SENTIMENT', label: 'Sentiment' },
+  { value: 'STATISTICAL_ARB', label: 'Statistical Arb' },
+  { value: 'TECHNICAL', label: 'Technical' },
+  { value: 'GENERAL', label: 'General' },
+];
+
 const inputClass =
   'w-full bg-bg-card border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-light';
 
 const labelClass = 'block text-xs font-medium text-text-muted mb-1';
+
+function serializeTargetWeights(rows: { ticker: string; weight: number }[]): string | undefined {
+  const cleaned = rows
+    .map((r) => ({ ticker: r.ticker.trim().toUpperCase(), weight: r.weight }))
+    .filter((r) => r.ticker && Number.isFinite(r.weight) && r.weight > 0);
+  if (cleaned.length === 0) return '';
+  const record: Record<string, number> = {};
+  for (const { ticker, weight } of cleaned) {
+    record[ticker] = weight;
+  }
+  return JSON.stringify(record);
+}
 
 const MARKDOWN_PLACEHOLDER = `## Overview
 Describe the strategy rationale...
@@ -81,22 +107,12 @@ Position sizing, max drawdown, etc.`;
 export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyFormPanelProps) {
   const isEdit = !!editId;
   const [showPreview, setShowPreview] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [tickerRaw, setTickerRaw] = useState(() => data.tickers.join(', '));
   const tickerInputFocused = useRef(false);
-
-  const [triggerIds, setTriggerIds] = useState<string[]>(() => data.triggers.map(() => crypto.randomUUID()));
-  useEffect(() => {
-    setTriggerIds((prev) => {
-      if (prev.length === data.triggers.length) return prev;
-      if (data.triggers.length > prev.length) {
-        return [...prev, ...Array.from({ length: data.triggers.length - prev.length }, () => crypto.randomUUID())];
-      }
-      return prev.slice(0, data.triggers.length);
-    });
-  }, [data.triggers.length]);
 
   useEffect(() => {
     if (!tickerInputFocused.current) {
@@ -107,36 +123,83 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
   const [, createStrategy] = useCreateStrategy();
   const [, updateStrategy] = useUpdateStrategy();
 
+  const targetWeightSum = data.targetWeights.reduce((acc, r) => acc + (Number.isFinite(r.weight) ? r.weight : 0), 0);
+  const targetWeightOverflow = targetWeightSum > 1.0001;
   const saveDisabled =
     saving ||
     !data.name.trim() ||
-    !data.description.trim() ||
     !data.content.trim() ||
-    !data.style.trim() ||
-    data.triggers.every((t) => !t.description.trim());
+    data.triggerGroups.every((g) => g.conditions.every((c) => !c.description.trim())) ||
+    targetWeightOverflow;
+
+  const hasPartialGroups = data.triggerGroups.some((g) => {
+    const filled = g.conditions.filter((c) => c.description.trim());
+    return filled.length > 0 && filled.length < g.conditions.length;
+  });
 
   function update(patch: Partial<StrategyFormData>) {
     onChange({ ...data, ...patch });
   }
 
-  function updateTrigger(index: number, patch: Partial<StrategyFormData['triggers'][number]>) {
-    const updated = data.triggers.map((t, i) => (i === index ? { ...t, ...patch } : t));
-    update({ triggers: updated });
+  function updateCondition(
+    groupIndex: number,
+    condIndex: number,
+    patch: Partial<TriggerGroupFormData['conditions'][number]>,
+  ) {
+    const updated = data.triggerGroups.map((g, gi) =>
+      gi === groupIndex
+        ? { ...g, conditions: g.conditions.map((c, ci) => (ci === condIndex ? { ...c, ...patch } : c)) }
+        : g,
+    );
+    update({ triggerGroups: updated });
   }
 
-  function addTrigger() {
-    setTriggerIds((prev) => [...prev, crypto.randomUUID()]);
-    update({ triggers: [...data.triggers, { type: 'PRICE_MOVE', description: '', params: {} }] });
+  function addCondition(groupIndex: number) {
+    const updated = data.triggerGroups.map((g, gi) =>
+      gi === groupIndex
+        ? {
+            ...g,
+            conditions: [...g.conditions, { id: crypto.randomUUID(), type: 'PRICE_MOVE', description: '', params: {} }],
+          }
+        : g,
+    );
+    update({ triggerGroups: updated });
   }
 
-  function removeTrigger(index: number) {
-    setTriggerIds((prev) => prev.filter((_, i) => i !== index));
-    update({ triggers: data.triggers.filter((_, i) => i !== index) });
+  function removeCondition(groupIndex: number, condIndex: number) {
+    const updated = data.triggerGroups
+      .map((g, gi) => (gi === groupIndex ? { ...g, conditions: g.conditions.filter((_, ci) => ci !== condIndex) } : g))
+      .filter((g) => g.conditions.length > 0);
+    update({
+      triggerGroups:
+        updated.length > 0
+          ? updated
+          : [
+              {
+                id: crypto.randomUUID(),
+                label: '',
+                conditions: [{ id: crypto.randomUUID(), type: 'PRICE_MOVE', description: '', params: {} }],
+              },
+            ],
+    });
   }
 
-  function toggleCapability(value: string) {
-    const next = data.requires.includes(value) ? data.requires.filter((v) => v !== value) : [...data.requires, value];
-    update({ requires: next });
+  function updateGroupLabel(groupIndex: number, label: string) {
+    const updated = data.triggerGroups.map((g, gi) => (gi === groupIndex ? { ...g, label } : g));
+    update({ triggerGroups: updated });
+  }
+
+  function addGroup() {
+    update({
+      triggerGroups: [
+        ...data.triggerGroups,
+        {
+          id: crypto.randomUUID(),
+          label: '',
+          conditions: [{ id: crypto.randomUUID(), type: 'PRICE_MOVE', description: '', params: {} }],
+        },
+      ],
+    });
   }
 
   function commitTickers() {
@@ -148,6 +211,20 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
     setTickerRaw(parsed.join(', '));
   }
 
+  function updateTargetWeight(index: number, patch: Partial<{ ticker: string; weight: number }>) {
+    update({
+      targetWeights: data.targetWeights.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    });
+  }
+
+  function addTargetWeight() {
+    update({ targetWeights: [...data.targetWeights, { ticker: '', weight: 0 }] });
+  }
+
+  function removeTargetWeight(index: number) {
+    update({ targetWeights: data.targetWeights.filter((_, i) => i !== index) });
+  }
+
   async function handleSave() {
     setError(null);
     setSaving(true);
@@ -155,23 +232,28 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
     try {
       const input = {
         name: data.name.trim(),
-        description: data.description.trim(),
+        description: data.description.trim() || data.name.trim(),
         category: data.category,
-        style: data.style.trim(),
-        requires: data.requires.length > 0 ? data.requires : undefined,
+        style: data.style || 'GENERAL',
         content: data.content,
-        triggers: data.triggers
-          .filter((t) => t.description.trim())
-          .map((t) => ({
-            type: t.type,
-            description: t.description.trim(),
-            params: Object.keys(t.params).length > 0 ? JSON.stringify(t.params) : undefined,
-          })),
+        triggerGroups: data.triggerGroups
+          .map((g) => ({
+            label: g.label || undefined,
+            conditions: g.conditions
+              .filter((c) => c.description.trim())
+              .map((c) => ({
+                type: c.type,
+                description: c.description.trim(),
+                params: Object.keys(c.params).length > 0 ? JSON.stringify(c.params) : undefined,
+              })),
+          }))
+          .filter((g) => g.conditions.length > 0),
         tickers: data.tickers.length > 0 ? data.tickers : undefined,
         maxPositionSize:
           data.maxPositionSize !== undefined && !isNaN(data.maxPositionSize) ? data.maxPositionSize : undefined,
         targetAllocation:
           data.targetAllocation !== undefined && !isNaN(data.targetAllocation) ? data.targetAllocation : undefined,
+        targetWeights: serializeTargetWeights(data.targetWeights),
       };
 
       const result = isEdit ? await updateStrategy({ id: editId, input }) : await createStrategy({ input });
@@ -203,18 +285,9 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="font-headline text-sm text-text-primary">Strategy</h2>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setShowPreview((p) => !p)}
-            className="text-xs text-text-muted hover:text-text-primary transition-colors cursor-pointer"
-          >
-            {showPreview ? 'Edit Content' : 'Preview Content'}
-          </button>
-          <Button size="sm" disabled={saveDisabled} loading={saving} onClick={handleSave}>
-            {isEdit ? 'Update' : 'Save'}
-          </Button>
-        </div>
+        <Button size="sm" disabled={saveDisabled} loading={saving} onClick={handleSave}>
+          {isEdit ? 'Update' : 'Save'}
+        </Button>
       </div>
 
       {/* Body */}
@@ -231,99 +304,6 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
           />
         </div>
 
-        {/* Description */}
-        <div>
-          <label className={labelClass}>Description</label>
-          <input
-            type="text"
-            value={data.description}
-            onChange={(e) => update({ description: e.target.value })}
-            placeholder="Brief description"
-            className={inputClass}
-          />
-        </div>
-
-        {/* Category + Style */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelClass}>Category</label>
-            <select value={data.category} onChange={(e) => update({ category: e.target.value })} className={inputClass}>
-              {CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Style</label>
-            <input
-              type="text"
-              value={data.style}
-              onChange={(e) => update({ style: e.target.value })}
-              placeholder="e.g. momentum, mean_reversion"
-              className={inputClass}
-            />
-          </div>
-        </div>
-
-        {/* Triggers */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-medium text-text-muted">Triggers</label>
-            <button
-              type="button"
-              onClick={addTrigger}
-              className="text-xs text-accent-primary hover:text-accent-secondary transition-colors cursor-pointer"
-            >
-              + Add trigger
-            </button>
-          </div>
-          <div className="space-y-2">
-            {data.triggers.map((trigger, i) => (
-              <div key={triggerIds[i] ?? i} className="bg-bg-tertiary rounded-lg p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <select
-                    value={trigger.type}
-                    onChange={(e) => updateTrigger(i, { type: e.target.value, params: {} })}
-                    className={cn(inputClass, 'flex-1')}
-                  >
-                    {TRIGGER_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                  {data.triggers.length > 1 && (
-                    <button
-                      type="button"
-                      aria-label="Remove trigger"
-                      onClick={() => removeTrigger(i)}
-                      className="text-text-muted hover:text-error transition-colors cursor-pointer"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  value={trigger.description}
-                  onChange={(e) => updateTrigger(i, { description: e.target.value })}
-                  placeholder="Trigger description"
-                  className={inputClass}
-                />
-                <TriggerParamFields
-                  type={trigger.type}
-                  params={trigger.params}
-                  onChange={(params) => updateTrigger(i, { params })}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Tickers */}
         <div>
           <label className={labelClass}>Tickers</label>
@@ -338,28 +318,99 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
               tickerInputFocused.current = false;
               commitTickers();
             }}
-            placeholder="AAPL, NVDA, BTC (comma-separated)"
+            placeholder="AAPL, NVDA, BTC (comma-separated, or leave empty for all)"
             className={inputClass}
           />
         </div>
 
-        {/* Max Position Size */}
+        {/* Trigger Groups */}
         <div>
-          <label className={labelClass}>Max Position Size</label>
-          <div className="flex items-center gap-3">
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={1}
-              value={posPercent}
-              onChange={(e) => {
-                const pct = Number(e.target.value);
-                update({ maxPositionSize: pct > 0 ? pct / 100 : undefined });
-              }}
-              className="flex-1 accent-accent-primary"
-            />
-            <span className="text-xs text-text-muted tabular-nums w-8 text-right">{posPercent}%</span>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-medium text-text-muted">Trigger Groups</label>
+            <button
+              type="button"
+              onClick={addGroup}
+              className="text-xs text-accent-primary hover:text-accent-secondary transition-colors cursor-pointer"
+            >
+              + Add group
+            </button>
+          </div>
+          <div className="space-y-3">
+            {data.triggerGroups.map((group, gi) => (
+              <div key={group.id}>
+                {gi > 0 && (
+                  <div className="flex items-center gap-2 py-1">
+                    <div className="flex-1 border-t border-border" />
+                    <span className="text-xs font-medium text-accent-primary">OR</span>
+                    <div className="flex-1 border-t border-border" />
+                  </div>
+                )}
+                <div className="bg-bg-tertiary rounded-lg p-3 space-y-2">
+                  <input
+                    type="text"
+                    value={group.label}
+                    onChange={(e) => updateGroupLabel(gi, e.target.value)}
+                    placeholder="Group label (optional)"
+                    className={cn(inputClass, 'text-xs')}
+                  />
+                  {group.conditions.map((condition, ci) => (
+                    <div key={condition.id}>
+                      {ci > 0 && <div className="text-center text-xs font-medium text-text-muted py-0.5">AND</div>}
+                      <div className="bg-bg-card rounded-lg p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={condition.type}
+                            onChange={(e) => updateCondition(gi, ci, { type: e.target.value, params: {} })}
+                            className={cn(inputClass, 'flex-1')}
+                          >
+                            {TRIGGER_TYPES.map((t) => (
+                              <option key={t} value={t}>
+                                {t}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            aria-label="Remove condition"
+                            onClick={() => removeCondition(gi, ci)}
+                            className="text-text-muted hover:text-error transition-colors cursor-pointer"
+                          >
+                            <svg
+                              className="h-4 w-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={condition.description}
+                          onChange={(e) => updateCondition(gi, ci, { description: e.target.value })}
+                          placeholder="Condition description"
+                          className={inputClass}
+                        />
+                        <TriggerParamFields
+                          type={condition.type}
+                          params={condition.params}
+                          onChange={(params) => updateCondition(gi, ci, { params })}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => addCondition(gi)}
+                    className="text-xs text-accent-primary hover:text-accent-secondary transition-colors cursor-pointer w-full text-center py-1"
+                  >
+                    + Add condition
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -384,56 +435,196 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
           </div>
         </div>
 
-        {/* Required Capabilities */}
+        {/* Advanced Settings */}
         <div>
-          <label className={labelClass}>Required Capabilities</label>
-          <div className="flex flex-wrap gap-1.5">
-            {CAPABILITIES.map((cap) => {
-              const selected = data.requires.includes(cap.value);
-              return (
-                <button
-                  key={cap.value}
-                  type="button"
-                  onClick={() => toggleCapability(cap.value)}
-                  className={cn(
-                    'rounded-full px-2.5 py-1 text-xs border transition-colors cursor-pointer',
-                    selected
-                      ? 'bg-accent-primary/20 text-accent-primary border-accent-primary/40'
-                      : 'bg-bg-tertiary text-text-muted border-border hover:border-border-light',
-                  )}
-                >
-                  {cap.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((p) => !p)}
+            className="flex items-center gap-1.5 text-xs text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+          >
+            <svg
+              className={cn('h-3 w-3 transition-transform', showAdvanced && 'rotate-90')}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="m9 5 7 7-7 7" />
+            </svg>
+            Advanced settings
+          </button>
 
-        {/* Content */}
-        <div>
-          <label className={labelClass}>Content</label>
-          {showPreview ? (
-            <div className="bg-bg-card border border-border rounded-lg p-4 prose prose-invert prose-sm max-w-none text-text-primary min-h-[500px]">
-              {data.content ? (
-                <ReactMarkdown>{data.content}</ReactMarkdown>
-              ) : (
-                <p className="text-text-muted italic">No content to preview</p>
-              )}
+          {showAdvanced && (
+            <div className="mt-3 space-y-4 border-l-2 border-border pl-4">
+              {/* Description */}
+              <div>
+                <label className={labelClass}>Description</label>
+                <input
+                  type="text"
+                  value={data.description}
+                  onChange={(e) => update({ description: e.target.value })}
+                  placeholder="Brief description (auto-generated if empty)"
+                  className={inputClass}
+                />
+              </div>
+
+              {/* Category + Style */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Category</label>
+                  <select
+                    value={data.category}
+                    onChange={(e) => update({ category: e.target.value })}
+                    className={inputClass}
+                  >
+                    {CATEGORIES.map((c) => (
+                      <option key={c.value} value={c.value}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Style</label>
+                  <select value={data.style} onChange={(e) => update({ style: e.target.value })} className={inputClass}>
+                    {STYLES.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Max Position Size */}
+              <div>
+                <label className={labelClass}>Max Position Size</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={posPercent}
+                    onChange={(e) => {
+                      const pct = Number(e.target.value);
+                      update({ maxPositionSize: pct > 0 ? pct / 100 : undefined });
+                    }}
+                    className="flex-1 accent-accent-primary"
+                  />
+                  <span className="text-xs text-text-muted tabular-nums w-8 text-right">{posPercent}%</span>
+                </div>
+              </div>
+
+              {/* Target Weights — ETF / basket allocation */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-medium text-text-muted">Target Weights</label>
+                  <span className={cn('text-xs tabular-nums', targetWeightOverflow ? 'text-error' : 'text-text-muted')}>
+                    {(targetWeightSum * 100).toFixed(1)}% / 100%
+                  </span>
+                </div>
+                {data.targetWeights.length > 0 && (
+                  <div className="space-y-1.5">
+                    {data.targetWeights.map((row, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={row.ticker}
+                          onChange={(e) => updateTargetWeight(i, { ticker: e.target.value.toUpperCase() })}
+                          placeholder="AAPL"
+                          className={cn(inputClass, 'flex-1')}
+                        />
+                        <div className="relative w-28">
+                          <input
+                            type="number"
+                            value={row.weight > 0 ? +(row.weight * 100).toFixed(2) : ''}
+                            onChange={(e) => {
+                              const v = e.currentTarget.valueAsNumber;
+                              updateTargetWeight(i, {
+                                weight: e.target.value === '' || Number.isNaN(v) ? 0 : v / 100,
+                              });
+                            }}
+                            placeholder="0"
+                            min={0}
+                            max={100}
+                            step={0.5}
+                            className={cn(inputClass, 'pr-8')}
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-muted pointer-events-none">
+                            %
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label="Remove target weight"
+                          onClick={() => removeTargetWeight(i)}
+                          className="text-text-muted hover:text-error transition-colors cursor-pointer"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={addTargetWeight}
+                  className="text-xs text-accent-primary hover:text-accent-secondary transition-colors cursor-pointer mt-1.5"
+                >
+                  + Add ticker
+                </button>
+                {targetWeightOverflow && <p className="text-xs text-error mt-1">Target weights sum must be ≤ 100%.</p>}
+              </div>
+
+              {/* Content */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-medium text-text-muted">Strategy Content</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowPreview((p) => !p)}
+                    className="text-xs text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+                  >
+                    {showPreview ? 'Edit' : 'Preview'}
+                  </button>
+                </div>
+                {showPreview ? (
+                  <div className="bg-bg-card border border-border rounded-lg p-4 prose prose-invert prose-sm max-w-none text-text-primary min-h-[300px]">
+                    {data.content ? (
+                      <ReactMarkdown>{data.content}</ReactMarkdown>
+                    ) : (
+                      <p className="text-text-muted italic">No content to preview</p>
+                    )}
+                  </div>
+                ) : (
+                  <textarea
+                    value={data.content}
+                    onChange={(e) => update({ content: e.target.value })}
+                    placeholder={MARKDOWN_PLACEHOLDER}
+                    rows={16}
+                    className={cn(inputClass, 'font-mono resize-none min-h-[300px]')}
+                  />
+                )}
+              </div>
             </div>
-          ) : (
-            <textarea
-              value={data.content}
-              onChange={(e) => update({ content: e.target.value })}
-              placeholder={MARKDOWN_PLACEHOLDER}
-              rows={24}
-              className={cn(inputClass, 'font-mono resize-none min-h-[500px]')}
-            />
           )}
         </div>
       </div>
 
       {/* Error bar */}
       {error && <div className="bg-error/10 border-t border-error/30 px-4 py-3 text-error text-sm">{error}</div>}
+      {hasPartialGroups && !error && (
+        <p className="text-xs text-warning px-4">Empty conditions will be removed on save.</p>
+      )}
     </div>
   );
 }

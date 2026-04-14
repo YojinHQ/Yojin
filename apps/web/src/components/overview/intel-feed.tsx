@@ -28,7 +28,7 @@ import type { FeedDetailData } from './feed-detail-modal';
 import Spinner from '../common/spinner';
 import { SymbolLogo } from '../common/symbol-logo';
 
-type ItemType = 'alert' | 'insight' | 'action';
+type ItemType = 'alert' | 'insight' | 'action' | 'data';
 type FilterTab = 'all' | 'alerts' | 'insights' | 'actions';
 type IconName = 'rebalance' | 'dollar' | 'box' | 'warehouse' | 'clock' | 'trending' | 'bubble' | 'trending-up' | 'zap';
 
@@ -84,10 +84,20 @@ const signalTypeIcon: Record<string, IconName> = {
 
 /** Promote higher-severity items into the alerts lane.
  * Only CRITICAL signals and explicit SUMMARY outputs qualify as alerts —
- * HIGH signals remain visible as prominent insights but don't clutter the alerts tab. */
-function classifySignal(signal: { outputType?: string | null; severity: IntelFeedItem['severity'] }): ItemType {
+ * HIGH signals remain visible as prominent insights but don't clutter the alerts tab.
+ *
+ * Signals sourced purely from Jintel ENRICHMENT (ownership breakdowns, fundamentals
+ * snapshots, technicals readings) are raw data points, not synthesized insights, so
+ * they classify as 'data' and stay out of the Insights tab. */
+function classifySignal(signal: {
+  outputType?: string | null;
+  severity: IntelFeedItem['severity'];
+  sources?: { type?: string | null }[];
+}): ItemType {
   if (signal.severity === 'CRITICAL') return 'alert';
   if (signal.outputType === 'SUMMARY') return 'alert';
+  const sources = signal.sources ?? [];
+  if (sources.length > 0 && sources.every((s) => s.type === 'ENRICHMENT')) return 'data';
   return 'insight';
 }
 
@@ -95,6 +105,7 @@ const categoryLabel: Record<ItemType, string> = {
   alert: 'ALERT',
   insight: 'INSIGHT',
   action: 'ACTION',
+  data: 'DATA',
 };
 
 const filterTabs: { key: FilterTab; label: string }[] = [
@@ -563,7 +574,7 @@ function IntelFeedContent({
     const signalItems: IntelFeedItem[] = (data?.curatedSignals ?? []).map((cs) => {
       const s = cs.signal;
       const severity = cs.severity ?? 'LOW';
-      const itemType = classifySignal({ outputType: s.outputType, severity });
+      const itemType = classifySignal({ outputType: s.outputType, severity, sources: s.sources });
       const topScore =
         cs.scores.length > 0
           ? cs.scores.reduce((best, sc) => (sc.compositeScore > best.compositeScore ? sc : best), cs.scores[0])

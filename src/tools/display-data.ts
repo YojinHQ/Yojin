@@ -100,13 +100,22 @@ export const StrategyProposalDataSchema = z.object({
   style: z.string().min(1),
   requires: z.array(DataCapabilitySchema),
   content: z.string().min(1),
-  triggers: z.array(
-    z.object({
-      type: TriggerTypeSchema,
-      description: z.string().min(1),
-      params: z.record(z.string(), z.unknown()).optional(),
-    }),
-  ),
+  triggerGroups: z
+    .array(
+      z.object({
+        label: z.string().default(''),
+        conditions: z
+          .array(
+            z.object({
+              type: TriggerTypeSchema,
+              description: z.string().min(1),
+              params: z.record(z.string(), z.unknown()).optional(),
+            }),
+          )
+          .min(1),
+      }),
+    )
+    .min(1),
   tickers: z.array(z.string()),
   maxPositionSize: z.number().min(0).max(1).optional(),
 });

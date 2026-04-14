@@ -290,10 +290,29 @@ function formatEnrichment(entity: Entity): string {
         `Bollinger Bands: Lower ${t.bollingerBands.lower.toFixed(2)} | Middle ${t.bollingerBands.middle.toFixed(2)} | Upper ${t.bollingerBands.upper.toFixed(2)}`,
       );
     if (t.ema != null) lines.push(`EMA(10): ${t.ema.toFixed(2)}`);
+    if (t.ema50 != null) lines.push(`EMA(50): ${t.ema50.toFixed(2)}`);
+    if (t.ema200 != null) lines.push(`EMA(200): ${t.ema200.toFixed(2)}`);
     if (t.sma != null) lines.push(`SMA(50): ${t.sma.toFixed(2)}`);
+    if (t.sma20 != null) lines.push(`SMA(20): ${t.sma20.toFixed(2)}`);
+    if (t.sma200 != null) lines.push(`SMA(200): ${t.sma200.toFixed(2)}`);
+    if (t.wma52 != null) lines.push(`52-WMA: ${t.wma52.toFixed(2)}`);
     if (t.atr != null) lines.push(`ATR(14): ${t.atr.toFixed(2)}`);
     if (t.vwma != null) lines.push(`VWMA(20): ${t.vwma.toFixed(2)}`);
+    if (t.vwap != null) lines.push(`VWAP: ${t.vwap.toFixed(2)}`);
     if (t.mfi != null) lines.push(`MFI(14): ${t.mfi.toFixed(1)}`);
+    if (t.adx != null) lines.push(`ADX: ${t.adx.toFixed(1)}`);
+    if (t.stochastic) lines.push(`Stochastic: %K ${t.stochastic.k.toFixed(1)} | %D ${t.stochastic.d.toFixed(1)}`);
+    if (t.obv != null) lines.push(`OBV: ${t.obv.toLocaleString()}`);
+    if (t.parabolicSar != null) lines.push(`Parabolic SAR: ${t.parabolicSar.toFixed(2)}`);
+    if (t.bollingerBandsWidth != null) lines.push(`BB Width: ${t.bollingerBandsWidth.toFixed(4)}`);
+    if (t.williamsR != null) lines.push(`Williams %R: ${t.williamsR.toFixed(1)}`);
+    if (t.crossovers) {
+      const cx = t.crossovers;
+      if (cx.goldenCross) lines.push(`⚠ Golden Cross (SMA 50 > SMA 200)`);
+      if (cx.deathCross) lines.push(`⚠ Death Cross (SMA 50 < SMA 200)`);
+      if (cx.emaCross) lines.push(`EMA Cross: EMA(50) > EMA(200) (bullish)`);
+      else if (t.ema50 != null && t.ema200 != null) lines.push(`EMA Cross: EMA(50) < EMA(200) (bearish)`);
+    }
     if (lines.length) sections.push(`## Technicals\n${lines.join('\n')}`);
   }
 
@@ -863,15 +882,24 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     name: 'run_technical',
     description:
       'Fetch technical indicators for a ticker via Jintel technicals sub-graph. ' +
-      'Returns RSI, MACD (with histogram), Bollinger Bands, EMA, SMA, ATR, VWMA, and MFI.\n\n' +
+      'Returns RSI, MACD, Bollinger Bands (+ width), EMA (10/50/200), SMA (20/50/200), 52-WMA, ' +
+      'ATR, VWMA, VWAP, MFI, ADX, Stochastic, OBV, Parabolic SAR, Williams %R, and crossover flags.\n\n' +
       'Interpretation guide:\n' +
       '- RSI > 70 = overbought, < 30 = oversold, 40-60 = neutral\n' +
       '- MACD histogram > 0 = bullish momentum, < 0 = bearish; crossover of MACD/signal line = trend change\n' +
-      '- Price near BB upper = overbought/strong trend, near BB lower = oversold/weak; BB squeeze (narrow bands) = breakout imminent\n' +
-      '- Price > SMA = uptrend, < SMA = downtrend; EMA reacts faster than SMA\n' +
+      '- Price near BB upper = overbought/strong trend, near BB lower = oversold/weak; BB squeeze (narrow width) = breakout imminent\n' +
+      '- Price > SMA(200) = long-term uptrend; golden cross (SMA 50 > 200) = bullish, death cross = bearish\n' +
+      '- EMA(50)/EMA(200) crossover = faster-reacting trend signal than SMA cross\n' +
+      '- 52-WMA = weekly trend filter, smooths daily noise\n' +
       '- ATR rising = increasing volatility; ATR falling = consolidation\n' +
       '- MFI > 80 = overbought (with volume confirmation), < 20 = oversold\n' +
-      '- VWMA > SMA = buying pressure, VWMA < SMA = selling pressure',
+      '- VWMA > SMA = buying pressure, VWMA < SMA = selling pressure\n' +
+      '- VWAP = institutional reference price; price above VWAP = bullish intraday bias\n' +
+      '- ADX > 25 = strong trend, < 20 = sideways/ranging market\n' +
+      '- Stochastic %K > 80 = overbought, < 20 = oversold; %K crossing %D = signal\n' +
+      '- OBV rising + price rising = volume-confirmed trend; divergence = warning\n' +
+      '- Parabolic SAR below price = uptrend, above = downtrend; flip = reversal signal\n' +
+      '- Williams %R > -20 = overbought, < -80 = oversold',
     parameters: z.object({
       ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, BTC, ETH)'),
     }),
@@ -905,6 +933,8 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         );
       }
       if (t.ema != null) lines.push(`EMA(10): ${t.ema.toFixed(2)}`);
+      if (t.ema50 != null) lines.push(`EMA(50): ${t.ema50.toFixed(2)}`);
+      if (t.ema200 != null) lines.push(`EMA(200): ${t.ema200.toFixed(2)}`);
       if (t.sma != null) {
         const trend = entity.market?.quote
           ? entity.market.quote.price > t.sma
@@ -913,11 +943,63 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
           : '';
         lines.push(`SMA(50): ${t.sma.toFixed(2)}${trend ? ` — price ${trend}` : ''}`);
       }
+      if (t.sma20 != null) lines.push(`SMA(20): ${t.sma20.toFixed(2)}`);
+      if (t.sma200 != null) {
+        const trend = entity.market?.quote
+          ? entity.market.quote.price > t.sma200
+            ? 'above (long-term uptrend)'
+            : 'below (long-term downtrend)'
+          : '';
+        lines.push(`SMA(200): ${t.sma200.toFixed(2)}${trend ? ` — price ${trend}` : ''}`);
+      }
+      if (t.wma52 != null) lines.push(`52-WMA: ${t.wma52.toFixed(2)}`);
       if (t.atr != null) lines.push(`ATR(14): ${t.atr.toFixed(2)}`);
       if (t.vwma != null) lines.push(`VWMA(20): ${t.vwma.toFixed(2)}`);
+      if (t.vwap != null) {
+        const bias = entity.market?.quote
+          ? entity.market.quote.price > t.vwap
+            ? ' — price above (bullish bias)'
+            : ' — price below (bearish bias)'
+          : '';
+        lines.push(`VWAP: ${t.vwap.toFixed(2)}${bias}`);
+      }
       if (t.mfi != null) {
         const zone = t.mfi > 80 ? ' (OVERBOUGHT)' : t.mfi < 20 ? ' (OVERSOLD)' : '';
         lines.push(`MFI(14): ${t.mfi.toFixed(1)}${zone}`);
+      }
+      if (t.adx != null) {
+        const strength = t.adx > 25 ? ' (strong trend)' : t.adx < 20 ? ' (weak/ranging)' : '';
+        lines.push(`ADX: ${t.adx.toFixed(1)}${strength}`);
+      }
+      if (t.stochastic) {
+        const zone = t.stochastic.k > 80 ? ' (OVERBOUGHT)' : t.stochastic.k < 20 ? ' (OVERSOLD)' : '';
+        lines.push(`Stochastic: %K ${t.stochastic.k.toFixed(1)} | %D ${t.stochastic.d.toFixed(1)}${zone}`);
+      }
+      if (t.obv != null) lines.push(`OBV: ${t.obv.toLocaleString()}`);
+      if (t.parabolicSar != null) {
+        const trend = entity.market?.quote
+          ? entity.market.quote.price > t.parabolicSar
+            ? ' (uptrend — SAR below price)'
+            : ' (downtrend — SAR above price)'
+          : '';
+        lines.push(`Parabolic SAR: ${t.parabolicSar.toFixed(2)}${trend}`);
+      }
+      if (t.bollingerBandsWidth != null) {
+        const squeeze = t.bollingerBandsWidth < 0.05 ? ' (SQUEEZE — breakout imminent)' : '';
+        lines.push(`BB Width: ${t.bollingerBandsWidth.toFixed(4)}${squeeze}`);
+      }
+      if (t.williamsR != null) {
+        const zone = t.williamsR > -20 ? ' (OVERBOUGHT)' : t.williamsR < -80 ? ' (OVERSOLD)' : '';
+        lines.push(`Williams %R: ${t.williamsR.toFixed(1)}${zone}`);
+      }
+      if (t.crossovers) {
+        const cx = t.crossovers;
+        const flags: string[] = [];
+        if (cx.goldenCross) flags.push('GOLDEN CROSS (SMA 50 > SMA 200) — bullish');
+        if (cx.deathCross) flags.push('DEATH CROSS (SMA 50 < SMA 200) — bearish');
+        if (cx.emaCross) flags.push('EMA CROSS: EMA(50) > EMA(200) — bullish');
+        else if (t.ema50 != null && t.ema200 != null) flags.push('EMA CROSS: EMA(50) < EMA(200) — bearish');
+        if (flags.length) lines.push(`\nCrossovers:\n${flags.map((f) => `  ${f}`).join('\n')}`);
       }
 
       return { content: lines.join('\n') };

@@ -22,14 +22,14 @@ const baseStrategy: Strategy = {
   name: 'Critical Drawdown Alert',
   description: 'Sends a critical alert and auto-drafts a hedge recommendation when any position exceeds -10% drawdown.',
   category: 'RISK',
-  style: 'defensive',
+  style: 'DEFENSIVE',
   requires: [],
   active: true,
   source: 'built-in',
   createdBy: 'YojinHQ/trading-strategies',
   createdAt: '2026-01-03T08:00:00.000Z',
   content: '',
-  triggers: [{ type: 'DRAWDOWN', description: 'Position drawdown exceeds -10%' }],
+  triggerGroups: [{ label: null, conditions: [{ type: 'DRAWDOWN', description: 'Position drawdown exceeds -10%' }] }],
   tickers: [],
 };
 
@@ -45,7 +45,7 @@ export const Portfolio: Story = {
       name: 'Concentration Warning',
       description: 'Alerts when any single position exceeds 30% of portfolio value.',
       category: 'PORTFOLIO',
-      style: 'balanced',
+      style: 'GENERAL',
     },
   },
 };
@@ -58,7 +58,7 @@ export const Market: Story = {
       name: 'Earnings Calendar Alert',
       description: 'Notifies you when a holding reports earnings within 3 days.',
       category: 'MARKET',
-      style: 'event_driven',
+      style: 'EVENT_DRIVEN',
     },
   },
 };
@@ -71,7 +71,7 @@ export const Research: Story = {
       name: 'Sentiment Shift Alert',
       description: 'Emails you when Jintel sentiment score shifts significantly.',
       category: 'RESEARCH',
-      style: 'momentum',
+      style: 'MOMENTUM',
       source: 'custom',
       createdBy: 'Dean',
       createdAt: '2026-01-12T08:00:00.000Z',
@@ -92,7 +92,7 @@ export const Community: Story = {
       id: '6',
       name: 'Sector Rotation Signal',
       source: 'community',
-      style: 'macro_rotation',
+      style: 'GENERAL',
       createdBy: 'Community',
     },
   },
@@ -116,7 +116,7 @@ export const AllCategories: Story = {
           name: 'Concentration Warning',
           description: 'Alerts when any single position exceeds 30% of portfolio value.',
           category: 'PORTFOLIO',
-          style: 'balanced',
+          style: 'GENERAL',
         }}
       />
       <StrategyCard
@@ -126,7 +126,7 @@ export const AllCategories: Story = {
           name: 'Earnings Calendar',
           description: 'Notifies you when a holding reports earnings within 3 days.',
           category: 'MARKET',
-          style: 'event_driven',
+          style: 'EVENT_DRIVEN',
         }}
       />
       <StrategyCard
@@ -136,7 +136,7 @@ export const AllCategories: Story = {
           name: 'Sentiment Tracker',
           description: 'Monitors Jintel sentiment shifts for your holdings.',
           category: 'RESEARCH',
-          style: 'momentum',
+          style: 'MOMENTUM',
           source: 'custom',
           createdBy: 'Dean',
         }}

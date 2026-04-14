@@ -506,12 +506,23 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     if (tech.macd) parts.push(`MACD histogram: ${tech.macd.histogram.toFixed(3)}`);
     if (tech.sma != null && tech.ema != null) {
       const crossLabel = tech.ema > tech.sma ? 'EMA above SMA (bullish)' : 'EMA below SMA (bearish)';
-      parts.push(`SMA: $${tech.sma.toFixed(2)}, EMA: $${tech.ema.toFixed(2)} — ${crossLabel}`);
+      parts.push(`SMA(50): $${tech.sma.toFixed(2)}, EMA(10): $${tech.ema.toFixed(2)} — ${crossLabel}`);
+    }
+    if (tech.sma200 != null) parts.push(`SMA(200): $${tech.sma200.toFixed(2)}`);
+    if (tech.crossovers) {
+      if (tech.crossovers.goldenCross) parts.push('Golden Cross active (SMA 50 > 200)');
+      if (tech.crossovers.deathCross) parts.push('Death Cross active (SMA 50 < 200)');
     }
     if (tech.bollingerBands) {
       const bb = tech.bollingerBands;
       parts.push(`Bollinger Bands: $${bb.lower.toFixed(2)} – $${bb.upper.toFixed(2)}`);
     }
+    if (tech.bollingerBandsWidth != null && tech.bollingerBandsWidth < 0.05) {
+      parts.push('BB Squeeze detected — breakout imminent');
+    }
+    if (tech.adx != null && tech.adx > 25) parts.push(`ADX: ${tech.adx.toFixed(1)} (strong trend)`);
+    if (tech.vwap != null) parts.push(`VWAP: $${tech.vwap.toFixed(2)}`);
+    if (tech.parabolicSar != null) parts.push(`Parabolic SAR: $${tech.parabolicSar.toFixed(2)}`);
 
     if (parts.length >= 1) {
       signals.push({

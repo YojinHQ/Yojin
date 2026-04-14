@@ -29,6 +29,7 @@ export const SignalTypeSchema = z.enum([
   'FILINGS',
   'SOCIALS',
   'REGULATORY',
+  'DISCLOSED_TRADE', // 13F, Form 4, congressional trade — metadata: { person, action, shares, dollarValue, source }
   'TRADING_LOGIC_TRIGGER',
 ]);
 export type SignalType = z.infer<typeof SignalTypeSchema>;

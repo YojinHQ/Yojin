@@ -77,8 +77,9 @@ const TREES: Record<string, WaterfallStep> = {
       {
         id: 'technicals',
         label: 'Technical analysis',
-        description: 'RSI, MACD, Bollinger Bands, moving averages, and more',
-        query: 'Show me the technicals for [TICKER] — RSI, MACD, Bollinger Bands, and moving averages',
+        description: 'RSI, MACD, Bollinger Bands, moving averages, crossovers, ADX, and more',
+        query:
+          'Show me the technicals for [TICKER] — RSI, MACD, Bollinger Bands, moving averages (SMA/EMA 50/200), crossovers, ADX, VWAP, and Stochastic',
         prefill: true,
       },
       {

@@ -255,15 +255,32 @@ export default function StrategyDetailModal({ open, strategyId, onClose }: Strat
             </div>
           </div>
 
-          {/* Triggers */}
-          {strategy.triggers.length > 0 && (
+          {/* Trigger Groups */}
+          {strategy.triggerGroups.length > 0 && (
             <div>
               <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">Triggers</h3>
-              <div className="space-y-1.5">
-                {strategy.triggers.map((trigger, i) => (
-                  <div key={i} className="rounded-lg bg-bg-tertiary px-3 py-2 text-sm">
-                    <span className="font-medium text-text-primary">{trigger.type}</span>
-                    <span className="ml-2 text-text-secondary">{trigger.description}</span>
+              <div className="space-y-2">
+                {strategy.triggerGroups.map((group, gi) => (
+                  <div key={gi}>
+                    {gi > 0 && (
+                      <div className="flex items-center gap-2 py-1">
+                        <div className="flex-1 border-t border-border" />
+                        <span className="text-xs font-medium text-accent-primary">OR</span>
+                        <div className="flex-1 border-t border-border" />
+                      </div>
+                    )}
+                    <div className="rounded-lg bg-bg-tertiary px-3 py-2">
+                      {group.label && <p className="text-xs font-medium text-text-muted mb-1">{group.label}</p>}
+                      <div className="space-y-1.5">
+                        {group.conditions.map((trigger, ci) => (
+                          <div key={ci} className="text-sm">
+                            {ci > 0 && <span className="text-xs text-text-muted mr-1">AND</span>}
+                            <span className="font-medium text-text-primary">{trigger.type}</span>
+                            <span className="ml-2 text-text-secondary">{trigger.description}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

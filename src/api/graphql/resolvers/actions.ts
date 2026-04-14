@@ -42,6 +42,7 @@ interface ActionGql {
   tickers: string[];
   riskContext: string | null;
   severity: number | null;
+  confidence: number;
   severityLabel: string;
   status: ActionStatus;
   expiresAt: string;
@@ -64,6 +65,7 @@ function toGql(action: Action): ActionGql {
     tickers: action.tickers ?? [],
     riskContext: action.riskContext ?? null,
     severity: action.severity ?? null,
+    confidence: action.confidence,
     severityLabel: deriveSeverityLabel(action.severity),
     status: action.status,
     expiresAt: action.expiresAt,

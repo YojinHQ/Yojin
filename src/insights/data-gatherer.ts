@@ -112,11 +112,24 @@ interface TechnicalsBrief {
   rsi: number | null;
   macd: { macd: number; signal: number; histogram: number } | null;
   bollingerBands: { upper: number; middle: number; lower: number } | null;
+  bollingerBandsWidth: number | null;
   ema: number | null;
+  ema50: number | null;
+  ema200: number | null;
   sma: number | null;
+  sma20: number | null;
+  sma200: number | null;
+  wma52: number | null;
   atr: number | null;
   vwma: number | null;
+  vwap: number | null;
   mfi: number | null;
+  adx: number | null;
+  stochastic: { k: number; d: number } | null;
+  obv: number | null;
+  parabolicSar: number | null;
+  williamsR: number | null;
+  crossovers: { goldenCross: boolean; deathCross: boolean; emaCross: boolean } | null;
 }
 
 interface SocialSentimentBrief {
@@ -314,10 +327,23 @@ export function formatBriefsForContext(briefs: DataBrief[]): string {
       if (t.macd) techParts.push(`MACD hist: ${t.macd.histogram.toFixed(3)}`);
       if (t.bollingerBands)
         techParts.push(`BB: ${t.bollingerBands.lower.toFixed(0)}–${t.bollingerBands.upper.toFixed(0)}`);
-      if (t.sma != null) techParts.push(`SMA: ${t.sma.toFixed(2)}`);
-      if (t.ema != null) techParts.push(`EMA: ${t.ema.toFixed(2)}`);
+      if (t.bollingerBandsWidth != null) techParts.push(`BB width: ${t.bollingerBandsWidth.toFixed(4)}`);
+      if (t.sma != null) techParts.push(`SMA(50): ${t.sma.toFixed(2)}`);
+      if (t.sma20 != null) techParts.push(`SMA(20): ${t.sma20.toFixed(2)}`);
+      if (t.sma200 != null) techParts.push(`SMA(200): ${t.sma200.toFixed(2)}`);
+      if (t.ema != null) techParts.push(`EMA(10): ${t.ema.toFixed(2)}`);
+      if (t.ema50 != null) techParts.push(`EMA(50): ${t.ema50.toFixed(2)}`);
+      if (t.ema200 != null) techParts.push(`EMA(200): ${t.ema200.toFixed(2)}`);
+      if (t.wma52 != null) techParts.push(`52-WMA: ${t.wma52.toFixed(2)}`);
       if (t.atr != null) techParts.push(`ATR: ${t.atr.toFixed(2)}`);
+      if (t.vwap != null) techParts.push(`VWAP: ${t.vwap.toFixed(2)}`);
       if (t.mfi != null) techParts.push(`MFI: ${t.mfi.toFixed(1)}`);
+      if (t.adx != null) techParts.push(`ADX: ${t.adx.toFixed(1)}`);
+      if (t.stochastic) techParts.push(`Stoch %K: ${t.stochastic.k.toFixed(1)}`);
+      if (t.parabolicSar != null) techParts.push(`PSAR: ${t.parabolicSar.toFixed(2)}`);
+      if (t.williamsR != null) techParts.push(`W%R: ${t.williamsR.toFixed(1)}`);
+      if (t.crossovers?.goldenCross) techParts.push('Golden Cross');
+      if (t.crossovers?.deathCross) techParts.push('Death Cross');
       if (techParts.length > 0) lines.push(`Technicals: ${techParts.join(' | ')}`);
     }
 
@@ -761,11 +787,24 @@ export function buildBrief(
           rsi: entity.technicals.rsi ?? null,
           macd: entity.technicals.macd ?? null,
           bollingerBands: entity.technicals.bollingerBands ?? null,
+          bollingerBandsWidth: entity.technicals.bollingerBandsWidth ?? null,
           ema: entity.technicals.ema ?? null,
+          ema50: entity.technicals.ema50 ?? null,
+          ema200: entity.technicals.ema200 ?? null,
           sma: entity.technicals.sma ?? null,
+          sma20: entity.technicals.sma20 ?? null,
+          sma200: entity.technicals.sma200 ?? null,
+          wma52: entity.technicals.wma52 ?? null,
           atr: entity.technicals.atr ?? null,
           vwma: entity.technicals.vwma ?? null,
+          vwap: entity.technicals.vwap ?? null,
           mfi: entity.technicals.mfi ?? null,
+          adx: entity.technicals.adx ?? null,
+          stochastic: entity.technicals.stochastic ?? null,
+          obv: entity.technicals.obv ?? null,
+          parabolicSar: entity.technicals.parabolicSar ?? null,
+          williamsR: entity.technicals.williamsR ?? null,
+          crossovers: entity.technicals.crossovers ?? null,
         }
       : null,
     socialSentiment: entity?.sentiment

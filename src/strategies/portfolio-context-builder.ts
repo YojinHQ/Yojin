@@ -40,12 +40,34 @@ export function mapIndicators(technicals: TechnicalIndicators | null | undefined
 
   const result: Record<string, number> = {};
 
+  // Oscillators
   if (technicals.rsi != null) result.RSI = technicals.rsi;
-  if (technicals.ema != null) result.EMA = technicals.ema;
-  if (technicals.sma != null) result.SMA = technicals.sma;
-  if (technicals.atr != null) result.ATR = technicals.atr;
-  if (technicals.vwma != null) result.VWMA = technicals.vwma;
   if (technicals.mfi != null) result.MFI = technicals.mfi;
+  if (technicals.williamsR != null) result.WILLIAMS_R = technicals.williamsR;
+  if (technicals.stochastic != null) {
+    result.STOCH_K = technicals.stochastic.k;
+    result.STOCH_D = technicals.stochastic.d;
+  }
+
+  // Moving averages
+  if (technicals.ema != null) result.EMA = technicals.ema;
+  if (technicals.ema50 != null) result.EMA_50 = technicals.ema50;
+  if (technicals.ema200 != null) result.EMA_200 = technicals.ema200;
+  if (technicals.sma != null) result.SMA = technicals.sma;
+  if (technicals.sma20 != null) result.SMA_20 = technicals.sma20;
+  if (technicals.sma200 != null) result.SMA_200 = technicals.sma200;
+  if (technicals.wma52 != null) result.WMA_52 = technicals.wma52;
+  if (technicals.vwma != null) result.VWMA = technicals.vwma;
+  if (technicals.vwap != null) result.VWAP = technicals.vwap;
+
+  // Volatility & trend
+  if (technicals.atr != null) result.ATR = technicals.atr;
+  if (technicals.adx != null) result.ADX = technicals.adx;
+  if (technicals.parabolicSar != null) result.PSAR = technicals.parabolicSar;
+  if (technicals.bollingerBandsWidth != null) result.BB_WIDTH = technicals.bollingerBandsWidth;
+
+  // Volume
+  if (technicals.obv != null) result.OBV = technicals.obv;
 
   if (technicals.macd != null) {
     result.MACD = technicals.macd.histogram;
@@ -57,6 +79,13 @@ export function mapIndicators(technicals: TechnicalIndicators | null | undefined
     result.BB_LOWER = technicals.bollingerBands.lower;
     result.BB_MIDDLE = technicals.bollingerBands.middle;
     result.BB_UPPER = technicals.bollingerBands.upper;
+  }
+
+  // Crossover flags (1 = active, 0 = inactive)
+  if (technicals.crossovers != null) {
+    result.GOLDEN_CROSS = technicals.crossovers.goldenCross ? 1 : 0;
+    result.DEATH_CROSS = technicals.crossovers.deathCross ? 1 : 0;
+    result.EMA_CROSS = technicals.crossovers.emaCross ? 1 : 0;
   }
 
   return result;

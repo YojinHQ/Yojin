@@ -27,17 +27,49 @@ const PRICE_DIRECTION_OPTIONS = [
 const DIRECTION_OPTIONS = [
   { value: 'above', label: 'Above' },
   { value: 'below', label: 'Below' },
+  { value: 'crosses_above', label: 'Crosses Above' },
+  { value: 'crosses_below', label: 'Crosses Below' },
 ];
 
+// Keys must match those produced by mapIndicators() in
+// src/strategies/portfolio-context-builder.ts — the evaluator looks up
+// ctx.indicators[ticker][indicator] directly.
 const INDICATOR_OPTIONS = [
-  { value: 'RSI', label: 'RSI' },
-  { value: 'MACD', label: 'MACD' },
-  { value: 'BB', label: 'Bollinger Bands' },
-  { value: 'EMA', label: 'EMA' },
-  { value: 'SMA', label: 'SMA' },
-  { value: 'ATR', label: 'ATR' },
-  { value: 'VWMA', label: 'VWMA' },
-  { value: 'MFI', label: 'MFI' },
+  // Oscillators
+  { value: 'RSI', label: 'RSI (14)' },
+  { value: 'MFI', label: 'MFI (14)' },
+  { value: 'WILLIAMS_R', label: 'Williams %R' },
+  { value: 'STOCH_K', label: 'Stochastic %K' },
+  { value: 'STOCH_D', label: 'Stochastic %D' },
+  // MACD (histogram as the primary crossable value)
+  { value: 'MACD', label: 'MACD Histogram' },
+  { value: 'MACD_LINE', label: 'MACD Line' },
+  { value: 'MACD_SIGNAL', label: 'MACD Signal' },
+  // Moving averages
+  { value: 'EMA', label: 'EMA (10)' },
+  { value: 'EMA_50', label: 'EMA (50)' },
+  { value: 'EMA_200', label: 'EMA (200)' },
+  { value: 'SMA_20', label: 'SMA (20)' },
+  { value: 'SMA', label: 'SMA (50)' },
+  { value: 'SMA_200', label: 'SMA (200)' },
+  { value: 'WMA_52', label: '52-WMA' },
+  { value: 'VWMA', label: 'VWMA (20)' },
+  { value: 'VWAP', label: 'VWAP' },
+  // Bollinger Bands
+  { value: 'BB_UPPER', label: 'Bollinger Upper' },
+  { value: 'BB_MIDDLE', label: 'Bollinger Middle' },
+  { value: 'BB_LOWER', label: 'Bollinger Lower' },
+  { value: 'BB_WIDTH', label: 'Bollinger Band Width' },
+  // Volatility & trend
+  { value: 'ATR', label: 'ATR (14)' },
+  { value: 'ADX', label: 'ADX' },
+  { value: 'PSAR', label: 'Parabolic SAR' },
+  // Volume
+  { value: 'OBV', label: 'OBV' },
+  // Crossover flags (1 = active, 0 = inactive) — use threshold 1 / direction "above"
+  { value: 'GOLDEN_CROSS', label: 'Golden Cross (flag)' },
+  { value: 'DEATH_CROSS', label: 'Death Cross (flag)' },
+  { value: 'EMA_CROSS', label: 'EMA Cross (flag)' },
 ];
 
 const METRIC_OPTIONS = [
@@ -90,8 +122,8 @@ export function NumberInput({
           type="number"
           value={value ?? ''}
           onChange={(e) => {
-            const raw = e.target.value;
-            onChange(raw === '' ? undefined : Number(raw));
+            const v = e.currentTarget.valueAsNumber;
+            onChange(e.target.value === '' ? undefined : Number.isNaN(v) ? value : v);
           }}
           placeholder={placeholder}
           min={min}
@@ -398,15 +430,24 @@ const DRIFT_DIRECTION_OPTIONS = [
 ];
 
 function AllocationDriftFields({ params, onChange }: { params: TriggerParams; onChange: (p: TriggerParams) => void }) {
+  const tolerancePercent =
+    (params.toleranceBps as number | undefined) !== undefined ? (params.toleranceBps as number) / 100 : undefined;
+  const driftPercent =
+    (params.driftThreshold as number | undefined) !== undefined ? (params.driftThreshold as number) * 100 : undefined;
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-3 gap-2">
       <NumberInput
-        label="Drift Threshold"
-        value={
-          (params.driftThreshold as number | undefined) !== undefined
-            ? (params.driftThreshold as number) * 100
-            : undefined
-        }
+        label="Tolerance (per-ticker)"
+        value={tolerancePercent}
+        onChange={(v) => onChange(set(params, 'toleranceBps', v !== undefined ? Math.round(v * 100) : undefined))}
+        placeholder="5"
+        suffix="%"
+        min={0}
+        step={0.5}
+      />
+      <NumberInput
+        label="Drift Threshold (strategy)"
+        value={driftPercent}
         onChange={(v) => onChange(set(params, 'driftThreshold', v !== undefined ? v / 100 : undefined))}
         placeholder="5"
         suffix="%"
@@ -426,6 +467,57 @@ function AllocationDriftFields({ params, onChange }: { params: TriggerParams; on
 
 function CustomFields() {
   return <p className="text-xs text-text-muted italic">Custom triggers are evaluated by the LLM at runtime</p>;
+}
+
+const PERSON_ACTION_OPTIONS = [
+  { value: 'ANY', label: 'Any' },
+  { value: 'BUY', label: 'Buy' },
+  { value: 'SELL', label: 'Sell' },
+];
+
+function PersonActivityFields({ params, onChange }: { params: TriggerParams; onChange: (p: TriggerParams) => void }) {
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className={labelClass}>Person / Fund</label>
+          <input
+            type="text"
+            value={(params.person as string | undefined) ?? ''}
+            onChange={(e) => onChange(set(params, 'person', e.target.value || undefined))}
+            placeholder="Warren Buffett"
+            className={inputClass}
+          />
+        </div>
+        <SelectInput
+          label="Action"
+          value={params.action as string | undefined}
+          onChange={(v) => onChange(set(params, 'action', v))}
+          options={PERSON_ACTION_OPTIONS}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <NumberInput
+          label="Min Dollar"
+          value={params.minDollar as number | undefined}
+          onChange={(v) => onChange(set(params, 'minDollar', v))}
+          placeholder="100000000"
+          suffix="$"
+          min={0}
+          step={1000000}
+        />
+        <NumberInput
+          label="Lookback"
+          value={params.lookback_days as number | undefined}
+          onChange={(v) => onChange(set(params, 'lookback_days', v))}
+          placeholder="90"
+          suffix="days"
+          min={1}
+          step={1}
+        />
+      </div>
+    </div>
+  );
 }
 
 // --- Main component ---
@@ -448,6 +540,8 @@ export function TriggerParamFields({ type, params, onChange }: TriggerParamField
       return <SignalPresentFields params={params} onChange={onChange} />;
     case 'ALLOCATION_DRIFT':
       return <AllocationDriftFields params={params} onChange={onChange} />;
+    case 'PERSON_ACTIVITY':
+      return <PersonActivityFields params={params} onChange={onChange} />;
     case 'CUSTOM':
       return <CustomFields />;
     default:
