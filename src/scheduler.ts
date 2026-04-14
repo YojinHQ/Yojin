@@ -27,6 +27,7 @@ import { parseConfidenceFromResponse, parseVerdictFromHeadline } from './actions
 import type { Orchestrator } from './agents/orchestrator.js';
 import { emitProgress } from './agents/orchestrator.js';
 import type { ProviderRouter } from './ai-providers/router.js';
+import type { AssetClass } from './api/graphql/types.js';
 import type { EventLog } from './core/event-log.js';
 import type { NotificationBus } from './core/notification-bus.js';
 import type { InsightStore } from './insights/insight-store.js';
@@ -48,6 +49,7 @@ import type { Signal } from './signals/types.js';
 import { snapFromInsight } from './snap/snap-from-insight.js';
 import { snapFromMicro } from './snap/snap-from-micro.js';
 import type { SnapStore } from './snap/snap-store.js';
+import { formatTriggerContext } from './strategies/format-trigger-context.js';
 import { buildPortfolioContext, buildSingleTickerContext } from './strategies/portfolio-context-builder.js';
 import type { PortfolioContext, StrategyEvaluator } from './strategies/strategy-evaluator.js';
 import type { StrategyEvaluation } from './strategies/types.js';
@@ -986,7 +988,7 @@ export class Scheduler {
    * Falls back to snapshot-only context if Jintel is unavailable.
    */
   private async buildEnrichedContext(snapshot: {
-    positions: { symbol: string; currentPrice: number; marketValue: number }[];
+    positions: { symbol: string; currentPrice: number; marketValue: number; assetClass?: AssetClass }[];
     totalValue: number;
   }): Promise<PortfolioContext> {
     const tickers = snapshot.positions.map((p) => p.symbol);
@@ -1202,6 +1204,7 @@ export class Scheduler {
         { price: quote.price, changePercent: quote.changePercent },
         { marketValue, totalValue },
         signals,
+        position?.assetClass,
       );
 
       // No pre-dedup — ActionStore.create() supersedes existing PENDING records
@@ -1245,17 +1248,7 @@ export class Scheduler {
     for (const evaluation of evaluations) {
       const ticker = evaluation.context.ticker as string | undefined;
 
-      // Build human-readable context from trigger data
-      const contextParts: string[] = [];
-      for (const [k, v] of Object.entries(evaluation.context)) {
-        if (k === 'ticker') continue;
-        const label = k
-          .replace(/([A-Z])/g, ' $1')
-          .replace(/_/g, ' ')
-          .trim();
-        const val = typeof v === 'number' ? (v < 1 && v > -1 ? `${(v * 100).toFixed(1)}%` : v.toFixed(2)) : String(v);
-        contextParts.push(`${label}: ${val}`);
-      }
+      const contextParts = formatTriggerContext(evaluation.context);
 
       // LLM reasoning: ask the Strategist to analyze this trigger and recommend action
       let headline = '';

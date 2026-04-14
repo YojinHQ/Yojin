@@ -25,6 +25,17 @@ export function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+/** Format an ISO deadline as "in 24h" / "in 3d" for the future, or "expired" once past. */
+export function timeUntil(iso: string): string {
+  const diff = new Date(iso).getTime() - Date.now();
+  if (diff <= 0) return 'expired';
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `in ${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `in ${hours}h`;
+  return `in ${Math.floor(hours / 24)}d`;
+}
+
 /** Format an ISO date as a short human-readable string: "Apr 9" or "Apr 9, 2025" (if not current year). */
 export function formatShortDate(iso: string): string {
   const date = new Date(iso);

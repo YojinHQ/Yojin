@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import Modal from '../common/modal';
 import Badge from '../common/badge';
 import type { BadgeVariant } from '../common/badge';
-import { timeAgo } from '../../lib/utils';
+import { timeUntil } from '../../lib/utils';
 
 /** Lightweight markdown → HTML for LLM-generated analysis text. */
 function markdownToHtml(md: string): string {
@@ -166,7 +166,7 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
             </div>
             <div>
               <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Expires</span>
-              <p className="mt-0.5 text-xs text-text-primary">{timeAgo(data.actionMeta.expiresAt)}</p>
+              <p className="mt-0.5 text-xs text-text-primary">{timeUntil(data.actionMeta.expiresAt)}</p>
             </div>
           </div>
           {data.actionMeta.riskContext && (

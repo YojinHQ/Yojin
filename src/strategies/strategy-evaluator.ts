@@ -9,6 +9,7 @@
 import { SUPPORTED_LOOKBACK_MONTHS } from './portfolio-context-builder.js';
 import type { StrategyStore } from './strategy-store.js';
 import type { Strategy, StrategyEvaluation, StrategyTrigger, TriggerGroup, TriggerType } from './types.js';
+import type { AssetClass } from '../api/graphql/types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import { SignalTypeSchema } from '../signals/types.js';
 import type { Signal, SignalType } from '../signals/types.js';
@@ -30,6 +31,8 @@ export interface PortfolioContext {
   positionDrawdowns: Record<string, number>;
   metrics: Record<string, Record<string, number>>;
   signals: Record<string, Signal[]>;
+  /** Per-ticker asset class. Used to gate strategies by their declared `assetClasses`. */
+  assetClasses?: Record<string, AssetClass>;
   /** Per-strategy allocation info: strategyId → { target, actual, tickers }. Computed by scheduler. */
   strategyAllocations?: Record<string, { target: number; actual: number; tickers: string[] }>;
 }
@@ -52,7 +55,13 @@ export class StrategyEvaluator {
   evaluate(ctx: PortfolioContext): StrategyEvaluation[] {
     const results = this.strategyStore
       .getActive()
-      .flatMap((strategy) => this.evaluateStrategy(strategy, this.resolveTickers(strategy, ctx), ctx));
+      .flatMap((strategy) =>
+        this.evaluateStrategy(
+          strategy,
+          this.filterByAssetClass(strategy, this.resolveTickers(strategy, ctx), ctx),
+          ctx,
+        ),
+      );
     this.snapshotCurrentValues(ctx);
     return results;
   }
@@ -65,11 +74,28 @@ export class StrategyEvaluator {
     const tickerSet = new Set(tickers);
     const results = this.strategyStore.getActive().flatMap((strategy) => {
       const applicable = strategy.tickers.length > 0 ? strategy.tickers.filter((t) => tickerSet.has(t)) : tickers;
-      if (applicable.length === 0) return [];
-      return this.evaluateStrategy(strategy, applicable, ctx, true);
+      const scoped = this.filterByAssetClass(strategy, applicable, ctx);
+      if (scoped.length === 0) return [];
+      return this.evaluateStrategy(strategy, scoped, ctx, true);
     });
     this.snapshotCurrentValues(ctx, tickers);
     return results;
+  }
+
+  /**
+   * Drop tickers whose asset class isn't in the strategy's declared `assetClasses`.
+   * Empty `assetClasses` means "all asset classes". Tickers with unknown asset class
+   * (no entry in ctx.assetClasses) are kept — the gate is permissive when data is missing.
+   */
+  private filterByAssetClass(strategy: Strategy, tickers: string[], ctx: PortfolioContext): string[] {
+    if (strategy.assetClasses.length === 0) return tickers;
+    const allowed = new Set<AssetClass>(strategy.assetClasses);
+    const map = ctx.assetClasses;
+    if (!map) return tickers;
+    return tickers.filter((t) => {
+      const cls = map[t];
+      return cls === undefined || allowed.has(cls);
+    });
   }
 
   /** Build a Strategist prompt section from fired strategy evaluations. */

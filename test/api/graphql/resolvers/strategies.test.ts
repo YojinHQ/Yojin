@@ -27,6 +27,7 @@ function makeStrategy(overrides: Partial<Strategy> = {}): Strategy {
     content: '## Thesis\nTest content',
     triggerGroups: [{ label: '', conditions: [{ type: 'PRICE_MOVE', description: 'Test trigger' }] }],
     tickers: [],
+    assetClasses: [],
     ...overrides,
   };
 }

@@ -10,6 +10,7 @@ import {
   TriggerGroupSchema,
 } from './types.js';
 import type { Strategy } from './types.js';
+import { AssetClassSchema } from '../api/graphql/types.js';
 
 const FrontmatterSchema = z
   .object({
@@ -21,6 +22,7 @@ const FrontmatterSchema = z
     triggerGroups: z.array(TriggerGroupSchema).min(1).optional(),
     triggers: z.array(StrategyTriggerSchema).min(1).optional(),
     tickers: z.array(z.string()).default([]),
+    assetClasses: z.array(AssetClassSchema).default([]),
     maxPositionSize: z.number().min(0).max(1).optional(),
     targetAllocation: z.number().min(0).max(1).optional(),
     targetWeights: TargetWeightsSchema.optional(),
@@ -76,6 +78,7 @@ export function parseFromMarkdown(md: string): Strategy {
     maxPositionSize: frontmatter.maxPositionSize,
     targetAllocation: frontmatter.targetAllocation,
     tickers: frontmatter.tickers,
+    assetClasses: frontmatter.assetClasses,
     targetWeights: frontmatter.targetWeights,
   });
 
@@ -104,6 +107,10 @@ export function serializeToMarkdown(strategy: Strategy): string {
   }));
 
   frontmatter['tickers'] = strategy.tickers;
+
+  if (strategy.assetClasses.length > 0) {
+    frontmatter['assetClasses'] = strategy.assetClasses;
+  }
 
   if (strategy.maxPositionSize !== undefined) {
     frontmatter['maxPositionSize'] = strategy.maxPositionSize;
