@@ -8,6 +8,14 @@
 
 import { SUPPORTED_LOOKBACK_MONTHS } from './portfolio-context-builder.js';
 import type { StrategyStore } from './strategy-store.js';
+import type {
+  ConditionTrace,
+  StrategyTrace,
+  StrategyTraceReport,
+  TickerGroupTrace,
+  TraceSummary,
+  TriggerGroupTrace,
+} from './trace-types.js';
 import { aggregateGroupStrength, computeTriggerStrength, pickStrongestGroup } from './trigger-strength.js';
 import type { TriggerStrength } from './trigger-strength.js';
 import type { Strategy, StrategyEvaluation, StrategyTrigger, TriggerGroup, TriggerType } from './types.js';
@@ -39,6 +47,10 @@ export interface PortfolioContext {
   strategyAllocations?: Record<string, { target: number; actual: number; tickers: string[] }>;
 }
 
+export interface EvaluateOptions {
+  trace?: boolean;
+}
+
 export class StrategyEvaluator {
   private readonly strategyStore: StrategyStore;
   /** Previous indicator/metric values per ticker for crossover detection. */
@@ -54,7 +66,15 @@ export class StrategyEvaluator {
   }
 
   /** Evaluate all active strategies against current portfolio context (macro flow). */
-  evaluate(ctx: PortfolioContext): StrategyEvaluation[] {
+  evaluate(ctx: PortfolioContext): StrategyEvaluation[];
+  evaluate(ctx: PortfolioContext, options: { trace: true }): StrategyTraceReport;
+  evaluate(ctx: PortfolioContext, options: EvaluateOptions): StrategyEvaluation[] | StrategyTraceReport;
+  evaluate(ctx: PortfolioContext, options?: EvaluateOptions): StrategyEvaluation[] | StrategyTraceReport {
+    if (options?.trace) {
+      const report = this.evaluateTrace(ctx);
+      this.snapshotCurrentValues(ctx);
+      return report;
+    }
     const results = this.strategyStore
       .getActive()
       .flatMap((strategy) =>
@@ -72,7 +92,18 @@ export class StrategyEvaluator {
    * Evaluate active strategies for specific tickers only, skipping macro-only triggers.
    * Used by micro flow (~5 min cadence).
    */
-  evaluateForTickers(ctx: PortfolioContext, tickers: string[]): StrategyEvaluation[] {
+  evaluateForTickers(ctx: PortfolioContext, tickers: string[]): StrategyEvaluation[];
+  evaluateForTickers(ctx: PortfolioContext, tickers: string[], options: { trace: true }): StrategyTraceReport;
+  evaluateForTickers(
+    ctx: PortfolioContext,
+    tickers: string[],
+    options?: EvaluateOptions,
+  ): StrategyEvaluation[] | StrategyTraceReport {
+    if (options?.trace) {
+      const report = this.evaluateTrace(ctx, tickers);
+      this.snapshotCurrentValues(ctx, tickers);
+      return report;
+    }
     const tickerSet = new Set(tickers);
     const results = this.strategyStore.getActive().flatMap((strategy) => {
       const applicable = strategy.tickers.length > 0 ? strategy.tickers.filter((t) => tickerSet.has(t)) : tickers;
@@ -514,6 +545,436 @@ ${sections.join('\n\n---\n\n')}`;
       default:
         return assertNever(trigger.type);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private — trace mode
+  // ---------------------------------------------------------------------------
+
+  private evaluateTrace(ctx: PortfolioContext, onlyTickers?: string[]): StrategyTraceReport {
+    const allStrategies = this.strategyStore.getActive();
+    const isMicro = onlyTickers != null;
+    const onlySet = onlyTickers ? new Set(onlyTickers) : null;
+
+    const strategyTraces: StrategyTrace[] = allStrategies.map((strategy) => {
+      // Resolve and scope tickers
+      const allTickers = this.resolveTickers(strategy, ctx);
+      const scopedByAssetClass = this.filterByAssetClass(strategy, allTickers, ctx);
+
+      // When micro: further filter to only the requested tickers
+      let scopedTickers: string[];
+      const filteredOutTickers: { ticker: string; reason: string }[] = [];
+
+      if (onlySet) {
+        const applicable =
+          strategy.tickers.length > 0 ? strategy.tickers.filter((t) => onlySet.has(t)) : (onlyTickers ?? []);
+        scopedTickers = this.filterByAssetClass(strategy, applicable, ctx);
+      } else {
+        scopedTickers = scopedByAssetClass;
+      }
+
+      // Track asset-class filtered tickers
+      const scopedSet = new Set(scopedTickers);
+      for (const t of allTickers) {
+        if (!scopedSet.has(t)) {
+          const cls = ctx.assetClasses?.[t];
+          if (cls && strategy.assetClasses.length > 0 && !strategy.assetClasses.includes(cls)) {
+            filteredOutTickers.push({
+              ticker: t,
+              reason: `asset class ${cls} not in [${strategy.assetClasses.join(', ')}]`,
+            });
+          }
+        }
+      }
+
+      const groups: TriggerGroupTrace[] = strategy.triggerGroups.map((group, groupIndex) => {
+        // Check for skipped groups
+        if (isMicro && this.groupHasMacroOnlyTrigger(group)) {
+          return {
+            groupIndex,
+            label: group.label,
+            skipped: 'macro-only trigger in micro mode',
+            tickers: [],
+          };
+        }
+        if (isMicro && this.groupHasLookbackPriceMove(group)) {
+          return {
+            groupIndex,
+            label: group.label,
+            skipped: 'lookback PRICE_MOVE skipped in micro mode',
+            tickers: [],
+          };
+        }
+
+        const tickerTraces: TickerGroupTrace[] = scopedTickers.map((ticker) => {
+          const conditionTraces: ConditionTrace[] = group.conditions.map((condition) =>
+            this.checkTriggerTrace(condition, ticker, ctx, strategy),
+          );
+
+          const allPass = conditionTraces.every((c) => c.result === 'PASS');
+          const passedStrengths = conditionTraces
+            .filter((c) => c.result === 'PASS' && c.strength != null)
+            .map((c) => c.strength as TriggerStrength);
+
+          return {
+            ticker,
+            conditions: conditionTraces,
+            groupResult: allPass ? 'PASS' : 'FAIL',
+            groupStrength: allPass && passedStrengths.length > 0 ? aggregateGroupStrength(passedStrengths) : undefined,
+          };
+        });
+
+        return {
+          groupIndex,
+          label: group.label,
+          tickers: tickerTraces,
+        };
+      });
+
+      // Determine which tickers fired and find the winning group
+      const firedByTicker = new Map<string, { groupIndex: number; strength: TriggerStrength }>();
+      for (const group of groups) {
+        if (group.skipped) continue;
+        for (const tickerTrace of group.tickers) {
+          if (tickerTrace.groupResult === 'PASS' && tickerTrace.groupStrength != null) {
+            const existing = firedByTicker.get(tickerTrace.ticker);
+            if (!existing || this.strengthOrder(tickerTrace.groupStrength) > this.strengthOrder(existing.strength)) {
+              firedByTicker.set(tickerTrace.ticker, {
+                groupIndex: group.groupIndex,
+                strength: tickerTrace.groupStrength,
+              });
+            }
+          }
+        }
+      }
+
+      const fired = firedByTicker.size > 0;
+      const winningEntries = [...firedByTicker.values()];
+      const winningGroup =
+        winningEntries.length > 0
+          ? winningEntries.reduce((best, cur) =>
+              this.strengthOrder(cur.strength) > this.strengthOrder(best.strength) ? cur : best,
+            ).groupIndex
+          : undefined;
+      const winningStrength =
+        winningEntries.length > 0
+          ? winningEntries.reduce((best, cur) =>
+              this.strengthOrder(cur.strength) > this.strengthOrder(best.strength) ? cur : best,
+            ).strength
+          : undefined;
+
+      return {
+        strategyId: strategy.id,
+        strategyName: strategy.name,
+        active: true,
+        scopedTickers,
+        filteredOutTickers,
+        groups,
+        result: fired ? 'FIRED' : 'NO_MATCH',
+        winningGroup,
+        winningStrength,
+      };
+    });
+
+    const summary = this.buildTraceSummary(strategyTraces, ctx);
+
+    return {
+      evaluatedAt: new Date().toISOString(),
+      portfolioContext: ctx,
+      errors: [],
+      strategies: strategyTraces,
+      summary,
+    };
+  }
+
+  private checkTriggerTrace(
+    trigger: StrategyTrigger,
+    ticker: string,
+    ctx: PortfolioContext,
+    strategy: Strategy,
+  ): ConditionTrace {
+    try {
+      const result = this.checkTrigger(trigger, ticker, ctx, strategy);
+      if (result !== null) {
+        const strength = computeTriggerStrength(trigger.type, result);
+        return {
+          type: trigger.type,
+          description: trigger.description,
+          params: trigger.params ?? {},
+          result: 'PASS',
+          actualValue: this.extractActualValue(trigger, ticker, ctx, strategy),
+          threshold: this.extractThreshold(trigger),
+          detail: result,
+          strength,
+        };
+      }
+
+      // checkTrigger returned null — determine FAIL vs NO_DATA
+      const actualValue = this.extractActualValue(trigger, ticker, ctx, strategy);
+      const isNoData = actualValue === null || actualValue === undefined;
+
+      if (isNoData) {
+        return {
+          type: trigger.type,
+          description: trigger.description,
+          params: trigger.params ?? {},
+          result: 'NO_DATA',
+          actualValue: null,
+          threshold: this.extractThreshold(trigger),
+          detail: {},
+          failReason: this.buildNoDataReason(trigger, ticker),
+        };
+      }
+
+      return {
+        type: trigger.type,
+        description: trigger.description,
+        params: trigger.params ?? {},
+        result: 'FAIL',
+        actualValue,
+        threshold: this.extractThreshold(trigger),
+        detail: {},
+        failReason: this.buildFailReason(trigger, ticker, actualValue, ctx, strategy),
+      };
+    } catch (err) {
+      return {
+        type: trigger.type,
+        description: trigger.description,
+        params: trigger.params ?? {},
+        result: 'ERROR',
+        actualValue: null,
+        threshold: this.extractThreshold(trigger),
+        detail: {},
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  private extractActualValue(
+    trigger: StrategyTrigger,
+    ticker: string,
+    ctx: PortfolioContext,
+    strategy?: Strategy,
+  ): number | string | null {
+    const params = trigger.params ?? {};
+    switch (trigger.type) {
+      case 'PRICE_MOVE': {
+        const lookbackMonths = params['lookback_months'] != null ? Number(params['lookback_months']) : undefined;
+        if (lookbackMonths != null) {
+          return ctx.periodReturns?.[`${ticker}:${lookbackMonths}`] ?? null;
+        }
+        return ctx.priceChanges[ticker] ?? null;
+      }
+      case 'INDICATOR_THRESHOLD': {
+        const indicator = String(params['indicator'] ?? 'RSI');
+        return ctx.indicators[ticker]?.[indicator] ?? null;
+      }
+      case 'CONCENTRATION_DRIFT':
+        // checkTrigger defaults to 0 when absent, so match that (FAIL, not NO_DATA)
+        return ctx.weights[ticker] ?? 0;
+      case 'ALLOCATION_DRIFT': {
+        if (strategy?.targetWeights) {
+          return ctx.weights[ticker] ?? null;
+        }
+        return ctx.strategyAllocations?.[strategy?.id ?? '']?.actual ?? null;
+      }
+      case 'DRAWDOWN':
+        // checkTrigger defaults to 0 when absent, so match that (FAIL, not NO_DATA)
+        return ctx.positionDrawdowns[ticker] ?? 0;
+      case 'EARNINGS_PROXIMITY': {
+        const days = ctx.earningsDays[ticker];
+        return days ?? null;
+      }
+      case 'METRIC_THRESHOLD': {
+        const metric = String(params['metric'] ?? '');
+        return ctx.metrics[ticker]?.[metric] ?? null;
+      }
+      case 'SIGNAL_PRESENT':
+      case 'PERSON_ACTIVITY': {
+        const signals = ctx.signals[ticker];
+        return signals != null ? signals.length : null;
+      }
+      case 'CUSTOM':
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  private extractThreshold(trigger: StrategyTrigger): number | string | null {
+    const params = trigger.params ?? {};
+    switch (trigger.type) {
+      case 'PRICE_MOVE':
+        return Number(params['threshold'] ?? 0);
+      case 'INDICATOR_THRESHOLD':
+      case 'METRIC_THRESHOLD':
+        return Number(params['threshold'] ?? 0);
+      case 'CONCENTRATION_DRIFT':
+        return Number(params['maxWeight'] ?? 0.15);
+      case 'ALLOCATION_DRIFT':
+        return params['toleranceBps'] != null
+          ? Number(params['toleranceBps']) / 10_000
+          : Number(params['driftThreshold'] ?? 0.05);
+      case 'DRAWDOWN':
+        return Number(params['threshold'] ?? -0.1);
+      case 'EARNINGS_PROXIMITY':
+        return Number(params['withinDays'] ?? 7);
+      case 'SIGNAL_PRESENT':
+      case 'PERSON_ACTIVITY':
+      case 'CUSTOM':
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  private buildNoDataReason(trigger: StrategyTrigger, ticker: string): string {
+    const params = trigger.params ?? {};
+    switch (trigger.type) {
+      case 'PRICE_MOVE': {
+        const lookback = params['lookback_months'];
+        return lookback != null
+          ? `No period return for ${ticker} (lookback_months=${lookback})`
+          : `No price change data for ${ticker}`;
+      }
+      case 'INDICATOR_THRESHOLD': {
+        const indicator = String(params['indicator'] ?? 'RSI');
+        return `Indicator ${indicator} is undefined or missing for ${ticker}`;
+      }
+      case 'CONCENTRATION_DRIFT':
+        return `Weight data missing for ${ticker}`;
+      case 'ALLOCATION_DRIFT':
+        return `Allocation data missing for ${ticker}`;
+      case 'DRAWDOWN':
+        return `Drawdown data missing for ${ticker}`;
+      case 'EARNINGS_PROXIMITY':
+        return `Earnings days data missing for ${ticker}`;
+      case 'METRIC_THRESHOLD': {
+        const metric = String(params['metric'] ?? '');
+        return `Metric ${metric} is undefined or missing for ${ticker}`;
+      }
+      case 'SIGNAL_PRESENT':
+        return `No signals found for ${ticker}`;
+      case 'PERSON_ACTIVITY':
+        return `No signals found for ${ticker}`;
+      case 'CUSTOM':
+        return `Custom trigger has no data for ${ticker}`;
+      default:
+        return `Data missing for ${ticker}`;
+    }
+  }
+
+  private buildFailReason(
+    trigger: StrategyTrigger,
+    ticker: string,
+    actual: number | string | null,
+    _ctx: PortfolioContext,
+    _strategy: Strategy,
+  ): string {
+    const params = trigger.params ?? {};
+    const threshold = this.extractThreshold(trigger);
+    switch (trigger.type) {
+      case 'PRICE_MOVE': {
+        const direction = params['direction'];
+        if (direction === 'drop') {
+          return `${ticker} price change ${actual} did not drop by ${Math.abs(Number(threshold))}`;
+        }
+        if (direction === 'rise') {
+          return `${ticker} price change ${actual} did not rise by ${threshold}`;
+        }
+        return `${ticker} price change ${actual} did not meet threshold ${threshold}`;
+      }
+      case 'INDICATOR_THRESHOLD': {
+        const indicator = String(params['indicator'] ?? 'RSI');
+        const direction = String(params['direction'] ?? 'above');
+        return `${ticker} ${indicator}=${actual} did not meet ${direction} ${threshold}`;
+      }
+      case 'CONCENTRATION_DRIFT':
+        return `${ticker} weight=${actual} does not exceed maxWeight=${threshold}`;
+      case 'ALLOCATION_DRIFT':
+        return `${ticker} allocation drift does not meet tolerance`;
+      case 'DRAWDOWN':
+        return `${ticker} drawdown=${actual} does not reach threshold=${threshold}`;
+      case 'EARNINGS_PROXIMITY':
+        return `${ticker} earnings in ${actual} days, not within ${threshold}`;
+      case 'METRIC_THRESHOLD': {
+        const metric = String(params['metric'] ?? '');
+        const direction = String(params['direction'] ?? 'above');
+        return `${ticker} ${metric}=${actual} did not meet ${direction} ${threshold}`;
+      }
+      case 'SIGNAL_PRESENT':
+        return `No matching signal found for ${ticker} with required types/sentiment`;
+      case 'PERSON_ACTIVITY':
+        return `No matching person activity signal for ${ticker}`;
+      case 'CUSTOM':
+        return `Custom trigger condition not met for ${ticker}`;
+      default:
+        return `Condition not met for ${ticker}`;
+    }
+  }
+
+  private strengthOrder(s: TriggerStrength): number {
+    const order: Record<TriggerStrength, number> = { WEAK: 0, MODERATE: 1, STRONG: 2, EXTREME: 3 };
+    return order[s] ?? 0;
+  }
+
+  private buildTraceSummary(strategies: StrategyTrace[], _ctx: PortfolioContext): TraceSummary {
+    const fired = strategies.filter((s) => s.result === 'FIRED').length;
+    const noMatch = strategies.filter((s) => s.result === 'NO_MATCH').length;
+
+    const allTickersSet = new Set<string>();
+    for (const s of strategies) {
+      for (const t of s.scopedTickers) allTickersSet.add(t);
+    }
+
+    let noDataCount = 0;
+    let errorCount = 0;
+    const firedList: { strategy: string; ticker: string; strength: TriggerStrength }[] = [];
+
+    for (const s of strategies) {
+      for (const group of s.groups) {
+        if (group.skipped) continue;
+        for (const tickerTrace of group.tickers) {
+          for (const cond of tickerTrace.conditions) {
+            if (cond.result === 'NO_DATA') noDataCount++;
+            if (cond.result === 'ERROR') errorCount++;
+          }
+        }
+      }
+
+      if (s.result === 'FIRED' && s.winningStrength) {
+        // Find which tickers fired
+        for (const group of s.groups) {
+          if (group.skipped) continue;
+          for (const tickerTrace of group.tickers) {
+            if (tickerTrace.groupResult === 'PASS' && tickerTrace.groupStrength != null) {
+              // Only add once per ticker per strategy (winning strength)
+              const alreadyAdded = firedList.some(
+                (f) => f.strategy === s.strategyName && f.ticker === tickerTrace.ticker,
+              );
+              if (!alreadyAdded) {
+                firedList.push({
+                  strategy: s.strategyName,
+                  ticker: tickerTrace.ticker,
+                  strength: tickerTrace.groupStrength,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      totalStrategies: strategies.length,
+      activeStrategies: strategies.filter((s) => s.active).length,
+      fired,
+      noMatch,
+      tickersEvaluated: [...allTickersSet],
+      noDataCount,
+      errorCount,
+      firedList,
+    };
   }
 }
 
