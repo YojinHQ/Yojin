@@ -104,11 +104,11 @@ describe('buildContext', () => {
     expect(names).toContain('display_propose_strategy');
   });
 
-  it('registers 6 agent profiles', async () => {
+  it('registers 7 agent profiles', async () => {
     const services = await buildContext({ skipVault: true, dataRoot: testDataRoot });
     const agents = services.agentRegistry.getAll();
 
-    expect(agents.length).toBe(6);
+    expect(agents.length).toBe(7);
     const ids = agents.map((a) => a.id).sort();
     expect(ids).toEqual([
       'bear-researcher',
@@ -116,6 +116,7 @@ describe('buildContext', () => {
       'research-analyst',
       'risk-manager',
       'strategist',
+      'strategy-architect',
       'trader',
     ]);
   });

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import { cn } from '../../lib/utils.js';
+import { INDICATOR_LABELS, METRIC_LABELS, SIGNAL_TYPE_LABELS } from './trigger-meta.js';
 
 export interface TriggerParams {
   [key: string]: unknown;
@@ -34,60 +35,13 @@ const DIRECTION_OPTIONS = [
 // Keys must match those produced by mapIndicators() in
 // src/strategies/portfolio-context-builder.ts — the evaluator looks up
 // ctx.indicators[ticker][indicator] directly.
-const INDICATOR_OPTIONS = [
-  // Oscillators
-  { value: 'RSI', label: 'RSI (14)' },
-  { value: 'MFI', label: 'MFI (14)' },
-  { value: 'WILLIAMS_R', label: 'Williams %R' },
-  { value: 'STOCH_K', label: 'Stochastic %K' },
-  { value: 'STOCH_D', label: 'Stochastic %D' },
-  // MACD (histogram as the primary crossable value)
-  { value: 'MACD', label: 'MACD Histogram' },
-  { value: 'MACD_LINE', label: 'MACD Line' },
-  { value: 'MACD_SIGNAL', label: 'MACD Signal' },
-  // Moving averages
-  { value: 'EMA', label: 'EMA (10)' },
-  { value: 'EMA_50', label: 'EMA (50)' },
-  { value: 'EMA_200', label: 'EMA (200)' },
-  { value: 'SMA_20', label: 'SMA (20)' },
-  { value: 'SMA', label: 'SMA (50)' },
-  { value: 'SMA_200', label: 'SMA (200)' },
-  { value: 'WMA_52', label: '52-WMA' },
-  { value: 'VWMA', label: 'VWMA (20)' },
-  { value: 'VWAP', label: 'VWAP' },
-  // Bollinger Bands
-  { value: 'BB_UPPER', label: 'Bollinger Upper' },
-  { value: 'BB_MIDDLE', label: 'Bollinger Middle' },
-  { value: 'BB_LOWER', label: 'Bollinger Lower' },
-  { value: 'BB_WIDTH', label: 'Bollinger Band Width' },
-  // Volatility & trend
-  { value: 'ATR', label: 'ATR (14)' },
-  { value: 'ADX', label: 'ADX' },
-  { value: 'PSAR', label: 'Parabolic SAR' },
-  // Volume
-  { value: 'OBV', label: 'OBV' },
-  // Crossover flags (1 = active, 0 = inactive) — use threshold 1 / direction "above"
-  { value: 'GOLDEN_CROSS', label: 'Golden Cross (flag)' },
-  { value: 'DEATH_CROSS', label: 'Death Cross (flag)' },
-  { value: 'EMA_CROSS', label: 'EMA Cross (flag)' },
-];
+function toOptions(labels: Record<string, string>): { value: string; label: string }[] {
+  return Object.entries(labels).map(([value, label]) => ({ value, label }));
+}
 
-const METRIC_OPTIONS = [
-  { value: 'priceToBook', label: 'Price-to-Book (P/B)' },
-  { value: 'roe', label: 'ROE' },
-  { value: 'sue', label: 'SUE' },
-  { value: 'sentiment_momentum_24h', label: 'Sentiment Momentum 24h' },
-];
-
-const SIGNAL_TYPE_OPTIONS = [
-  { value: 'NEWS', label: 'News' },
-  { value: 'FUNDAMENTAL', label: 'Fundamental' },
-  { value: 'SENTIMENT', label: 'Sentiment' },
-  { value: 'TECHNICAL', label: 'Technical' },
-  { value: 'MACRO', label: 'Macro' },
-  { value: 'FILINGS', label: 'Filings' },
-  { value: 'SOCIALS', label: 'Socials' },
-];
+const INDICATOR_OPTIONS = toOptions(INDICATOR_LABELS);
+const METRIC_OPTIONS = toOptions(METRIC_LABELS);
+const SIGNAL_TYPE_OPTIONS = toOptions(SIGNAL_TYPE_LABELS);
 
 // --- Reusable field components ---
 

@@ -170,6 +170,8 @@ const cache = cacheExchange({
       },
       updateStrategy(_result, _args, cache) {
         cache.invalidate('Query', 'strategies');
+        const id = (_args as { id?: string }).id;
+        if (id) cache.invalidate({ __typename: 'Strategy', id });
       },
       deleteStrategy(_result, _args, cache) {
         cache.invalidate('Query', 'strategies');

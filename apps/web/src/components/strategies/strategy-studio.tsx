@@ -11,6 +11,7 @@ import { SuggestionChips } from './suggestion-chips.js';
 import { StrategyFormPanel } from './strategy-form-panel.js';
 import type { StrategyFormData } from './strategy-form-panel.js';
 import type { Strategy } from './types.js';
+import { parseParams, parseTargetWeights } from './trigger-meta.js';
 
 export interface StrategyStudioProps {
   open: boolean;
@@ -44,31 +45,6 @@ function createEmptyForm(): StrategyFormData {
   };
 }
 
-function parseTargetWeights(raw: string | null | undefined): { ticker: string; weight: number }[] {
-  if (!raw) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
-    return Object.entries(parsed as Record<string, unknown>)
-      .filter(([, v]) => typeof v === 'number' && Number.isFinite(v))
-      .map(([ticker, weight]) => ({ ticker, weight: weight as number }));
-  } catch {
-    return [];
-  }
-}
-
-function parseParams(raw: string | null | undefined): Record<string, unknown> {
-  if (!raw) return {};
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
 function strategyToFormData(strategy: Strategy): StrategyFormData {
   return {
     name: strategy.name,
@@ -95,40 +71,15 @@ function strategyToFormData(strategy: Strategy): StrategyFormData {
   };
 }
 
-const CREATE_PROMPT =
-  '[STRATEGY STUDIO — CREATE MODE]\n' +
-  'Help me create a new trading strategy. Ask clarifying questions to understand my goal — ' +
-  'what I want to capture or protect against, which assets, what thresholds.\n\n' +
-  'Recognize which archetype I am aiming for:\n' +
-  '- **Technical:** indicator/price-based. Available indicator keys for `INDICATOR_THRESHOLD` triggers: ' +
-  '`RSI`, `MFI`, `WILLIAMS_R`, `STOCH_K`, `STOCH_D`, ' +
-  '`MACD` (histogram), `MACD_LINE`, `MACD_SIGNAL`, ' +
-  '`EMA`, `EMA_50`, `EMA_200`, `SMA` (50), `SMA_20`, `SMA_200`, `WMA_52`, `VWMA`, `VWAP`, ' +
-  '`BB_UPPER`, `BB_MIDDLE`, `BB_LOWER`, `BB_WIDTH`, ' +
-  '`ATR`, `ADX`, `PSAR`, `OBV`, ' +
-  '`GOLDEN_CROSS`, `DEATH_CROSS`, `EMA_CROSS` (crossover flags — 1 when active; use threshold `1` with direction `above`). ' +
-  'Also consider `PRICE_MOVE` and `DRAWDOWN` triggers. If my intent maps to an existing template, propose forking it.\n' +
-  '- **Copy Trading:** "trade like [person/fund]". CRITICAL: search for the EXACT investor/fund the user named — never substitute a different one. Use `search_entities` to find that specific fund, then `get_institutional_holdings` with their CIK to fetch their real 13F portfolio. Use the actual holdings to populate the strategy ticker list and inform triggers. If the user says "Buffett", look up Berkshire Hathaway — not ARK, not any other fund.\n' +
-  '- **Index Replication / Thematic Allocation:** "build me [index/theme]" or "put X% in [theme]". Suggest a concrete basket of companies with weight targets and concentration drift triggers.\n\n' +
-  'Once you have enough information, call `display_propose_strategy` with a complete strategy. ' +
-  "Generate a full markdown body (thesis, entry/exit rules, risk management) — don't leave it to the user.";
-
-const EDIT_PROMPT_PREFIX =
-  '[STRATEGY STUDIO — EDIT MODE]\n' +
-  'I want to edit this strategy. Help me refine it — I can edit the form directly or ask you for changes. ' +
-  'When I ask for modifications, call `display_propose_strategy` with the updated strategy. ' +
-  'You can also proactively suggest improvements.\n\nCurrent strategy: ';
-
-const FORK_PROMPT_PREFIX =
-  '[STRATEGY STUDIO — FORK MODE]\n' +
-  'I want to fork this strategy as a starting point for a new one. ' +
-  'Help me customize it. When I ask for changes, call `display_propose_strategy` with the updated strategy.\n\nOriginal strategy: ';
+// The thread id (`strategy-studio-*`) routes to the strategy-architect agent
+// profile on the backend — it owns the voice, archetype guidance, and tool
+// scope. Keep these messages short and natural.
 
 function buildInitialMessage(strategy: Strategy | null | undefined, editMode: boolean | undefined): string {
-  if (!strategy) return CREATE_PROMPT;
+  if (!strategy) return 'I want to create a new trading strategy.';
   const data = JSON.stringify(strategyToFormData(strategy));
-  if (editMode) return `${EDIT_PROMPT_PREFIX}${data}`;
-  return `${FORK_PROMPT_PREFIX}${data}`;
+  if (editMode) return `Help me edit this strategy:\n\n${data}`;
+  return `Fork this strategy as a starting point for a new one:\n\n${data}`;
 }
 
 export function StrategyStudio({ open, onClose, strategy, editMode }: StrategyStudioProps) {

@@ -163,6 +163,14 @@ export class AgentRuntime {
     };
   }
 
+  /**
+   * Thread-id prefix used by the web Strategy Studio. Matching threads are
+   * routed to the `strategy-architect` agent profile (focused tool scope +
+   * dedicated system prompt) instead of the generic chat agent.
+   */
+  private static readonly STRATEGY_STUDIO_PREFIX = 'strategy-studio-';
+  private static readonly STRATEGY_ARCHITECT_AGENT_ID = 'strategy-architect';
+
   /** General-purpose chat system prompt — same as the CLI REPL. */
   private static readonly CHAT_SYSTEM_PROMPT =
     'You are Yojin, a personal AI finance agent.\n\n' +
@@ -219,15 +227,32 @@ export class AgentRuntime {
       }
     }
 
-    // Use all available tools (same as CLI chat) — not scoped to a single agent.
-    const allTools = this.toolRegistry.all();
-    const guardedTools = this.wrapToolsWithGuards(allTools, 'chat');
+    // Strategy Studio threads route to a focused agent profile (scoped tools +
+    // dedicated system prompt). All other web/CLI chat threads use the generic
+    // chat agent with the full tool registry.
+    const isStudioThread = params.threadId?.startsWith(AgentRuntime.STRATEGY_STUDIO_PREFIX) ?? false;
+    const agentId = isStudioThread ? AgentRuntime.STRATEGY_ARCHITECT_AGENT_ID : 'chat';
+
+    let systemPrompt: string;
+    let tools: ToolDefinition[];
+    if (isStudioThread) {
+      const profile = this.agentRegistry.get(AgentRuntime.STRATEGY_ARCHITECT_AGENT_ID);
+      if (!profile) {
+        throw new Error(`Agent not registered: ${AgentRuntime.STRATEGY_ARCHITECT_AGENT_ID}`);
+      }
+      systemPrompt = await this.assembleSystemPrompt(profile);
+      tools = this.toolRegistry.subset(profile.tools);
+    } else {
+      systemPrompt = AgentRuntime.CHAT_SYSTEM_PROMPT;
+      tools = this.toolRegistry.all();
+    }
+    const guardedTools = this.wrapToolsWithGuards(tools, agentId);
 
     const history = sessionKey ? (await this.sessionStore.getHistory(sessionKey)).map((e) => e.message) : [];
 
     await this.eventLog.append({
       type: 'agent.run.start',
-      data: { agentId: 'chat', sessionKey: sessionKey ?? null },
+      data: { agentId, sessionKey: sessionKey ?? null },
     });
 
     // Build user message — text-only or mixed content with image
@@ -247,7 +272,7 @@ export class AgentRuntime {
       result = await runAgentLoop(userContent, history, {
         provider: this.provider,
         model,
-        systemPrompt: AgentRuntime.CHAT_SYSTEM_PROMPT,
+        systemPrompt,
         tools: guardedTools,
         onEvent: params.onEvent,
         abortSignal: params.abortSignal,
@@ -256,7 +281,7 @@ export class AgentRuntime {
     } catch (err) {
       await this.eventLog.append({
         type: 'agent.run.error',
-        data: { agentId: 'chat', error: String(err) },
+        data: { agentId, error: String(err) },
       });
       throw err;
     }
@@ -271,10 +296,10 @@ export class AgentRuntime {
 
     await this.eventLog.append({
       type: 'agent.run.complete',
-      data: { agentId: 'chat', iterations: result.iterations, usage: result.usage },
+      data: { agentId, iterations: result.iterations, usage: result.usage },
     });
 
-    logger.info('Chat completed', {
+    logger.info(`${agentId} completed`, {
       iterations: result.iterations,
       usage: result.usage,
     });

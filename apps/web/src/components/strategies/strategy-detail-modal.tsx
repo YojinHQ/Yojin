@@ -1,7 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 
-import { useStrategy, useExportStrategy, useDeleteStrategy } from '../../api/hooks/index.js';
+import {
+  useStrategy,
+  useExportStrategy,
+  useDeleteStrategy,
+  useToggleStrategy,
+  useUpdateStrategy,
+} from '../../api/hooks/index.js';
 import { formatStyle } from './types.js';
 import type { StrategyCategory } from './types.js';
 import type { BadgeVariant } from '../common/badge.js';
@@ -9,8 +15,10 @@ import Modal from '../common/modal.js';
 import Button from '../common/button.js';
 import Badge from '../common/badge.js';
 import Spinner from '../common/spinner.js';
+import Toggle from '../common/toggle.js';
 import { StrategyStudio } from './strategy-studio.js';
 import { cn } from '../../lib/utils.js';
+import { humanizeTrigger, parseTargetWeights, TRIGGER_TYPE_LABELS } from './trigger-meta.js';
 
 /* ── Section parser ─────────────────────────────────────────────── */
 
@@ -145,6 +153,21 @@ function SectionPanel({ section, defaultOpen }: { section: ContentSection; defau
   );
 }
 
+/* ── Section header ─────────────────────────────────────────────── */
+
+function SectionLabel({ children, count }: { children: React.ReactNode; count?: number }) {
+  return (
+    <h3 className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+      <span>{children}</span>
+      {count !== undefined && (
+        <span className="rounded-full bg-bg-tertiary px-1.5 py-0.5 text-[10px] tabular-nums text-text-muted">
+          {count}
+        </span>
+      )}
+    </h3>
+  );
+}
+
 interface StrategyDetailModalProps {
   open: boolean;
   strategyId: string;
@@ -158,10 +181,156 @@ const categoryVariant: Record<StrategyCategory, BadgeVariant> = {
   RESEARCH: 'success',
 };
 
+function formatPercent(fraction: number): string {
+  const pct = fraction * 100;
+  return Number.isInteger(pct) ? `${pct}%` : `${pct.toFixed(1)}%`;
+}
+
+/* ── Universe editor ─────────────────────────────────────────────── */
+
+interface UniverseRow {
+  id: string;
+  ticker: string;
+  weight: string; // percent string for editing (e.g., "30")
+}
+
+function buildInitialRows(tickers: string[], weights: { ticker: string; weight: number }[]): UniverseRow[] {
+  const weightMap = new Map(weights.map((w) => [w.ticker.toUpperCase(), w.weight]));
+  return tickers.map((t) => {
+    const w = weightMap.get(t.toUpperCase());
+    return {
+      id: crypto.randomUUID(),
+      ticker: t,
+      weight: w !== undefined ? String(Number((w * 100).toFixed(2))) : '',
+    };
+  });
+}
+
+interface UniverseEditorProps {
+  initialTickers: string[];
+  initialWeights: { ticker: string; weight: number }[];
+  onCancel: () => void;
+  onSave: (tickers: string[], targetWeights: string | null) => Promise<void>;
+  saving: boolean;
+}
+
+function UniverseEditor({ initialTickers, initialWeights, onCancel, onSave, saving }: UniverseEditorProps) {
+  const [rows, setRows] = useState<UniverseRow[]>(() => buildInitialRows(initialTickers, initialWeights));
+
+  const totalPercent = useMemo(
+    () =>
+      rows.reduce((acc, r) => {
+        const n = Number(r.weight);
+        return acc + (Number.isFinite(n) ? n : 0);
+      }, 0),
+    [rows],
+  );
+
+  function updateRow(id: string, patch: Partial<UniverseRow>) {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }
+
+  function removeRow(id: string) {
+    setRows((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  function addRow() {
+    setRows((prev) => [...prev, { id: crypto.randomUUID(), ticker: '', weight: '' }]);
+  }
+
+  async function handleSave() {
+    const tickers: string[] = [];
+    const weights: Record<string, number> = {};
+    let anyWeight = false;
+    for (const r of rows) {
+      const t = r.ticker.trim().toUpperCase();
+      if (!t) continue;
+      tickers.push(t);
+      const w = Number(r.weight);
+      if (r.weight.trim() !== '' && Number.isFinite(w)) {
+        weights[t] = w / 100;
+        anyWeight = true;
+      }
+    }
+    const targetWeights = anyWeight ? JSON.stringify(weights) : null;
+    await onSave(tickers, targetWeights);
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-bg-card p-3">
+      <div className="space-y-1.5">
+        {rows.map((row) => (
+          <div key={row.id} className="flex items-center gap-2">
+            <input
+              type="text"
+              value={row.ticker}
+              onChange={(e) => updateRow(row.id, { ticker: e.target.value.toUpperCase() })}
+              placeholder="TICKER"
+              className="flex-1 rounded-md border border-border bg-bg-tertiary px-2 py-1 text-xs font-medium text-text-primary uppercase placeholder:text-text-muted focus:border-accent-primary focus:outline-none"
+            />
+            <div className="relative w-20">
+              <input
+                type="number"
+                value={row.weight}
+                onChange={(e) => updateRow(row.id, { weight: e.target.value })}
+                placeholder="—"
+                step="0.5"
+                min="0"
+                max="100"
+                className="w-full rounded-md border border-border bg-bg-tertiary px-2 py-1 pr-5 text-xs text-text-primary tabular-nums placeholder:text-text-muted focus:border-accent-primary focus:outline-none"
+              />
+              <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-text-muted">
+                %
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => removeRow(row.id)}
+              aria-label={`Remove ${row.ticker || 'row'}`}
+              className="rounded p-1 text-text-muted hover:bg-bg-hover hover:text-error cursor-pointer"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-2 flex items-center justify-between">
+        <button type="button" onClick={addRow} className="text-xs text-accent-primary hover:underline cursor-pointer">
+          + Add ticker
+        </button>
+        {totalPercent > 0 && (
+          <span
+            className={cn(
+              'text-[10px] uppercase tracking-wide tabular-nums',
+              totalPercent > 100.01 ? 'text-error' : 'text-text-muted',
+            )}
+          >
+            Total {totalPercent % 1 === 0 ? totalPercent : totalPercent.toFixed(1)}%
+          </span>
+        )}
+      </div>
+
+      <div className="mt-3 flex justify-end gap-2 border-t border-border pt-2">
+        <Button variant="secondary" size="sm" onClick={onCancel} disabled={saving}>
+          Cancel
+        </Button>
+        <Button size="sm" loading={saving} onClick={handleSave}>
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function StrategyDetailModal({ open, strategyId, onClose }: StrategyDetailModalProps) {
   const [result] = useStrategy(strategyId);
   const exportStrategy = useExportStrategy();
   const [, deleteStrategy] = useDeleteStrategy();
+  const [, toggleStrategy] = useToggleStrategy();
+  const [, updateStrategy] = useUpdateStrategy();
   const [copying, setCopying] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -170,12 +339,68 @@ export default function StrategyDetailModal({ open, strategyId, onClose }: Strat
   const [forking, setForking] = useState(false);
   const [forkKey, setForkKey] = useState(1000); // offset from editorKey to prevent key collisions
   const [error, setError] = useState<string | null>(null);
+  const [editingUniverse, setEditingUniverse] = useState(false);
+  const [savingUniverse, setSavingUniverse] = useState(false);
+  // Optimistic active state — toggleStrategy returns {id, active} which graphcache merges,
+  // but local state lets the toggle respond immediately while the mutation is in-flight.
+  const [activeOverride, setActiveOverride] = useState<boolean | null>(null);
 
   const strategy = result.data?.strategy;
   const sections = useMemo(
     () => (strategy?.content ? parseContentSections(strategy.content) : []),
     [strategy?.content],
   );
+  const targetWeights = useMemo(() => parseTargetWeights(strategy?.targetWeights), [strategy?.targetWeights]);
+  const targetWeightSum = useMemo(
+    () => targetWeights.reduce((acc, r) => acc + (Number.isFinite(r.weight) ? r.weight : 0), 0),
+    [targetWeights],
+  );
+  const tickerWeightMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const w of targetWeights) map.set(w.ticker.toUpperCase(), w.weight);
+    return map;
+  }, [targetWeights]);
+
+  // Reset transient UI when the modal reopens for a different strategy.
+  useEffect(() => {
+    if (!open) {
+      setEditingUniverse(false);
+      setActiveOverride(null);
+      setError(null);
+    }
+  }, [open]);
+
+  const isActive = activeOverride ?? strategy?.active ?? false;
+
+  async function handleToggleActive(next: boolean) {
+    if (!strategy) return;
+    setActiveOverride(next);
+    setError(null);
+    const res = await toggleStrategy({ id: strategy.id, active: next });
+    if (res.error) {
+      setActiveOverride(strategy.active);
+      setError(res.error.message);
+    }
+  }
+
+  async function handleSaveUniverse(tickers: string[], targetWeightsJson: string | null) {
+    if (!strategy) return;
+    setSavingUniverse(true);
+    setError(null);
+    try {
+      const res = await updateStrategy({
+        id: strategy.id,
+        input: { tickers, targetWeights: targetWeightsJson },
+      });
+      if (res.error) {
+        setError(res.error.message);
+        return;
+      }
+      setEditingUniverse(false);
+    } finally {
+      setSavingUniverse(false);
+    }
+  }
 
   async function handleCopy() {
     setCopying(true);
@@ -249,16 +474,112 @@ export default function StrategyDetailModal({ open, strategyId, onClose }: Strat
           {/* Header */}
           <div>
             <p className="text-sm text-text-secondary">{strategy.description}</p>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 rounded-md border border-border bg-bg-card px-2 py-1">
+                <Toggle checked={isActive} onChange={handleToggleActive} size="sm" />
+                <span className={cn('text-xs font-medium', isActive ? 'text-success' : 'text-text-muted')}>
+                  {isActive ? 'Active' : 'Paused'}
+                </span>
+              </div>
               <Badge variant={categoryVariant[strategy.category]}>{strategy.category}</Badge>
               <Badge variant="neutral">{formatStyle(strategy.style)}</Badge>
             </div>
           </div>
 
-          {/* Trigger Groups */}
+          {/* Settings — allocation + max position */}
+          {(strategy.targetAllocation != null || strategy.maxPositionSize != null) && (
+            <div className="grid grid-cols-2 gap-2">
+              {strategy.targetAllocation != null && (
+                <div className="rounded-lg border border-border bg-bg-card px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-text-muted">Target Allocation</div>
+                  <div className="mt-0.5 text-lg font-medium text-text-primary tabular-nums">
+                    {formatPercent(strategy.targetAllocation)}
+                  </div>
+                </div>
+              )}
+              {strategy.maxPositionSize != null && (
+                <div className="rounded-lg border border-border bg-bg-card px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-text-muted">Max Position</div>
+                  <div className="mt-0.5 text-lg font-medium text-text-primary tabular-nums">
+                    {formatPercent(strategy.maxPositionSize)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Universe — tickers + inline weights, with edit mode */}
+          {(strategy.tickers.length > 0 || editingUniverse) && (
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <SectionLabel count={strategy.tickers.length}>Universe</SectionLabel>
+                {!editingUniverse && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingUniverse(true)}
+                    aria-label="Edit universe"
+                    className="rounded p-1 text-text-muted hover:bg-bg-hover hover:text-text-primary cursor-pointer"
+                  >
+                    <svg
+                      className="h-3.5 w-3.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={1.8}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {editingUniverse ? (
+                <UniverseEditor
+                  initialTickers={strategy.tickers}
+                  initialWeights={targetWeights}
+                  onCancel={() => setEditingUniverse(false)}
+                  onSave={handleSaveUniverse}
+                  saving={savingUniverse}
+                />
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-1.5">
+                    {strategy.tickers.map((t) => {
+                      const w = tickerWeightMap.get(t.toUpperCase());
+                      return (
+                        <span
+                          key={t}
+                          className="inline-flex items-center gap-1.5 rounded-md bg-bg-tertiary px-2 py-1 text-xs font-medium text-text-primary tabular-nums"
+                        >
+                          <span>{t}</span>
+                          {w !== undefined && <span className="text-text-muted">{formatPercent(w)}</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  {targetWeights.length > 0 && (
+                    <p
+                      className={cn(
+                        'mt-1.5 text-[10px] uppercase tracking-wide tabular-nums',
+                        targetWeightSum > 1.0001 ? 'text-error' : 'text-text-muted',
+                      )}
+                    >
+                      Total {formatPercent(targetWeightSum)}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Triggers */}
           {strategy.triggerGroups.length > 0 && (
             <div>
-              <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">Triggers</h3>
+              <SectionLabel>Triggers</SectionLabel>
               <div className="space-y-2">
                 {strategy.triggerGroups.map((group, gi) => (
                   <div key={gi}>
@@ -269,17 +590,23 @@ export default function StrategyDetailModal({ open, strategyId, onClose }: Strat
                         <div className="flex-1 border-t border-border" />
                       </div>
                     )}
-                    <div className="rounded-lg bg-bg-tertiary px-3 py-2">
-                      {group.label && <p className="text-xs font-medium text-text-muted mb-1">{group.label}</p>}
-                      <div className="space-y-1.5">
-                        {group.conditions.map((trigger, ci) => (
-                          <div key={ci} className="text-sm">
-                            {ci > 0 && <span className="text-xs text-text-muted mr-1">AND</span>}
-                            <span className="font-medium text-text-primary">{trigger.type}</span>
-                            <span className="ml-2 text-text-secondary">{trigger.description}</span>
-                          </div>
-                        ))}
-                      </div>
+                    <div className="rounded-lg border border-border bg-bg-card px-3 py-2">
+                      {group.label && <p className="mb-1 text-xs font-medium text-text-muted">{group.label}</p>}
+                      <ul className="space-y-1.5">
+                        {group.conditions.map((trigger, ci) => {
+                          const sentence = humanizeTrigger(trigger.type, trigger.params, trigger.description);
+                          const typeLabel = TRIGGER_TYPE_LABELS[trigger.type] ?? trigger.type;
+                          return (
+                            <li key={ci} className="flex items-start gap-2 text-sm">
+                              {ci > 0 && <span className="mt-0.5 text-xs text-text-muted">AND</span>}
+                              <span className="flex-1 text-text-primary">{sentence}</span>
+                              <span className="rounded bg-bg-tertiary px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-text-muted">
+                                {typeLabel}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
                     </div>
                   </div>
                 ))}
@@ -290,9 +617,7 @@ export default function StrategyDetailModal({ open, strategyId, onClose }: Strat
           {/* Required Capabilities */}
           {strategy.requires.length > 0 && (
             <div>
-              <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
-                Required Capabilities
-              </h3>
+              <SectionLabel>Required Capabilities</SectionLabel>
               <div className="flex flex-wrap gap-1.5">
                 {strategy.requires.map((cap) => (
                   <Badge key={cap} variant="accent" size="sm">
@@ -305,10 +630,13 @@ export default function StrategyDetailModal({ open, strategyId, onClose }: Strat
 
           {/* Strategy Content — structured sections */}
           {sections.length > 0 && (
-            <div className="space-y-2">
-              {sections.map((section) => (
-                <SectionPanel key={section.heading} section={section} defaultOpen={false} />
-              ))}
+            <div>
+              <SectionLabel>Rationale</SectionLabel>
+              <div className="space-y-2">
+                {sections.map((section) => (
+                  <SectionPanel key={section.heading} section={section} defaultOpen={false} />
+                ))}
+              </div>
             </div>
           )}
 
