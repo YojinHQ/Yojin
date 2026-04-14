@@ -17,6 +17,7 @@ import type {
   IntelFeedQueryResult,
   IntelFeedQueryVariables,
   SchedulerStatusQueryResult,
+  TriggerStrength,
 } from '../../api/types';
 import { cn, timeAgo } from '../../lib/utils';
 import { useFeatureStatus } from '../../lib/feature-status';
@@ -63,7 +64,7 @@ interface IntelFeedItem {
   data?: DataRow[];
   isAction?: boolean;
   verdict?: 'BUY' | 'SELL' | 'TRIM' | 'HOLD' | 'REVIEW';
-  triggerStrength?: string;
+  triggerStrength?: TriggerStrength;
   strategyName?: string;
   riskContext?: string;
   expiresAt?: string;

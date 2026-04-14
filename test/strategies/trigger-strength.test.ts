@@ -341,9 +341,8 @@ describe('computeTriggerStrength — EARNINGS_PROXIMITY', () => {
     expect(computeTriggerStrength('EARNINGS_PROXIMITY', { daysUntilEarnings: 1, withinDays: 7 })).toBe('STRONG');
   });
 
-  it('returns EXTREME when earnings are today (daysLeft=0)', () => {
-    // daysLeft=0, withinDays=7 → ratio=1 → STRONG (not EXTREME since 1<1.5)
-    // Actually: ratio=1.0 → STRONG (boundary at 1.5 for EXTREME)
+  it('returns STRONG when earnings are today (ratio capped at 1.0)', () => {
+    // daysLeft=0, withinDays=7 → ratio=1.0 → STRONG (EARNINGS_PROXIMITY can never reach EXTREME)
     expect(computeTriggerStrength('EARNINGS_PROXIMITY', { daysUntilEarnings: 0, withinDays: 7 })).toBe('STRONG');
   });
 

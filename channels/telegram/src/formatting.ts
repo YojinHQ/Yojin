@@ -1,5 +1,5 @@
 import type { Action } from '../../../src/actions/types.js';
-import { chunkMessage as chunkMessageBase, escapeHtml } from '../../../src/formatting/index.js';
+import { chunkMessage as chunkMessageBase, escapeHtml, formatTriggerStrength } from '../../../src/formatting/index.js';
 import type { InsightReport } from '../../../src/insights/types.js';
 import type { Snap } from '../../../src/snap/types.js';
 
@@ -34,7 +34,8 @@ export function formatAction(action: Action): string {
   const header = ticker
     ? `\u{26A1} <b>${escapeHtml(action.verdict)} ${escapeHtml(ticker)}</b>`
     : `\u{26A1} <b>${escapeHtml(action.verdict)}</b>`;
-  const lines = [header, escapeHtml(action.what)];
+  const strength = action.triggerStrength ? `[${formatTriggerStrength(action.triggerStrength)}]` : '';
+  const lines = [header, strength ? `${escapeHtml(strength)} ${escapeHtml(action.what)}` : escapeHtml(action.what)];
   if (action.why && action.why !== action.what) {
     lines.push('', escapeHtml(action.why));
   }

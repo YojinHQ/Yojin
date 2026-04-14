@@ -5,6 +5,7 @@ import type { Action } from '../../../src/actions/types.js';
 import { isNotificationEnabled } from '../../../src/api/graphql/resolvers/channels.js';
 import { QUICK_ACTIONS } from '../../../src/channels/quick-actions.js';
 import type { NotificationBus } from '../../../src/core/notification-bus.js';
+import { formatTriggerStrength } from '../../../src/formatting/index.js';
 import type { InsightStore } from '../../../src/insights/insight-store.js';
 import type { InsightReport } from '../../../src/insights/types.js';
 import { createSubsystemLogger } from '../../../src/logging/logger.js';
@@ -51,7 +52,8 @@ function formatSnap(snap: { intelSummary: string; actionItems: { text: string; s
 function formatAction(action: Action): string {
   const ticker = action.tickers[0];
   const header = ticker ? `:zap: *${action.verdict} ${ticker}*` : `:zap: *${action.verdict}*`;
-  const lines = [header, action.what];
+  const strength = action.triggerStrength ? `[${formatTriggerStrength(action.triggerStrength)}]` : '';
+  const lines = [header, strength ? `${strength} ${action.what}` : action.what];
   if (action.why && action.why !== action.what) {
     lines.push('', action.why);
   }

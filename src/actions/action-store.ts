@@ -141,7 +141,8 @@ export class ActionStore {
       return { success: false, error: `Invalid action: ${parsed.error.message}` };
     }
 
-    await this.supersedePendingByTriggerId(parsed.data.triggerId);
+    const allActions = await this.queryAll();
+    await this.supersedePendingByTriggerId(parsed.data.triggerId, allActions);
 
     await this.appendAction(parsed.data);
     logger.info('Action created', {
@@ -269,8 +270,8 @@ export class ActionStore {
    * appending a fresh Action to ensure the triggerId dedup guarantees that
    * at most one PENDING record exists per triggerId at a time.
    */
-  private async supersedePendingByTriggerId(triggerId: string): Promise<void> {
-    const actions = await this.queryAll();
+  private async supersedePendingByTriggerId(triggerId: string, all?: Action[]): Promise<void> {
+    const actions = all ?? (await this.queryAll());
     const now = new Date().toISOString();
 
     for (const existing of actions) {

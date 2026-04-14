@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import Modal from '../common/modal';
 import Badge from '../common/badge';
 import type { BadgeVariant } from '../common/badge';
+import type { TriggerStrength } from '../../api/types';
 import { timeAgo } from '../../lib/utils';
 
 /** Lightweight markdown → HTML for LLM-generated analysis text. */
@@ -41,7 +42,7 @@ export interface FeedDetailData {
   impact?: 'high' | 'medium' | 'low';
   urgency?: 'high' | 'medium' | 'low';
   confidence?: number;
-  triggerStrength?: string;
+  triggerStrength?: TriggerStrength;
   keyPoints: string[];
   analysis: string;
   recommendation?: string;

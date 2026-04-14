@@ -1,5 +1,5 @@
 import type { Action } from '../../../src/actions/types.js';
-import { chunkMessage as chunkMessageBase } from '../../../src/formatting/index.js';
+import { chunkMessage as chunkMessageBase, formatTriggerStrength } from '../../../src/formatting/index.js';
 import type { InsightReport } from '../../../src/insights/types.js';
 import type { Snap } from '../../../src/snap/types.js';
 
@@ -58,7 +58,8 @@ export function formatSnap(snap: Snap): string {
 export function formatAction(action: Action): string {
   const ticker = action.tickers[0];
   const header = ticker ? `\u{26A1} *${action.verdict} ${ticker}*` : `\u{26A1} *${action.verdict}*`;
-  const lines = [header, action.what];
+  const strength = action.triggerStrength ? `[${formatTriggerStrength(action.triggerStrength)}]` : '';
+  const lines = [header, strength ? `${strength} ${action.what}` : action.what];
   if (action.why && action.why !== action.what) {
     lines.push('', action.why);
   }

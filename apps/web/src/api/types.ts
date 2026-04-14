@@ -1180,6 +1180,7 @@ export interface SummaryQueryVariables {
 
 export type ActionVerdict = 'BUY' | 'SELL' | 'TRIM' | 'HOLD' | 'REVIEW';
 export type ActionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
+export type TriggerStrength = 'WEAK' | 'MODERATE' | 'STRONG' | 'EXTREME';
 
 export interface Action {
   id: string;
@@ -1193,7 +1194,7 @@ export interface Action {
   tickers: string[];
   riskContext: string | null;
   severity: number | null;
-  triggerStrength: string;
+  triggerStrength: TriggerStrength;
   severityLabel: string;
   status: ActionStatus;
   expiresAt: string;

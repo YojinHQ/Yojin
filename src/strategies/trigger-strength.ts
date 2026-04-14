@@ -72,7 +72,7 @@ export function computeTriggerStrength(
       const drift = Math.abs(Number(context['drift'] ?? 0));
       const driftThreshold = Number(context['driftThreshold'] ?? 0.05);
       if (!Number.isFinite(drift) || !Number.isFinite(driftThreshold) || driftThreshold === 0) return 'MODERATE';
-      return ratioToStrength((drift - driftThreshold) / driftThreshold);
+      return ratioToStrength(Math.abs(drift - driftThreshold) / driftThreshold);
     }
 
     case 'DRAWDOWN': {
