@@ -116,6 +116,17 @@ fn resolve_entry_script(app: &AppHandle) -> std::io::Result<PathBuf> {
         return Ok(PathBuf::from(override_path));
     }
 
+    // Debug builds (`tauri dev`) must prefer the monorepo root so iteration is
+    // live: `sidecar/app/` is a one-shot copy produced by `bundle-app.mjs` for
+    // release packaging and goes stale the moment backend/web source changes.
+    // Release builds keep the staged bundle first — end users have no repo.
+    #[cfg(debug_assertions)]
+    {
+        if let Some(path) = resolve_from_monorepo_root() {
+            return Ok(path);
+        }
+    }
+
     if let Ok(resource_dir) = app.path().resource_dir() {
         // Production: bundle-app.mjs stages the backend at sidecar/app/.
         let candidate = resource_dir
@@ -129,25 +140,30 @@ fn resolve_entry_script(app: &AppHandle) -> std::io::Result<PathBuf> {
         }
     }
 
-    // Dev fallback: walk up from the desktop crate's manifest dir to find the
-    // monorepo root (the directory containing pnpm-workspace.yaml).
-    let mut cursor = std::env::current_dir()?;
+    #[cfg(not(debug_assertions))]
+    {
+        if let Some(path) = resolve_from_monorepo_root() {
+            return Ok(path);
+        }
+    }
+
+    Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "Could not locate Yojin entry.js — set YOJIN_DESKTOP_ENTRY",
+    ))
+}
+
+/// Walk up from the current dir to the monorepo root (marked by
+/// pnpm-workspace.yaml) and return `dist/src/entry.js` if present.
+fn resolve_from_monorepo_root() -> Option<PathBuf> {
+    let mut cursor = std::env::current_dir().ok()?;
     loop {
         if cursor.join("pnpm-workspace.yaml").exists() {
             let candidate = cursor.join("dist").join("src").join("entry.js");
-            if candidate.exists() {
-                return Ok(candidate);
-            }
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("Found monorepo root at {} but {} is missing — run `pnpm build` first", cursor.display(), candidate.display()),
-            ));
+            return candidate.exists().then_some(candidate);
         }
         if !cursor.pop() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Could not locate Yojin entry.js — set YOJIN_DESKTOP_ENTRY",
-            ));
+            return None;
         }
     }
 }
