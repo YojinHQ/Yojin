@@ -69,6 +69,26 @@ pnpm --filter @yojin/desktop tauri -- bundle:node --target=darwin-arm64
 
 `src-tauri/sidecar/` is gitignored — the binary is downloaded fresh per build.
 
+## Bundled backend (self-contained installer)
+
+The installer ships the compiled backend and web bundle so users get a working app out of the box without a local Yojin checkout.
+
+`scripts/bundle-app.mjs` runs after `deps:build` + `bundle-node` and `pnpm deploy --prod`s the root `@yojinhq/yojin` package into `src-tauri/sidecar/app/`. That directory ends up containing:
+
+- `dist/` — compiled backend (entry point: `dist/src/entry.js`)
+- `apps/web/dist/` — prebuilt React dashboard served by the web channel
+- `data/default/` — factory defaults (agents, strategies, personas, …)
+- `node_modules/` — production-only deps, hoisted (no `.pnpm` symlink farm)
+- `package.json`, `yojin.mjs`, README, LICENSE
+
+`tauri.conf.json` includes the whole tree via `resources: ["sidecar/**/*"]`. `sidecar.rs` then resolves the entry script at `resource_dir/sidecar/app/dist/src/entry.js` (falling back to the dev monorepo walk for local runs).
+
+Run it manually:
+
+```bash
+pnpm --filter @yojin/desktop bundle:app
+```
+
 ## Build (per-platform installers)
 
 ```bash
@@ -83,7 +103,6 @@ pnpm --filter @yojin/desktop build
 
 ## Open items
 
-- [ ] Bundle the Node app itself (compiled `dist/` + `node_modules/`) as a resource so the installer is self-contained — `sidecar.rs` already looks for `sidecar/dist/src/entry.js` in the resource dir
 - [ ] Lazy-download Playwright browsers on first scrape (keeps installer small per `Workstream B / decision 2`)
 - [ ] Codesigning certs (Apple Developer ID + Windows OV)
 - [ ] Auto-update channel (Tauri updater plugin)

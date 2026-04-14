@@ -48,8 +48,10 @@ impl Drop for SidecarHandle {
 ///
 /// Resolution order for the entry script:
 ///   1. `YOJIN_DESKTOP_ENTRY` env var (manual override).
-///   2. Tauri resource dir (production builds bundle the script there).
-///   3. Walk up from `current_exe` to the monorepo root, then `dist/src/entry.js` (dev mode).
+///   2. Tauri resource dir at `sidecar/app/dist/src/entry.js` — production
+///      installer: `scripts/bundle-app.mjs` stages the self-contained backend
+///      (dist + web bundle + prod node_modules) under `sidecar/app/`.
+///   3. Walk up from `current_dir` to the monorepo root, then `dist/src/entry.js` (dev mode).
 pub fn spawn(app: &AppHandle) -> Result<SidecarHandle, std::io::Error> {
     let port = pick_free_port()?;
     let entry = resolve_entry_script(app)?;
@@ -115,7 +117,13 @@ fn resolve_entry_script(app: &AppHandle) -> std::io::Result<PathBuf> {
     }
 
     if let Ok(resource_dir) = app.path().resource_dir() {
-        let candidate = resource_dir.join("sidecar").join("dist").join("src").join("entry.js");
+        // Production: bundle-app.mjs stages the backend at sidecar/app/.
+        let candidate = resource_dir
+            .join("sidecar")
+            .join("app")
+            .join("dist")
+            .join("src")
+            .join("entry.js");
         if candidate.exists() {
             return Ok(candidate);
         }

@@ -1,15 +1,16 @@
 {
   "name": "@yojin/desktop",
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "pnpm run deps:build && tauri dev",
-    "build": "pnpm run deps:build && node scripts/bundle-node.mjs && tauri build",
+    "build": "pnpm run deps:build && node scripts/bundle-node.mjs && node scripts/bundle-app.mjs && tauri build",
     "deps:build": "pnpm --filter @yojinhq/yojin build && pnpm --filter @yojin/web build",
     "tauri": "tauri",
     "bundle:node": "node scripts/bundle-node.mjs",
-    "bundle:node:all": "node scripts/bundle-node.mjs --all"
+    "bundle:node:all": "node scripts/bundle-node.mjs --all",
+    "bundle:app": "node scripts/bundle-app.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.4.0"
