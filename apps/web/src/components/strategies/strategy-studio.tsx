@@ -207,6 +207,13 @@ export function StrategyStudio({ open, onClose, strategy, editMode }: StrategySt
               if (proposed.requires) {
                 proposed.requires = proposed.requires.map((r) => r.toUpperCase());
               }
+              // LLM may emit lowercase enum values — normalize to the GraphQL enum casing
+              if (typeof proposed.style === 'string') {
+                proposed.style = proposed.style.toUpperCase();
+              }
+              if (typeof proposed.category === 'string') {
+                proposed.category = proposed.category.toUpperCase();
+              }
               // The LLM may emit targetWeights as a Record<ticker, weight> — normalize to the array shape.
               const rawWeights = (proposed as { targetWeights?: unknown }).targetWeights;
               if (rawWeights && !Array.isArray(rawWeights) && typeof rawWeights === 'object') {
@@ -221,7 +228,6 @@ export function StrategyStudio({ open, onClose, strategy, editMode }: StrategySt
             }
           }
         } else if (event.type === 'TEXT_DELTA') {
-          setIsLoading(false);
           if (event.accumulatedText != null) {
             setStreamingContent(event.accumulatedText);
           } else if (event.delta != null) {
@@ -333,7 +339,7 @@ export function StrategyStudio({ open, onClose, strategy, editMode }: StrategySt
               <ChatMessageComponent key={msg.id} role={msg.role} content={msg.content} toolCards={msg.toolCards} />
             ))}
             {streamingContent && <ChatMessageComponent role="assistant" content={streamingContent} streaming />}
-            {isLoading && !streamingContent && (
+            {isLoading && (
               <div className="flex items-center gap-1.5 py-2">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-text-muted" />
                 <span className="h-2 w-2 animate-pulse rounded-full bg-text-muted [animation-delay:150ms]" />
