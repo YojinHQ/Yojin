@@ -43,7 +43,7 @@ Cross-platform tray app for Yojin. Wraps the existing Node backend (sidecar) and
 pnpm --filter @yojin/desktop dev
 ```
 
-This launches `tauri dev`, which:
+This first builds the backend (`tsc`) and the web dashboard (`vite build`) so the sidecar has `dist/src/entry.js` and `apps/web/dist/` to serve, then launches `tauri dev`, which:
 
 1. Starts the Rust shell.
 2. Shell spawns the Node backend with a random `YOJIN_PORT`.
@@ -52,7 +52,7 @@ This launches `tauri dev`, which:
 
 ## Bundled Node runtime
 
-End users don't need Node installed — `pnpm --filter @yojin/desktop build` runs `scripts/bundle-node.mjs` as a `prebuild` step, which downloads the official Node 22.12.0 distribution for the host platform and drops the `node` binary at `src-tauri/sidecar/node` (`node.exe` on Windows). Tauri then ships that file as a bundle resource.
+End users don't need Node installed — `pnpm --filter @yojin/desktop build` chains `scripts/bundle-node.mjs` before `tauri build`, which downloads the official Node 22.12.0 distribution for the host platform and drops the `node` binary at `src-tauri/sidecar/node` (`node.exe` on Windows). Tauri then ships that file as a bundle resource. On Windows hosts the script extracts the `.zip` via PowerShell's built-in `Expand-Archive` so no Unix toolchain is required; other hosts use `unzip`/`tar` as usual.
 
 At runtime, `src-tauri/src/sidecar.rs` resolves the Node command in this order:
 

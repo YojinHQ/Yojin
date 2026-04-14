@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tauri dev",
-    "build": "tauri build",
+    "dev": "pnpm run deps:build && tauri dev",
+    "build": "pnpm run deps:build && node scripts/bundle-node.mjs && tauri build",
+    "deps:build": "pnpm --filter @yojinhq/yojin build && pnpm --filter @yojin/web build",
     "tauri": "tauri",
     "bundle:node": "node scripts/bundle-node.mjs",
-    "bundle:node:all": "node scripts/bundle-node.mjs --all",
-    "prebuild": "node scripts/bundle-node.mjs"
+    "bundle:node:all": "node scripts/bundle-node.mjs --all"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.4.0"

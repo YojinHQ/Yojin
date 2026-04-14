@@ -64,11 +64,30 @@ async function downloadFile(url, dest) {
 }
 
 function extract(archivePath, destDir, isZip) {
-  const result = isZip
-    ? spawnSync('unzip', ['-q', archivePath, '-d', destDir], { stdio: 'inherit' })
-    : spawnSync('tar', ['-xJf', archivePath, '-C', destDir], { stdio: 'inherit' });
+  if (!isZip) {
+    const result = spawnSync('tar', ['-xJf', archivePath, '-C', destDir], { stdio: 'inherit' });
+    if (result.status !== 0) {
+      throw new Error(`tar extraction failed for ${archivePath}`);
+    }
+    return;
+  }
+
+  // Windows stock shells don't have `unzip`, but every Windows 10+ install has
+  // PowerShell with `Expand-Archive` built in. Prefer it on win32 hosts and
+  // fall back to `unzip` elsewhere (Linux/macOS CI boxes cross-bundling the
+  // Windows archive).
+  if (process.platform === 'win32') {
+    const script = `Expand-Archive -LiteralPath ${JSON.stringify(archivePath)} -DestinationPath ${JSON.stringify(destDir)} -Force`;
+    const result = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { stdio: 'inherit' });
+    if (result.status !== 0) {
+      throw new Error(`PowerShell Expand-Archive failed for ${archivePath}`);
+    }
+    return;
+  }
+
+  const result = spawnSync('unzip', ['-q', archivePath, '-d', destDir], { stdio: 'inherit' });
   if (result.status !== 0) {
-    throw new Error(`Extraction failed for ${archivePath}`);
+    throw new Error(`unzip extraction failed for ${archivePath}`);
   }
 }
 
