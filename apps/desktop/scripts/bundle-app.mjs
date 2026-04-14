@@ -18,7 +18,13 @@ const STAGE_DIR = resolve(__dirname, '..', 'src-tauri', 'sidecar', 'app');
 const REPO_ROOT = resolve(__dirname, '..', '..', '..');
 
 function run(cmd, args, opts = {}) {
-  const result = spawnSync(cmd, args, { stdio: 'inherit', ...opts });
+  // shell: true on Windows so .cmd/.ps1 shims (like `pnpm.cmd`) resolve; without
+  // it spawnSync returns { status: null } and the process fails silently.
+  const result = spawnSync(cmd, args, {
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+    ...opts,
+  });
   if (result.status !== 0) {
     throw new Error(`${cmd} ${args.join(' ')} exited with status ${result.status}`);
   }
