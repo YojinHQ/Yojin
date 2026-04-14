@@ -97,32 +97,25 @@ function strategyToFormData(strategy: Strategy): StrategyFormData {
 
 const CREATE_PROMPT =
   '[STRATEGY STUDIO — CREATE MODE]\n' +
-  'Help me create a new trading strategy. Ask clarifying questions to understand my goal — ' +
-  'what I want to capture or protect against, which assets, what thresholds.\n\n' +
-  'Recognize which archetype I am aiming for:\n' +
-  '- **Technical:** indicator/price-based. Available indicator keys for `INDICATOR_THRESHOLD` triggers: ' +
-  '`RSI`, `MFI`, `WILLIAMS_R`, `STOCH_K`, `STOCH_D`, ' +
-  '`MACD` (histogram), `MACD_LINE`, `MACD_SIGNAL`, ' +
-  '`EMA`, `EMA_50`, `EMA_200`, `SMA` (50), `SMA_20`, `SMA_200`, `WMA_52`, `VWMA`, `VWAP`, ' +
-  '`BB_UPPER`, `BB_MIDDLE`, `BB_LOWER`, `BB_WIDTH`, ' +
-  '`ATR`, `ADX`, `PSAR`, `OBV`, ' +
-  '`GOLDEN_CROSS`, `DEATH_CROSS`, `EMA_CROSS` (crossover flags — 1 when active; use threshold `1` with direction `above`). ' +
-  'Also consider `PRICE_MOVE` and `DRAWDOWN` triggers. If my intent maps to an existing template, propose forking it.\n' +
-  '- **Copy Trading:** "trade like [person/fund]". CRITICAL: search for the EXACT investor/fund the user named — never substitute a different one. Use `search_entities` to find that specific fund, then `get_institutional_holdings` with their CIK to fetch their real 13F portfolio. Use the actual holdings to populate the strategy ticker list and inform triggers. If the user says "Buffett", look up Berkshire Hathaway — not ARK, not any other fund.\n' +
-  '- **Index Replication / Thematic Allocation:** "build me [index/theme]" or "put X% in [theme]". Suggest a concrete basket of companies with weight targets and concentration drift triggers.\n\n' +
-  'Once you have enough information, call `display_propose_strategy` with a complete strategy. ' +
-  "Generate a full markdown body (thesis, entry/exit rules, risk management) — don't leave it to the user.";
+  'Help me create a trading strategy. Keep chat replies to 1–2 sentences. ' +
+  'Ask one short clarifying question at a time — not a questionnaire. ' +
+  'As soon as you have the goal, assets, and trigger thresholds, call `display_propose_strategy`.\n\n' +
+  'Archetypes to recognize:\n' +
+  '- **Technical:** indicator/price-based. `INDICATOR_THRESHOLD` keys include RSI, MFI, WILLIAMS_R, STOCH_K/D, MACD (histogram/line/signal), EMA/EMA_50/EMA_200, SMA/SMA_20/SMA_200, WMA_52, VWMA, VWAP, BB_UPPER/MIDDLE/LOWER/WIDTH, ATR, ADX, PSAR, OBV, GOLDEN_CROSS, DEATH_CROSS, EMA_CROSS (crossover flags: threshold `1`, direction `above`). Also `PRICE_MOVE` and `DRAWDOWN`. If my intent maps to an existing template, propose forking it.\n' +
+  '- **Copy Trading:** "trade like [person/fund]". Search for the EXACT investor/fund named — never substitute. Use `search_entities`, then `get_institutional_holdings` with their CIK. Buffett → Berkshire, not ARK.\n' +
+  '- **Index / Thematic:** suggest a concrete basket with weight targets and drift triggers.\n\n' +
+  'Markdown body: keep it short — 2–3 lines of thesis, terse entry/exit/risk notes. No long sections.';
 
 const EDIT_PROMPT_PREFIX =
   '[STRATEGY STUDIO — EDIT MODE]\n' +
-  'I want to edit this strategy. Help me refine it — I can edit the form directly or ask you for changes. ' +
-  'When I ask for modifications, call `display_propose_strategy` with the updated strategy. ' +
-  'You can also proactively suggest improvements.\n\nCurrent strategy: ';
+  'I want to edit this strategy. Keep replies to 1–2 sentences. ' +
+  'When I ask for changes, call `display_propose_strategy` with the update. ' +
+  'Brief suggestions welcome.\n\nCurrent strategy: ';
 
 const FORK_PROMPT_PREFIX =
   '[STRATEGY STUDIO — FORK MODE]\n' +
-  'I want to fork this strategy as a starting point for a new one. ' +
-  'Help me customize it. When I ask for changes, call `display_propose_strategy` with the updated strategy.\n\nOriginal strategy: ';
+  'I want to fork this as a starting point. ' +
+  'When I ask for changes, call `display_propose_strategy` with the update.\n\nOriginal strategy: ';
 
 function buildInitialMessage(strategy: Strategy | null | undefined, editMode: boolean | undefined): string {
   if (!strategy) return CREATE_PROMPT;
