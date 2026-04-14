@@ -63,7 +63,7 @@ interface FeedDetailModalProps {
   data: FeedDetailData | null;
 }
 
-const triggerStrengthVariant: Record<TriggerStrength, BadgeVariant> = {
+const TRIGGER_STRENGTH_VARIANT: Record<TriggerStrength, BadgeVariant> = {
   WEAK: 'neutral',
   MODERATE: 'info',
   STRONG: 'warning',
@@ -157,7 +157,7 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
           </Badge>
         )}
         {data.triggerStrength && (
-          <Badge variant={triggerStrengthVariant[data.triggerStrength]} outline>
+          <Badge variant={TRIGGER_STRENGTH_VARIANT[data.triggerStrength]} outline>
             {data.triggerStrength.charAt(0) + data.triggerStrength.slice(1).toLowerCase()} Strength
           </Badge>
         )}

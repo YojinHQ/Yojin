@@ -87,7 +87,7 @@ export function computeTriggerStrength(
       const withinDays = Number(context['withinDays'] ?? 7);
       if (!Number.isFinite(daysLeft) || !Number.isFinite(withinDays) || withinDays === 0) return 'MODERATE';
       // Ratio caps at 1.0 (daysLeft=0) — EARNINGS_PROXIMITY can never reach EXTREME
-      const ratio = Math.max(0, 1 - daysLeft / withinDays);
+      const ratio = Math.min(1, Math.max(0, 1 - daysLeft / withinDays));
       return ratioToStrength(ratio);
     }
 
