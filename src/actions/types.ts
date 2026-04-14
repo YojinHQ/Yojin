@@ -52,6 +52,8 @@ export const ActionSchema = z.object({
   riskContext: z.string().optional(),
   /** Optional 0–1 severity; higher = higher priority in the ranker. */
   severity: z.number().min(0).max(1).optional(),
+  /** 0–1 confidence in the verdict; used for conflict resolution when multiple strategies fire on the same ticker. */
+  confidence: z.number().min(0).max(1).default(0.5),
   status: ActionStatusSchema.default('PENDING'),
   expiresAt: DateTimeField,
   createdAt: DateTimeField,
@@ -76,4 +78,26 @@ export function parseVerdictFromHeadline(headline: string): ActionVerdict {
     return match[1] as ActionVerdict;
   }
   return 'REVIEW';
+}
+
+/** Parse confidence score from LLM response text. Clamps to 0-1, defaults to 0.5. */
+export function parseConfidenceFromResponse(text: string): number {
+  const match = text.match(/CONFIDENCE:\s*(-?[\d.]+)/i);
+  if (!match) return 0.5;
+  const value = Number(match[1]);
+  if (!Number.isFinite(value)) return 0.5;
+  return Math.max(0, Math.min(1, value));
+}
+
+// ---------------------------------------------------------------------------
+// Effective score — conflict resolution between competing actions
+// ---------------------------------------------------------------------------
+
+const DEFENSIVE_VERDICTS: ReadonlySet<ActionVerdict> = new Set(['TRIM', 'SELL']);
+const RISK_BOOST = 0.3;
+
+/** Compute effective score for conflict resolution. Defensive verdicts get a risk boost.
+ *  Tie-break: when scores are equal, the newer action wins (latest-wins semantics). */
+export function effectiveScore(confidence: number, verdict: ActionVerdict): number {
+  return confidence + (DEFENSIVE_VERDICTS.has(verdict) ? RISK_BOOST : 0);
 }

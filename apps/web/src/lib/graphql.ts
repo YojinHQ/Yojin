@@ -66,6 +66,7 @@ const cache = cacheExchange({
     SessionDetail: (data) => data.id as string,
     Strategy: (data) => data.id as string,
     StrategyTrigger: () => null, // embedded — nested under Strategy
+    TriggerGroup: () => null, // embedded — nested under Strategy
     StrategySource: (data) => data.id as string,
     StrategySyncResult: () => null, // embedded — mutation result
     SymbolSearchResult: () => null, // embedded — search result, no stable identity

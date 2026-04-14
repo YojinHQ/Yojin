@@ -2,11 +2,11 @@
  * GraphQL resolvers for Strategies — trading strategy management.
  */
 
-import { DataCapabilitySchema } from '../../../strategies/capabilities.js';
-import type { DataCapability } from '../../../strategies/capabilities.js';
+import { DataCapabilitySchema, deriveCapabilities } from '../../../strategies/capabilities.js';
 import { parseFromMarkdown, serializeToMarkdown, slugify } from '../../../strategies/strategy-serializer.js';
 import type { StrategyStore } from '../../../strategies/strategy-store.js';
-import type { Strategy, StrategyCategory } from '../../../strategies/types.js';
+import { StrategyStyleSchema, TriggerTypeSchema } from '../../../strategies/types.js';
+import type { Strategy, StrategyCategory, StrategyStyle } from '../../../strategies/types.js';
 
 // ---------------------------------------------------------------------------
 // State — wired by composition root
@@ -27,8 +27,12 @@ const CAPABILITY_TO_GQL: Record<string, string> = Object.fromEntries(
   DataCapabilitySchema.options.map((c) => [c, c.toUpperCase()]),
 );
 
-const GQL_TO_CAPABILITY: Record<string, DataCapability> = Object.fromEntries(
-  DataCapabilitySchema.options.map((c) => [c.toUpperCase(), c]),
+const STYLE_TO_GQL: Record<string, string> = Object.fromEntries(
+  StrategyStyleSchema.options.map((s) => [s, s.toUpperCase()]),
+);
+
+const GQL_TO_STYLE: Record<string, StrategyStyle> = Object.fromEntries(
+  StrategyStyleSchema.options.map((s) => [s.toUpperCase(), s]),
 );
 
 // ---------------------------------------------------------------------------
@@ -48,7 +52,8 @@ export function resolveStrategies(
     strategies = strategies.filter((s) => s.active === args.active);
   }
   if (args.style) {
-    strategies = strategies.filter((s) => s.style === args.style);
+    const internalStyle = GQL_TO_STYLE[args.style] ?? args.style.toLowerCase();
+    strategies = strategies.filter((s) => s.style === internalStyle);
   }
   if (args.query) {
     const q = args.query.toLowerCase();
@@ -92,14 +97,18 @@ interface StrategyTriggerInput {
   params?: string;
 }
 
+interface TriggerGroupInput {
+  label?: string;
+  conditions: StrategyTriggerInput[];
+}
+
 interface CreateStrategyInput {
   name: string;
   description: string;
   category: StrategyCategory;
   style: string;
-  requires?: string[];
   content: string;
-  triggers: StrategyTriggerInput[];
+  triggerGroups: TriggerGroupInput[];
   tickers?: string[];
   maxPositionSize?: number;
 }
@@ -109,34 +118,39 @@ interface UpdateStrategyInput {
   description?: string;
   category?: StrategyCategory;
   style?: string;
-  requires?: string[];
   content?: string;
-  triggers?: StrategyTriggerInput[];
+  triggerGroups?: TriggerGroupInput[];
   tickers?: string[];
   maxPositionSize?: number;
 }
 
-function mapTriggersFromInput(triggers: StrategyTriggerInput[]): Strategy['triggers'] {
+function mapTriggersFromInput(triggers: StrategyTriggerInput[]): Strategy['triggerGroups'][number]['conditions'] {
   return triggers.map((t, i) => {
+    const typeParsed = TriggerTypeSchema.safeParse(t.type);
+    if (!typeParsed.success) {
+      throw new Error(`Invalid trigger type at index ${i}: ${t.type}`);
+    }
     let params: Record<string, unknown> | undefined;
     if (t.params) {
       try {
         params = JSON.parse(t.params) as Record<string, unknown>;
       } catch {
-        throw new Error(`Trigger ${i + 1}: invalid JSON in params`);
+        throw new Error(`Invalid trigger params JSON at index ${i}`);
       }
     }
     return {
-      type: t.type as Strategy['triggers'][number]['type'],
+      type: typeParsed.data,
       description: t.description,
       ...(params ? { params } : {}),
     };
   });
 }
 
-function mapRequiresFromInput(requires?: string[]): DataCapability[] {
-  if (!requires) return [];
-  return requires.map((r) => GQL_TO_CAPABILITY[r] ?? (r.toLowerCase() as DataCapability));
+function mapTriggerGroupsFromInput(groups: TriggerGroupInput[]): Strategy['triggerGroups'] {
+  return groups.map((g) => ({
+    label: g.label ?? '',
+    conditions: mapTriggersFromInput(g.conditions),
+  }));
 }
 
 export function resolveCreateStrategy(_: unknown, args: { input: CreateStrategyInput }): unknown {
@@ -147,19 +161,20 @@ export function resolveCreateStrategy(_: unknown, args: { input: CreateStrategyI
   if (existing) {
     id = `${id}-${Date.now()}`;
   }
+  const triggerGroups = mapTriggerGroupsFromInput(input.triggerGroups);
   const strategy: Strategy = {
     id,
     name: input.name,
     description: input.description,
     category: input.category,
-    style: input.style,
-    requires: mapRequiresFromInput(input.requires),
+    style: GQL_TO_STYLE[input.style] ?? 'general',
+    requires: deriveCapabilities(triggerGroups),
     active: false,
     source: 'custom',
     createdBy: 'user',
     createdAt: new Date().toISOString(),
     content: input.content,
-    triggers: mapTriggersFromInput(input.triggers),
+    triggerGroups,
     tickers: input.tickers ?? [],
     ...(input.maxPositionSize !== undefined ? { maxPositionSize: input.maxPositionSize } : {}),
   };
@@ -174,10 +189,12 @@ export function resolveUpdateStrategy(_: unknown, args: { id: string; input: Upd
   if (input.name !== undefined) fields.name = input.name;
   if (input.description !== undefined) fields.description = input.description;
   if (input.category !== undefined) fields.category = input.category;
-  if (input.style !== undefined) fields.style = input.style;
-  if (input.requires !== undefined) fields.requires = mapRequiresFromInput(input.requires);
+  if (input.style !== undefined) fields.style = GQL_TO_STYLE[input.style] ?? 'general';
   if (input.content !== undefined) fields.content = input.content;
-  if (input.triggers !== undefined) fields.triggers = mapTriggersFromInput(input.triggers);
+  if (input.triggerGroups !== undefined) {
+    fields.triggerGroups = mapTriggerGroupsFromInput(input.triggerGroups);
+    fields.requires = deriveCapabilities(fields.triggerGroups);
+  }
   if (input.tickers !== undefined) fields.tickers = input.tickers;
   if (input.maxPositionSize !== undefined) fields.maxPositionSize = input.maxPositionSize;
   const updated = strategyStore.update(id, fields);
@@ -211,17 +228,20 @@ function toGraphQL(strategy: Strategy): unknown {
     name: strategy.name,
     description: strategy.description,
     category: strategy.category,
-    style: strategy.style,
+    style: STYLE_TO_GQL[strategy.style] ?? strategy.style.toUpperCase(),
     requires: strategy.requires.map((r) => CAPABILITY_TO_GQL[r] ?? r.toUpperCase()),
     active: strategy.active,
     source: strategy.source,
     createdBy: strategy.createdBy,
     createdAt: strategy.createdAt,
     content: strategy.content,
-    triggers: strategy.triggers.map((t) => ({
-      type: t.type,
-      description: t.description,
-      params: t.params ? JSON.stringify(t.params) : null,
+    triggerGroups: strategy.triggerGroups.map((g) => ({
+      label: g.label || null,
+      conditions: g.conditions.map((t) => ({
+        type: t.type,
+        description: t.description,
+        params: t.params ? JSON.stringify(t.params) : null,
+      })),
     })),
     maxPositionSize: strategy.maxPositionSize ?? null,
     tickers: strategy.tickers,

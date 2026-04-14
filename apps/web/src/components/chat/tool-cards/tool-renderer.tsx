@@ -46,7 +46,14 @@ export default function ToolRenderer({ tool, params }: ToolRendererProps) {
         <StrategyProposalCard
           name={params.name as string | undefined}
           category={params.category as string | undefined}
-          triggerCount={Array.isArray(params.triggers) ? params.triggers.length : undefined}
+          triggerCount={
+            Array.isArray(params.triggerGroups)
+              ? (params.triggerGroups as { conditions?: unknown[] }[]).reduce(
+                  (sum, g) => sum + (Array.isArray(g.conditions) ? g.conditions.length : 0),
+                  0,
+                )
+              : undefined
+          }
         />
       );
       break;

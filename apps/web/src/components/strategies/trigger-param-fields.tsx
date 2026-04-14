@@ -27,17 +27,23 @@ const PRICE_DIRECTION_OPTIONS = [
 const DIRECTION_OPTIONS = [
   { value: 'above', label: 'Above' },
   { value: 'below', label: 'Below' },
+  { value: 'crosses_above', label: 'Crosses Above' },
+  { value: 'crosses_below', label: 'Crosses Below' },
 ];
 
 const INDICATOR_OPTIONS = [
-  { value: 'RSI', label: 'RSI' },
-  { value: 'MACD', label: 'MACD' },
-  { value: 'BB', label: 'Bollinger Bands' },
-  { value: 'EMA', label: 'EMA' },
-  { value: 'SMA', label: 'SMA' },
-  { value: 'ATR', label: 'ATR' },
-  { value: 'VWMA', label: 'VWMA' },
-  { value: 'MFI', label: 'MFI' },
+  { value: 'RSI', label: 'RSI (14)' },
+  { value: 'EMA', label: 'EMA (10)' },
+  { value: 'SMA', label: 'SMA (50)' },
+  { value: 'ATR', label: 'ATR (14)' },
+  { value: 'VWMA', label: 'VWMA (20)' },
+  { value: 'MFI', label: 'MFI (14)' },
+  { value: 'MACD', label: 'MACD Histogram' },
+  { value: 'MACD_LINE', label: 'MACD Line' },
+  { value: 'MACD_SIGNAL', label: 'MACD Signal' },
+  { value: 'BB_UPPER', label: 'Bollinger Upper' },
+  { value: 'BB_MIDDLE', label: 'Bollinger Middle' },
+  { value: 'BB_LOWER', label: 'Bollinger Lower' },
 ];
 
 const METRIC_OPTIONS = [
@@ -90,8 +96,8 @@ export function NumberInput({
           type="number"
           value={value ?? ''}
           onChange={(e) => {
-            const raw = e.target.value;
-            onChange(raw === '' ? undefined : Number(raw));
+            const v = e.currentTarget.valueAsNumber;
+            onChange(e.target.value === '' ? undefined : Number.isNaN(v) ? value : v);
           }}
           placeholder={placeholder}
           min={min}

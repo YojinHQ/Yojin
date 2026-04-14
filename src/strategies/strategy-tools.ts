@@ -80,7 +80,13 @@ export function createStrategyTools(options: StrategyToolsOptions): ToolDefiniti
       }
 
       const cap = checkCapabilities(strategy.requires);
-      const triggers = strategy.triggers.map((t) => `  - ${t.type}: ${t.description}`).join('\n');
+      const triggers = strategy.triggerGroups
+        .map((g, i) => {
+          const label = g.label ? ` (${g.label})` : '';
+          const conditions = g.conditions.map((c) => `    - ${c.type}: ${c.description}`).join('\n');
+          return `  Group ${i + 1}${label} [AND]:\n${conditions}`;
+        })
+        .join('\n  OR\n');
 
       const content = [
         `# ${strategy.name}`,
@@ -202,7 +208,7 @@ function formatStrategySummary(strategy: Strategy): string {
     `**${strategy.name}** (${strategy.id})`,
     `  Category: ${strategy.category} | Style: ${strategy.style} | Active: ${strategy.active}`,
     `  Capabilities: ${cap.status}${cap.missing.length > 0 ? ` (missing: ${cap.missing.join(', ')})` : ''}`,
-    `  Triggers: ${strategy.triggers.map((t) => t.type).join(', ')}`,
+    `  Trigger groups: ${strategy.triggerGroups.length} (${strategy.triggerGroups.flatMap((g) => g.conditions.map((c) => c.type)).join(', ')})`,
   ].join('\n');
 }
 

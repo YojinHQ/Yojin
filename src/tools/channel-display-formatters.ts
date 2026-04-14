@@ -22,8 +22,12 @@ function formatStrategyProposalPlain(d: StrategyProposalData, escape: (s: string
   if (d.maxPositionSize !== undefined) {
     lines.push(`Max Position Size: ${(d.maxPositionSize * 100).toFixed(0)}%`);
   }
-  lines.push('', 'Triggers:');
-  for (const t of d.triggers) lines.push(`  ${escape(t.type)}: ${escape(t.description)}`);
+  lines.push('', 'Trigger Groups:');
+  for (const g of d.triggerGroups) {
+    const indent = g.label ? '    ' : '  ';
+    if (g.label) lines.push(`  ${escape(g.label)}:`);
+    for (const c of g.conditions) lines.push(`${indent}${escape(c.type)}: ${escape(c.description)}`);
+  }
   return lines.join('\n');
 }
 
@@ -42,9 +46,13 @@ function formatStrategyProposalTelegram(d: StrategyProposalData): string {
   if (d.maxPositionSize !== undefined) {
     lines.push(`<b>Max Position Size:</b> ${(d.maxPositionSize * 100).toFixed(0)}%`);
   }
-  lines.push('', '<b>Triggers:</b>');
-  for (const t of d.triggers) {
-    lines.push(`  \u2022 <code>${esc(t.type)}</code>: ${esc(t.description)}`);
+  lines.push('', '<b>Trigger Groups:</b>');
+  for (const g of d.triggerGroups) {
+    const indent = g.label ? '    ' : '  ';
+    if (g.label) lines.push(`  <b>${esc(g.label)}:</b>`);
+    for (const c of g.conditions) {
+      lines.push(`${indent}\u2022 <code>${esc(c.type)}</code>: ${esc(c.description)}`);
+    }
   }
   return lines.join('\n');
 }

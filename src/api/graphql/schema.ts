@@ -620,6 +620,7 @@ export const typeDefs = /* GraphQL */ `
     tickers: [String!]!
     riskContext: String
     severity: Float
+    confidence: Float!
     severityLabel: String!
     status: ActionStatus!
     expiresAt: String!
@@ -1149,6 +1150,25 @@ export const typeDefs = /* GraphQL */ `
     RESEARCH
   }
 
+  enum StrategyStyle {
+    MOMENTUM
+    VALUE
+    MEAN_REVERSION
+    SWING
+    TREND_FOLLOWING
+    INCOME
+    GROWTH
+    DEFENSIVE
+    CARRY
+    EVENT_DRIVEN
+    QUANT
+    RISK
+    SENTIMENT
+    STATISTICAL_ARB
+    TECHNICAL
+    GENERAL
+  }
+
   enum DataCapability {
     MARKET_DATA
     TECHNICALS
@@ -1168,19 +1188,24 @@ export const typeDefs = /* GraphQL */ `
     params: String
   }
 
+  type TriggerGroup {
+    label: String
+    conditions: [StrategyTrigger!]!
+  }
+
   type Strategy {
     id: ID!
     name: String!
     description: String!
     category: StrategyCategory!
-    style: String!
+    style: StrategyStyle!
     requires: [DataCapability!]!
     active: Boolean!
     source: String!
     createdBy: String!
     createdAt: String!
     content: String!
-    triggers: [StrategyTrigger!]!
+    triggerGroups: [TriggerGroup!]!
     maxPositionSize: Float
     tickers: [String!]!
   }
@@ -1191,14 +1216,18 @@ export const typeDefs = /* GraphQL */ `
     params: String
   }
 
+  input TriggerGroupInput {
+    label: String
+    conditions: [StrategyTriggerInput!]!
+  }
+
   input CreateStrategyInput {
     name: String!
     description: String!
     category: StrategyCategory!
-    style: String!
-    requires: [DataCapability!]
+    style: StrategyStyle!
     content: String!
-    triggers: [StrategyTriggerInput!]!
+    triggerGroups: [TriggerGroupInput!]!
     tickers: [String!]
     maxPositionSize: Float
   }
@@ -1207,10 +1236,9 @@ export const typeDefs = /* GraphQL */ `
     name: String
     description: String
     category: StrategyCategory
-    style: String
-    requires: [DataCapability!]
+    style: StrategyStyle
     content: String
-    triggers: [StrategyTriggerInput!]
+    triggerGroups: [TriggerGroupInput!]
     tickers: [String!]
     maxPositionSize: Float
   }
@@ -1318,7 +1346,7 @@ export const typeDefs = /* GraphQL */ `
     summary(id: ID!): Summary
     actions(status: ActionStatus, since: String, limit: Int, dismissed: Boolean): [Action!]!
     action(id: ID!): Action
-    strategies(category: StrategyCategory, active: Boolean, style: String, query: String): [Strategy!]!
+    strategies(category: StrategyCategory, active: Boolean, style: StrategyStyle, query: String): [Strategy!]!
     strategy(id: ID!): Strategy
     exportStrategy(id: ID!): String!
     strategySources: [StrategySource!]!

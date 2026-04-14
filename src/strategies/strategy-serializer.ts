@@ -2,19 +2,24 @@ import * as yaml from 'yaml';
 import { z } from 'zod';
 
 import { DataCapabilitySchema } from './capabilities.js';
-import { StrategyCategorySchema, StrategySchema, StrategyTriggerSchema } from './types.js';
+import { StrategyCategorySchema, StrategySchema, StrategyTriggerSchema, TriggerGroupSchema } from './types.js';
 import type { Strategy } from './types.js';
 
-const FrontmatterSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().min(1),
-  category: StrategyCategorySchema,
-  style: z.string().min(1),
-  requires: z.array(DataCapabilitySchema).default([]),
-  triggers: z.array(StrategyTriggerSchema).min(1),
-  tickers: z.array(z.string()).default([]),
-  maxPositionSize: z.number().min(0).max(1).optional(),
-});
+const FrontmatterSchema = z
+  .object({
+    name: z.string().min(1),
+    description: z.string().min(1),
+    category: StrategyCategorySchema,
+    style: z.string().min(1),
+    requires: z.array(DataCapabilitySchema).default([]),
+    triggerGroups: z.array(TriggerGroupSchema).min(1).optional(),
+    triggers: z.array(StrategyTriggerSchema).min(1).optional(),
+    tickers: z.array(z.string()).default([]),
+    maxPositionSize: z.number().min(0).max(1).optional(),
+  })
+  .refine((data) => data.triggerGroups || data.triggers, {
+    message: 'Either triggerGroups or triggers must be provided',
+  });
 
 export function slugify(name: string): string {
   return name
@@ -44,6 +49,9 @@ export function parseFromMarkdown(md: string): Strategy {
     throw new Error('Markdown body (strategy content) cannot be empty');
   }
 
+  const triggerGroups =
+    frontmatter.triggerGroups ?? (frontmatter.triggers ?? []).map((t) => ({ label: '', conditions: [t] }));
+
   const strategy: Strategy = StrategySchema.parse({
     id: slugify(frontmatter.name),
     name: frontmatter.name,
@@ -56,7 +64,7 @@ export function parseFromMarkdown(md: string): Strategy {
     createdBy: 'community',
     createdAt: new Date().toISOString(),
     content,
-    triggers: frontmatter.triggers,
+    triggerGroups,
     maxPositionSize: frontmatter.maxPositionSize,
     tickers: frontmatter.tickers,
   });
@@ -76,10 +84,13 @@ export function serializeToMarkdown(strategy: Strategy): string {
     frontmatter['requires'] = strategy.requires;
   }
 
-  frontmatter['triggers'] = strategy.triggers.map((t) => ({
-    type: t.type,
-    description: t.description,
-    ...(t.params ? { params: t.params } : {}),
+  frontmatter['triggerGroups'] = strategy.triggerGroups.map((g) => ({
+    ...(g.label ? { label: g.label } : {}),
+    conditions: g.conditions.map((t) => ({
+      type: t.type,
+      description: t.description,
+      ...(t.params ? { params: t.params } : {}),
+    })),
   }));
 
   frontmatter['tickers'] = strategy.tickers;

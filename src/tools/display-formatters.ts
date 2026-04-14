@@ -97,9 +97,13 @@ function formatStrategyProposal(data: StrategyProposalData): string {
     lines.push(`Max Position Size: ${(data.maxPositionSize * 100).toFixed(0)}%`);
   }
 
-  lines.push('', 'Triggers:');
-  for (const t of data.triggers) {
-    lines.push(`  ${t.type}: ${t.description}`);
+  lines.push('', 'Trigger Groups:');
+  for (const g of data.triggerGroups) {
+    const indent = g.label ? '    ' : '  ';
+    if (g.label) lines.push(`  ${g.label}:`);
+    for (const c of g.conditions) {
+      lines.push(`${indent}${c.type}: ${c.description}`);
+    }
   }
 
   return lines.join('\n');

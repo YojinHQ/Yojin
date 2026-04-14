@@ -23,7 +23,7 @@ function makeStrategy(overrides: Partial<Strategy> = {}): Strategy {
     createdBy: 'test',
     createdAt: '2026-01-01T00:00:00.000Z',
     content: '## Thesis\nTest content',
-    triggers: [{ type: 'PRICE_MOVE', description: 'Test trigger' }],
+    triggerGroups: [{ label: '', conditions: [{ type: 'PRICE_MOVE', description: 'Test trigger' }] }],
     tickers: [],
     ...overrides,
   };
@@ -180,7 +180,12 @@ describe('createStrategyTools', () => {
         makeStrategy({
           active: true,
           tickers: ['AAPL'],
-          triggers: [{ type: 'PRICE_MOVE', description: 'Drop >10%', params: { threshold: -0.1 } }],
+          triggerGroups: [
+            {
+              label: '',
+              conditions: [{ type: 'PRICE_MOVE', description: 'Drop >10%', params: { threshold: -0.1 } }],
+            },
+          ],
         }),
       );
 

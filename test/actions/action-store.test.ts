@@ -100,8 +100,8 @@ describe('ActionStore.create', () => {
   });
 
   it('does not supersede actions with a different triggerId', async () => {
-    await store.create(makeAction({ id: 'a-1', triggerId: 't-AAPL' }));
-    await store.create(makeAction({ id: 'a-2', triggerId: 't-NVDA' }));
+    await store.create(makeAction({ id: 'a-1', triggerId: 't-AAPL', ticker: 'AAPL' }));
+    await store.create(makeAction({ id: 'a-2', triggerId: 't-NVDA', ticker: 'NVDA' }));
 
     const pending = await store.getPending();
     expect(new Set(pending.map((a) => a.id))).toEqual(new Set(['a-1', 'a-2']));
@@ -245,13 +245,14 @@ describe('ActionStore.getPending', () => {
   });
 
   it('returns only PENDING, non-dismissed, non-expired actions', async () => {
-    await store.create(makeAction({ id: 'a-pending', triggerId: 't-1' }));
-    await store.create(makeAction({ id: 'a-approved', triggerId: 't-2' }));
+    await store.create(makeAction({ id: 'a-pending', triggerId: 't-1', ticker: 'AAPL' }));
+    await store.create(makeAction({ id: 'a-approved', triggerId: 't-2', ticker: 'NVDA' }));
     await store.approve('a-approved');
     await store.create(
       makeAction({
         id: 'a-expired',
         triggerId: 't-3',
+        ticker: 'GOOG',
         expiresAt: new Date(Date.now() - 1000).toISOString(),
       }),
     );
@@ -275,8 +276,8 @@ describe('ActionStore.query', () => {
   });
 
   it('filters by status', async () => {
-    await store.create(makeAction({ id: 'a-1', triggerId: 't-1' }));
-    await store.create(makeAction({ id: 'a-2', triggerId: 't-2' }));
+    await store.create(makeAction({ id: 'a-1', triggerId: 't-1', ticker: 'AAPL' }));
+    await store.create(makeAction({ id: 'a-2', triggerId: 't-2', ticker: 'NVDA' }));
     await store.approve('a-2');
 
     const pending = await store.query({ status: 'PENDING' });

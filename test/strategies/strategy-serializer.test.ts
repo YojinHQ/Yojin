@@ -9,6 +9,32 @@ category: MARKET
 style: momentum
 requires:
   - market_data
+triggerGroups:
+  - conditions:
+      - type: PRICE_MOVE
+        description: 12-month return exceeds 15%
+        params:
+          threshold: 0.15
+          direction: above
+tickers: []
+maxPositionSize: 0.05
+---
+
+## Thesis
+Stocks with strong momentum tend to continue outperforming.
+
+## Entry Rules
+- Formation period: 12 months
+- Go long top decile
+`;
+
+const LEGACY_MD = `---
+name: Price Momentum
+description: Go long stocks with strong 12-month returns
+category: MARKET
+style: momentum
+requires:
+  - market_data
 triggers:
   - type: PRICE_MOVE
     description: 12-month return exceeds 15%
@@ -35,9 +61,10 @@ describe('parseFromMarkdown', () => {
     expect(strategy.category).toBe('MARKET');
     expect(strategy.style).toBe('momentum');
     expect(strategy.requires).toEqual(['market_data']);
-    expect(strategy.triggers).toHaveLength(1);
-    expect(strategy.triggers[0].type).toBe('PRICE_MOVE');
-    expect(strategy.triggers[0].params).toEqual({ threshold: 0.15, direction: 'above' });
+    expect(strategy.triggerGroups).toHaveLength(1);
+    expect(strategy.triggerGroups[0].conditions).toHaveLength(1);
+    expect(strategy.triggerGroups[0].conditions[0].type).toBe('PRICE_MOVE');
+    expect(strategy.triggerGroups[0].conditions[0].params).toEqual({ threshold: 0.15, direction: 'above' });
     expect(strategy.tickers).toEqual([]);
     expect(strategy.maxPositionSize).toBe(0.05);
     expect(strategy.source).toBe('community');
@@ -78,7 +105,7 @@ Body here`;
 name: Simple Strategy
 description: A test
 category: RISK
-style: risk
+style: defensive
 triggers:
   - type: DRAWDOWN
     description: Drawdown exceeds threshold
@@ -125,7 +152,66 @@ describe('serializeToMarkdown', () => {
     expect(reparsed.category).toBe(original.category);
     expect(reparsed.style).toBe(original.style);
     expect(reparsed.requires).toEqual(original.requires);
-    expect(reparsed.triggers).toEqual(original.triggers);
+    expect(reparsed.triggerGroups).toEqual(original.triggerGroups);
     expect(reparsed.content.trim()).toBe(original.content.trim());
+  });
+
+  it('serializes triggerGroups (not triggers) in frontmatter', () => {
+    const strategy = parseFromMarkdown(VALID_MD);
+    const md = serializeToMarkdown(strategy);
+    expect(md).toContain('triggerGroups:');
+    expect(md).not.toContain('triggers:');
+  });
+});
+
+describe('strategy-serializer triggerGroups', () => {
+  it('serializes and parses triggerGroups round-trip', () => {
+    const strategy = {
+      id: 'test',
+      name: 'Test Strategy',
+      description: 'Test desc',
+      category: 'MARKET' as const,
+      style: 'momentum',
+      requires: ['technicals' as const],
+      active: false,
+      source: 'custom' as const,
+      createdBy: 'test',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      content: '# Strategy\nBuy low sell high.',
+      triggerGroups: [
+        {
+          label: 'Entry',
+          conditions: [
+            {
+              type: 'INDICATOR_THRESHOLD' as const,
+              description: 'RSI below 30',
+              params: { indicator: 'RSI', threshold: 30, direction: 'below' },
+            },
+            { type: 'PRICE_MOVE' as const, description: 'Drop > 5%', params: { threshold: -0.05 } },
+          ],
+        },
+        {
+          label: '',
+          conditions: [{ type: 'DRAWDOWN' as const, description: 'Drawdown > 10%', params: { threshold: -0.1 } }],
+        },
+      ],
+      tickers: ['AAPL'],
+    };
+
+    const md = serializeToMarkdown(strategy);
+    expect(md).toContain('triggerGroups:');
+    expect(md).not.toContain('triggers:');
+
+    const parsed = parseFromMarkdown(md);
+    expect(parsed.triggerGroups).toHaveLength(2);
+    expect(parsed.triggerGroups[0].label).toBe('Entry');
+    expect(parsed.triggerGroups[0].conditions).toHaveLength(2);
+    expect(parsed.triggerGroups[1].conditions).toHaveLength(1);
+  });
+
+  it('parses old triggers format as fallback', () => {
+    const parsed = parseFromMarkdown(LEGACY_MD);
+    expect(parsed.triggerGroups).toHaveLength(1);
+    expect(parsed.triggerGroups[0].conditions[0].type).toBe('PRICE_MOVE');
   });
 });

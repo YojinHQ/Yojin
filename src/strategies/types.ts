@@ -19,6 +19,30 @@ export const StrategyCategorySchema = z.enum(['RISK', 'PORTFOLIO', 'MARKET', 'RE
 export type StrategyCategory = z.infer<typeof StrategyCategorySchema>;
 
 // ---------------------------------------------------------------------------
+// Strategy style — controlled vocabulary for filtering
+// ---------------------------------------------------------------------------
+
+export const StrategyStyleSchema = z.enum([
+  'momentum',
+  'value',
+  'mean_reversion',
+  'swing',
+  'trend_following',
+  'income',
+  'growth',
+  'defensive',
+  'carry',
+  'event_driven',
+  'quant',
+  'risk',
+  'sentiment',
+  'statistical_arb',
+  'technical',
+  'general',
+]);
+export type StrategyStyle = z.infer<typeof StrategyStyleSchema>;
+
+// ---------------------------------------------------------------------------
 // Strategy trigger condition
 // ---------------------------------------------------------------------------
 
@@ -42,6 +66,14 @@ export const StrategyTriggerSchema = z.object({
 });
 export type StrategyTrigger = z.infer<typeof StrategyTriggerSchema>;
 
+export const TriggerGroupSchema = z.object({
+  /** Optional human-readable group label (e.g. "Entry signal", "Risk exit"). */
+  label: z.string().default(''),
+  /** All conditions must fire (AND) for this group to fire. */
+  conditions: z.array(StrategyTriggerSchema).min(1),
+});
+export type TriggerGroup = z.infer<typeof TriggerGroupSchema>;
+
 // ---------------------------------------------------------------------------
 // Strategy — the core entity
 // ---------------------------------------------------------------------------
@@ -53,13 +85,13 @@ export const StrategySchema = z.object({
   category: StrategyCategorySchema,
   active: z.boolean().default(false),
   source: z.enum(['built-in', 'custom', 'community']),
-  style: z.string().min(1).default('general'),
+  style: StrategyStyleSchema.default('general'),
   requires: z.array(DataCapabilitySchema).default([]),
   createdBy: z.string().min(1),
   createdAt: DateTimeField,
   /** The Markdown strategy content — what the Strategist reads. */
   content: z.string().min(1),
-  triggers: z.array(StrategyTriggerSchema).min(1),
+  triggerGroups: z.array(TriggerGroupSchema).min(1),
   /** Max position size as fraction of portfolio (0-1). Guard enforced. */
   maxPositionSize: z.number().min(0).max(1).optional(),
   /** Tickers this strategy applies to. Empty = all portfolio tickers. */

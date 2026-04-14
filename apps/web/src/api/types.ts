@@ -1193,6 +1193,7 @@ export interface Action {
   tickers: string[];
   riskContext: string | null;
   severity: number | null;
+  confidence: number;
   severityLabel: string;
   status: ActionStatus;
   expiresAt: string;
@@ -1374,19 +1375,42 @@ export interface StrategyTrigger {
   params?: string | null;
 }
 
+export interface TriggerGroup {
+  label?: string | null;
+  conditions: StrategyTrigger[];
+}
+
+export type StrategyStyle =
+  | 'MOMENTUM'
+  | 'VALUE'
+  | 'MEAN_REVERSION'
+  | 'SWING'
+  | 'TREND_FOLLOWING'
+  | 'INCOME'
+  | 'GROWTH'
+  | 'DEFENSIVE'
+  | 'CARRY'
+  | 'EVENT_DRIVEN'
+  | 'QUANT'
+  | 'RISK'
+  | 'SENTIMENT'
+  | 'STATISTICAL_ARB'
+  | 'TECHNICAL'
+  | 'GENERAL';
+
 export interface Strategy {
   id: string;
   name: string;
   description: string;
   category: StrategyCategory;
-  style: string;
+  style: StrategyStyle;
   requires: string[];
   active: boolean;
   source: string;
   createdBy: string;
   createdAt: string;
   content: string;
-  triggers: StrategyTrigger[];
+  triggerGroups: TriggerGroup[];
   maxPositionSize?: number | null;
   tickers: string[];
 }
@@ -1397,7 +1421,7 @@ export interface StrategiesQueryResult {
 
 export interface StrategiesQueryVariables {
   category?: StrategyCategory;
-  style?: string;
+  style?: StrategyStyle;
   active?: boolean;
   query?: string;
 }

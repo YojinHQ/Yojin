@@ -39,7 +39,7 @@ const validMarkdown2 = `---
 name: Another Strategy
 description: Second test strategy
 category: RISK
-style: risk
+style: defensive
 requires: [portfolio]
 triggers:
   - type: DRAWDOWN

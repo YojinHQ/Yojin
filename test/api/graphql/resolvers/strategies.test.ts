@@ -25,7 +25,7 @@ function makeStrategy(overrides: Partial<Strategy> = {}): Strategy {
     createdBy: 'test',
     createdAt: '2026-01-01T00:00:00.000Z',
     content: '## Thesis\nTest content',
-    triggers: [{ type: 'PRICE_MOVE', description: 'Test trigger' }],
+    triggerGroups: [{ label: '', conditions: [{ type: 'PRICE_MOVE', description: 'Test trigger' }] }],
     tickers: [],
     ...overrides,
   };
@@ -79,18 +79,19 @@ describe('strategies resolvers', () => {
           name: 'Momentum Breakout',
           description: 'Buy on momentum breakout',
           category: 'MARKET',
-          style: 'momentum',
-          requires: ['MARKET_DATA', 'TECHNICALS'],
+          style: 'MOMENTUM',
           content: '## Thesis\nBuy breakouts',
-          triggers: [{ type: 'PRICE_MOVE', description: 'Price breaks above resistance' }],
+          triggerGroups: [
+            { label: '', conditions: [{ type: 'PRICE_MOVE', description: 'Price breaks above resistance' }] },
+          ],
           tickers: ['AAPL'],
         },
       });
       expect(store.create).toHaveBeenCalled();
       expect(result).toMatchObject({
         name: 'Momentum Breakout',
-        style: 'momentum',
-        requires: ['MARKET_DATA', 'TECHNICALS'],
+        style: 'MOMENTUM',
+        requires: ['MARKET_DATA'],
       });
     });
   });
@@ -103,7 +104,7 @@ describe('strategies resolvers', () => {
 
       const result = resolveUpdateStrategy(null, {
         id: 'test-strategy',
-        input: { description: 'Updated description', style: 'value' },
+        input: { description: 'Updated description', style: 'VALUE' },
       });
       expect(store.update).toHaveBeenCalledWith(
         'test-strategy',

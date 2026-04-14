@@ -22,17 +22,25 @@ export interface StrategyStudioProps {
 /** Strategy Studio thread prefix — sessions starting with this are filtered from the sidebar. */
 export const STRATEGY_STUDIO_PREFIX = 'strategy-studio-';
 
-const EMPTY_FORM: StrategyFormData = {
-  name: '',
-  description: '',
-  category: 'MARKET',
-  style: '',
-  requires: [],
-  content: '',
-  triggers: [{ type: 'PRICE_MOVE', description: '', params: {} }],
-  tickers: [],
-  maxPositionSize: undefined,
-};
+function createEmptyForm(): StrategyFormData {
+  return {
+    name: '',
+    description: '',
+    category: 'MARKET',
+    style: '',
+    requires: [],
+    content: '',
+    triggerGroups: [
+      {
+        id: crypto.randomUUID(),
+        label: '',
+        conditions: [{ id: crypto.randomUUID(), type: 'PRICE_MOVE', description: '', params: {} }],
+      },
+    ],
+    tickers: [],
+    maxPositionSize: undefined,
+  };
+}
 
 function parseParams(raw: string | null | undefined): Record<string, unknown> {
   if (!raw) return {};
@@ -55,10 +63,15 @@ function strategyToFormData(strategy: Strategy): StrategyFormData {
     // Keep uppercase (matches form CAPABILITIES); GraphQL resolver handles case conversion
     requires: [...strategy.requires],
     content: strategy.content,
-    triggers: strategy.triggers.map((t) => ({
-      type: t.type,
-      description: t.description,
-      params: parseParams(t.params),
+    triggerGroups: strategy.triggerGroups.map((g) => ({
+      id: crypto.randomUUID(),
+      label: g.label ?? '',
+      conditions: g.conditions.map((t) => ({
+        id: crypto.randomUUID(),
+        type: t.type,
+        description: t.description,
+        params: parseParams(t.params),
+      })),
     })),
     tickers: [...strategy.tickers],
     maxPositionSize: strategy.maxPositionSize ?? undefined,
@@ -101,7 +114,7 @@ export function StrategyStudio({ open, onClose, strategy, editMode }: StrategySt
   const [streamingContent, setStreamingContent] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState<StrategyFormData>(() =>
-    strategy ? strategyToFormData(strategy) : { ...EMPTY_FORM },
+    strategy ? strategyToFormData(strategy) : createEmptyForm(),
   );
   const [formVisible, setFormVisible] = useState(() => !!strategy);
 
@@ -157,9 +170,14 @@ export function StrategyStudio({ open, onClose, strategy, editMode }: StrategySt
           if (card.tool === 'propose-strategy') {
             try {
               const proposed = JSON.parse(card.params) as Partial<StrategyFormData>;
-              // Ensure trigger.params is always an object (server may send undefined)
-              if (proposed.triggers) {
-                proposed.triggers = proposed.triggers.map((t) => ({ ...t, params: t.params ?? {} }));
+              // Ensure condition.params is always an object (server may send undefined)
+              if (proposed.triggerGroups) {
+                proposed.triggerGroups = proposed.triggerGroups.map((g) => ({
+                  ...g,
+                  id: crypto.randomUUID(),
+                  label: g.label ?? '',
+                  conditions: g.conditions.map((c) => ({ ...c, id: crypto.randomUUID(), params: c.params ?? {} })),
+                }));
               }
               // GraphQL returns uppercase capabilities; normalize for form
               if (proposed.requires) {
