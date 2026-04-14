@@ -16,7 +16,12 @@ import type {
   TraceSummary,
   TriggerGroupTrace,
 } from './trace-types.js';
-import { aggregateGroupStrength, computeTriggerStrength, pickStrongestGroup } from './trigger-strength.js';
+import {
+  STRENGTH_ORDER,
+  aggregateGroupStrength,
+  computeTriggerStrength,
+  pickStrongestGroup,
+} from './trigger-strength.js';
 import type { TriggerStrength } from './trigger-strength.js';
 import type { Strategy, StrategyEvaluation, StrategyTrigger, TriggerGroup, TriggerType } from './types.js';
 import type { AssetClass } from '../api/graphql/types.js';
@@ -557,33 +562,33 @@ ${sections.join('\n\n---\n\n')}`;
     const onlySet = onlyTickers ? new Set(onlyTickers) : null;
 
     const strategyTraces: StrategyTrace[] = allStrategies.map((strategy) => {
-      // Resolve and scope tickers
       const allTickers = this.resolveTickers(strategy, ctx);
-      const scopedByAssetClass = this.filterByAssetClass(strategy, allTickers, ctx);
-
-      // When micro: further filter to only the requested tickers
-      let scopedTickers: string[];
       const filteredOutTickers: { ticker: string; reason: string }[] = [];
+      let scopedTickers: string[];
 
       if (onlySet) {
         const applicable =
           strategy.tickers.length > 0 ? strategy.tickers.filter((t) => onlySet.has(t)) : (onlyTickers ?? []);
         scopedTickers = this.filterByAssetClass(strategy, applicable, ctx);
       } else {
-        scopedTickers = scopedByAssetClass;
+        scopedTickers = this.filterByAssetClass(strategy, allTickers, ctx);
       }
 
-      // Track asset-class filtered tickers
+      // Track filtered-out tickers with reasons
       const scopedSet = new Set(scopedTickers);
       for (const t of allTickers) {
-        if (!scopedSet.has(t)) {
-          const cls = ctx.assetClasses?.[t];
-          if (cls && strategy.assetClasses.length > 0 && !strategy.assetClasses.includes(cls)) {
-            filteredOutTickers.push({
-              ticker: t,
-              reason: `asset class ${cls} not in [${strategy.assetClasses.join(', ')}]`,
-            });
-          }
+        if (scopedSet.has(t)) continue;
+        const cls = ctx.assetClasses?.[t];
+        if (cls && strategy.assetClasses.length > 0 && !strategy.assetClasses.includes(cls)) {
+          filteredOutTickers.push({
+            ticker: t,
+            reason: `asset class ${cls} not in [${strategy.assetClasses.join(', ')}]`,
+          });
+        } else if (onlySet && !onlySet.has(t)) {
+          filteredOutTickers.push({
+            ticker: t,
+            reason: `not in --tickers filter`,
+          });
         }
       }
 
@@ -638,7 +643,7 @@ ${sections.join('\n\n---\n\n')}`;
         for (const tickerTrace of group.tickers) {
           if (tickerTrace.groupResult === 'PASS' && tickerTrace.groupStrength != null) {
             const existing = firedByTicker.get(tickerTrace.ticker);
-            if (!existing || this.strengthOrder(tickerTrace.groupStrength) > this.strengthOrder(existing.strength)) {
+            if (!existing || STRENGTH_ORDER[tickerTrace.groupStrength] > STRENGTH_ORDER[existing.strength]) {
               firedByTicker.set(tickerTrace.ticker, {
                 groupIndex: group.groupIndex,
                 strength: tickerTrace.groupStrength,
@@ -650,17 +655,11 @@ ${sections.join('\n\n---\n\n')}`;
 
       const fired = firedByTicker.size > 0;
       const winningEntries = [...firedByTicker.values()];
-      const winningGroup =
+      const winner =
         winningEntries.length > 0
           ? winningEntries.reduce((best, cur) =>
-              this.strengthOrder(cur.strength) > this.strengthOrder(best.strength) ? cur : best,
-            ).groupIndex
-          : undefined;
-      const winningStrength =
-        winningEntries.length > 0
-          ? winningEntries.reduce((best, cur) =>
-              this.strengthOrder(cur.strength) > this.strengthOrder(best.strength) ? cur : best,
-            ).strength
+              STRENGTH_ORDER[cur.strength] > STRENGTH_ORDER[best.strength] ? cur : best,
+            )
           : undefined;
 
       return {
@@ -671,12 +670,12 @@ ${sections.join('\n\n---\n\n')}`;
         filteredOutTickers,
         groups,
         result: fired ? 'FIRED' : 'NO_MATCH',
-        winningGroup,
-        winningStrength,
+        winningGroup: winner?.groupIndex,
+        winningStrength: winner?.strength,
       };
     });
 
-    const summary = this.buildTraceSummary(strategyTraces, ctx);
+    const summary = this.buildTraceSummary(strategyTraces);
 
     return {
       evaluatedAt: new Date().toISOString(),
@@ -734,7 +733,7 @@ ${sections.join('\n\n---\n\n')}`;
         actualValue,
         threshold: this.extractThreshold(trigger),
         detail: {},
-        failReason: this.buildFailReason(trigger, ticker, actualValue, ctx, strategy),
+        failReason: this.buildFailReason(trigger, ticker, actualValue),
       };
     } catch (err) {
       return {
@@ -864,13 +863,7 @@ ${sections.join('\n\n---\n\n')}`;
     }
   }
 
-  private buildFailReason(
-    trigger: StrategyTrigger,
-    ticker: string,
-    actual: number | string | null,
-    _ctx: PortfolioContext,
-    _strategy: Strategy,
-  ): string {
+  private buildFailReason(trigger: StrategyTrigger, ticker: string, actual: number | string | null): string {
     const params = trigger.params ?? {};
     const threshold = this.extractThreshold(trigger);
     switch (trigger.type) {
@@ -913,12 +906,7 @@ ${sections.join('\n\n---\n\n')}`;
     }
   }
 
-  private strengthOrder(s: TriggerStrength): number {
-    const order: Record<TriggerStrength, number> = { WEAK: 0, MODERATE: 1, STRONG: 2, EXTREME: 3 };
-    return order[s] ?? 0;
-  }
-
-  private buildTraceSummary(strategies: StrategyTrace[], _ctx: PortfolioContext): TraceSummary {
+  private buildTraceSummary(strategies: StrategyTrace[]): TraceSummary {
     const fired = strategies.filter((s) => s.result === 'FIRED').length;
     const noMatch = strategies.filter((s) => s.result === 'NO_MATCH').length;
 

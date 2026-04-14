@@ -94,7 +94,7 @@ async function batchEnrich(client: JintelClient, tickers: string[], errors: Cont
     if (result.success) {
       results.push(...result.data);
     } else {
-      errors.push({ phase: 'jintel-enrich', message: result.error, tickers: chunk });
+      errors.push({ phase: 'jintel-enrich', message: String(result.error), tickers: chunk });
     }
   }
 
@@ -237,14 +237,25 @@ export async function runStrategyDebug(args: string[]): Promise<void> {
     report = { ...report, errors: [...report.errors, ...contextErrors] };
   }
 
-  // Filter by --strategy flag (id or name substring match)
+  // Filter by --strategy flag (id or name substring match) and recalculate summary
   if (opts.strategy) {
     const filter = opts.strategy.toLowerCase();
+    const filtered = report.strategies.filter(
+      (s) => s.strategyId.toLowerCase().includes(filter) || s.strategyName.toLowerCase().includes(filter),
+    );
+    const firedCount = filtered.filter((s) => s.result === 'FIRED').length;
+    const firedList = report.summary.firedList.filter((f) => filtered.some((s) => s.strategyName === f.strategy));
     report = {
       ...report,
-      strategies: report.strategies.filter(
-        (s) => s.strategyId.toLowerCase().includes(filter) || s.strategyName.toLowerCase().includes(filter),
-      ),
+      strategies: filtered,
+      summary: {
+        ...report.summary,
+        totalStrategies: filtered.length,
+        activeStrategies: filtered.filter((s) => s.active).length,
+        fired: firedCount,
+        noMatch: filtered.filter((s) => s.result === 'NO_MATCH').length,
+        firedList,
+      },
     };
   }
 

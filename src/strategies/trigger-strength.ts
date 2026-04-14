@@ -13,7 +13,7 @@ import type { TriggerType } from './types.js';
 export const TriggerStrengthSchema = z.enum(['WEAK', 'MODERATE', 'STRONG', 'EXTREME']);
 export type TriggerStrength = z.infer<typeof TriggerStrengthSchema>;
 
-const STRENGTH_ORDER: Record<TriggerStrength, number> = {
+export const STRENGTH_ORDER: Record<TriggerStrength, number> = {
   WEAK: 0,
   MODERATE: 1,
   STRONG: 2,
