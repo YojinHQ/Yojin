@@ -931,24 +931,20 @@ ${sections.join('\n\n---\n\n')}`;
       }
 
       if (s.result === 'FIRED' && s.winningStrength) {
-        // Find which tickers fired
+        const tickerWinners = new Map<string, TriggerStrength>();
         for (const group of s.groups) {
           if (group.skipped) continue;
           for (const tickerTrace of group.tickers) {
             if (tickerTrace.groupResult === 'PASS' && tickerTrace.groupStrength != null) {
-              // Only add once per ticker per strategy (winning strength)
-              const alreadyAdded = firedList.some(
-                (f) => f.strategy === s.strategyName && f.ticker === tickerTrace.ticker,
-              );
-              if (!alreadyAdded) {
-                firedList.push({
-                  strategy: s.strategyName,
-                  ticker: tickerTrace.ticker,
-                  strength: tickerTrace.groupStrength,
-                });
+              const existing = tickerWinners.get(tickerTrace.ticker);
+              if (!existing || STRENGTH_ORDER[tickerTrace.groupStrength] > STRENGTH_ORDER[existing]) {
+                tickerWinners.set(tickerTrace.ticker, tickerTrace.groupStrength);
               }
             }
           }
+        }
+        for (const [ticker, strength] of tickerWinners) {
+          firedList.push({ strategy: s.strategyName, ticker, strength });
         }
       }
     }
