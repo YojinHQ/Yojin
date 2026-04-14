@@ -19,6 +19,11 @@
     "resources": ["sidecar/**/*"],
     "category": "Finance",
     "shortDescription": "Personal AI finance agent",
-    "longDescription": "Yojin is a personal AI finance agent that runs locally, connects to your investment accounts, and delivers personalized portfolio intelligence."
+    "longDescription": "Yojin is a personal AI finance agent that runs locally, connects to your investment accounts, and delivers personalized portfolio intelligence.",
+    "windows": {
+      "wix": {
+        "version": "1.0.0.3"
+      }
+    }
   }
 }
