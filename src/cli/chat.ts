@@ -10,6 +10,7 @@ import { createInterface } from 'node:readline';
 import { anthropicPlugin } from '../../providers/anthropic/index.js';
 import { buildContext } from '../composition.js';
 import { runOnboarding } from './onboarding.js';
+import { onShutdownSignal } from './shutdown-signals.js';
 import { runAgentLoop } from '../core/agent-loop.js';
 import type { AgentLoopProvider, AgentMessage, ToolDefinition } from '../core/types.js';
 import { getLogger } from '../logging/index.js';
@@ -373,8 +374,7 @@ export async function startChat(args: string[]): Promise<void> {
   };
 
   rl.on('close', () => void shutdown());
-  process.on('SIGINT', () => void shutdown());
-  process.on('SIGTERM', () => void shutdown());
+  onShutdownSignal(() => void shutdown());
 
   ask();
 }
