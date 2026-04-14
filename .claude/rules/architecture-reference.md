@@ -42,6 +42,7 @@ globs: ["src/**/*.ts"]
 - **`providers/`** — LLM provider plugins (`anthropic/`)
 - **`channels/`** — Channel plugins (`slack/`, `web/`)
 - **`apps/web/`** — React 19 web app (Vite 6, Tailwind CSS 4, urql)
+- **`apps/desktop/`** — Tauri 2 cross-platform tray app (macOS + Windows). Spawns the Node backend as a sidecar and renders `apps/web/` in a webview. See `apps/desktop/README.md`.
 
 ## Data Directory Structure
 
