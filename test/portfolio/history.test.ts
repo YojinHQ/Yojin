@@ -150,6 +150,8 @@ describe('fillCalendarDays', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildHistoryPoints', () => {
+  const zeroBaseline = { totalValue: 0, totalCost: 0 };
+
   it('computes daily totalValue from quantity × closePrice', () => {
     const positions: Position[] = [
       makePosition({ symbol: 'AAPL', platform: 'ROBINHOOD', quantity: 10, costBasis: 140 }),
@@ -165,14 +167,14 @@ describe('buildHistoryPoints', () => {
     ]);
     const startDates = new Map([['AAPL:ROBINHOOD', '2026-04-01']]);
 
-    const points = buildHistoryPoints(positions, filledPrices, startDates, '2026-04-01', '2026-04-02');
+    const points = buildHistoryPoints(positions, filledPrices, startDates, '2026-04-01', '2026-04-02', zeroBaseline);
 
     expect(points).toHaveLength(2);
     expect(points[0].totalValue).toBe(1500); // 10 × 150
     expect(points[1].totalValue).toBe(1600); // 10 × 160
   });
 
-  it('computes periodPnl as value delta minus cost delta', () => {
+  it('computes periodPnl as cumulative delta from baseline', () => {
     const positions: Position[] = [
       makePosition({ symbol: 'AAPL', platform: 'ROBINHOOD', quantity: 10, costBasis: 140 }),
     ];
@@ -186,17 +188,19 @@ describe('buildHistoryPoints', () => {
       ],
     ]);
     const startDates = new Map([['AAPL:ROBINHOOD', '2026-04-01']]);
+    // Baseline: first-import snapshot had AAPL at 145 → totalValue 1450
+    const baseline = { totalValue: 1450, totalCost: 1400 };
 
-    const points = buildHistoryPoints(positions, filledPrices, startDates, '2026-04-01', '2026-04-02');
+    const points = buildHistoryPoints(positions, filledPrices, startDates, '2026-04-01', '2026-04-02', baseline);
 
-    // day 0: periodPnl = 0 (first point)
-    expect(points[0].periodPnl).toBe(0);
-    // day 1: valueChange=100, costChange=0, periodPnl=100
-    expect(points[1].periodPnl).toBe(100);
-    expect(points[1].periodPnlPercent).toBeCloseTo((100 / 1500) * 100, 5);
+    // day 0: cumulative = (1500-1450) - (1400-1400) = 50
+    expect(points[0].periodPnl).toBe(50);
+    // day 1: cumulative = (1600-1450) - 0 = 150
+    expect(points[1].periodPnl).toBe(150);
+    expect(points[1].periodPnlPercent).toBeCloseTo((150 / 1450) * 100, 5);
   });
 
-  it('excludes positions before their startDate', () => {
+  it('skips days before any position existed', () => {
     const positions: Position[] = [
       makePosition({ symbol: 'AAPL', platform: 'ROBINHOOD', quantity: 10, costBasis: 140 }),
     ];
@@ -209,16 +213,17 @@ describe('buildHistoryPoints', () => {
         ]),
       ],
     ]);
-    // Position starts on day 2
+    // Position starts on day 2 — day 1 has no holdings
     const startDates = new Map([['AAPL:ROBINHOOD', '2026-04-02']]);
 
-    const points = buildHistoryPoints(positions, filledPrices, startDates, '2026-04-01', '2026-04-02');
+    const points = buildHistoryPoints(positions, filledPrices, startDates, '2026-04-01', '2026-04-02', zeroBaseline);
 
-    expect(points[0].totalValue).toBe(0); // excluded
-    expect(points[1].totalValue).toBe(1600); // included
+    expect(points).toHaveLength(1);
+    expect(points[0].timestamp.slice(0, 10)).toBe('2026-04-02');
+    expect(points[0].totalValue).toBe(1600);
   });
 
-  it('subtracts cost delta when new position enters', () => {
+  it('neutralizes cost delta when a new position enters after baseline', () => {
     const pos1 = makePosition({ symbol: 'AAPL', platform: 'ROBINHOOD', quantity: 10, costBasis: 140 });
     const pos2 = makePosition({ symbol: 'TSLA', platform: 'ROBINHOOD', quantity: 5, costBasis: 200 });
 
@@ -243,52 +248,45 @@ describe('buildHistoryPoints', () => {
       ['AAPL:ROBINHOOD', '2026-04-01'],
       ['TSLA:ROBINHOOD', '2026-04-02'],
     ]);
+    // Baseline = day-1 state (AAPL only): value=1500, cost=1400
+    const baseline = { totalValue: 1500, totalCost: 1400 };
 
-    const points = buildHistoryPoints([pos1, pos2], filledPrices, startDates, '2026-04-01', '2026-04-02');
+    const points = buildHistoryPoints([pos1, pos2], filledPrices, startDates, '2026-04-01', '2026-04-02', baseline);
 
-    // Day 1: only AAPL. value=1500, cost=1400
-    expect(points[0].totalValue).toBe(1500);
-    expect(points[0].totalCost).toBe(1400);
+    // Day 1 (baseline day): cumulative = 0
+    expect(points[0].periodPnl).toBe(0);
 
-    // Day 2: AAPL value=1550, TSLA value=1075, total=2625; cost=1400+1000=2400
-    expect(points[1].totalValue).toBe(2625);
-    expect(points[1].totalCost).toBe(2400);
-
-    // periodPnl = valueChange - costChange = (2625-1500) - (2400-1400) = 1125 - 1000 = 125
+    // Day 2: value=2625, cost=2400.
+    // cumulative = (2625-1500) - (2400-1400) = 1125 - 1000 = 125
+    // Adding TSLA doesn't inflate P&L; only AAPL's +5 × 10 gain (+$50) and TSLA's unrealized at close ($75) show.
     expect(points[1].periodPnl).toBe(125);
   });
 
-  it('handles zero previous value without division by zero', () => {
+  it('skips days when no position has a price', () => {
     const positions: Position[] = [
       makePosition({ symbol: 'AAPL', platform: 'ROBINHOOD', quantity: 10, costBasis: 140 }),
     ];
-    const filledPrices = new Map([
-      // No price on day 1, price on day 2
-      ['AAPL', new Map([['2026-04-02', 150]])],
-    ]);
+    const filledPrices = new Map([['AAPL', new Map([['2026-04-02', 150]])]]);
     const startDates = new Map([['AAPL:ROBINHOOD', '2026-04-01']]);
 
-    const points = buildHistoryPoints(positions, filledPrices, startDates, '2026-04-01', '2026-04-02');
+    const points = buildHistoryPoints(positions, filledPrices, startDates, '2026-04-01', '2026-04-02', zeroBaseline);
 
-    // Day 1: no price → position skipped → value=0, cost=0
-    expect(points[0].totalValue).toBe(0);
-    expect(points[0].totalCost).toBe(0);
-    // Day 2: price available → value=1500, cost=1400
-    expect(points[1].totalValue).toBe(1500);
-    expect(points[1].periodPnlPercent).toBe(0); // prevValue was 0, no division
+    // Day 1 (no price) skipped; only day 2 emitted
+    expect(points).toHaveLength(1);
+    expect(points[0].timestamp.slice(0, 10)).toBe('2026-04-02');
+    expect(points[0].totalValue).toBe(1500);
   });
 
-  it('returns points with totalValue=0 when no prices available', () => {
+  it('returns no points when no prices are available for any day', () => {
     const positions: Position[] = [
       makePosition({ symbol: 'AAPL', platform: 'ROBINHOOD', quantity: 10, costBasis: 140 }),
     ];
-    const filledPrices = new Map<string, Map<string, number>>(); // empty
+    const filledPrices = new Map<string, Map<string, number>>();
     const startDates = new Map([['AAPL:ROBINHOOD', '2026-04-01']]);
 
-    const points = buildHistoryPoints(positions, filledPrices, startDates, '2026-04-01', '2026-04-01');
+    const points = buildHistoryPoints(positions, filledPrices, startDates, '2026-04-01', '2026-04-01', zeroBaseline);
 
-    expect(points).toHaveLength(1);
-    expect(points[0].totalValue).toBe(0);
+    expect(points).toHaveLength(0);
   });
 });
 

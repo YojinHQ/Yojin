@@ -106,6 +106,27 @@ export class PortfolioSnapshotStore {
     }
   }
 
+  /** Read the first snapshot (first line of the JSONL file) — the moment the user started tracking. */
+  async getFirst(): Promise<PortfolioSnapshot | null> {
+    let content: string;
+    try {
+      content = await readFile(this.filePath, 'utf-8');
+    } catch {
+      return null;
+    }
+
+    for (const line of content.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        return JSON.parse(line) as PortfolioSnapshot;
+      } catch {
+        logger.warn('Failed to parse first snapshot line');
+        return null;
+      }
+    }
+    return null;
+  }
+
   /**
    * Return the latest snapshot with PII redacted — balances converted to
    * ranges, account IDs hashed. Use this before sending data to external

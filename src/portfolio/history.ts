@@ -55,21 +55,26 @@ export function fillCalendarDays(
   return filled;
 }
 
+export interface HistoryBaseline {
+  totalValue: number;
+  totalCost: number;
+}
+
 export function buildHistoryPoints(
   positions: Position[],
   filledPrices: Map<string, Map<string, number>>,
   startDates: Map<string, string>,
   start: string,
   end: string,
+  baseline: HistoryBaseline,
 ): PortfolioHistoryPoint[] {
   const days = dateRange(start, end);
   const points: PortfolioHistoryPoint[] = [];
-  let prevValue = 0;
-  let prevCost = 0;
 
   for (const day of days) {
     let totalValue = 0;
     let totalCost = 0;
+    let hasAnyPosition = false;
 
     for (const pos of positions) {
       const key = `${pos.symbol}:${pos.platform}`;
@@ -80,19 +85,19 @@ export function buildHistoryPoints(
       if (close == null) continue;
       totalValue += pos.quantity * close;
       totalCost += pos.costBasis * pos.quantity;
+      hasAnyPosition = true;
     }
+
+    // Skip days before any position existed — the portfolio wasn't tracked yet.
+    if (!hasAnyPosition) continue;
 
     const totalPnl = totalValue - totalCost;
     const totalPnlPercent = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
 
-    let periodPnl = 0;
-    let periodPnlPercent = 0;
-    if (points.length > 0) {
-      const valueChange = totalValue - prevValue;
-      const costChange = totalCost - prevCost;
-      periodPnl = valueChange - costChange;
-      periodPnlPercent = prevValue > 0 ? (periodPnl / prevValue) * 100 : 0;
-    }
+    // Cumulative P&L since first-import baseline. Subtracting the cost delta
+    // neutralizes positions added after import so they don't show as gains/losses.
+    const periodPnl = totalValue - baseline.totalValue - (totalCost - baseline.totalCost);
+    const periodPnlPercent = baseline.totalValue > 0 ? (periodPnl / baseline.totalValue) * 100 : 0;
 
     points.push({
       timestamp: `${day}T16:00:00Z`,
@@ -103,9 +108,6 @@ export function buildHistoryPoints(
       periodPnl,
       periodPnlPercent,
     });
-
-    prevValue = totalValue;
-    prevCost = totalCost;
   }
 
   return points;
