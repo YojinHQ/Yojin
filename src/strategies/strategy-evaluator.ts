@@ -712,6 +712,20 @@ ${sections.join('\n\n---\n\n')}`;
       const actualValue = this.extractActualValue(trigger, ticker, ctx, strategy);
       const isNoData = actualValue === null || actualValue === undefined;
 
+      // Crossover triggers need prior history — if absent, that's NO_DATA not FAIL
+      if (!isNoData && this.isCrossoverTriggerMissingHistory(trigger, ticker)) {
+        return {
+          type: trigger.type,
+          description: trigger.description,
+          params: trigger.params ?? {},
+          result: 'NO_DATA',
+          actualValue,
+          threshold: this.extractThreshold(trigger),
+          detail: {},
+          failReason: `No prior snapshot for crossover detection on ${ticker}`,
+        };
+      }
+
       if (isNoData) {
         return {
           type: trigger.type,
@@ -773,7 +787,8 @@ ${sections.join('\n\n---\n\n')}`;
         return ctx.weights[ticker] ?? 0;
       case 'ALLOCATION_DRIFT': {
         if (strategy?.targetWeights) {
-          return ctx.weights[ticker] ?? null;
+          // checkTrigger defaults to 0 when absent (unheld tickers), so match that
+          return ctx.weights[ticker] ?? 0;
         }
         return ctx.strategyAllocations?.[strategy?.id ?? '']?.actual ?? null;
       }
@@ -904,6 +919,20 @@ ${sections.join('\n\n---\n\n')}`;
       default:
         return `Condition not met for ${ticker}`;
     }
+  }
+
+  private isCrossoverTriggerMissingHistory(trigger: StrategyTrigger, ticker: string): boolean {
+    const direction = String(trigger.params?.['direction'] ?? '');
+    if (direction !== 'crosses_above' && direction !== 'crosses_below') return false;
+    if (trigger.type === 'INDICATOR_THRESHOLD') {
+      const indicator = String(trigger.params?.['indicator'] ?? 'RSI');
+      return this.getPreviousValue(ticker, indicator) === undefined;
+    }
+    if (trigger.type === 'METRIC_THRESHOLD') {
+      const metric = String(trigger.params?.['metric'] ?? '');
+      return this.getPreviousValue(ticker, `metric:${metric}`) === undefined;
+    }
+    return false;
   }
 
   private buildTraceSummary(strategies: StrategyTrace[]): TraceSummary {
