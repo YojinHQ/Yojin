@@ -22,12 +22,15 @@ jobs:
           - platform: macos-14
             rust-targets: aarch64-apple-darwin
             tauri-args: --target aarch64-apple-darwin
-          - platform: macos-13
+            bundle-node-target: ''
+          - platform: macos-14
             rust-targets: x86_64-apple-darwin
             tauri-args: --target x86_64-apple-darwin
+            bundle-node-target: darwin-x64
           - platform: windows-latest
             rust-targets: x86_64-pc-windows-msvc
             tauri-args: ''
+            bundle-node-target: ''
 
     runs-on: ${{ matrix.platform }}
 
@@ -59,8 +62,20 @@ jobs:
         run: pnpm --filter @yojin/desktop deps:build
 
       - name: Bundle Node runtime
-        run: pnpm --filter @yojin/desktop bundle:node
         shell: bash
+        env:
+          CROSS_TARGET: ${{ matrix.bundle-node-target }}
+        run: |
+          if [ -n "$CROSS_TARGET" ]; then
+            # Cross-bundle: download the target-arch Node binary and rename
+            # to bare `node` so sidecar.rs resolves it at runtime.
+            node apps/desktop/scripts/bundle-node.mjs --target="$CROSS_TARGET"
+            mv "apps/desktop/src-tauri/sidecar/node-$CROSS_TARGET" \
+               "apps/desktop/src-tauri/sidecar/node"
+            chmod +x apps/desktop/src-tauri/sidecar/node
+          else
+            pnpm --filter @yojin/desktop bundle:node
+          fi
 
       - name: Resolve release tag
         id: tag
