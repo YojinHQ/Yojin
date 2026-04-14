@@ -1,5 +1,7 @@
 mod sidecar;
 
+use std::path::PathBuf;
+use std::process::Command;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -50,17 +52,30 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building Yojin desktop")
-        .run(|app, event| {
-            if let tauri::RunEvent::ExitRequested { .. } = event {
+        .run(|app, event| match event {
+            tauri::RunEvent::ExitRequested { .. } => {
                 shutdown_sidecar(app);
             }
+            // macOS: fires when the user clicks the dock icon. Bring the main
+            // window up instead of leaving the click as a no-op.
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { .. } => {
+                let handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(err) = open_main_window(handle).await {
+                        log::error!("Failed to open Yojin window on dock activation: {err}");
+                    }
+                });
+            }
+            _ => {}
         });
 }
 
 fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open Yojin", true, None::<&str>)?;
+    let logs = MenuItem::with_id(app, "logs", "Open Logs", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &logs, &quit])?;
 
     TrayIconBuilder::with_id("yojin-tray")
         .icon(app.default_window_icon().cloned().expect("default icon"))
@@ -75,6 +90,11 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
                     }
                 });
             }
+            "logs" => {
+                if let Err(err) = open_logs_dir() {
+                    log::error!("Failed to open logs directory: {err}");
+                }
+            }
             "quit" => {
                 app.exit(0);
             }
@@ -83,6 +103,59 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
         .build(app)?;
 
     Ok(())
+}
+
+/// Resolve the Yojin logs directory using the same rules as `src/paths.ts`:
+///   1. `$YOJIN_HOME/logs` if set
+///   2. `~/.yojin/logs`
+///
+/// Creates the directory if it doesn't exist so the OS file manager has
+/// something to open (e.g. on a fresh install before the backend writes).
+fn resolve_logs_dir() -> Result<PathBuf, String> {
+    let root = if let Ok(home) = std::env::var("YOJIN_HOME") {
+        PathBuf::from(home)
+    } else {
+        let home = dirs_home()?;
+        home.join(".yojin")
+    };
+    let logs = root.join("logs");
+    if !logs.exists() {
+        std::fs::create_dir_all(&logs).map_err(|e| e.to_string())?;
+    }
+    Ok(logs)
+}
+
+fn dirs_home() -> Result<PathBuf, String> {
+    #[cfg(unix)]
+    {
+        std::env::var("HOME")
+            .map(PathBuf::from)
+            .map_err(|_| "HOME env var not set".to_string())
+    }
+    #[cfg(windows)]
+    {
+        std::env::var("USERPROFILE")
+            .map(PathBuf::from)
+            .map_err(|_| "USERPROFILE env var not set".to_string())
+    }
+}
+
+/// Reveal the logs directory in the OS file manager. Best-effort — errors are
+/// logged by the caller.
+fn open_logs_dir() -> Result<(), String> {
+    let path = resolve_logs_dir()?;
+    let path_str = path.to_string_lossy().to_string();
+
+    #[cfg(target_os = "macos")]
+    let status = Command::new("open").arg(&path_str).status();
+    #[cfg(target_os = "windows")]
+    let status = Command::new("explorer").arg(&path_str).status();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let status = Command::new("xdg-open").arg(&path_str).status();
+
+    status
+        .map_err(|e| e.to_string())
+        .and_then(|s| if s.success() { Ok(()) } else { Err(format!("exit {s}")) })
 }
 
 async fn launch_sidecar(app: AppHandle) -> Result<(), String> {

@@ -1,6 +1,6 @@
 [package]
 name = "yojin-desktop"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.3"
 description = "Yojin desktop tray app"
 authors = ["Yojin"]
 edition = "2021"
