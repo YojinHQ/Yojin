@@ -4,8 +4,11 @@ use std::process::{Child, Command, Stdio};
 
 use tauri::{AppHandle, Manager};
 
-/// Handle to the spawned Node backend. Dropping this struct does **not** kill
-/// the child — call [`SidecarHandle::shutdown`] explicitly from a quit path.
+/// Handle to the spawned Node backend. The normal shutdown path is
+/// [`SidecarHandle::shutdown`] via `RunEvent::ExitRequested`, which fires on tray
+/// Quit and on SIGINT/SIGTERM routed through `install_signal_handlers` in
+/// `lib.rs`. The `Drop` impl is a last-resort safety net for panic unwinding —
+/// it does not fire on signals, which terminate the runtime without unwinding.
 pub struct SidecarHandle {
     pub port: u16,
     child: Option<Child>,
@@ -32,6 +35,12 @@ impl SidecarHandle {
             let _ = child.kill();
         }
         let _ = child.wait();
+    }
+}
+
+impl Drop for SidecarHandle {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }
 

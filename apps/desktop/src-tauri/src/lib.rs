@@ -35,6 +35,7 @@ pub fn run() {
                 }
             });
 
+            install_signal_handlers(app.handle().clone());
             build_tray(app)?;
             Ok(())
         })
@@ -117,10 +118,8 @@ async fn wait_for_gateway(base_url: &str) -> Result<(), String> {
 }
 
 async fn open_main_window(app: AppHandle) -> Result<(), String> {
-    let url = {
-        let state = app.state::<AppState>();
-        state.gateway_url.lock().expect("url mutex").clone()
-    };
+    let state = app.state::<AppState>();
+    let url = state.gateway_url.lock().expect("url mutex").clone();
 
     let url = url.ok_or_else(|| "Backend has not started yet".to_string())?;
 
@@ -141,9 +140,51 @@ async fn open_main_window(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Install SIGINT/SIGTERM handlers (Ctrl-C on Windows) that route termination
+/// through `app.exit(0)` so the normal `RunEvent::ExitRequested` → `shutdown_sidecar`
+/// path runs. Without this, a targeted signal to the desktop process would
+/// terminate the Rust runtime without unwinding — Drop impls don't fire on
+/// signals — and the Node sidecar would orphan.
+fn install_signal_handlers(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{signal, SignalKind};
+            let mut sigint = match signal(SignalKind::interrupt()) {
+                Ok(s) => s,
+                Err(err) => {
+                    log::error!("Failed to install SIGINT handler: {err}");
+                    return;
+                }
+            };
+            let mut sigterm = match signal(SignalKind::terminate()) {
+                Ok(s) => s,
+                Err(err) => {
+                    log::error!("Failed to install SIGTERM handler: {err}");
+                    return;
+                }
+            };
+            tokio::select! {
+                _ = sigint.recv() => log::info!("Received SIGINT — shutting down"),
+                _ = sigterm.recv() => log::info!("Received SIGTERM — shutting down"),
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            if let Err(err) = tokio::signal::ctrl_c().await {
+                log::error!("Failed to install Ctrl-C handler: {err}");
+                return;
+            }
+            log::info!("Received Ctrl-C — shutting down");
+        }
+        app.exit(0);
+    });
+}
+
 fn shutdown_sidecar(app: &AppHandle) {
     let state = app.state::<AppState>();
-    if let Some(mut handle) = state.sidecar.lock().expect("sidecar mutex").take() {
+    let mut guard = state.sidecar.lock().expect("sidecar mutex");
+    if let Some(mut handle) = guard.take() {
         handle.shutdown();
     }
 }
