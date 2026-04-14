@@ -2,7 +2,13 @@ import * as yaml from 'yaml';
 import { z } from 'zod';
 
 import { DataCapabilitySchema } from './capabilities.js';
-import { StrategyCategorySchema, StrategySchema, StrategyTriggerSchema, TriggerGroupSchema } from './types.js';
+import {
+  StrategyCategorySchema,
+  StrategySchema,
+  StrategyTriggerSchema,
+  TargetWeightsSchema,
+  TriggerGroupSchema,
+} from './types.js';
 import type { Strategy } from './types.js';
 
 const FrontmatterSchema = z
@@ -16,6 +22,7 @@ const FrontmatterSchema = z
     triggers: z.array(StrategyTriggerSchema).min(1).optional(),
     tickers: z.array(z.string()).default([]),
     maxPositionSize: z.number().min(0).max(1).optional(),
+    targetWeights: TargetWeightsSchema.optional(),
   })
   .refine((data) => data.triggerGroups || data.triggers, {
     message: 'Either triggerGroups or triggers must be provided',
@@ -67,6 +74,7 @@ export function parseFromMarkdown(md: string): Strategy {
     triggerGroups,
     maxPositionSize: frontmatter.maxPositionSize,
     tickers: frontmatter.tickers,
+    targetWeights: frontmatter.targetWeights,
   });
 
   return strategy;
@@ -97,6 +105,10 @@ export function serializeToMarkdown(strategy: Strategy): string {
 
   if (strategy.maxPositionSize !== undefined) {
     frontmatter['maxPositionSize'] = strategy.maxPositionSize;
+  }
+
+  if (strategy.targetWeights) {
+    frontmatter['targetWeights'] = strategy.targetWeights;
   }
 
   const yamlStr = yaml.stringify(frontmatter, { lineWidth: 0 });

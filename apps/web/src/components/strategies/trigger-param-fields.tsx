@@ -427,6 +427,75 @@ function CustomFields() {
   return <p className="text-xs text-text-muted italic">Custom triggers are evaluated by the LLM at runtime</p>;
 }
 
+function AllocationDriftFields({ params, onChange }: { params: TriggerParams; onChange: (p: TriggerParams) => void }) {
+  const displayPercent =
+    (params.toleranceBps as number | undefined) !== undefined ? (params.toleranceBps as number) / 100 : undefined;
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <NumberInput
+        label="Tolerance"
+        value={displayPercent}
+        onChange={(v) => onChange(set(params, 'toleranceBps', v !== undefined ? Math.round(v * 100) : undefined))}
+        placeholder="5"
+        suffix="%"
+        min={0}
+        step={0.5}
+      />
+    </div>
+  );
+}
+
+const PERSON_ACTION_OPTIONS = [
+  { value: 'ANY', label: 'Any' },
+  { value: 'BUY', label: 'Buy' },
+  { value: 'SELL', label: 'Sell' },
+];
+
+function PersonActivityFields({ params, onChange }: { params: TriggerParams; onChange: (p: TriggerParams) => void }) {
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className={labelClass}>Person / Fund</label>
+          <input
+            type="text"
+            value={(params.person as string | undefined) ?? ''}
+            onChange={(e) => onChange(set(params, 'person', e.target.value || undefined))}
+            placeholder="Warren Buffett"
+            className={inputClass}
+          />
+        </div>
+        <SelectInput
+          label="Action"
+          value={params.action as string | undefined}
+          onChange={(v) => onChange(set(params, 'action', v))}
+          options={PERSON_ACTION_OPTIONS}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <NumberInput
+          label="Min Dollar"
+          value={params.minDollar as number | undefined}
+          onChange={(v) => onChange(set(params, 'minDollar', v))}
+          placeholder="100000000"
+          suffix="$"
+          min={0}
+          step={1000000}
+        />
+        <NumberInput
+          label="Lookback"
+          value={params.lookback_days as number | undefined}
+          onChange={(v) => onChange(set(params, 'lookback_days', v))}
+          placeholder="90"
+          suffix="days"
+          min={1}
+          step={1}
+        />
+      </div>
+    </div>
+  );
+}
+
 // --- Main component ---
 
 export function TriggerParamFields({ type, params, onChange }: TriggerParamFieldsProps) {
@@ -445,6 +514,10 @@ export function TriggerParamFields({ type, params, onChange }: TriggerParamField
       return <ConcentrationDriftFields params={params} onChange={onChange} />;
     case 'SIGNAL_PRESENT':
       return <SignalPresentFields params={params} onChange={onChange} />;
+    case 'ALLOCATION_DRIFT':
+      return <AllocationDriftFields params={params} onChange={onChange} />;
+    case 'PERSON_ACTIVITY':
+      return <PersonActivityFields params={params} onChange={onChange} />;
     case 'CUSTOM':
       return <CustomFields />;
     default:

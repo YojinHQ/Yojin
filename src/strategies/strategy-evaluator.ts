@@ -14,7 +14,7 @@ import { SignalTypeSchema } from '../signals/types.js';
 import type { Signal, SignalType } from '../signals/types.js';
 
 /** Triggers that require the full portfolio context and can only run during macro flow. */
-const MACRO_ONLY_TRIGGERS: ReadonlySet<TriggerType> = new Set(['CONCENTRATION_DRIFT', 'CUSTOM']);
+const MACRO_ONLY_TRIGGERS: ReadonlySet<TriggerType> = new Set(['CONCENTRATION_DRIFT', 'ALLOCATION_DRIFT', 'CUSTOM']);
 
 const logger = createSubsystemLogger('strategy-evaluator');
 
@@ -96,7 +96,15 @@ ${sections.join('\n\n---\n\n')}`;
   // ---------------------------------------------------------------------------
 
   private resolveTickers(strategy: Strategy, ctx: PortfolioContext): string[] {
-    return strategy.tickers.length > 0 ? strategy.tickers : Object.keys(ctx.weights);
+    const base = strategy.tickers.length > 0 ? strategy.tickers : Object.keys(ctx.weights);
+    // ALLOCATION_DRIFT needs to fire on zero-position underweights too, so union the
+    // target tickers into the evaluation set even when they aren't in the portfolio yet.
+    if (!strategy.targetWeights) return base;
+    const hasAllocationTrigger = strategy.triggerGroups.some((g) =>
+      g.conditions.some((c) => c.type === 'ALLOCATION_DRIFT'),
+    );
+    if (!hasAllocationTrigger) return base;
+    return [...new Set([...base, ...Object.keys(strategy.targetWeights)])];
   }
 
   private evaluateStrategy(
@@ -128,7 +136,7 @@ ${sections.join('\n\n---\n\n')}`;
     ticker: string,
     ctx: PortfolioContext,
   ): StrategyEvaluation[] {
-    const fired = this.checkAllConditions(group.conditions, ticker, ctx);
+    const fired = this.checkAllConditions(group.conditions, ticker, ctx, strategy);
     if (!fired) return [];
 
     const mergedContext: Record<string, unknown> = { ticker };
@@ -166,10 +174,11 @@ ${sections.join('\n\n---\n\n')}`;
     conditions: StrategyTrigger[],
     ticker: string,
     ctx: PortfolioContext,
+    strategy: Strategy,
   ): Record<string, unknown>[] | null {
     const results: Record<string, unknown>[] = [];
     for (const condition of conditions) {
-      const fired = this.checkTrigger(condition, ticker, ctx);
+      const fired = this.checkTrigger(condition, ticker, ctx, strategy);
       if (!fired) return null;
       results.push({ ...fired, _triggerType: condition.type });
     }
@@ -221,6 +230,7 @@ ${sections.join('\n\n---\n\n')}`;
     trigger: StrategyTrigger,
     ticker: string,
     ctx: PortfolioContext,
+    strategy: Strategy,
   ): Record<string, unknown> | null {
     const params = trigger.params ?? {};
 
@@ -291,6 +301,23 @@ ${sections.join('\n\n---\n\n')}`;
         return null;
       }
 
+      case 'ALLOCATION_DRIFT': {
+        const target = strategy.targetWeights?.[ticker];
+        if (target == null) return null;
+        const actual = ctx.weights[ticker] ?? 0;
+        const delta = actual - target;
+        const toleranceBps = Number(params['toleranceBps'] ?? 500);
+        const tolerance = toleranceBps / 10_000;
+        if (Math.abs(delta) < tolerance) return null;
+        return {
+          target,
+          actual,
+          delta,
+          toleranceBps,
+          direction: delta > 0 ? 'overweight' : 'underweight',
+        };
+      }
+
       case 'DRAWDOWN': {
         const threshold = Number(params['threshold'] ?? -0.1);
         const drawdown = ctx.positionDrawdowns[ticker] ?? 0;
@@ -351,6 +378,38 @@ ${sections.join('\n\n---\n\n')}`;
           signalType: matched.type,
           signalTitle: matched.title,
           sentimentScore: matched.sentimentScore ?? null,
+        };
+      }
+
+      case 'PERSON_ACTIVITY': {
+        const person = typeof params['person'] === 'string' ? params['person'] : '';
+        if (!person) return null;
+        const actionFilter = typeof params['action'] === 'string' ? params['action'].toUpperCase() : 'ANY';
+        const minDollar = params['minDollar'] != null ? Number(params['minDollar']) : 0;
+        const lookbackDays = params['lookback_days'] != null ? Number(params['lookback_days']) : 120;
+        const cutoff = Date.now() - lookbackDays * 24 * 3_600_000;
+
+        const tickerSignals = ctx.signals[ticker] ?? [];
+        const matched = tickerSignals.find((s) => {
+          if (s.type !== 'DISCLOSED_TRADE') return false;
+          if (new Date(s.publishedAt).getTime() < cutoff) return false;
+          const meta = s.metadata ?? {};
+          if (meta['person'] !== person) return false;
+          if (actionFilter !== 'ANY' && String(meta['action'] ?? '').toUpperCase() !== actionFilter) return false;
+          const dollar = Number(meta['dollarValue'] ?? 0);
+          if (minDollar > 0 && dollar < minDollar) return false;
+          return true;
+        });
+        if (!matched) return null;
+        const meta = matched.metadata ?? {};
+        return {
+          signalId: matched.id,
+          person,
+          action: meta['action'] ?? null,
+          shares: meta['shares'] ?? null,
+          dollarValue: meta['dollarValue'] ?? null,
+          filingSource: meta['source'] ?? null,
+          publishedAt: matched.publishedAt,
         };
       }
 

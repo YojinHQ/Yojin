@@ -23,6 +23,7 @@ export interface StrategyFormData {
   triggerGroups: TriggerGroupFormData[];
   tickers: string[];
   maxPositionSize: number | undefined;
+  targetWeights: { ticker: string; weight: number }[];
 }
 
 interface StrategyFormPanelProps {
@@ -36,10 +37,12 @@ const TRIGGER_TYPES = [
   'PRICE_MOVE',
   'INDICATOR_THRESHOLD',
   'CONCENTRATION_DRIFT',
+  'ALLOCATION_DRIFT',
   'DRAWDOWN',
   'EARNINGS_PROXIMITY',
   'METRIC_THRESHOLD',
   'SIGNAL_PRESENT',
+  'PERSON_ACTIVITY',
   'CUSTOM',
 ];
 
@@ -74,6 +77,18 @@ const inputClass =
 
 const labelClass = 'block text-xs font-medium text-text-muted mb-1';
 
+function serializeTargetWeights(rows: { ticker: string; weight: number }[]): string | undefined {
+  const cleaned = rows
+    .map((r) => ({ ticker: r.ticker.trim().toUpperCase(), weight: r.weight }))
+    .filter((r) => r.ticker && Number.isFinite(r.weight) && r.weight > 0);
+  if (cleaned.length === 0) return '';
+  const record: Record<string, number> = {};
+  for (const { ticker, weight } of cleaned) {
+    record[ticker] = weight;
+  }
+  return JSON.stringify(record);
+}
+
 const MARKDOWN_PLACEHOLDER = `## Overview
 Describe the strategy rationale...
 
@@ -107,11 +122,14 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
   const [, createStrategy] = useCreateStrategy();
   const [, updateStrategy] = useUpdateStrategy();
 
+  const targetWeightSum = data.targetWeights.reduce((acc, r) => acc + (Number.isFinite(r.weight) ? r.weight : 0), 0);
+  const targetWeightOverflow = targetWeightSum > 1.0001;
   const saveDisabled =
     saving ||
     !data.name.trim() ||
     !data.content.trim() ||
-    data.triggerGroups.every((g) => g.conditions.every((c) => !c.description.trim()));
+    data.triggerGroups.every((g) => g.conditions.every((c) => !c.description.trim())) ||
+    targetWeightOverflow;
 
   const hasPartialGroups = data.triggerGroups.some((g) => {
     const filled = g.conditions.filter((c) => c.description.trim());
@@ -192,6 +210,20 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
     setTickerRaw(parsed.join(', '));
   }
 
+  function updateTargetWeight(index: number, patch: Partial<{ ticker: string; weight: number }>) {
+    update({
+      targetWeights: data.targetWeights.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    });
+  }
+
+  function addTargetWeight() {
+    update({ targetWeights: [...data.targetWeights, { ticker: '', weight: 0 }] });
+  }
+
+  function removeTargetWeight(index: number) {
+    update({ targetWeights: data.targetWeights.filter((_, i) => i !== index) });
+  }
+
   async function handleSave() {
     setError(null);
     setSaving(true);
@@ -218,6 +250,7 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
         tickers: data.tickers.length > 0 ? data.tickers : undefined,
         maxPositionSize:
           data.maxPositionSize !== undefined && !isNaN(data.maxPositionSize) ? data.maxPositionSize : undefined,
+        targetWeights: serializeTargetWeights(data.targetWeights),
       };
 
       const result = isEdit ? await updateStrategy({ id: editId, input }) : await createStrategy({ input });
@@ -452,6 +485,75 @@ export function StrategyFormPanel({ data, onChange, editId, onSaved }: StrategyF
                   />
                   <span className="text-xs text-text-muted tabular-nums w-8 text-right">{posPercent}%</span>
                 </div>
+              </div>
+
+              {/* Target Weights — ETF / basket allocation */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-medium text-text-muted">Target Weights</label>
+                  <span className={cn('text-xs tabular-nums', targetWeightOverflow ? 'text-error' : 'text-text-muted')}>
+                    {(targetWeightSum * 100).toFixed(1)}% / 100%
+                  </span>
+                </div>
+                {data.targetWeights.length > 0 && (
+                  <div className="space-y-1.5">
+                    {data.targetWeights.map((row, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={row.ticker}
+                          onChange={(e) => updateTargetWeight(i, { ticker: e.target.value.toUpperCase() })}
+                          placeholder="AAPL"
+                          className={cn(inputClass, 'flex-1')}
+                        />
+                        <div className="relative w-28">
+                          <input
+                            type="number"
+                            value={row.weight > 0 ? +(row.weight * 100).toFixed(2) : ''}
+                            onChange={(e) => {
+                              const v = e.currentTarget.valueAsNumber;
+                              updateTargetWeight(i, {
+                                weight: e.target.value === '' || Number.isNaN(v) ? 0 : v / 100,
+                              });
+                            }}
+                            placeholder="0"
+                            min={0}
+                            max={100}
+                            step={0.5}
+                            className={cn(inputClass, 'pr-8')}
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-muted pointer-events-none">
+                            %
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label="Remove target weight"
+                          onClick={() => removeTargetWeight(i)}
+                          className="text-text-muted hover:text-error transition-colors cursor-pointer"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={addTargetWeight}
+                  className="text-xs text-accent-primary hover:text-accent-secondary transition-colors cursor-pointer mt-1.5"
+                >
+                  + Add ticker
+                </button>
+                {targetWeightOverflow && <p className="text-xs text-error mt-1">Target weights sum must be ≤ 100%.</p>}
               </div>
 
               {/* Content */}

@@ -1108,4 +1108,196 @@ describe('crossover detection', () => {
       await rm(dir, { recursive: true });
     }
   });
+
+  // -------------------------------------------------------------------------
+  // ALLOCATION_DRIFT — ETF-style target weights
+  // -------------------------------------------------------------------------
+
+  it('ALLOCATION_DRIFT fires on overweight and underweight beyond tolerance', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'strategy-eval-'));
+    try {
+      const strategy = makeStrategy({
+        id: 'test-allocation-drift',
+        category: 'PORTFOLIO',
+        targetWeights: { AAPL: 0.3, MSFT: 0.3, GOOG: 0.2 },
+        triggers: [
+          {
+            type: 'ALLOCATION_DRIFT',
+            description: 'Weight drifts > 5% from target',
+            params: { toleranceBps: 500 },
+          },
+        ],
+      });
+      await writeFile(join(dir, `${strategy.id}.json`), JSON.stringify(strategy));
+      const store = new StrategyStore({ dir });
+      await store.initialize();
+
+      // AAPL: 40% (overweight by 10%), MSFT: 28% (within tolerance), GOOG: 0% in portfolio (underweight by 20%)
+      const snapshot = makeSnapshot(
+        [
+          { symbol: 'AAPL', currentPrice: 150, marketValue: 4000 },
+          { symbol: 'MSFT', currentPrice: 300, marketValue: 2800 },
+          { symbol: 'TSLA', currentPrice: 200, marketValue: 3200 },
+        ],
+        10000,
+      );
+      const ctx = buildPortfolioContext(snapshot, [], []);
+
+      const evaluator = new StrategyEvaluator(store);
+      const results = evaluator.evaluate(ctx);
+
+      const byTicker = Object.fromEntries(results.map((r) => [r.context['ticker'], r]));
+      expect(byTicker['AAPL']).toBeDefined();
+      expect(byTicker['AAPL'].context['direction']).toBe('overweight');
+      expect(byTicker['AAPL'].context['delta']).toBeCloseTo(0.1);
+      expect(byTicker['MSFT']).toBeUndefined();
+      expect(byTicker['GOOG']).toBeDefined();
+      expect(byTicker['GOOG'].context['direction']).toBe('underweight');
+      expect(byTicker['GOOG'].context['actual']).toBe(0);
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  it('ALLOCATION_DRIFT ignores tickers absent from targetWeights', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'strategy-eval-'));
+    try {
+      const strategy = makeStrategy({
+        id: 'test-allocation-scope',
+        category: 'PORTFOLIO',
+        targetWeights: { AAPL: 0.5 },
+        triggers: [
+          {
+            type: 'ALLOCATION_DRIFT',
+            description: 'Weight drifts from target',
+            params: { toleranceBps: 100 },
+          },
+        ],
+      });
+      await writeFile(join(dir, `${strategy.id}.json`), JSON.stringify(strategy));
+      const store = new StrategyStore({ dir });
+      await store.initialize();
+
+      const snapshot = makeSnapshot(
+        [
+          { symbol: 'AAPL', currentPrice: 150, marketValue: 5000 },
+          { symbol: 'XOM', currentPrice: 100, marketValue: 5000 },
+        ],
+        10000,
+      );
+      const ctx = buildPortfolioContext(snapshot, [], []);
+
+      const evaluator = new StrategyEvaluator(store);
+      const results = evaluator.evaluate(ctx);
+
+      // Only AAPL is in targetWeights; XOM ignored even though it has a position.
+      expect(results).toHaveLength(0);
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // PERSON_ACTIVITY — copy-trade
+  // -------------------------------------------------------------------------
+
+  it('PERSON_ACTIVITY fires on a DISCLOSED_TRADE signal for the tracked person', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'strategy-eval-'));
+    try {
+      const strategy = makeStrategy({
+        id: 'test-person-activity',
+        category: 'RESEARCH',
+        triggers: [
+          {
+            type: 'PERSON_ACTIVITY',
+            description: 'Buffett buys via 13F',
+            params: { person: 'Warren Buffett', action: 'BUY', minDollar: 1_000_000 },
+          },
+        ],
+      });
+      await writeFile(join(dir, `${strategy.id}.json`), JSON.stringify(strategy));
+      const store = new StrategyStore({ dir });
+      await store.initialize();
+
+      const now = new Date().toISOString();
+      const signal: Signal = {
+        id: 'dt1',
+        type: 'DISCLOSED_TRADE',
+        title: 'Warren Buffett increased AAPL',
+        sources: [{ id: 'jintel', name: 'Jintel 13F', type: 'API', reliability: 0.95 }],
+        assets: [{ ticker: 'AAPL', linkType: 'DIRECT', relevance: 1 }],
+        publishedAt: now,
+        ingestedAt: now,
+        contentHash: 'ch1',
+        confidence: 0.95,
+        outputType: 'INSIGHT',
+        version: 1,
+        metadata: {
+          person: 'Warren Buffett',
+          action: 'BUY',
+          shares: 1_000_000,
+          dollarValue: 150_000_000,
+          source: '13F',
+        },
+      } as unknown as Signal;
+
+      const snapshot = makeSnapshot([{ symbol: 'AAPL', currentPrice: 150, marketValue: 1500 }], 1500);
+      const ctx = buildPortfolioContext(snapshot, [], [], undefined, { AAPL: [signal] });
+
+      const evaluator = new StrategyEvaluator(store);
+      const results = evaluator.evaluate(ctx);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].triggerType).toBe('PERSON_ACTIVITY');
+      expect(results[0].context['person']).toBe('Warren Buffett');
+      expect(results[0].context['action']).toBe('BUY');
+      expect(results[0].context['dollarValue']).toBe(150_000_000);
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  it('PERSON_ACTIVITY does not fire for a different person or action', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'strategy-eval-'));
+    try {
+      const strategy = makeStrategy({
+        id: 'test-person-filter',
+        category: 'RESEARCH',
+        triggers: [
+          {
+            type: 'PERSON_ACTIVITY',
+            description: 'Pelosi buys',
+            params: { person: 'Nancy Pelosi', action: 'BUY' },
+          },
+        ],
+      });
+      await writeFile(join(dir, `${strategy.id}.json`), JSON.stringify(strategy));
+      const store = new StrategyStore({ dir });
+      await store.initialize();
+
+      const now = new Date().toISOString();
+      const wrongPerson: Signal = {
+        id: 'dt2',
+        type: 'DISCLOSED_TRADE',
+        title: 'Buffett sold AAPL',
+        sources: [{ id: 'jintel', name: 'Jintel', type: 'API', reliability: 0.95 }],
+        assets: [{ ticker: 'AAPL', linkType: 'DIRECT', relevance: 1 }],
+        publishedAt: now,
+        ingestedAt: now,
+        contentHash: 'ch2',
+        confidence: 0.9,
+        outputType: 'INSIGHT',
+        version: 1,
+        metadata: { person: 'Warren Buffett', action: 'SELL', dollarValue: 5_000_000, source: '13F' },
+      } as unknown as Signal;
+
+      const snapshot = makeSnapshot([{ symbol: 'AAPL', currentPrice: 150, marketValue: 1500 }], 1500);
+      const ctx = buildPortfolioContext(snapshot, [], [], undefined, { AAPL: [wrongPerson] });
+
+      const evaluator = new StrategyEvaluator(store);
+      expect(evaluator.evaluate(ctx)).toHaveLength(0);
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
 });

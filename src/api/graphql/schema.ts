@@ -50,6 +50,7 @@ export const typeDefs = /* GraphQL */ `
     FILINGS
     SOCIALS
     REGULATORY
+    DISCLOSED_TRADE
     TRADING_LOGIC_TRIGGER
   }
 
@@ -1208,6 +1209,10 @@ export const typeDefs = /* GraphQL */ `
     triggerGroups: [TriggerGroup!]!
     maxPositionSize: Float
     tickers: [String!]!
+    """
+    JSON-stringified { ticker: weight } map for ETF-style strategies.
+    """
+    targetWeights: String
   }
 
   input StrategyTriggerInput {
@@ -1230,6 +1235,10 @@ export const typeDefs = /* GraphQL */ `
     triggerGroups: [TriggerGroupInput!]!
     tickers: [String!]
     maxPositionSize: Float
+    """
+    JSON-stringified { ticker: weight } map for ALLOCATION_DRIFT strategies.
+    """
+    targetWeights: String
   }
 
   input UpdateStrategyInput {
@@ -1241,6 +1250,10 @@ export const typeDefs = /* GraphQL */ `
     triggerGroups: [TriggerGroupInput!]
     tickers: [String!]
     maxPositionSize: Float
+    """
+    JSON-stringified { ticker: weight } map. Pass empty string to clear.
+    """
+    targetWeights: String
   }
 
   # ---------------------------------------------------------------------------

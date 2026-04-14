@@ -5,8 +5,8 @@
 import { DataCapabilitySchema, deriveCapabilities } from '../../../strategies/capabilities.js';
 import { parseFromMarkdown, serializeToMarkdown, slugify } from '../../../strategies/strategy-serializer.js';
 import type { StrategyStore } from '../../../strategies/strategy-store.js';
-import { StrategyStyleSchema, TriggerTypeSchema } from '../../../strategies/types.js';
-import type { Strategy, StrategyCategory, StrategyStyle } from '../../../strategies/types.js';
+import { StrategyStyleSchema, TargetWeightsSchema, TriggerTypeSchema } from '../../../strategies/types.js';
+import type { Strategy, StrategyCategory, StrategyStyle, TargetWeights } from '../../../strategies/types.js';
 
 // ---------------------------------------------------------------------------
 // State — wired by composition root
@@ -111,6 +111,7 @@ interface CreateStrategyInput {
   triggerGroups: TriggerGroupInput[];
   tickers?: string[];
   maxPositionSize?: number;
+  targetWeights?: string;
 }
 
 interface UpdateStrategyInput {
@@ -122,6 +123,7 @@ interface UpdateStrategyInput {
   triggerGroups?: TriggerGroupInput[];
   tickers?: string[];
   maxPositionSize?: number;
+  targetWeights?: string;
 }
 
 function mapTriggersFromInput(triggers: StrategyTriggerInput[]): Strategy['triggerGroups'][number]['conditions'] {
@@ -153,6 +155,23 @@ function mapTriggerGroupsFromInput(groups: TriggerGroupInput[]): Strategy['trigg
   }));
 }
 
+/** Parse a JSON-stringified target weights map. Empty string means "clear". */
+function parseTargetWeightsInput(raw: string | undefined): TargetWeights | undefined | null {
+  if (raw === undefined) return undefined; // field not provided
+  if (raw === '') return null; // explicit clear
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('Invalid targetWeights JSON');
+  }
+  const validated = TargetWeightsSchema.safeParse(parsed);
+  if (!validated.success) {
+    throw new Error(`Invalid targetWeights: ${validated.error.issues.map((i) => i.message).join(', ')}`);
+  }
+  return validated.data;
+}
+
 export function resolveCreateStrategy(_: unknown, args: { input: CreateStrategyInput }): unknown {
   if (!strategyStore) throw new Error('Strategy store not initialized');
   const { input } = args;
@@ -162,6 +181,7 @@ export function resolveCreateStrategy(_: unknown, args: { input: CreateStrategyI
     id = `${id}-${Date.now()}`;
   }
   const triggerGroups = mapTriggerGroupsFromInput(input.triggerGroups);
+  const targetWeights = parseTargetWeightsInput(input.targetWeights);
   const strategy: Strategy = {
     id,
     name: input.name,
@@ -177,6 +197,7 @@ export function resolveCreateStrategy(_: unknown, args: { input: CreateStrategyI
     triggerGroups,
     tickers: input.tickers ?? [],
     ...(input.maxPositionSize !== undefined ? { maxPositionSize: input.maxPositionSize } : {}),
+    ...(targetWeights ? { targetWeights } : {}),
   };
   strategyStore.create(strategy);
   return toGraphQL(strategy);
@@ -197,6 +218,10 @@ export function resolveUpdateStrategy(_: unknown, args: { id: string; input: Upd
   }
   if (input.tickers !== undefined) fields.tickers = input.tickers;
   if (input.maxPositionSize !== undefined) fields.maxPositionSize = input.maxPositionSize;
+  if (input.targetWeights !== undefined) {
+    const parsed = parseTargetWeightsInput(input.targetWeights);
+    fields.targetWeights = parsed ?? undefined;
+  }
   const updated = strategyStore.update(id, fields);
   return toGraphQL(updated);
 }
@@ -245,5 +270,6 @@ function toGraphQL(strategy: Strategy): unknown {
     })),
     maxPositionSize: strategy.maxPositionSize ?? null,
     tickers: strategy.tickers,
+    targetWeights: strategy.targetWeights ? JSON.stringify(strategy.targetWeights) : null,
   };
 }

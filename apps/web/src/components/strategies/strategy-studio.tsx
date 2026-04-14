@@ -39,7 +39,21 @@ function createEmptyForm(): StrategyFormData {
     ],
     tickers: [],
     maxPositionSize: undefined,
+    targetWeights: [],
   };
+}
+
+function parseTargetWeights(raw: string | null | undefined): { ticker: string; weight: number }[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+    return Object.entries(parsed as Record<string, unknown>)
+      .filter(([, v]) => typeof v === 'number' && Number.isFinite(v))
+      .map(([ticker, weight]) => ({ ticker, weight: weight as number }));
+  } catch {
+    return [];
+  }
 }
 
 function parseParams(raw: string | null | undefined): Record<string, unknown> {
@@ -75,6 +89,7 @@ function strategyToFormData(strategy: Strategy): StrategyFormData {
     })),
     tickers: [...strategy.tickers],
     maxPositionSize: strategy.maxPositionSize ?? undefined,
+    targetWeights: parseTargetWeights(strategy.targetWeights),
   };
 }
 
@@ -189,6 +204,13 @@ export function StrategyStudio({ open, onClose, strategy, editMode }: StrategySt
               // GraphQL returns uppercase capabilities; normalize for form
               if (proposed.requires) {
                 proposed.requires = proposed.requires.map((r) => r.toUpperCase());
+              }
+              // The LLM may emit targetWeights as a Record<ticker, weight> — normalize to the array shape.
+              const rawWeights = (proposed as { targetWeights?: unknown }).targetWeights;
+              if (rawWeights && !Array.isArray(rawWeights) && typeof rawWeights === 'object') {
+                proposed.targetWeights = Object.entries(rawWeights as Record<string, unknown>)
+                  .filter(([, v]) => typeof v === 'number' && Number.isFinite(v))
+                  .map(([ticker, weight]) => ({ ticker: ticker.toUpperCase(), weight: weight as number }));
               }
               setFormData((prev) => ({ ...prev, ...proposed }));
               setFormVisible(true);

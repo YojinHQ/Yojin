@@ -1413,6 +1413,8 @@ export interface Strategy {
   triggerGroups: TriggerGroup[];
   maxPositionSize?: number | null;
   tickers: string[];
+  /** JSON-stringified { ticker: weight } map for ALLOCATION_DRIFT strategies. */
+  targetWeights?: string | null;
 }
 
 export interface StrategiesQueryResult {

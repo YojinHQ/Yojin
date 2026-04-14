@@ -48,10 +48,12 @@ const TRIGGER_TYPE_CAPABILITIES: Record<string, DataCapability[]> = {
   PRICE_MOVE: ['market_data'],
   INDICATOR_THRESHOLD: ['technicals'],
   CONCENTRATION_DRIFT: ['portfolio'],
+  ALLOCATION_DRIFT: ['portfolio'],
   DRAWDOWN: ['market_data', 'portfolio'],
   EARNINGS_PROXIMITY: ['fundamentals'],
   METRIC_THRESHOLD: [],
   SIGNAL_PRESENT: ['news'],
+  PERSON_ACTIVITY: ['filings'],
   CUSTOM: [],
 };
 
@@ -63,6 +65,8 @@ const SIGNAL_TYPE_CAPABILITIES: Record<string, DataCapability> = {
   MACRO: 'macro_data',
   FILINGS: 'filings',
   SOCIALS: 'sentiment',
+  REGULATORY: 'filings',
+  DISCLOSED_TRADE: 'filings',
   TRADING_LOGIC_TRIGGER: 'market_data',
 };
 

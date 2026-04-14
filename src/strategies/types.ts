@@ -50,10 +50,12 @@ export const TriggerTypeSchema = z.enum([
   'PRICE_MOVE', // Absolute or % price change
   'INDICATOR_THRESHOLD', // Technical indicator (RSI, MACD, ...) crosses a value
   'CONCENTRATION_DRIFT', // Position weight exceeds limit
+  'ALLOCATION_DRIFT', // Actual weight deviates from strategy.targetWeights
   'DRAWDOWN', // Portfolio or position drawdown
   'EARNINGS_PROXIMITY', // Days until earnings report
   'METRIC_THRESHOLD', // Numeric metric (SUE, sentiment momentum, P/B, ...) crosses a value
   'SIGNAL_PRESENT', // A recent Signal of given types/sentiment exists for the ticker
+  'PERSON_ACTIVITY', // A DISCLOSED_TRADE signal for a tracked person (13F, congress, insider)
   'CUSTOM', // User-defined expression
 ]);
 export type TriggerType = z.infer<typeof TriggerTypeSchema>;
@@ -78,6 +80,14 @@ export type TriggerGroup = z.infer<typeof TriggerGroupSchema>;
 // Strategy — the core entity
 // ---------------------------------------------------------------------------
 
+/** Target allocation weights — ticker → fraction of portfolio (0-1). Sum must be ≤ 1. */
+export const TargetWeightsSchema = z
+  .record(IdField, z.number().min(0).max(1))
+  .refine((w) => Object.values(w).reduce((a, b) => a + b, 0) <= 1.0001, {
+    message: 'Sum of target weights must be ≤ 1.0',
+  });
+export type TargetWeights = z.infer<typeof TargetWeightsSchema>;
+
 export const StrategySchema = z.object({
   id: IdField,
   name: z.string().min(1),
@@ -96,6 +106,8 @@ export const StrategySchema = z.object({
   maxPositionSize: z.number().min(0).max(1).optional(),
   /** Tickers this strategy applies to. Empty = all portfolio tickers. */
   tickers: z.array(IdField).default([]),
+  /** Target allocation for ETF-style strategies (ticker → weight). Read by ALLOCATION_DRIFT. */
+  targetWeights: TargetWeightsSchema.optional(),
 });
 export type Strategy = z.infer<typeof StrategySchema>;
 
