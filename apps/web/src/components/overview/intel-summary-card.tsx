@@ -45,9 +45,7 @@ export default function IntelSummaryCard() {
   if (!jintelConfigured) {
     return (
       <DashboardCard title="Snap" variant="feature" className="flex-1">
-        <CardBlurGate mockContent={<MockIntelSummary />}>
-          <FeatureCardGate requires="jintel" />
-        </CardBlurGate>
+        <CardBlurGate mockContent={<MockIntelSummary />} />
       </DashboardCard>
     );
   }

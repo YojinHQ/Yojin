@@ -1,15 +1,11 @@
 import { useState } from 'react';
-import { useQuery } from 'urql';
 import Card from '../common/card';
 import Toggle from '../common/toggle';
-import { GateCard } from '../common/feature-gate';
 import {
   useListChannels,
   useNotificationPreferences,
   useSaveNotificationPreferences,
 } from '../../api/hooks/use-channels';
-import { ONBOARDING_STATUS_QUERY } from '../../api/documents';
-import type { OnboardingStatusQueryResult } from '../../api/types';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -30,40 +26,22 @@ const DEFAULT_ENABLED_TYPES = ['insight.ready', 'action.created', 'approval.requ
 // ---------------------------------------------------------------------------
 
 export function NotificationRoutingCard() {
-  const [{ data: statusData }] = useQuery<OnboardingStatusQueryResult>({
-    query: ONBOARDING_STATUS_QUERY,
-  });
-  const jintelConfigured = statusData?.onboardingStatus?.jintelConfigured ?? false;
-
   return (
-    <div className="relative">
-      <Card className="overflow-hidden p-0">
-        {/* Header */}
-        <div className="flex items-center gap-4 px-5 py-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-primary/10">
-            <RouteIcon />
-          </div>
-          <div>
-            <h2 className="font-headline text-lg text-text-primary">Notification Routing</h2>
-            <p className="text-sm text-text-muted">Choose which notifications each channel receives.</p>
-          </div>
+    <Card className="overflow-hidden p-0">
+      <div className="flex items-center gap-4 px-5 py-4">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-primary/10">
+          <RouteIcon />
         </div>
+        <div>
+          <h2 className="font-headline text-lg text-text-primary">Notification Routing</h2>
+          <p className="text-sm text-text-muted">Choose which notifications each channel receives.</p>
+        </div>
+      </div>
 
-        {/* Content */}
-        <div className="border-t border-border px-5 py-4">
-          <NotificationPreferencesEditor />
-        </div>
-      </Card>
-
-      {!jintelConfigured && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-bg-primary/70 backdrop-blur-[3px]">
-          <GateCard
-            requires="jintel"
-            subtitle="Jintel is free to use. Connect it to unlock live market data and analytics."
-          />
-        </div>
-      )}
-    </div>
+      <div className="border-t border-border px-5 py-4">
+        <NotificationPreferencesEditor />
+      </div>
+    </Card>
   );
 }
 

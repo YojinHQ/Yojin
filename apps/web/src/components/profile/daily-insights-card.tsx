@@ -3,11 +3,9 @@ import { useMutation, useQuery } from 'urql';
 import Card from '../common/card';
 import Button from '../common/button';
 import Toggle from '../common/toggle';
-import { GateCard } from '../common/feature-gate';
 import { TimePicker } from '../onboarding/time-picker';
 import { TimezonePicker } from '../onboarding/timezone-picker';
-import { BRIEFING_CONFIG_QUERY, ONBOARDING_STATUS_QUERY, SAVE_BRIEFING_CONFIG_MUTATION } from '../../api/documents';
-import type { OnboardingStatusQueryResult } from '../../api/types';
+import { BRIEFING_CONFIG_QUERY, SAVE_BRIEFING_CONFIG_MUTATION } from '../../api/documents';
 
 // ---------------------------------------------------------------------------
 // Types & constants
@@ -50,40 +48,22 @@ function detectTimezone(): string {
 // ---------------------------------------------------------------------------
 
 export function DailyInsightsCard() {
-  const [{ data: statusData }] = useQuery<OnboardingStatusQueryResult>({
-    query: ONBOARDING_STATUS_QUERY,
-  });
-  const jintelConfigured = statusData?.onboardingStatus?.jintelConfigured ?? false;
-
   return (
-    <div className="relative">
-      <Card className="overflow-hidden p-0">
-        {/* Header */}
-        <div className="flex items-center gap-4 px-5 py-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-primary/10">
-            <CalendarIcon />
-          </div>
-          <div>
-            <h2 className="font-headline text-lg text-text-primary">Daily Insights</h2>
-            <p className="text-sm text-text-muted">Configure your daily briefing schedule and content.</p>
-          </div>
+    <Card className="overflow-hidden p-0">
+      <div className="flex items-center gap-4 px-5 py-4">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-primary/10">
+          <CalendarIcon />
         </div>
+        <div>
+          <h2 className="font-headline text-lg text-text-primary">Daily Insights</h2>
+          <p className="text-sm text-text-muted">Configure your daily briefing schedule and content.</p>
+        </div>
+      </div>
 
-        {/* Content */}
-        <div className="border-t border-border px-5 py-4">
-          <BriefingEditor />
-        </div>
-      </Card>
-
-      {!jintelConfigured && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-bg-primary/70 backdrop-blur-[3px]">
-          <GateCard
-            requires="jintel"
-            subtitle="Jintel is free to use. Connect it to unlock live market data and analytics."
-          />
-        </div>
-      )}
-    </div>
+      <div className="border-t border-border px-5 py-4">
+        <BriefingEditor />
+      </div>
+    </Card>
   );
 }
 

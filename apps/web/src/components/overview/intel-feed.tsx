@@ -23,7 +23,6 @@ import { cn, timeAgo } from '../../lib/utils';
 import { useFeatureStatus } from '../../lib/feature-status';
 import Button from '../common/button';
 import { CardBlurGate } from '../common/card-blur-gate';
-import { FeatureCardGate } from '../common/feature-gate';
 import FeedDetailModal from './feed-detail-modal';
 import type { FeedDetailData } from './feed-detail-modal';
 import Spinner from '../common/spinner';
@@ -402,15 +401,12 @@ export default function IntelFeed({
   const { jintelConfigured, aiConfigured } = useFeatureStatus();
 
   if (!jintelConfigured || !aiConfigured) {
-    const requirement = !jintelConfigured ? (!aiConfigured ? 'both' : 'jintel') : 'ai';
     return (
       <div className="flex h-full flex-col">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-xs font-medium uppercase tracking-wider text-text-primary">Intel Feed</h2>
         </div>
-        <CardBlurGate mockContent={<MockIntelFeed />}>
-          <FeatureCardGate requires={requirement} />
-        </CardBlurGate>
+        <CardBlurGate mockContent={<MockIntelFeed />} />
       </div>
     );
   }

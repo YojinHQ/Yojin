@@ -17,7 +17,6 @@ import { useFeatureStatus } from '../../lib/feature-status';
 import { cn, timeAgo } from '../../lib/utils';
 import { CardBlurGate } from '../common/card-blur-gate';
 import { DashboardCard } from '../common/dashboard-card';
-import { FeatureCardGate } from '../common/feature-gate';
 import Modal from '../common/modal';
 import Spinner from '../common/spinner';
 
@@ -117,22 +116,10 @@ export function YojinSnapCard() {
     };
   }, [grouped]);
 
-  if (!jintelConfigured) {
+  if (!jintelConfigured || !aiConfigured) {
     return (
       <DashboardCard title="Summaries" variant="feature" className="flex-1">
-        <CardBlurGate mockContent={<MockSummaries />}>
-          <FeatureCardGate requires="jintel" />
-        </CardBlurGate>
-      </DashboardCard>
-    );
-  }
-
-  if (!aiConfigured) {
-    return (
-      <DashboardCard title="Summaries" variant="feature" className="flex-1">
-        <CardBlurGate mockContent={<MockSummaries />}>
-          <FeatureCardGate requires="ai" />
-        </CardBlurGate>
+        <CardBlurGate mockContent={<MockSummaries />} />
       </DashboardCard>
     );
   }

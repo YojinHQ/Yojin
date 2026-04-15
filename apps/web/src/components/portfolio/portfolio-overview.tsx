@@ -4,7 +4,6 @@ import { useFeatureStatus } from '../../lib/feature-status';
 import { usePortfolio } from '../../api';
 import { CardEmptyState } from '../common/card-empty-state';
 import { CardBlurGate } from '../common/card-blur-gate';
-import { FeatureCardGate } from '../common/feature-gate';
 import Spinner from '../common/spinner';
 import Button from '../common/button';
 import { useAddPositionModal } from '../../lib/add-position-modal-context';
@@ -26,9 +25,7 @@ export function PortfolioOverview() {
   if (!jintelConfigured) {
     return (
       <DashboardCard title="Total Value" className="min-h-[120px] flex-1">
-        <CardBlurGate mockContent={<MockTotalValue />}>
-          <FeatureCardGate requires="jintel" />
-        </CardBlurGate>
+        <CardBlurGate mockContent={<MockTotalValue />} />
       </DashboardCard>
     );
   }
