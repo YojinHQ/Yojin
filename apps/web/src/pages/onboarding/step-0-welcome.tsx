@@ -33,7 +33,7 @@ export function Step0Welcome() {
           style={{ animationDelay: '100ms' }}
         >
           <h1 className="font-headline text-4xl leading-tight text-text-primary sm:text-5xl">
-            Take control of your finance.
+            Take control of your finances.
           </h1>
         </div>
 
@@ -100,7 +100,7 @@ export function Step0Welcome() {
         {/* CTA */}
         <div
           className="flex flex-col items-center gap-4 opacity-0 [animation:onboarding-fade-up_0.5s_ease-out_forwards]"
-          style={{ animationDelay: '800ms' }}
+          style={{ animationDelay: '950ms' }}
         >
           <Button variant="primary" size="lg" onClick={nextStep} className="px-8">
             Set up Yojin
