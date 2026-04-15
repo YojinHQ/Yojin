@@ -642,6 +642,35 @@ async function batchEnrichAllChunked(client: JintelClient, tickers: string[]): P
   return result;
 }
 
+// Sub-graphs that strategy trigger evaluation actually reads.
+// Used on the 5-min micro tick so triggers don't wait for the 4h LLM cycle.
+const BATCH_ENRICH_QUERY_TRIGGER = buildBatchEnrichQuery(['market', 'technicals', 'sentiment']);
+
+export async function batchEnrichForTriggers(client: JintelClient, tickers: string[]): Promise<Map<string, Entity>> {
+  const CHUNK_SIZE = 20;
+  const out = new Map<string, Entity>();
+  for (let i = 0; i < tickers.length; i += CHUNK_SIZE) {
+    const chunk = tickers.slice(i, i + CHUNK_SIZE);
+    try {
+      const data = await client.request<Entity[]>(BATCH_ENRICH_QUERY_TRIGGER, { tickers: chunk });
+      const byTicker = new Map<string, Entity>();
+      for (const entity of data) {
+        for (const t of entity.tickers ?? []) byTicker.set(t.toUpperCase(), entity);
+      }
+      for (const inputTicker of chunk) {
+        const entity = byTicker.get(inputTicker.toUpperCase());
+        if (entity) out.set(inputTicker, entity);
+      }
+    } catch (err) {
+      logger.warn('Trigger enrich chunk failed', {
+        chunk: chunk.slice(0, 3),
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return out;
+}
+
 async function recallAllMemories(
   stores: Map<string, SignalMemoryStore>,
   tickers: string[],

@@ -29,6 +29,7 @@ import type { ProviderRouter } from './ai-providers/router.js';
 import type { AssetClass } from './api/graphql/types.js';
 import type { EventLog } from './core/event-log.js';
 import type { NotificationBus } from './core/notification-bus.js';
+import { batchEnrichForTriggers } from './insights/data-gatherer.js';
 import type { InsightStore } from './insights/insight-store.js';
 import { buildMacroSummaryInputs } from './insights/macro-summary-builder.js';
 import type { MicroInsightStore } from './insights/micro-insight-store.js';
@@ -558,6 +559,47 @@ export class Scheduler {
           if (state) state.completedToday = true;
         }
         return;
+      }
+
+      // Lightweight trigger pass — runs at the 5-min micro cadence when signals are fresh,
+      // independent of the 4h LLM cadence. ActionStore supersedes any older PENDING action
+      // with the same triggerId when the heavy path later re-evaluates the same asset.
+      const jintelClientLight = this.getJintelClient?.();
+      if (jintelClientLight && this.strategyEvaluator) {
+        const lightSymbols = assetsWithNewSignals.map((a) => a.symbol);
+        try {
+          const [entityMap, allSignals] = await Promise.all([
+            batchEnrichForTriggers(jintelClientLight, lightSymbols),
+            archive.query({ tickers: lightSymbols, limit: 50 * lightSymbols.length }),
+          ]);
+          const lightSet = new Set(lightSymbols);
+          const signalsByTicker = new Map<string, Signal[]>();
+          for (const sig of allSignals) {
+            for (const asset of sig.assets) {
+              if (lightSet.has(asset.ticker)) {
+                const list = signalsByTicker.get(asset.ticker) ?? [];
+                list.push(sig);
+                signalsByTicker.set(asset.ticker, list);
+              }
+            }
+          }
+          const lightInputs: Array<{ symbol: string; entity: Entity; signals: Signal[] }> = [];
+          for (const symbol of lightSymbols) {
+            const entity = entityMap.get(symbol);
+            if (entity) lightInputs.push({ symbol, entity, signals: signalsByTicker.get(symbol) ?? [] });
+          }
+          if (lightInputs.length > 0) {
+            void this.evaluateMicroStrategies(lightInputs).catch((err) => {
+              logger.error('Lightweight strategy evaluation failed', {
+                error: err instanceof Error ? err.message : String(err),
+              });
+            });
+          }
+        } catch (err) {
+          logger.warn('Lightweight trigger enrichment failed', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
 
       // LLM interval gate: even when new signals exist, don't re-analyze an asset
