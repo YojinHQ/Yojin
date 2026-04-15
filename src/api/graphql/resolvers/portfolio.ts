@@ -106,28 +106,15 @@ export async function portfolioHistoryQuery(days?: number | null): Promise<Portf
   const latest = await snapshotStore.getLatest();
   if (!latest || latest.positions.length === 0) return [];
 
-  const first = await snapshotStore.getFirst();
-  if (!first) return [];
-
-  // P&L is measured from the day AFTER first import — the import day itself
-  // is the $0 baseline and is not plotted.
-  const firstImportDate = first.timestamp.slice(0, 10);
-  const dayAfterImport = new Date(`${firstImportDate}T00:00:00Z`);
-  dayAfterImport.setUTCDate(dayAfterImport.getUTCDate() + 1);
-  const dayAfterImportStr = dayAfterImport.toISOString().slice(0, 10);
-  const todayStr = new Date().toISOString().slice(0, 10);
-  if (dayAfterImportStr > todayStr) return [];
-
   const positions = latest.positions;
   const symbols = [...new Set(positions.map((p) => p.symbol))];
 
-  // Requested window, clamped so we never go earlier than the first import day.
   const effectiveDays = days ?? 7;
-  const requestedStart = new Date(Date.now() - effectiveDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const startDate = requestedStart > dayAfterImportStr ? requestedStart : dayAfterImportStr;
+  const startDate = new Date(Date.now() - effectiveDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  // Resolve when each position was first held
+  // Resolve when each position was first held — honors entryDate, then snapshot timeline,
+  // then falls back to the window start so positions without a known entry appear for the whole range.
   const needsTimeline = positions.filter((p) => !p.entryDate);
   let timeline: Map<string, string> | null = null;
   if (needsTimeline.length > 0) {
@@ -135,13 +122,11 @@ export async function portfolioHistoryQuery(days?: number | null): Promise<Portf
   }
   const startDates = resolvePositionStartDates(positions, timeline, startDate);
 
-  // Fetch historical daily prices from Jintel
   if (!jintelClient) {
     log.debug('No Jintel client — returning empty history');
     return [];
   }
 
-  const baseline = { totalValue: first.totalValue, totalCost: first.totalCost };
   let history: PortfolioHistoryPoint[] = [];
 
   if (startDate <= yesterday) {
@@ -161,21 +146,19 @@ export async function portfolioHistoryQuery(days?: number | null): Promise<Portf
 
     const rawPriceMap = buildPriceMap(priceData);
     const filledPrices = fillCalendarDays(rawPriceMap, startDate, yesterday);
-    history = buildHistoryPoints(positions, filledPrices, startDates, startDate, yesterday, baseline);
+    history = buildHistoryPoints(positions, filledPrices, startDates, startDate, yesterday);
   }
 
-  // Append today's live-priced trailing point — cumulative P&L vs. first-import baseline.
+  // Append today's live-priced trailing point — unrealized P&L vs. cost basis.
   const liveSnapshot = await enrichPortfolioSnapshotWithLiveQuotes(latest, jintelClient);
-  const livePnl = liveSnapshot.totalValue - baseline.totalValue - (liveSnapshot.totalCost - baseline.totalCost);
-
   const livePoint: PortfolioHistoryPoint = {
     timestamp: new Date().toISOString(),
     totalValue: liveSnapshot.totalValue,
     totalCost: liveSnapshot.totalCost,
     totalPnl: liveSnapshot.totalPnl,
     totalPnlPercent: liveSnapshot.totalPnlPercent,
-    periodPnl: livePnl,
-    periodPnlPercent: baseline.totalValue > 0 ? (livePnl / baseline.totalValue) * 100 : 0,
+    periodPnl: liveSnapshot.totalPnl,
+    periodPnlPercent: liveSnapshot.totalPnlPercent,
   };
 
   const liveDay = livePoint.timestamp.slice(0, 10);

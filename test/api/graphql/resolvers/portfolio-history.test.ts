@@ -29,10 +29,6 @@ function makeSnapshot(
   };
 }
 
-function daysAgoISO(offset: number): string {
-  return new Date(Date.now() - offset * 24 * 60 * 60 * 1000).toISOString();
-}
-
 function makePriceHistory(ticker: string, prices: Record<string, number>): TickerPriceHistory {
   return {
     ticker,
@@ -54,10 +50,10 @@ function createMockJintel(priceHistories: TickerPriceHistory[]): JintelClient {
   } as unknown as JintelClient;
 }
 
-function createMockStore(snapshot: PortfolioSnapshot, firstSnapshot?: PortfolioSnapshot): PortfolioSnapshotStore {
+function createMockStore(snapshot: PortfolioSnapshot): PortfolioSnapshotStore {
   return {
     getLatest: vi.fn().mockResolvedValue(snapshot),
-    getFirst: vi.fn().mockResolvedValue(firstSnapshot ?? snapshot),
+    getFirst: vi.fn().mockResolvedValue(snapshot),
     getPositionTimeline: vi.fn().mockResolvedValue(new Map()),
     save: vi.fn(),
   } as unknown as PortfolioSnapshotStore;
@@ -84,17 +80,15 @@ describe('portfolioHistoryQuery — backfill from Jintel prices', () => {
         entryDate: '2026-04-01',
       },
     ]);
-    // First import was 3 days ago — otherwise the "imported today" guard short-circuits
-    // before the Jintel check and the test would pass for the wrong reason.
-    const first = makeSnapshot(latest.positions, daysAgoISO(3));
-    setSnapshotStore(createMockStore(latest, first));
+    setSnapshotStore(createMockStore(latest));
     setPortfolioJintelClient(undefined);
 
     const history = await portfolioHistoryQuery(7);
     expect(history).toEqual([]);
   });
 
-  it('returns empty on a fresh same-day import (no day-after yet)', async () => {
+  it('emits a live trailing point for a fresh same-day import', async () => {
+    const today = new Date().toISOString().slice(0, 10);
     const snap = makeSnapshot([
       {
         symbol: 'AAPL',
@@ -107,17 +101,22 @@ describe('portfolioHistoryQuery — backfill from Jintel prices', () => {
         unrealizedPnlPercent: 33.33,
         assetClass: 'EQUITY',
         platform: 'MANUAL',
-        entryDate: new Date().toISOString().slice(0, 10),
+        entryDate: today,
       },
     ]);
     setSnapshotStore(createMockStore(snap));
     setPortfolioJintelClient(createMockJintel([]));
 
     const history = await portfolioHistoryQuery(7);
-    expect(history).toEqual([]);
+
+    // A same-day import has no backfill window, but the live trailing point
+    // should still render so the chart isn't empty on import day.
+    expect(history).toHaveLength(1);
+    expect(history[0].totalValue).toBe(2000);
+    expect(history[0].periodPnl).toBe(500);
   });
 
-  it('emits first bar the day after first import with cumulative delta from baseline', async () => {
+  it('plots every day from entryDate with unrealized P&L vs. cost basis', async () => {
     const d = (offset: number) => new Date(Date.now() - offset * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const day3ago = d(3);
     const day2ago = d(2);
@@ -138,28 +137,30 @@ describe('portfolioHistoryQuery — backfill from Jintel prices', () => {
         entryDate: day3ago,
       },
     ]);
-    // First import was 3 days ago at $2000 value / $1500 cost — this is the baseline.
-    const first = makeSnapshot(latest.positions, daysAgoISO(3));
     const prices = makePriceHistory('AAPL', {
       [day3ago]: 200,
       [day2ago]: 210,
       [day1ago]: 205,
     });
-    setSnapshotStore(createMockStore(latest, first));
+    setSnapshotStore(createMockStore(latest));
     setPortfolioJintelClient(createMockJintel([prices]));
 
     const history = await portfolioHistoryQuery(7);
 
-    // Import day (day3ago) is the $0 baseline and is NOT plotted.
-    expect(history.find((p) => p.timestamp.slice(0, 10) === day3ago)).toBeUndefined();
-
+    // Entry day is now plotted.
+    const point3ago = history.find((p) => p.timestamp.slice(0, 10) === day3ago);
     const point2ago = history.find((p) => p.timestamp.slice(0, 10) === day2ago);
     const point1ago = history.find((p) => p.timestamp.slice(0, 10) === day1ago);
+
+    // Day 3 ago: value=2000, cost=1500 → pnl=500
+    expect(point3ago?.totalValue).toBe(2000);
+    expect(point3ago?.periodPnl).toBe(500);
+    // Day 2 ago: value=2100, cost=1500 → pnl=600
     expect(point2ago?.totalValue).toBe(2100);
-    // Cumulative P&L vs. baseline ($2000 value, $1500 cost): (2100-2000) - 0 = 100
-    expect(point2ago?.periodPnl).toBe(100);
+    expect(point2ago?.periodPnl).toBe(600);
+    // Day 1 ago: value=2050, cost=1500 → pnl=550
     expect(point1ago?.totalValue).toBe(2050);
-    expect(point1ago?.periodPnl).toBe(50);
+    expect(point1ago?.periodPnl).toBe(550);
   });
 
   it('returns empty when no positions', async () => {
@@ -187,13 +188,12 @@ describe('portfolioHistoryQuery — backfill from Jintel prices', () => {
         entryDate: '2026-04-01',
       },
     ]);
-    const first = makeSnapshot(latest.positions, daysAgoISO(3));
     const failClient = {
       priceHistory: vi.fn().mockResolvedValue({ success: false, error: 'API down' }),
       quotes: vi.fn().mockResolvedValue({ success: false }),
     } as unknown as JintelClient;
 
-    setSnapshotStore(createMockStore(latest, first));
+    setSnapshotStore(createMockStore(latest));
     setPortfolioJintelClient(failClient);
 
     const history = await portfolioHistoryQuery(7);
@@ -215,8 +215,7 @@ describe('portfolioHistoryQuery — backfill from Jintel prices', () => {
         platform: 'ROBINHOOD',
       },
     ]);
-    const first = makeSnapshot(latest.positions, daysAgoISO(3));
-    const mockStore = createMockStore(latest, first);
+    const mockStore = createMockStore(latest);
     const prices = makePriceHistory('AAPL', { '2026-04-01': 200 });
 
     setSnapshotStore(mockStore);

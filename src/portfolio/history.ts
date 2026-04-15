@@ -55,18 +55,12 @@ export function fillCalendarDays(
   return filled;
 }
 
-export interface HistoryBaseline {
-  totalValue: number;
-  totalCost: number;
-}
-
 export function buildHistoryPoints(
   positions: Position[],
   filledPrices: Map<string, Map<string, number>>,
   startDates: Map<string, string>,
   start: string,
   end: string,
-  baseline: HistoryBaseline,
 ): PortfolioHistoryPoint[] {
   const days = dateRange(start, end);
   const points: PortfolioHistoryPoint[] = [];
@@ -91,22 +85,17 @@ export function buildHistoryPoints(
     // Skip days before any position existed — the portfolio wasn't tracked yet.
     if (!hasAnyPosition) continue;
 
-    const totalPnl = totalValue - totalCost;
-    const totalPnlPercent = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
-
-    // Cumulative P&L since first-import baseline. Subtracting the cost delta
-    // neutralizes positions added after import so they don't show as gains/losses.
-    const periodPnl = totalValue - baseline.totalValue - (totalCost - baseline.totalCost);
-    const periodPnlPercent = baseline.totalValue > 0 ? (periodPnl / baseline.totalValue) * 100 : 0;
+    const pnl = totalValue - totalCost;
+    const pnlPercent = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
 
     points.push({
       timestamp: `${day}T16:00:00Z`,
       totalValue,
       totalCost,
-      totalPnl,
-      totalPnlPercent,
-      periodPnl,
-      periodPnlPercent,
+      totalPnl: pnl,
+      totalPnlPercent: pnlPercent,
+      periodPnl: pnl,
+      periodPnlPercent: pnlPercent,
     });
   }
 
