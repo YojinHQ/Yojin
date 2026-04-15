@@ -144,7 +144,10 @@ export function StrategyStudio({ open, onClose, strategy, editMode }: StrategySt
   const [, sendMessageMutation] = useMutation(SEND_MESSAGE_MUTATION);
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Use scrollTop instead of scrollIntoView — the latter can shift browser focus
+    // away from the chat input when called inside a modal.
+    const el = messagesEndRef.current?.parentElement;
+    if (el) el.scrollTop = el.scrollHeight;
   }, []);
 
   useEffect(() => {

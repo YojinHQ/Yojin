@@ -265,8 +265,8 @@ export function buildPortfolioContext(
   const metrics: Record<string, Record<string, number>> = {};
   const assetClasses: Record<string, AssetClass> = {};
 
-  const quoteMap = new Map(quotes.map((q) => [q.ticker, q]));
-  const entityMap = new Map(entities.map((e) => [e.tickers?.[0] ?? e.id, e]));
+  const quoteMap = new Map(quotes.filter(Boolean).map((q) => [q.ticker, q]));
+  const entityMap = new Map(entities.filter(Boolean).map((e) => [e.tickers?.[0] ?? e.id, e]));
 
   const totalValue = snapshot.totalValue || 0;
   const now = Date.now();

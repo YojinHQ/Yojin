@@ -92,6 +92,20 @@ export default function ChatInput({
     resize();
   }, [value, resize]);
 
+  // Refocus the textarea when the AI finishes responding.
+  // Strategy Studio uses `disabled={isLoading}`, main chat uses `disableAttachment={isLoading}`.
+  const prevDisabledRef = useRef(disabled);
+  const prevDisableAttachmentRef = useRef(disableAttachment);
+  useEffect(() => {
+    const disabledCleared = prevDisabledRef.current && !disabled;
+    const attachmentCleared = prevDisableAttachmentRef.current && !disableAttachment;
+    if (disabledCleared || attachmentCleared) {
+      textareaRef.current?.focus();
+    }
+    prevDisabledRef.current = disabled;
+    prevDisableAttachmentRef.current = disableAttachment;
+  }, [disabled, disableAttachment]);
+
   // When attachment is disabled, treat any pre-attached image as absent.
   // This prevents silently sending an image that gets dropped in the queued path.
   const effectiveImage = disableAttachment ? null : image;

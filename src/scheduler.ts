@@ -23,7 +23,6 @@ import type { Entity, JintelClient } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
 import type { ActionStore } from './actions/action-store.js';
-import { parseVerdictFromHeadline } from './actions/types.js';
 import type { Orchestrator } from './agents/orchestrator.js';
 import { emitProgress } from './agents/orchestrator.js';
 import type { ProviderRouter } from './ai-providers/router.js';
@@ -49,6 +48,7 @@ import type { Signal } from './signals/types.js';
 import { snapFromInsight } from './snap/snap-from-insight.js';
 import { snapFromMicro } from './snap/snap-from-micro.js';
 import type { SnapStore } from './snap/snap-store.js';
+import { generateActionReasoning } from './strategies/action-reasoning.js';
 import { formatTriggerContext } from './strategies/format-trigger-context.js';
 import { buildPortfolioContext, buildSingleTickerContext } from './strategies/portfolio-context-builder.js';
 import type { PortfolioContext, StrategyEvaluator } from './strategies/strategy-evaluator.js';
@@ -1246,83 +1246,10 @@ export class Scheduler {
     const now = new Date().toISOString();
 
     for (const evaluation of evaluations) {
+      const { headline, verdict, reasoning } = await generateActionReasoning(evaluation, this.providerRouter ?? null);
+
       const ticker = evaluation.context.ticker as string | undefined;
-
       const contextParts = formatTriggerContext(evaluation.context);
-
-      // LLM reasoning: ask the Strategist to analyze this trigger and recommend action
-      let headline = '';
-      let reasoning = '';
-      if (this.providerRouter) {
-        logger.info('Requesting LLM reasoning for strategy trigger', { strategyId: evaluation.strategyId, ticker });
-        try {
-          const llmResult = await this.providerRouter.completeWithTools({
-            model: 'sonnet',
-            system: `You are a trading strategist. A strategy trigger has fired. Analyze and recommend a specific action.
-
-Your response MUST start with a one-line headline in this exact format:
-ACTION: <BUY|SELL|TRIM|HOLD|REVIEW> <TICKER> — <one-sentence reason>
-
-Then provide your analysis:
-1. Why this trigger matters right now
-2. Key risks before acting
-3. Position sizing or timing guidance
-
-Be direct and concise. No hedging or disclaimers.`,
-            messages: [
-              {
-                role: 'user',
-                content: `Strategy: ${evaluation.strategyName}
-Trigger: ${evaluation.triggerDescription}
-Ticker: ${ticker ?? 'portfolio-wide'}
-Trigger data: ${contextParts.join(', ')}
-${this.formatAllocationBudget(evaluation.context)}
-Strategy rules:
-${evaluation.strategyContent}
-
-Provide your ACTION headline and analysis.`,
-              },
-            ],
-            maxTokens: 512,
-          });
-          const fullText = llmResult.content
-            .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-            .map((b) => b.text)
-            .join('');
-          if (fullText) {
-            // Parse headline from first line (ACTION: BUY AAPL — reason)
-            const lines = fullText.split('\n').filter(Boolean);
-            const actionMatch = lines[0]?.match(/^ACTION:\s*(.+)/i);
-            if (actionMatch) {
-              headline = actionMatch[1].trim();
-              reasoning = lines.slice(1).join('\n').trim();
-            } else {
-              reasoning = fullText;
-            }
-            logger.info('LLM reasoning generated for strategy trigger', {
-              strategyId: evaluation.strategyId,
-              ticker,
-              headline: headline || '(no headline parsed)',
-              length: fullText.length,
-            });
-          }
-        } catch (err) {
-          logger.warn('LLM reasoning failed for strategy trigger, using static content', {
-            strategyId: evaluation.strategyId,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      }
-
-      // Fallback when LLM unavailable or didn't produce structured output
-      if (!headline) {
-        headline = `REVIEW ${ticker ?? 'portfolio'} — ${evaluation.triggerDescription}`;
-      }
-      if (!reasoning) {
-        reasoning = evaluation.triggerDescription;
-      }
-
-      const verdict = parseVerdictFromHeadline(headline);
 
       const result = await this.actionStore.create({
         id: randomUUID(),
@@ -1361,15 +1288,6 @@ Provide your ACTION headline and analysis.`,
         });
       }
     }
-  }
-
-  /** Format allocation budget info for the LLM prompt when the strategy has a targetAllocation. */
-  private formatAllocationBudget(context: Record<string, unknown>): string {
-    const target = context.targetAllocation as number | undefined;
-    if (target == null) return '';
-    const actual = (context.actualAllocation as number | undefined) ?? 0;
-    const remaining = (context.allocationRemaining as number | undefined) ?? Math.max(0, target - actual);
-    return `\nAllocation budget: target ${(target * 100).toFixed(0)}% of portfolio, current ${(actual * 100).toFixed(1)}%, remaining ${(remaining * 100).toFixed(1)}%\n`;
   }
 
   // ---------------------------------------------------------------------------

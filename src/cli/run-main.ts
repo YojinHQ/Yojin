@@ -519,6 +519,7 @@ Commands:
     --tickers <syms>       Comma-separated tickers (default: all portfolio)
     --strategy <id>        Evaluate a single strategy only
     --dry-run              Skip Jintel fetch, use cached data
+    --with-actions         Run LLM action generation + consistency checks
 
 Advanced:
   yojin serve          Alias for start
