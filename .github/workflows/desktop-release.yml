@@ -98,17 +98,19 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: apps/desktop
           tagName: ${{ steps.tag.outputs.value }}
           releaseName: 'Yojin Desktop ${{ steps.tag.outputs.value }}'
           releaseBody: |
-            Unsigned builds — Gatekeeper/SmartScreen will warn on first launch.
-
-            **macOS**: right-click the app → "Open" → "Open" in the confirmation dialog.
-            **Windows**: SmartScreen popup → "More info" → "Run anyway".
-
-            Code signing is on the roadmap once Apple Developer ID + Windows OV/EV certs are provisioned.
+            **macOS**: signed + notarized with Apple Developer ID. Double-click to install.
+            **Windows**: unsigned — SmartScreen popup → "More info" → "Run anyway". Windows OV/EV cert is on the roadmap.
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.tauri-args }}
