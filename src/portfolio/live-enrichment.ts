@@ -117,8 +117,10 @@ function toETDate(dateStr: string): string {
 
 /** Build a sparkline from price history closing prices.
  *  When `regularHoursOnly` is true, strips pre-market (<9:30 AM ET) and after-hours (>=4:00 PM ET) candles
- *  and keeps only the latest trading date so a multi-session 1d range doesn't produce an overnight cliff. */
-function buildSparkline(history: TickerPriceHistory, livePrice: number, regularHoursOnly = false): number[] {
+ *  and keeps only the latest trading date so a multi-session 1d range doesn't produce an overnight cliff.
+ *  When `livePrice` is omitted (e.g. the live quote endpoint returned no data for this ticker),
+ *  the sparkline ends at the most recent close from history instead. */
+function buildSparkline(history: TickerPriceHistory, livePrice?: number, regularHoursOnly = false): number[] {
   let candles = history.history;
   if (regularHoursOnly) {
     candles = candles.filter((p) => {
@@ -133,7 +135,7 @@ function buildSparkline(history: TickerPriceHistory, livePrice: number, regularH
     }
   }
   const points = candles.map((p) => p.close);
-  points.push(livePrice);
+  if (livePrice !== undefined) points.push(livePrice);
   return points;
 }
 
@@ -269,10 +271,31 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
   }
 
   const positions: Position[] = snapshot.positions.map((pos) => {
-    const quote = quoteMap.get(pos.symbol.toUpperCase());
+    const upperSymbol = pos.symbol.toUpperCase();
+    const quote = quoteMap.get(upperSymbol);
+    const priceHist = historyMap.get(upperSymbol);
+    const isEquity = !cryptoSet.has(upperSymbol);
+
+    // Jintel's /quotes endpoint has coverage gaps (e.g. some ETFs return null),
+    // but /priceHistory often still has data. Fall back to history so the UI
+    // gets a fresh price + sparkline instead of stale scrape values.
     if (!quote) {
       log.debug('No quote found for position', { symbol: pos.symbol, availableTickers: [...quoteMap.keys()] });
-      return pos;
+      if (!priceHist || priceHist.history.length === 0) return pos;
+      const lastClose = priceHist.history[priceHist.history.length - 1]?.close;
+      if (lastClose === undefined) return pos;
+      const sparkline = buildSparkline(priceHist, undefined, isEquity);
+      const hasCostBasis = pos.costBasis > 0;
+      const marketValue = pos.quantity * lastClose;
+      const totalCost = hasCostBasis ? pos.costBasis * pos.quantity : 0;
+      return {
+        ...pos,
+        currentPrice: lastClose,
+        marketValue,
+        unrealizedPnl: hasCostBasis ? marketValue - totalCost : 0,
+        unrealizedPnlPercent: hasCostBasis ? ((lastClose - pos.costBasis) / pos.costBasis) * 100 : 0,
+        sparkline: sparkline.length >= 2 ? sparkline : undefined,
+      };
     }
 
     const currentPrice = quote.price;
@@ -280,9 +303,6 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
     const hasCostBasis = pos.costBasis > 0;
     const totalCost = hasCostBasis ? pos.costBasis * pos.quantity : 0;
 
-    const upperSymbol = pos.symbol.toUpperCase();
-    const priceHist = historyMap.get(upperSymbol);
-    const isEquity = !cryptoSet.has(upperSymbol);
     const sparkline =
       priceHist && priceHist.history.length > 0 ? buildSparkline(priceHist, currentPrice, isEquity) : undefined;
 

@@ -225,7 +225,7 @@ describe('live quote enrichment', () => {
     expect(aapl.currentPrice).toBe(175);
   });
 
-  it('preserves positions when no quote exists for a symbol', async () => {
+  it('falls back to priceHistory last close when no quote exists for a symbol', async () => {
     // Only return a quote for AAPL, not GOOG
     const partialQuotes = vi.fn().mockResolvedValue({
       success: true,
@@ -239,13 +239,14 @@ describe('live quote enrichment', () => {
     const aapl = positions.find((p) => p.symbol === 'AAPL')!;
     expect(aapl.currentPrice).toBe(190);
 
-    // GOOG retains original price
+    // GOOG falls back to last close from priceHistory (155) instead of stored 140
     const goog = positions.find((p) => p.symbol === 'GOOG')!;
-    expect(goog.currentPrice).toBe(140);
-    expect(goog.marketValue).toBe(700);
+    expect(goog.currentPrice).toBe(155);
+    expect(goog.marketValue).toBe(5 * 155);
+    expect(goog.dayChange).toBeUndefined();
   });
 
-  it('handles null entries in quotes response', async () => {
+  it('falls back to priceHistory when the quote entry is null', async () => {
     // Jintel can return null for symbols it doesn't recognize
     const quotesWithNull = vi.fn().mockResolvedValue({
       success: true,
@@ -259,7 +260,28 @@ describe('live quote enrichment', () => {
     const aapl = positions.find((p) => p.symbol === 'AAPL')!;
     expect(aapl.currentPrice).toBe(190);
 
-    // GOOG retains original price (its quote was null)
+    // GOOG falls back to priceHistory (last close 155) instead of stored 140
+    const goog = positions.find((p) => p.symbol === 'GOOG')!;
+    expect(goog.currentPrice).toBe(155);
+    expect(goog.marketValue).toBe(5 * 155);
+  });
+
+  it('retains original price when neither quote nor priceHistory is available', async () => {
+    const partialQuotes = vi.fn().mockResolvedValue({
+      success: true,
+      data: [makeQuotes()[0]],
+    });
+    const emptyHistory = vi.fn().mockResolvedValue({
+      success: true,
+      data: [{ ticker: 'AAPL', history: [] }],
+    });
+    setPortfolioJintelClient({
+      ...createQuoteMockClient(partialQuotes),
+      priceHistory: emptyHistory,
+    } as unknown as JintelClient);
+
+    const positions = (await portfolioQuery()).positions;
+
     const goog = positions.find((p) => p.symbol === 'GOOG')!;
     expect(goog.currentPrice).toBe(140);
     expect(goog.marketValue).toBe(700);
