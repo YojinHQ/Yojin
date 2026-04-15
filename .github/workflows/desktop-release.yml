@@ -80,43 +80,6 @@ jobs:
       - name: Stage backend bundle (dist + web + prod deps)
         run: pnpm --filter @yojin/desktop bundle:app
 
-      - name: Pre-sign sidecar binaries (macOS only)
-        if: runner.os == 'macOS'
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          KEYCHAIN=yojin-sidecar.keychain
-          KEYCHAIN_PWD=$(openssl rand -base64 24)
-          security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN"
-          security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN"
-          EXISTING=$(security list-keychains -d user | sed -e 's/^[[:space:]]*//;s/"//g' | tr '\n' ' ')
-          security list-keychains -d user -s "$KEYCHAIN" $EXISTING
-          CERT_FILE=$(mktemp -t cert).p12
-          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_FILE"
-          security import "$CERT_FILE" -k "$KEYCHAIN" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PWD" "$KEYCHAIN" > /dev/null
-          rm -f "$CERT_FILE"
-          SIDECAR_DIR=apps/desktop/src-tauri/sidecar
-          if [ ! -d "$SIDECAR_DIR" ]; then
-            echo "Sidecar dir not found: $SIDECAR_DIR" >&2
-            exit 1
-          fi
-          while IFS= read -r -d '' f; do
-            echo "Signing $f"
-            codesign --sign "$APPLE_SIGNING_IDENTITY" --timestamp --options runtime --force "$f"
-          done < <(find "$SIDECAR_DIR" -type f \( -name '*.dylib' -o -name '*.so' -o -name '*.node' \) -print0)
-          for bin in "$SIDECAR_DIR"/node "$SIDECAR_DIR"/node-*; do
-            if [ -f "$bin" ]; then
-              echo "Signing $bin"
-              codesign --sign "$APPLE_SIGNING_IDENTITY" --timestamp --options runtime --force "$bin"
-            fi
-          done
-
       - name: Resolve release tag
         id: tag
         shell: bash
@@ -135,18 +98,12 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: apps/desktop
           tagName: ${{ steps.tag.outputs.value }}
           releaseName: 'Yojin Desktop ${{ steps.tag.outputs.value }}'
           releaseBody: |
-            **macOS**: signed + notarized with Apple Developer ID. Double-click to install.
+            **macOS**: unsigned. First launch will show "App is damaged". Run `xattr -cr /Applications/Yojin.app` to clear the quarantine flag, then double-click. Apple signing + notarization will return once the CI path is fixed.
             **Windows**: unsigned — SmartScreen popup → "More info" → "Run anyway". Windows OV/EV cert is on the roadmap.
           releaseDraft: false
           prerelease: false
