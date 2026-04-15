@@ -40,7 +40,7 @@ export function formatSharePrice(value: number): string {
 
   if (abs > 0 && abs < 0.01) {
     return new Intl.NumberFormat('en-US', {
-      minimumFractionDigits: 4,
+      minimumFractionDigits: 0,
       maximumFractionDigits: 4,
     }).format(value);
   }

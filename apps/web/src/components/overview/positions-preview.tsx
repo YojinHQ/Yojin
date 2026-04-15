@@ -512,11 +512,11 @@ export default function PositionsPreview() {
 }
 
 const MOCK_POSITIONS = [
-  { symbol: 'AAPL', name: 'Apple Inc', price: '$182.52', change: '$2.15', pct: '1.19%', up: true },
-  { symbol: 'NVDA', name: 'NVIDIA Corp', price: '$875.28', change: '$12.45', pct: '1.40%', up: false },
-  { symbol: 'BTC', name: 'Bitcoin', price: '$67,234.50', change: '$892.30', pct: '1.35%', up: true },
-  { symbol: 'TSLA', name: 'Tesla Inc', price: '$248.42', change: '$5.67', pct: '2.33%', up: true },
-  { symbol: 'MSFT', name: 'Microsoft', price: '$415.60', change: '$3.22', pct: '0.77%', up: false },
+  { symbol: 'AAPL', name: 'Apple Inc', price: '182.52', change: '$2.15', pct: '1.19%', up: true },
+  { symbol: 'NVDA', name: 'NVIDIA Corp', price: '875.28', change: '$12.45', pct: '1.40%', up: false },
+  { symbol: 'BTC', name: 'Bitcoin', price: '67,234', change: '$892.30', pct: '1.35%', up: true },
+  { symbol: 'TSLA', name: 'Tesla Inc', price: '248.42', change: '$5.67', pct: '2.33%', up: true },
+  { symbol: 'MSFT', name: 'Microsoft', price: '415.60', change: '$3.22', pct: '0.77%', up: false },
 ];
 
 function MockPositions() {
