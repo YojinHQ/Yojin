@@ -103,28 +103,15 @@ export async function portfolioQuery(): Promise<PortfolioSnapshot | null> {
 export async function portfolioHistoryQuery(days?: number | null): Promise<PortfolioHistoryPoint[]> {
   if (!snapshotStore) return [];
 
-  const latest = await snapshotStore.getLatest();
-  if (!latest || latest.positions.length === 0) return [];
+  const snapshot = await snapshotStore.getLatest();
+  if (!snapshot || snapshot.positions.length === 0) return [];
 
-  const first = await snapshotStore.getFirst();
-  if (!first) return [];
-
-  // P&L is measured from the day AFTER first import — the import day itself
-  // is the $0 baseline and is not plotted.
-  const firstImportDate = first.timestamp.slice(0, 10);
-  const dayAfterImport = new Date(`${firstImportDate}T00:00:00Z`);
-  dayAfterImport.setUTCDate(dayAfterImport.getUTCDate() + 1);
-  const dayAfterImportStr = dayAfterImport.toISOString().slice(0, 10);
-  const todayStr = new Date().toISOString().slice(0, 10);
-  if (dayAfterImportStr > todayStr) return [];
-
-  const positions = latest.positions;
+  const positions = snapshot.positions;
   const symbols = [...new Set(positions.map((p) => p.symbol))];
 
-  // Requested window, clamped so we never go earlier than the first import day.
+  // Determine date range
   const effectiveDays = days ?? 7;
-  const requestedStart = new Date(Date.now() - effectiveDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const startDate = requestedStart > dayAfterImportStr ? requestedStart : dayAfterImportStr;
+  const startDate = new Date(Date.now() - effectiveDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   // Resolve when each position was first held
@@ -141,32 +128,34 @@ export async function portfolioHistoryQuery(days?: number | null): Promise<Portf
     return [];
   }
 
-  const baseline = { totalValue: first.totalValue, totalCost: first.totalCost };
-  let history: PortfolioHistoryPoint[] = [];
-
-  if (startDate <= yesterday) {
-    const range = daysToJintelRange(effectiveDays);
-    let priceData: TickerPriceHistory[];
-    try {
-      const result = await jintelClient.priceHistory(symbols, range, '1d');
-      if (!result.success) {
-        log.warn('Jintel priceHistory returned non-success', { error: result });
-        return [];
-      }
-      priceData = result.data;
-    } catch (err) {
-      log.warn('Jintel priceHistory call failed', { error: String(err) });
+  const range = daysToJintelRange(effectiveDays);
+  let priceData: TickerPriceHistory[];
+  try {
+    const result = await jintelClient.priceHistory(symbols, range, '1d');
+    if (!result.success) {
+      log.warn('Jintel priceHistory returned non-success', { error: result });
       return [];
     }
-
-    const rawPriceMap = buildPriceMap(priceData);
-    const filledPrices = fillCalendarDays(rawPriceMap, startDate, yesterday);
-    history = buildHistoryPoints(positions, filledPrices, startDates, startDate, yesterday, baseline);
+    priceData = result.data;
+  } catch (err) {
+    log.warn('Jintel priceHistory call failed', { error: String(err) });
+    return [];
   }
 
-  // Append today's live-priced trailing point — cumulative P&L vs. first-import baseline.
-  const liveSnapshot = await enrichPortfolioSnapshotWithLiveQuotes(latest, jintelClient);
-  const livePnl = liveSnapshot.totalValue - baseline.totalValue - (liveSnapshot.totalCost - baseline.totalCost);
+  // Build price map and fill weekends/holidays
+  const rawPriceMap = buildPriceMap(priceData);
+  const filledPrices = fillCalendarDays(rawPriceMap, startDate, yesterday);
+
+  // Compute historical points (up to yesterday)
+  const history = buildHistoryPoints(positions, filledPrices, startDates, startDate, yesterday);
+
+  // Append today's live-priced trailing point
+  const liveSnapshot = await enrichPortfolioSnapshotWithLiveQuotes(snapshot, jintelClient);
+  const prevPoint = history.length > 0 ? history[history.length - 1] : null;
+  const prevValue = prevPoint ? prevPoint.totalValue : 0;
+  const prevCost = prevPoint ? prevPoint.totalCost : 0;
+  const liveCostChange = liveSnapshot.totalCost - prevCost;
+  const livePnl = liveSnapshot.totalValue - prevValue - liveCostChange;
 
   const livePoint: PortfolioHistoryPoint = {
     timestamp: new Date().toISOString(),
@@ -174,10 +163,11 @@ export async function portfolioHistoryQuery(days?: number | null): Promise<Portf
     totalCost: liveSnapshot.totalCost,
     totalPnl: liveSnapshot.totalPnl,
     totalPnlPercent: liveSnapshot.totalPnlPercent,
-    periodPnl: livePnl,
-    periodPnlPercent: baseline.totalValue > 0 ? (livePnl / baseline.totalValue) * 100 : 0,
+    periodPnl: prevPoint ? livePnl : 0,
+    periodPnlPercent: prevValue > 0 ? (livePnl / prevValue) * 100 : 0,
   };
 
+  // If yesterday's point exists, append today. Otherwise just return the live point.
   const liveDay = livePoint.timestamp.slice(0, 10);
   const lastDay = history.length > 0 ? history[history.length - 1].timestamp.slice(0, 10) : null;
   if (liveDay === lastDay) {
