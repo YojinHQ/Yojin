@@ -63,7 +63,7 @@ interface IntelFeedItem {
   link: string | null;
   data?: DataRow[];
   isAction?: boolean;
-  verdict?: 'BUY' | 'SELL' | 'TRIM' | 'HOLD' | 'REVIEW';
+  verdict?: 'BUY' | 'SELL';
   triggerStrength?: TriggerStrength;
   strategyName?: string;
   riskContext?: string;
@@ -228,7 +228,7 @@ function IntelFeedCard({
           ? 'border-accent-primary/40 bg-accent-primary/5'
           : item.verdict === 'BUY'
             ? 'border-success/30 bg-success/[0.06]'
-            : item.verdict === 'SELL' || item.verdict === 'TRIM'
+            : item.verdict === 'SELL'
               ? 'border-error/30 bg-error/[0.06]'
               : 'border-border-light bg-bg-tertiary/60',
         !selectMode && (expanded ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'),
@@ -242,7 +242,7 @@ function IntelFeedCard({
             'absolute -top-2 -right-2 z-10 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wider text-white shadow-sm motion-safe:animate-badge-in',
             item.verdict === 'BUY'
               ? 'bg-success'
-              : item.verdict === 'SELL' || item.verdict === 'TRIM'
+              : item.verdict === 'SELL'
                 ? 'bg-error'
                 : item.type === 'alert'
                   ? 'bg-warning'
@@ -268,13 +268,7 @@ function IntelFeedCard({
               <span
                 className={cn(
                   'mb-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wider',
-                  item.verdict === 'BUY'
-                    ? 'bg-success/15 text-success'
-                    : item.verdict === 'SELL' || item.verdict === 'TRIM'
-                      ? 'bg-error/15 text-error'
-                      : item.verdict === 'HOLD'
-                        ? 'bg-warning/15 text-warning'
-                        : 'bg-info/15 text-info',
+                  item.verdict === 'BUY' ? 'bg-success/15 text-success' : 'bg-error/15 text-error',
                 )}
               >
                 {item.verdict}
@@ -875,15 +869,11 @@ function IntelFeedContent({
       tagVariant:
         item.verdict === 'BUY'
           ? 'success'
-          : item.verdict === 'SELL' || item.verdict === 'TRIM'
+          : item.verdict === 'SELL'
             ? 'error'
-            : item.verdict === 'HOLD'
+            : item.type === 'alert'
               ? 'warning'
-              : item.verdict === 'REVIEW'
-                ? 'info'
-                : item.type === 'alert'
-                  ? 'warning'
-                  : 'success',
+              : 'success',
       sentiment:
         item.sentiment === 'bullish' || item.sentiment === 'bearish' || item.sentiment === 'neutral'
           ? item.sentiment

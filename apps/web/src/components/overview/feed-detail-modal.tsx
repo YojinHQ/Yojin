@@ -48,7 +48,7 @@ export interface FeedDetailData {
   recommendation?: string;
   relatedTickers?: string[];
   signals?: FeedSignalLink[];
-  verdict?: 'BUY' | 'SELL' | 'TRIM' | 'HOLD' | 'REVIEW';
+  verdict?: 'BUY' | 'SELL';
   /** Action-specific fields */
   actionMeta?: {
     strategyName: string | null;
@@ -121,7 +121,7 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
       aria-labelledby="feed-detail-title"
       className={cn(
         data.verdict === 'BUY' && 'border-success/30 ring-1 ring-success/10',
-        (data.verdict === 'SELL' || data.verdict === 'TRIM') && 'border-error/30 ring-1 ring-error/10',
+        data.verdict === 'SELL' && 'border-error/30 ring-1 ring-error/10',
       )}
     >
       {/* Source + time header */}
@@ -186,7 +186,7 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
                 'mt-2 flex items-center justify-between rounded-lg px-4 py-3',
                 data.verdict === 'BUY'
                   ? 'bg-success/10 text-success'
-                  : data.verdict === 'SELL' || data.verdict === 'TRIM'
+                  : data.verdict === 'SELL'
                     ? 'bg-error/10 text-error'
                     : 'bg-bg-tertiary text-text-primary',
               )}
@@ -194,8 +194,7 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
               <div>
                 <span className="text-2xs font-semibold uppercase tracking-wider opacity-70">Suggested</span>
                 <p className="text-lg font-bold leading-tight">
-                  {data.verdict === 'SELL' || data.verdict === 'TRIM' ? 'Sell' : 'Buy'}{' '}
-                  {data.actionMeta.suggestedQuantity} shares
+                  {data.verdict === 'SELL' ? 'Sell' : 'Buy'} {data.actionMeta.suggestedQuantity} shares
                 </p>
               </div>
               <div className="text-right">

@@ -1178,7 +1178,7 @@ export interface SummaryQueryVariables {
 // Opinionated layer with a PENDING → APPROVED | REJECTED | EXPIRED lifecycle.
 // ---------------------------------------------------------------------------
 
-export type ActionVerdict = 'BUY' | 'SELL' | 'TRIM' | 'HOLD' | 'REVIEW';
+export type ActionVerdict = 'BUY' | 'SELL';
 export type ActionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
 export type TriggerStrength = 'WEAK' | 'MODERATE' | 'STRONG' | 'EXTREME';
 
