@@ -56,12 +56,23 @@ SUMMARY examples — BAD (too long, too much detail):
 
 Before emitting SUMMARY, count the characters. If over 90, rewrite shorter.
 
-Then provide concise analysis (2-4 sentences per point):
-1. Why this trigger matters — reference specific news, data, or discussions
-2. Key risks before acting
-3. Timing or other notes (entry/exit levels if applicable)
+Then provide a clear, fluff-free analysis using this structure:
 
-Be direct and concise. No disclaimers.`;
+## Why now
+Explain the specific news, data point, or discussion driving this trigger. Be substantive — the reader wants to understand the catalyst. Cut every filler word.
+
+## Risks
+- <what would invalidate this trade>
+- <what else could go wrong>
+
+Fluff-cutting rules (strict):
+- No filler phrases: "it is worth noting", "importantly", "however", "that said", "in summary", "overall", "as such", "given that".
+- No hedging adjectives: "potentially", "arguably", "somewhat", "relatively", "fairly", "quite".
+- No intensifier adverbs: "sharply", "significantly", "substantially", "notably", "markedly" — just state the move.
+- No disclaimers ("this is not financial advice", "past performance", etc.).
+- Do NOT restate the ticker, verdict, ENTRY, TARGET, STOP, HORIZON, CATALYST_IMPACT, or trigger metrics — they render separately in the UI.
+- No "act within Xh" / urgency timing phrasing.
+- If a sentence doesn't add information, delete it. A shorter focused explanation beats a padded thorough one.`;
 
 interface ActionReasoningResult {
   headline: string;

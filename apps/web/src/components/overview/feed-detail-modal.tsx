@@ -101,9 +101,28 @@ const impactBadge: Record<string, { label: string; variant: BadgeVariant }> = {
   low: { label: 'Low Impact', variant: 'info' },
 };
 
+function Field({
+  label,
+  value,
+  className,
+  valueClass,
+}: {
+  label: string;
+  value: string;
+  className?: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className={className}>
+      <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">{label}</span>
+      <p className={cn('mt-0.5 text-xs text-text-primary', valueClass)}>{value}</p>
+    </div>
+  );
+}
+
 function SectionRule({ label }: { label: string }) {
   return (
-    <div className="mt-5 mb-2.5 flex items-center gap-2.5">
+    <div className="mt-3 mb-1.5 flex items-center gap-2.5">
       <span className="whitespace-nowrap text-3xs font-semibold uppercase tracking-[0.15em] text-text-muted">
         {label}
       </span>
@@ -115,13 +134,13 @@ function SectionRule({ label }: { label: string }) {
 function AnalysisSection({ analysis, isAction }: { analysis: string; isAction: boolean }) {
   const html = useMemo(() => markdownToHtml(analysis), [analysis]);
   return (
-    <>
+    <div>
       <SectionRule label={isAction ? 'Strategy Rationale' : 'Analysis'} />
       <div
-        className="text-xs leading-relaxed text-text-secondary [&_li]:my-0.5"
+        className="text-xs leading-relaxed text-text-secondary [&_h3]:mt-2 [&_h3]:mb-0.5 [&_h3]:text-xs [&_h4]:mt-1.5 [&_h4]:mb-0.5 [&_li]:my-0.5 [&_p]:my-0.5"
         dangerouslySetInnerHTML={{ __html: html }}
       />
-    </>
+    </div>
   );
 }
 
@@ -132,7 +151,7 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
     <Modal
       open={open}
       onClose={onClose}
-      maxWidth="max-w-2xl"
+      maxWidth="max-w-3xl"
       aria-labelledby="feed-detail-title"
       className={cn(
         data.verdict === 'BUY' && 'border-success/30 ring-1 ring-success/10',
@@ -157,12 +176,12 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
       </div>
 
       {/* Title */}
-      <h2 id="feed-detail-title" className="font-headline text-lg leading-snug text-text-primary">
+      <h2 id="feed-detail-title" className="font-headline text-base leading-snug text-text-primary">
         {data.title}
       </h2>
 
       {/* Badge row */}
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <Badge variant={data.tagVariant}>{data.tag}</Badge>
         {data.sentiment && (
           <Badge variant={sentimentBadge[data.sentiment].variant} outline>
@@ -201,19 +220,19 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
         <>
           {/* Priced-in warning */}
           {data.actionMeta.pricedIn && (
-            <div className="mt-2 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-2.5">
-              <span className="text-sm text-warning" aria-hidden="true">
+            <div className="mt-2 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-1.5">
+              <span className="text-xs text-warning" aria-hidden="true">
                 &#9888;
               </span>
-              <div>
-                <p className="text-xs font-semibold text-warning">Potentially Priced In</p>
-                <p className="text-2xs text-text-secondary">
-                  Current price has already moved past the max entry
+              <p className="text-xs text-warning">
+                <span className="font-semibold">Priced In:</span>{' '}
+                <span className="text-text-secondary">
+                  price moved past max entry
                   {data.actionMeta.maxEntry != null &&
                     ` ($${data.actionMeta.maxEntry.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`}
-                  . The catalyst may already be reflected in the price.
-                </p>
-              </div>
+                  — catalyst may be reflected.
+                </span>
+              </p>
             </div>
           )}
 
@@ -221,7 +240,7 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
           {data.actionMeta.suggestedQuantity != null && data.actionMeta.suggestedQuantity > 0 && (
             <div
               className={cn(
-                'mt-2 flex items-center justify-between rounded-lg px-4 py-3',
+                'mt-2 flex items-center justify-between rounded-lg px-3 py-2',
                 data.verdict === 'BUY'
                   ? 'bg-success/10 text-success'
                   : data.verdict === 'SELL'
@@ -229,206 +248,157 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
                     : 'bg-bg-tertiary text-text-primary',
               )}
             >
-              <div>
-                <span className="text-2xs font-semibold uppercase tracking-wider opacity-70">Suggested</span>
-                <p className="text-lg font-bold leading-tight">
-                  {data.verdict === 'BUY' ? 'Buy' : data.verdict === 'SELL' ? 'Sell' : 'Review'}{' '}
-                  {data.actionMeta.suggestedQuantity} shares
-                </p>
-              </div>
-              <div className="text-right">
+              <p className="text-sm font-bold leading-tight">
+                {data.verdict === 'BUY' ? 'Buy' : data.verdict === 'SELL' ? 'Sell' : 'Review'}{' '}
+                {data.actionMeta.suggestedQuantity} shares
                 {data.actionMeta.currentPrice != null && (
-                  <p className="text-xs opacity-70">@ ${data.actionMeta.currentPrice.toFixed(2)}</p>
+                  <span className="ml-1 text-xs font-normal opacity-70">
+                    @ ${data.actionMeta.currentPrice.toFixed(2)}
+                  </span>
                 )}
-                {data.actionMeta.suggestedValue != null && (
-                  <p className="text-sm font-semibold">
-                    ~${data.actionMeta.suggestedValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                  </p>
-                )}
-              </div>
+              </p>
+              {data.actionMeta.suggestedValue != null && (
+                <p className="text-sm font-semibold">
+                  ~${data.actionMeta.suggestedValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                </p>
+              )}
             </div>
           )}
 
-          {/* Trading parameters — entry/target/stop/horizon/maxEntry/catalystImpact from LLM */}
-          {(data.actionMeta.entryRange ||
-            data.actionMeta.targetPrice != null ||
-            data.actionMeta.stopLoss != null ||
-            data.actionMeta.horizon ||
-            data.actionMeta.maxEntry != null ||
-            data.actionMeta.catalystImpact) && (
-            <>
-              <SectionRule label="Trading Parameters" />
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                {data.actionMeta.entryRange && (
-                  <div>
-                    <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Entry</span>
-                    <p className="mt-0.5 text-xs text-text-primary">{data.actionMeta.entryRange}</p>
-                  </div>
-                )}
-                {data.actionMeta.targetPrice != null && (
-                  <div>
-                    <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Target</span>
-                    <p className="mt-0.5 text-xs text-text-primary">
-                      $
-                      {data.actionMeta.targetPrice.toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </p>
-                  </div>
-                )}
-                {data.actionMeta.stopLoss != null && (
-                  <div>
-                    <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Stop Loss</span>
-                    <p className="mt-0.5 text-xs text-text-primary">
-                      $
-                      {data.actionMeta.stopLoss.toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </p>
-                  </div>
-                )}
-                {data.actionMeta.horizon && (
-                  <div>
-                    <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Horizon</span>
-                    <p className="mt-0.5 text-xs text-text-primary">{data.actionMeta.horizon}</p>
-                  </div>
-                )}
-                {data.actionMeta.maxEntry != null && (
-                  <div>
-                    <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Max Entry</span>
-                    <p
-                      className={cn(
-                        'mt-0.5 text-xs',
-                        data.actionMeta.pricedIn ? 'font-semibold text-warning' : 'text-text-primary',
-                      )}
-                    >
-                      $
-                      {data.actionMeta.maxEntry.toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </p>
-                  </div>
-                )}
-                {data.actionMeta.catalystImpact && (
-                  <div>
-                    <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">
-                      Catalyst Impact
-                    </span>
-                    <p className="mt-0.5 text-xs text-text-primary">{data.actionMeta.catalystImpact}</p>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
-          <SectionRule label="Trigger Details" />
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-            {data.actionMeta.strategyName && (
-              <div>
-                <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Strategy</span>
-                <p className="mt-0.5 text-xs text-text-primary">{data.actionMeta.strategyName}</p>
-              </div>
+          {/* Consolidated trade + trigger parameters */}
+          <SectionRule label="Trade Parameters" />
+          <div className="grid grid-cols-3 gap-x-3 gap-y-1.5">
+            {data.actionMeta.entryRange && <Field label="Entry" value={data.actionMeta.entryRange} />}
+            {data.actionMeta.targetPrice != null && (
+              <Field
+                label="Target"
+                value={`$${data.actionMeta.targetPrice.toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}`}
+              />
             )}
-            <div>
-              <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Severity</span>
-              <p className="mt-0.5 text-xs text-text-primary">{data.actionMeta.severity}</p>
-            </div>
-            <div>
-              <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Expires</span>
-              <p className="mt-0.5 text-xs text-text-primary">{timeUntil(data.actionMeta.expiresAt)}</p>
-            </div>
+            {data.actionMeta.stopLoss != null && (
+              <Field
+                label="Stop Loss"
+                value={`$${data.actionMeta.stopLoss.toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}`}
+              />
+            )}
+            {data.actionMeta.maxEntry != null && (
+              <Field
+                label="Max Entry"
+                value={`$${data.actionMeta.maxEntry.toLocaleString('en-US', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}`}
+                valueClass={data.actionMeta.pricedIn ? 'font-semibold text-warning' : undefined}
+              />
+            )}
+            {data.actionMeta.horizon && <Field label="Horizon" value={data.actionMeta.horizon} />}
+            <Field label="Expires" value={timeUntil(data.actionMeta.expiresAt)} />
+            {data.actionMeta.catalystImpact && <Field label="Catalyst Impact" value={data.actionMeta.catalystImpact} />}
+            {data.actionMeta.strategyName && <Field label="Strategy" value={data.actionMeta.strategyName} />}
             {data.actionMeta.sizeGuidance && (
-              <div className="col-span-2">
-                <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Size</span>
-                <p className="mt-0.5 text-xs text-text-primary">{data.actionMeta.sizeGuidance}</p>
-              </div>
+              <Field label="Size" value={data.actionMeta.sizeGuidance} className="col-span-3" />
             )}
           </div>
           {data.actionMeta.riskContext && (
-            <div className="mt-3 rounded-lg border border-border-light bg-bg-primary/50 px-3 py-2">
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 rounded-lg border border-border-light bg-bg-primary/50 px-3 py-1.5">
               <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Context</span>
-              <ul className="mt-1 space-y-0.5">
-                {data.actionMeta.riskContext
-                  .split('\n')
-                  .filter(Boolean)
-                  .map((line, i) => (
-                    <li key={i} className="text-xs leading-relaxed text-text-secondary">
-                      {line}
-                    </li>
-                  ))}
-              </ul>
+              {data.actionMeta.riskContext
+                .split('\n')
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .map((line, i) => {
+                  const colonIdx = line.indexOf(':');
+                  const hasKv = colonIdx > 0 && colonIdx < 40;
+                  const key = hasKv ? line.slice(0, colonIdx).trim() : null;
+                  const value = hasKv ? line.slice(colonIdx + 1).trim() : line;
+                  return (
+                    <span key={i} className="text-xs leading-snug text-text-secondary">
+                      {key && <span className="text-text-muted">{key}:</span>} {value}
+                    </span>
+                  );
+                })}
             </div>
           )}
         </>
       )}
 
-      {/* Key Points */}
-      {data.keyPoints.length > 0 && (
-        <>
-          <SectionRule label="Key Points" />
-          <ul className="space-y-1.5">
-            {data.keyPoints.map((point, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs leading-relaxed text-text-secondary">
-                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-accent-primary" />
-                {point}
-              </li>
-            ))}
-          </ul>
-        </>
+      {/* Key Points + Analysis — side by side, Analysis gets more width */}
+      {(data.keyPoints.length > 0 || data.analysis) && (
+        <div className="grid grid-cols-1 gap-x-5 md:grid-cols-5">
+          {data.keyPoints.length > 0 && (
+            <div className="md:col-span-2">
+              <SectionRule label="Key Points" />
+              <ul className="space-y-1">
+                {data.keyPoints.map((point, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs leading-snug text-text-secondary">
+                    <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-accent-primary" />
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {data.analysis && (
+            <div className={data.keyPoints.length > 0 ? 'md:col-span-3' : 'md:col-span-5'}>
+              <AnalysisSection analysis={data.analysis} isAction={!!data.actionMeta} />
+            </div>
+          )}
+        </div>
       )}
-
-      {/* Analysis / Strategy Rationale */}
-      {data.analysis && <AnalysisSection analysis={data.analysis} isAction={!!data.actionMeta} />}
 
       {/* Recommendation (intel-specific) */}
       {data.recommendation && (
-        <>
-          <SectionRule label="Recommendation" />
-          <div className="rounded-lg border border-accent-primary/20 bg-accent-glow p-3">
-            <p className="text-xs leading-relaxed text-text-primary">{data.recommendation}</p>
-          </div>
-        </>
+        <div className="mt-3 rounded-lg border border-accent-primary/20 bg-accent-glow px-3 py-2">
+          <span className="text-3xs font-semibold uppercase tracking-wider text-accent-primary">Recommendation</span>
+          <p className="mt-0.5 text-xs leading-snug text-text-primary">{data.recommendation}</p>
+        </div>
       )}
 
-      {/* Related Tickers */}
-      {data.relatedTickers && data.relatedTickers.length > 0 && (
-        <>
-          <SectionRule label="Related" />
-          <div className="flex flex-wrap gap-1.5">
-            {data.relatedTickers.map((ticker) => (
-              <span key={ticker} className="rounded bg-bg-tertiary px-2 py-0.5 text-2xs font-medium text-text-primary">
-                {ticker}
-              </span>
-            ))}
+      {/* Footer: Related tickers + View Source */}
+      {((data.relatedTickers && data.relatedTickers.length > 0) || data.link) && (
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {data.relatedTickers && data.relatedTickers.length > 0 && (
+              <>
+                <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Related</span>
+                {data.relatedTickers.map((ticker) => (
+                  <span
+                    key={ticker}
+                    className="rounded bg-bg-tertiary px-1.5 py-0.5 text-2xs font-medium text-text-primary"
+                  >
+                    {ticker}
+                  </span>
+                ))}
+              </>
+            )}
           </div>
-        </>
-      )}
-
-      {/* View Source */}
-      {data.link && (
-        <div className="mt-5">
-          <a
-            href={data.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-accent-primary transition-colors hover:text-accent-primary/80"
-          >
-            <svg
-              className="h-3.5 w-3.5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          {data.link && (
+            <a
+              href={data.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex flex-shrink-0 items-center gap-1 text-xs font-medium text-accent-primary transition-colors hover:text-accent-primary/80"
             >
-              <path d="M7 17 17 7M7 7h10v10" />
-            </svg>
-            View Source
-          </a>
+              <svg
+                className="h-3 w-3"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M7 17 17 7M7 7h10v10" />
+              </svg>
+              Source
+            </a>
+          )}
         </div>
       )}
     </Modal>
