@@ -13,6 +13,12 @@ coverage/
 .DS_Store
 Thumbs.db
 
+# Developer certificates (machine-specific, never committed)
+*.csr
+*.key
+*.p12
+developer_id.*
+
 # IDE
 .vscode/
 .idea/
