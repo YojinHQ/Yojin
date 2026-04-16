@@ -639,7 +639,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   setAssessmentStore(assessmentStore);
 
   // Insight tools (1 tool: save_insight_report)
-  const { insightStore, tools: insightTools } = wireInsights({ dataRoot, signalArchive });
+  const { insightStore, tools: insightTools } = wireInsights({ dataRoot, signalArchive, snapshotStore });
   for (const tool of insightTools) {
     toolRegistry.register(tool);
   }
