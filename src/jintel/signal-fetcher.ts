@@ -15,6 +15,7 @@ import type {
 } from '@yojinhq/jintel-client';
 import { GDP, INFLATION, INTEREST_RATES, SP500_MULTIPLES, buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
+import { isShortInterestFresh } from './freshness.js';
 import { formatNumber, riskSignalsToRaw } from './tools.js';
 import type { FinancialStatements, KeyExecutive, RedditComment } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
@@ -764,8 +765,10 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     if (ownership.institutionsCount != null) parts.push(`Institutions: ${ownership.institutionsCount}`);
     if (ownership.outstandingShares != null) parts.push(`Outstanding: ${formatNumber(ownership.outstandingShares)}`);
     if (ownership.floatShares != null) parts.push(`Float: ${formatNumber(ownership.floatShares)}`);
-    if (ownership.shortPercentOfFloat != null) {
-      parts.push(`Short % of float: ${(ownership.shortPercentOfFloat * 100).toFixed(2)}%`);
+    if (ownership.shortPercentOfFloat != null && isShortInterestFresh(ownership.shortInterestDate)) {
+      parts.push(
+        `Short % of float: ${(ownership.shortPercentOfFloat * 100).toFixed(2)}% (as of ${ownership.shortInterestDate})`,
+      );
     }
     if (parts.length > 0) {
       signals.push({
