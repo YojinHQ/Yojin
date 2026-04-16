@@ -377,6 +377,43 @@ describe('ActionStore.getRecentResolutions', () => {
     expect(result.has('rsi-PRICE-GOOG')).toBe(false);
   });
 
+  it('treats an active dismissal as a recent resolution at same strength', async () => {
+    await store.create(makeAction({ id: 'a-1', triggerId: 'rsi-PRICE-AAPL' }));
+    const dismissRes = await store.dismiss('a-1');
+    expect(dismissRes.success).toBe(true);
+
+    const result = await store.getRecentResolutions([{ triggerId: 'rsi-PRICE-AAPL', newStrength: 'MODERATE' }], WINDOW);
+    expect(result.size).toBe(1);
+    const hit = result.get('rsi-PRICE-AAPL');
+    expect(hit?.id).toBe('a-1');
+    expect(hit?.dismissedAt).toBeDefined();
+  });
+
+  it('excludes a dismissed action when new strength escalates past it', async () => {
+    await store.create(makeAction({ id: 'a-1', triggerId: 'rsi-PRICE-AAPL' }));
+    await store.dismiss('a-1'); // dismissed at default MODERATE strength
+
+    const result = await store.getRecentResolutions([{ triggerId: 'rsi-PRICE-AAPL', newStrength: 'EXTREME' }], WINDOW);
+    expect(result.size).toBe(0);
+  });
+
+  it('stops suppressing once the dismissed record has been superseded', async () => {
+    await store.create(makeAction({ id: 'a-1', triggerId: 'rsi-PRICE-AAPL' }));
+    await store.dismiss('a-1');
+    // A higher-strength fire supersedes a-1 and creates a-2.
+    await store.create({ ...makeAction({ id: 'a-2', triggerId: 'rsi-PRICE-AAPL' }), triggerStrength: 'EXTREME' });
+
+    // a-1 should now be EXPIRED/superseded (invariant: one PENDING per trigger).
+    const old = await store.getById('a-1');
+    expect(old?.status).toBe('EXPIRED');
+    expect(old?.resolvedBy).toBe('superseded');
+    expect(old?.dismissedAt).toBeDefined();
+
+    // a-2 is PENDING with no user decision yet — next evaluation should not be suppressed.
+    const result = await store.getRecentResolutions([{ triggerId: 'rsi-PRICE-AAPL', newStrength: 'EXTREME' }], WINDOW);
+    expect(result.size).toBe(0);
+  });
+
   it('finds resolutions whose createdAt file is older than the cooldown cutoff', async () => {
     // Regression: files are partitioned by `createdAt`, but we filter by
     // `resolvedAt`. An action created 2 days ago and resolved within the 24h
