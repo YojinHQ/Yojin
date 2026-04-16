@@ -549,8 +549,14 @@ function formatOwnership(o: OwnershipBreakdown): string {
   if (o.institutionsCount != null) lines.push(`Institutions: ${o.institutionsCount}`);
   if (o.outstandingShares != null) lines.push(`Outstanding shares: ${formatNumber(o.outstandingShares)}`);
   if (o.floatShares != null) lines.push(`Float shares: ${formatNumber(o.floatShares)}`);
-  if (o.shortPercentOfFloat != null && isShortInterestFresh(o.shortInterestDate)) {
-    lines.push(`Short % of float: ${(o.shortPercentOfFloat * 100).toFixed(2)}% (as of ${o.shortInterestDate})`);
+  if (isShortInterestFresh(o.shortInterestDate)) {
+    const asOf = ` (as of ${o.shortInterestDate})`;
+    if (o.shortInterest != null) lines.push(`Short interest: ${formatNumber(o.shortInterest)}${asOf}`);
+    if (o.shortPercentOfFloat != null)
+      lines.push(`Short % of float: ${(o.shortPercentOfFloat * 100).toFixed(2)}%${asOf}`);
+    if (o.daysToCover != null) lines.push(`Days to cover: ${o.daysToCover.toFixed(1)}${asOf}`);
+    if (o.shortInterestPrevMonth != null)
+      lines.push(`Short interest prev month: ${formatNumber(o.shortInterestPrevMonth)}${asOf}`);
   }
   return lines.join('\n');
 }

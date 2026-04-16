@@ -8,26 +8,27 @@
 import { z } from 'zod';
 
 import type { SignalArchive } from './archive.js';
-import type { Signal } from './types.js';
+import type { Signal, SignalType } from './types.js';
+import { SignalTypeSchema } from './types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 
 export interface SignalToolsOptions {
   archive: SignalArchive;
 }
 
-const DEFAULT_SINCE_DAYS: Record<string, number> = {
-  FUNDAMENTAL: 7,
-  TECHNICAL: 7,
-  NEWS: 3,
-  SENTIMENT: 3,
-  SOCIALS: 3,
+const DEFAULT_SINCE_DAYS: Partial<Record<SignalType, number>> = {
+  [SignalTypeSchema.enum.FUNDAMENTAL]: 7,
+  [SignalTypeSchema.enum.TECHNICAL]: 7,
+  [SignalTypeSchema.enum.NEWS]: 3,
+  [SignalTypeSchema.enum.SENTIMENT]: 3,
+  [SignalTypeSchema.enum.SOCIALS]: 3,
 };
 
-function resolveSince(type: string | undefined, since: string | undefined): string | undefined {
+function resolveSince(type: SignalType | undefined, since: string | undefined): string | undefined {
   if (since) return since;
   if (!type) return undefined;
-  const days = DEFAULT_SINCE_DAYS[type.toUpperCase()];
-  if (!days) return undefined;
+  const days = DEFAULT_SINCE_DAYS[type];
+  if (days === undefined) return undefined;
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
@@ -58,7 +59,9 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
       'Supports batch lookup: pass `tickers` array to search multiple symbols in ONE call ' +
       '(results grouped by ticker). Returns signal summaries (id, title, type, tickers, date).',
     parameters: z.object({
-      type: z.string().optional().describe('Signal type: NEWS, FUNDAMENTAL, SENTIMENT, TECHNICAL, MACRO'),
+      type: SignalTypeSchema.optional().describe(
+        'Signal type (one of: NEWS, FUNDAMENTAL, SENTIMENT, TECHNICAL, MACRO, FILINGS, SOCIALS, REGULATORY, DISCLOSED_TRADE, TRADING_LOGIC_TRIGGER)',
+      ),
       ticker: z.string().optional().describe('Filter by single ticker symbol (e.g. AAPL)'),
       tickers: z
         .array(z.string().min(1))
@@ -87,7 +90,7 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
         .describe('Max results per ticker (when using tickers array) or total'),
     }),
     async execute(params: {
-      type?: string;
+      type?: SignalType;
       ticker?: string;
       tickers?: string[];
       sourceId?: string;
