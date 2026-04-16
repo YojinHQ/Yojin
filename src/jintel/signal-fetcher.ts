@@ -15,6 +15,7 @@ import type {
 } from '@yojinhq/jintel-client';
 import { GDP, INFLATION, INTEREST_RATES, SP500_MULTIPLES, buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
+import { isShortInterestFresh } from './freshness.js';
 import { formatNumber, riskSignalsToRaw } from './tools.js';
 import type { FinancialStatements, KeyExecutive, RedditComment } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
@@ -407,7 +408,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
         reliability: 0.9,
         title: `${entity.name ?? tickers[0]} Short Interest`,
         content: parts.join(' | '),
-        publishedAt: si.reportDate.includes('T') ? si.reportDate : `${si.reportDate}T00:00:00Z`,
+        publishedAt: now,
         type: SignalType.FUNDAMENTAL,
         tickers,
         confidence: 0.85,
@@ -745,7 +746,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       reliability: 0.95,
       title: `${entity.name ?? tickers[0]} Institutional Holdings (13F)`,
       content: lines.join('\n'),
-      publishedAt: reportDate.includes('T') ? reportDate : `${reportDate}T00:00:00Z`,
+      publishedAt: now,
       type: SignalType.FUNDAMENTAL,
       tickers,
       confidence: 0.95,
@@ -764,8 +765,11 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
     if (ownership.institutionsCount != null) parts.push(`Institutions: ${ownership.institutionsCount}`);
     if (ownership.outstandingShares != null) parts.push(`Outstanding: ${formatNumber(ownership.outstandingShares)}`);
     if (ownership.floatShares != null) parts.push(`Float: ${formatNumber(ownership.floatShares)}`);
-    if (ownership.shortPercentOfFloat != null)
-      parts.push(`Short % of float: ${(ownership.shortPercentOfFloat * 100).toFixed(2)}%`);
+    if (ownership.shortPercentOfFloat != null && isShortInterestFresh(ownership.shortInterestDate)) {
+      parts.push(
+        `Short % of float: ${(ownership.shortPercentOfFloat * 100).toFixed(2)}% (as of ${ownership.shortInterestDate})`,
+      );
+    }
     if (parts.length > 0) {
       signals.push({
         sourceId: 'jintel-ownership',

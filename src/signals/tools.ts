@@ -8,11 +8,28 @@
 import { z } from 'zod';
 
 import type { SignalArchive } from './archive.js';
-import type { Signal } from './types.js';
+import type { Signal, SignalType } from './types.js';
+import { SignalTypeSchema } from './types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 
 export interface SignalToolsOptions {
   archive: SignalArchive;
+}
+
+const DEFAULT_SINCE_DAYS: Partial<Record<SignalType, number>> = {
+  [SignalTypeSchema.enum.FUNDAMENTAL]: 7,
+  [SignalTypeSchema.enum.TECHNICAL]: 7,
+  [SignalTypeSchema.enum.NEWS]: 3,
+  [SignalTypeSchema.enum.SENTIMENT]: 3,
+  [SignalTypeSchema.enum.SOCIALS]: 3,
+};
+
+function resolveSince(type: SignalType | undefined, since: string | undefined): string | undefined {
+  if (since) return since;
+  if (!type) return undefined;
+  const days = DEFAULT_SINCE_DAYS[type];
+  if (days === undefined) return undefined;
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
 export function createSignalTools(options: SignalToolsOptions): ToolDefinition[] {
@@ -42,7 +59,9 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
       'Supports batch lookup: pass `tickers` array to search multiple symbols in ONE call ' +
       '(results grouped by ticker). Returns signal summaries (id, title, type, tickers, date).',
     parameters: z.object({
-      type: z.string().optional().describe('Signal type: NEWS, FUNDAMENTAL, SENTIMENT, TECHNICAL, MACRO'),
+      type: SignalTypeSchema.optional().describe(
+        'Signal type (one of: NEWS, FUNDAMENTAL, SENTIMENT, TECHNICAL, MACRO, FILINGS, SOCIALS, REGULATORY, DISCLOSED_TRADE, TRADING_LOGIC_TRIGGER)',
+      ),
       ticker: z.string().optional().describe('Filter by single ticker symbol (e.g. AAPL)'),
       tickers: z
         .array(z.string().min(1))
@@ -51,7 +70,15 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
         .optional()
         .describe('Filter by multiple tickers at once (e.g. ["AAPL","MSFT","GOOG"]). Takes precedence over ticker.'),
       sourceId: z.string().optional().describe('Filter by data source ID'),
-      since: z.string().optional().describe('ISO date — signals on or after this date'),
+      since: z
+        .string()
+        .optional()
+        .describe(
+          'ISO date — signals on or after this date. ' +
+            'When omitted, time-sensitive types are clamped automatically: FUNDAMENTAL/TECHNICAL → 7 days, ' +
+            'NEWS/SENTIMENT/SOCIALS → 3 days. Other types (MACRO, FILINGS, …) return full history. ' +
+            'Pass an explicit old date to override (e.g. to backtest or audit).',
+        ),
       until: z.string().optional().describe('ISO date — signals on or before this date'),
       search: z.string().optional().describe('Text search in title and content'),
       limit: z
@@ -63,7 +90,7 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
         .describe('Max results per ticker (when using tickers array) or total'),
     }),
     async execute(params: {
-      type?: string;
+      type?: SignalType;
       ticker?: string;
       tickers?: string[];
       sourceId?: string;
@@ -72,13 +99,15 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
       search?: string;
       limit: number;
     }): Promise<ToolResult> {
+      const effectiveSince = resolveSince(params.type, params.since);
+
       // Batch mode: single query for all tickers, then group in memory
       if (params.tickers) {
         const allSignals = await archive.query({
           type: params.type,
           tickers: params.tickers,
           sourceId: params.sourceId,
-          since: params.since,
+          since: effectiveSince,
           until: params.until,
           search: params.search,
           limit: params.limit * params.tickers.length,
@@ -131,7 +160,7 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
         type: params.type,
         ticker: params.ticker,
         sourceId: params.sourceId,
-        since: params.since,
+        since: effectiveSince,
         until: params.until,
         search: params.search,
         limit: params.limit,
