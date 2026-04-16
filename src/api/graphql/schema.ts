@@ -23,22 +23,7 @@ export const typeDefs = /* GraphQL */ `
 
   enum AlertStatus {
     ACTIVE
-    TRIGGERED
     DISMISSED
-  }
-
-  enum AlertRuleType {
-    PRICE_MOVE
-    SENTIMENT_SHIFT
-    EARNINGS_PROXIMITY
-    CONCENTRATION_DRIFT
-    CORRELATION_WARNING
-  }
-
-  enum Direction {
-    UP
-    DOWN
-    BOTH
   }
 
   enum SignalType {
@@ -198,22 +183,20 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # ---------------------------------------------------------------------------
-  # Alerts
+  # Alerts — AI-driven, promoted from high-severity MicroInsights
   # ---------------------------------------------------------------------------
-
-  type AlertRule {
-    type: AlertRuleType!
-    symbol: String
-    threshold: Float
-    direction: Direction
-  }
 
   type Alert {
     id: ID!
-    rule: AlertRule!
+    insightId: ID!
+    symbol: String!
+    severity: Float!
+    severityLabel: String!
+    thesis: String!
+    keyDevelopments: [String!]!
+    rating: String!
+    sentiment: String!
     status: AlertStatus!
-    message: String!
-    triggeredAt: String
     dismissedAt: String
     createdAt: String!
   }
@@ -366,13 +349,6 @@ export const typeDefs = /* GraphQL */ `
   # ---------------------------------------------------------------------------
   # Inputs
   # ---------------------------------------------------------------------------
-
-  input AlertRuleInput {
-    type: AlertRuleType!
-    symbol: String
-    threshold: Float
-    direction: Direction
-  }
 
   input ManualPositionInput {
     symbol: String!
@@ -1408,7 +1384,6 @@ export const typeDefs = /* GraphQL */ `
     addManualPosition(input: ManualPositionInput!): PortfolioSnapshot!
     editPosition(symbol: String!, platform: String!, input: ManualPositionInput!): PortfolioSnapshot!
     removePosition(symbol: String!, platform: String!): PortfolioSnapshot!
-    createAlert(rule: AlertRuleInput!): Alert!
     dismissAlert(id: ID!): Alert!
     dismissSignal(signalId: ID!): Boolean!
     batchDismissSignals(signalIds: [ID!]!): Boolean!

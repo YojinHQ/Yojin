@@ -30,7 +30,6 @@ describe('GraphQL schema', () => {
     const fields = mutationType.getFields();
 
     expect(fields.refreshPositions).toBeDefined();
-    expect(fields.createAlert).toBeDefined();
     expect(fields.dismissAlert).toBeDefined();
   });
 
@@ -80,14 +79,14 @@ describe('GraphQL schema', () => {
     expect(errors).toHaveLength(0);
   });
 
-  it('validates a createAlert mutation', () => {
+  it('validates a dismissAlert mutation', () => {
     const schema = buildSchema(typeDefs);
     const doc = parse(`
       mutation {
-        createAlert(rule: { type: PRICE_MOVE, symbol: "AAPL", threshold: 5.0, direction: UP }) {
+        dismissAlert(id: "alert-123") {
           id
           status
-          message
+          thesis
         }
       }
     `);

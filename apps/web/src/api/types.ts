@@ -37,14 +37,7 @@ export type Platform = KnownPlatform | (string & {});
 export function isKnownPlatform(value: string): value is KnownPlatform {
   return (KNOWN_PLATFORMS as readonly string[]).includes(value);
 }
-export type AlertStatus = 'ACTIVE' | 'TRIGGERED' | 'DISMISSED';
-export type AlertRuleType =
-  | 'PRICE_MOVE'
-  | 'SENTIMENT_SHIFT'
-  | 'EARNINGS_PROXIMITY'
-  | 'CONCENTRATION_DRIFT'
-  | 'CORRELATION_WARNING';
-export type Direction = 'UP' | 'DOWN' | 'BOTH';
+export type AlertStatus = 'ACTIVE' | 'DISMISSED';
 
 export type SignalType =
   | 'NEWS'
@@ -215,28 +208,19 @@ export interface RiskReport {
 // Alerts
 // ---------------------------------------------------------------------------
 
-export interface AlertRule {
-  type: AlertRuleType;
-  symbol: string | null;
-  threshold: number | null;
-  direction: Direction | null;
-}
-
 export interface Alert {
   id: string;
-  rule: AlertRule;
+  insightId: string;
+  symbol: string;
+  severity: number;
+  severityLabel: string;
+  thesis: string;
+  keyDevelopments: string[];
+  rating: string;
+  sentiment: string;
   status: AlertStatus;
-  message: string;
-  triggeredAt: string | null;
   dismissedAt: string | null;
   createdAt: string;
-}
-
-export interface AlertRuleInput {
-  type: AlertRuleType;
-  symbol?: string;
-  threshold?: number;
-  direction?: Direction;
 }
 
 // ---------------------------------------------------------------------------
@@ -996,10 +980,6 @@ export interface RefreshPositionsMutationResult {
   refreshPositions: PortfolioSnapshot;
 }
 
-export interface CreateAlertMutationResult {
-  createAlert: Alert;
-}
-
 export interface DismissAlertMutationResult {
   dismissAlert: Alert;
 }
@@ -1292,10 +1272,6 @@ export interface NewsQueryVariables {
 
 export interface RefreshPositionsVariables {
   platform: Platform;
-}
-
-export interface CreateAlertVariables {
-  rule: AlertRuleInput;
 }
 
 export interface DismissAlertVariables {

@@ -42,6 +42,15 @@ export function formatAction(action: Action): string {
   return lines.join('\n');
 }
 
+/** Format an insight-driven alert for Telegram HTML. */
+export function formatAlert(event: { symbol: string; severity: number; thesis: string }): string {
+  const label = event.severity >= 0.9 ? 'CRITICAL' : 'HIGH';
+  const icon = event.severity >= 0.9 ? '\u{1F6A8}' : '\u{26A0}\u{FE0F}';
+  return [`${icon} <b>${escapeHtml(label)} Alert: ${escapeHtml(event.symbol)}</b>`, '', escapeHtml(event.thesis)].join(
+    '\n',
+  );
+}
+
 export function formatInsight(report: InsightReport): string {
   const lines: string[] = ['\u{1F4CA} <b>Daily Insights Report</b>', ''];
 

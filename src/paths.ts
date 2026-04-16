@@ -43,6 +43,7 @@ export const DATA_SUBDIRS = [
   'watchlist',
   'summaries',
   'actions',
+  'alerts',
   'strategies',
   'snap',
   'profiles', // Per-ticker persistent knowledge profiles

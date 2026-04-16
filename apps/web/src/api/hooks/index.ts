@@ -6,7 +6,7 @@ export {
   useRemovePosition,
 } from './use-portfolio.js';
 export { useRiskReport } from './use-risk.js';
-export { useAlerts, useCreateAlert, useDismissAlert, useOnAlert } from './use-alerts.js';
+export { useAlerts, useDismissAlert, useOnAlert } from './use-alerts.js';
 export { useSummaries, useSummary } from './use-summaries.js';
 export { useActions, useAction, useApproveAction, useRejectAction, useDismissAction } from './use-actions.js';
 export { useQuote, useSearchSymbols, useNews, useOnPriceMove } from './use-market.js';

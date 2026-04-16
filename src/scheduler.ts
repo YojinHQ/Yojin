@@ -26,6 +26,9 @@ import type { ActionStore } from './actions/action-store.js';
 import type { Orchestrator } from './agents/orchestrator.js';
 import { emitProgress } from './agents/orchestrator.js';
 import type { ProviderRouter } from './ai-providers/router.js';
+import type { AlertPromoterConfig } from './alerts/alert-promoter.js';
+import { DEFAULT_ALERT_PROMOTER_CONFIG, buildAlert, meetsThreshold, resolveSeverity } from './alerts/alert-promoter.js';
+import type { AlertStore } from './alerts/alert-store.js';
 import type { AssetClass } from './api/graphql/types.js';
 import type { EventLog } from './core/event-log.js';
 import type { NotificationBus } from './core/notification-bus.js';
@@ -120,6 +123,10 @@ export interface SchedulerOptions {
   summaryStore?: SummaryStore;
   /** Action store — persists BUY/SELL/REVIEW actions produced by Strategy/Strategy triggers. */
   actionStore?: ActionStore;
+  /** Alert store — persists insight-driven alerts promoted from high-severity MicroInsights. */
+  alertStore?: AlertStore;
+  /** Alert promotion config — severity threshold and per-ticker cooldown. */
+  alertPromoterConfig?: Partial<AlertPromoterConfig>;
   /** Portfolio snapshot store — used to build PortfolioContext for strategy evaluation. */
   snapshotStore?: PortfolioSnapshotStore;
   /** Snap store — snap brief is regenerated after each curation cycle. */
@@ -224,6 +231,8 @@ export class Scheduler {
   private readonly strategyEvaluator?: StrategyEvaluator;
   private readonly summaryStore?: SummaryStore;
   private readonly actionStore?: ActionStore;
+  private readonly alertStore?: AlertStore;
+  private readonly alertPromoterConfig: AlertPromoterConfig;
   private readonly snapshotStore?: PortfolioSnapshotStore;
   private readonly snapStore?: SnapStore;
   private readonly insightStore?: InsightStore;
@@ -275,6 +284,8 @@ export class Scheduler {
     this.strategyEvaluator = options.strategyEvaluator;
     this.summaryStore = options.summaryStore;
     this.actionStore = options.actionStore;
+    this.alertStore = options.alertStore;
+    this.alertPromoterConfig = { ...DEFAULT_ALERT_PROMOTER_CONFIG, ...options.alertPromoterConfig };
     this.snapshotStore = options.snapshotStore;
     this.snapStore = options.snapStore;
     this.insightStore = options.insightStore;
@@ -688,6 +699,8 @@ export class Scheduler {
       // the Intel Feed has a standalone record independent of the snap.
       if (microInsights.length > 0) {
         await this.persistMicroSummaries(microInsights);
+        // Promote high-severity insights to alerts
+        await this.promoteInsightsToAlerts(microInsights);
       }
 
       // Evaluate per-asset strategy triggers — fires for every asset we enriched,
@@ -1217,6 +1230,88 @@ export class Scheduler {
           });
         }
       }
+    }
+  }
+
+  /**
+   * Promote high-severity MicroInsights to Alerts.
+   *
+   * For each insight that meets the severity threshold:
+   * 1. Check insightId uniqueness (no double-alert for same insight)
+   * 2. Check per-ticker cooldown (skip if recent alert exists, unless severity escalates)
+   * 3. Persist to AlertStore
+   * 4. Publish to GraphQL pubsub (web UI) + NotificationBus (channels)
+   * 5. Log to EventLog
+   */
+  private async promoteInsightsToAlerts(insights: MicroInsight[]): Promise<void> {
+    if (!this.alertStore) return;
+
+    const { severityThreshold, cooldownMs } = this.alertPromoterConfig;
+
+    for (const insight of insights) {
+      if (!meetsThreshold(insight, severityThreshold)) continue;
+
+      // Dedup: skip if this exact insight already produced an alert
+      const alreadyAlerted = await this.alertStore.hasAlertForInsight(insight.id);
+      if (alreadyAlerted) continue;
+
+      // Cooldown: skip if a recent alert exists for this ticker (unless severity escalates)
+      const recentAlert = await this.alertStore.getLatestActiveForTicker(insight.symbol, cooldownMs);
+      if (recentAlert) {
+        const newSeverity = resolveSeverity(insight);
+        if (newSeverity <= recentAlert.severity) {
+          logger.debug('Skipping alert — recent alert exists with equal/higher severity', {
+            symbol: insight.symbol,
+            existingSeverity: recentAlert.severity,
+            newSeverity,
+          });
+          continue;
+        }
+        logger.info('Escalating alert — new severity exceeds recent alert', {
+          symbol: insight.symbol,
+          existingSeverity: recentAlert.severity,
+          newSeverity,
+        });
+      }
+
+      const alert = buildAlert(insight);
+      const result = await this.alertStore.create(alert);
+      if (!result.success) {
+        logger.warn('Failed to create alert', { symbol: insight.symbol, error: result.error });
+        continue;
+      }
+
+      // Publish to NotificationBus — channels (Telegram, Slack, WhatsApp) and
+      // the web channel bridge this to the GraphQL onAlert subscription.
+      if (this.notificationBus) {
+        this.notificationBus.publish({
+          type: 'alert.promoted',
+          alertId: alert.id,
+          symbol: alert.symbol,
+          severity: alert.severity,
+          thesis: alert.thesis,
+        });
+      }
+
+      // Log to EventLog for Activity Feed
+      if (this.eventLog) {
+        await this.eventLog.append({
+          type: 'alert',
+          data: {
+            alertId: alert.id,
+            symbol: alert.symbol,
+            severityLabel: alert.severityLabel,
+            thesis: alert.thesis,
+          },
+        });
+      }
+
+      logger.info('Alert promoted from micro insight', {
+        alertId: alert.id,
+        symbol: alert.symbol,
+        severityLabel: alert.severityLabel,
+        insightId: insight.id,
+      });
     }
   }
 

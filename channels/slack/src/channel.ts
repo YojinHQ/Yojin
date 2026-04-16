@@ -50,6 +50,13 @@ function formatSnap(snap: { intelSummary: string; actionItems: { text: string; s
   return lines.join('\n');
 }
 
+/** Format an insight-driven alert for Slack. */
+function formatAlert(event: { symbol: string; severity: number; thesis: string }): string {
+  const label = event.severity >= 0.9 ? 'CRITICAL' : 'HIGH';
+  const icon = event.severity >= 0.9 ? ':rotating_light:' : ':warning:';
+  return [`${icon} *${label} Alert: ${event.symbol}*`, '', event.thesis].join('\n');
+}
+
 /** Format an Action for Slack: verdict badge + headline + reasoning. */
 function formatAction(action: Action): string {
   const ticker = action.tickers[0];
@@ -310,6 +317,18 @@ export function buildSlackChannel(deps: SlackChannelDeps = {}): ChannelPlugin {
           await app.client.chat.postMessage({ channel: defaultChannelId, text: formatAction(action) });
         } catch (err) {
           logger.error('Failed to push action', { error: err });
+        }
+      }),
+    );
+
+    unsubscribers.push(
+      bus.on('alert.promoted', async (event) => {
+        if (!defaultChannelId) return;
+        if (!(await isNotificationEnabled('slack', 'alert.promoted'))) return;
+        try {
+          await app.client.chat.postMessage({ channel: defaultChannelId, text: formatAlert(event) });
+        } catch (err) {
+          logger.error('Failed to push alert', { error: err });
         }
       }),
     );

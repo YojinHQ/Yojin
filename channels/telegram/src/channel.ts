@@ -1,7 +1,7 @@
 import type { Bot } from 'grammy';
 
 import { buildActionKeyboard, buildApprovalKeyboard, createBot } from './bot.js';
-import { chunkMessage, escapeHtml, formatAction, formatInsight, formatSnap } from './formatting.js';
+import { chunkMessage, escapeHtml, formatAction, formatAlert, formatInsight, formatSnap } from './formatting.js';
 import type { ActionStore } from '../../../src/actions/action-store.js';
 import { isNotificationEnabled } from '../../../src/api/graphql/resolvers/channels.js';
 import type { NotificationBus } from '../../../src/core/notification-bus.js';
@@ -353,6 +353,19 @@ export function buildTelegramChannel(deps: TelegramChannelDeps = {}): ChannelPlu
           await bot.api.sendMessage(activeChatId, text, { parse_mode: 'HTML', reply_markup: keyboard });
         } catch (err) {
           logger.error('Failed to push action', { error: err });
+        }
+      }),
+    );
+
+    unsubscribers.push(
+      bus.on('alert.promoted', async (event) => {
+        if (!bot || !activeChatId) return;
+        if (!(await isNotificationEnabled('telegram', 'alert.promoted'))) return;
+        try {
+          const text = formatAlert(event);
+          await bot.api.sendMessage(activeChatId, text, { parse_mode: 'HTML' });
+        } catch (err) {
+          logger.error('Failed to push alert', { error: err });
         }
       }),
     );

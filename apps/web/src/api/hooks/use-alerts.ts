@@ -1,11 +1,9 @@
 import { useQuery, useMutation, useSubscription } from 'urql';
 
-import { ALERTS_QUERY, CREATE_ALERT_MUTATION, DISMISS_ALERT_MUTATION, ON_ALERT_SUBSCRIPTION } from '../documents.js';
+import { ALERTS_QUERY, DISMISS_ALERT_MUTATION, ON_ALERT_SUBSCRIPTION } from '../documents.js';
 import type {
   AlertsQueryResult,
   AlertsQueryVariables,
-  CreateAlertMutationResult,
-  CreateAlertVariables,
   DismissAlertMutationResult,
   DismissAlertVariables,
   OnAlertSubscriptionResult,
@@ -18,11 +16,6 @@ export function useAlerts(variables?: AlertsQueryVariables) {
     query: ALERTS_QUERY,
     variables: variables ?? {},
   });
-}
-
-/** Create a new alert rule. */
-export function useCreateAlert() {
-  return useMutation<CreateAlertMutationResult, CreateAlertVariables>(CREATE_ALERT_MUTATION);
 }
 
 /** Dismiss an existing alert by ID. */

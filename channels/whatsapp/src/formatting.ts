@@ -54,6 +54,13 @@ export function formatSnap(snap: Snap): string {
   return lines.join('\n');
 }
 
+/** Format an insight-driven alert for WhatsApp. */
+export function formatAlert(event: { symbol: string; severity: number; thesis: string }): string {
+  const label = event.severity >= 0.9 ? 'CRITICAL' : 'HIGH';
+  const icon = event.severity >= 0.9 ? '\u{1F6A8}' : '\u{26A0}\u{FE0F}';
+  return [`${icon} *${label} Alert: ${event.symbol}*`, '', event.thesis].join('\n');
+}
+
 /** Format an Action for WhatsApp: verdict badge + headline + reasoning. */
 export function formatAction(action: Action): string {
   const ticker = action.tickers[0];

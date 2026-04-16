@@ -16,9 +16,11 @@ import { z } from 'zod';
 import { ActionStore } from './actions/action-store.js';
 import { createDefaultProfiles } from './agents/defaults.js';
 import { AgentRegistry } from './agents/registry.js';
+import { AlertStore } from './alerts/alert-store.js';
 import { pubsub } from './api/graphql/pubsub.js';
 import { setActionStore } from './api/graphql/resolvers/actions.js';
 import { setAiConfigVault } from './api/graphql/resolvers/ai-config.js';
+import { setAlertStore } from './api/graphql/resolvers/alerts.js';
 import { setChannelDataRoot, setChannelOAuthDir, setChannelVault } from './api/graphql/resolvers/channels.js';
 import { setConnectionManager } from './api/graphql/resolvers/connections.js';
 import {
@@ -176,6 +178,7 @@ export interface YojinServices {
   assessmentWorkflowStartMs: { value: number };
   summaryStore: SummaryStore;
   actionStore: ActionStore;
+  alertStore: AlertStore;
   strategyStore: StrategyStore;
   strategyEvaluator: StrategyEvaluator;
   watchlistStore: WatchlistStore;
@@ -675,6 +678,10 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   const actionStore = new ActionStore({ dir: `${dataRoot}/actions` });
   setActionStore(actionStore);
 
+  // Alert store — AI-driven alerts promoted from high-severity MicroInsights
+  const alertStore = new AlertStore({ dir: `${dataRoot}/alerts` });
+  setAlertStore(alertStore);
+
   // Strategy store + evaluator — seed strategies from Markdown on first run
   const strategiesDir = `${dataRoot}/strategies`;
   const strategyStore = new StrategyStore({ dir: strategiesDir });
@@ -771,6 +778,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     assessmentWorkflowStartMs,
     summaryStore,
     actionStore,
+    alertStore,
     strategyStore,
     strategyEvaluator,
     watchlistStore,

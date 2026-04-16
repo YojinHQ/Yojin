@@ -120,28 +120,19 @@ export interface RiskReport {
 // Alerts
 // ---------------------------------------------------------------------------
 
-export type AlertStatus = 'ACTIVE' | 'TRIGGERED' | 'DISMISSED';
-
-export type AlertRuleType =
-  | 'PRICE_MOVE'
-  | 'SENTIMENT_SHIFT'
-  | 'EARNINGS_PROXIMITY'
-  | 'CONCENTRATION_DRIFT'
-  | 'CORRELATION_WARNING';
-
-export interface AlertRule {
-  type: AlertRuleType;
-  symbol?: string;
-  threshold?: number;
-  direction?: 'UP' | 'DOWN' | 'BOTH';
-}
+export type AlertStatus = 'ACTIVE' | 'DISMISSED';
 
 export interface Alert {
   id: string;
-  rule: AlertRule;
+  insightId: string;
+  symbol: string;
+  severity: number;
+  severityLabel: string;
+  thesis: string;
+  keyDevelopments: string[];
+  rating: string;
+  sentiment: string;
   status: AlertStatus;
-  message: string;
-  triggeredAt?: string;
   dismissedAt?: string;
   createdAt: string;
 }
@@ -196,13 +187,6 @@ export interface PriceEvent {
 // ---------------------------------------------------------------------------
 // Input types
 // ---------------------------------------------------------------------------
-
-export interface AlertRuleInput {
-  type: AlertRuleType;
-  symbol?: string;
-  threshold?: number;
-  direction?: 'UP' | 'DOWN' | 'BOTH';
-}
 
 export interface ManualPositionInput {
   symbol: string;

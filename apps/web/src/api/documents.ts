@@ -38,15 +38,15 @@ export const POSITION_FIELDS = gql`
 export const ALERT_FIELDS = gql`
   fragment AlertFields on Alert {
     id
-    rule {
-      type
-      symbol
-      threshold
-      direction
-    }
+    insightId
+    symbol
+    severity
+    severityLabel
+    thesis
+    keyDevelopments
+    rating
+    sentiment
     status
-    message
-    triggeredAt
     dismissedAt
     createdAt
   }
@@ -603,15 +603,6 @@ export const REFRESH_POSITIONS_MUTATION = gql`
     }
   }
   ${POSITION_FIELDS}
-`;
-
-export const CREATE_ALERT_MUTATION = gql`
-  mutation CreateAlert($rule: AlertRuleInput!) {
-    createAlert(rule: $rule) {
-      ...AlertFields
-    }
-  }
-  ${ALERT_FIELDS}
 `;
 
 export const DISMISS_ALERT_MUTATION = gql`

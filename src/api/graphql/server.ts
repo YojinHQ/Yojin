@@ -21,7 +21,7 @@ import {
   saveAiConfigMutation,
   saveAiCredentialMutation,
 } from './resolvers/ai-config.js';
-import { alertsQuery, createAlertMutation, dismissAlertMutation } from './resolvers/alerts.js';
+import { alertsQuery, dismissAlertMutation } from './resolvers/alerts.js';
 import {
   cancelChannelPairingMutation,
   connectChannelMutation,
@@ -223,7 +223,6 @@ const schema = createSchema({
       addManualPosition: addManualPositionMutation,
       editPosition: editPositionMutation,
       removePosition: removePositionMutation,
-      createAlert: createAlertMutation,
       dismissAlert: dismissAlertMutation,
       sendMessage: sendMessageMutation,
       createSession: createSessionMutation,

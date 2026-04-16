@@ -164,27 +164,26 @@ describe('GraphQL resolvers', () => {
   });
 
   describe('Query.alerts', () => {
-    it('returns all alerts', async () => {
+    it('returns empty array when no AlertStore is wired', async () => {
       const result = await executeQuery(`
         query {
           alerts {
             id
             status
-            message
-            rule {
-              type
-              symbol
-            }
+            thesis
+            symbol
+            severity
+            severityLabel
           }
         }
       `);
 
       expect(result.errors).toBeUndefined();
       const alerts = result.data!.alerts as unknown[];
-      expect(alerts.length).toBeGreaterThan(0);
+      expect(alerts).toEqual([]);
     });
 
-    it('filters alerts by status', async () => {
+    it('accepts status filter', async () => {
       const result = await executeQuery(`
         query {
           alerts(status: ACTIVE) {
@@ -195,45 +194,13 @@ describe('GraphQL resolvers', () => {
       `);
 
       expect(result.errors).toBeUndefined();
-      const alerts = result.data!.alerts as Array<{ status: string }>;
-      for (const alert of alerts) {
-        expect(alert.status).toBe('ACTIVE');
-      }
-    });
-  });
-
-  describe('Mutation.createAlert', () => {
-    it('creates a new alert', async () => {
-      const result = await executeQuery(`
-        mutation {
-          createAlert(rule: { type: PRICE_MOVE, symbol: "MSFT", threshold: 3.0, direction: BOTH }) {
-            id
-            status
-            message
-            rule {
-              type
-              symbol
-              threshold
-              direction
-            }
-          }
-        }
-      `);
-
-      expect(result.errors).toBeUndefined();
-      const alert = result.data!.createAlert as Record<string, unknown>;
-      expect(alert.status).toBe('ACTIVE');
-      expect(alert.rule).toEqual({
-        type: 'PRICE_MOVE',
-        symbol: 'MSFT',
-        threshold: 3.0,
-        direction: 'BOTH',
-      });
+      const alerts = result.data!.alerts as unknown[];
+      expect(alerts).toEqual([]);
     });
   });
 
   describe('Mutation.dismissAlert', () => {
-    it('dismisses an existing alert', async () => {
+    it('returns error when AlertStore is not wired', async () => {
       const result = await executeQuery(`
         mutation {
           dismissAlert(id: "alert-001") {
@@ -244,10 +211,8 @@ describe('GraphQL resolvers', () => {
         }
       `);
 
-      expect(result.errors).toBeUndefined();
-      const alert = result.data!.dismissAlert as Record<string, unknown>;
-      expect(alert.status).toBe('DISMISSED');
-      expect(alert.dismissedAt).toBeDefined();
+      // Without an AlertStore wired, the resolver throws
+      expect(result.errors).toBeDefined();
     });
   });
 

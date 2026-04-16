@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { type WAMessage, type WASocket, downloadMediaMessage } from '@whiskeysockets/baileys';
 
-import { chunkMessage, formatAction, formatInsight, formatSnap, toWhatsApp } from './formatting.js';
+import { chunkMessage, formatAction, formatAlert, formatInsight, formatSnap, toWhatsApp } from './formatting.js';
 import { createWhatsAppSession } from './session.js';
 import type { WhatsAppSession } from './session.js';
 import type { ActionStore } from '../../../src/actions/action-store.js';
@@ -419,6 +419,18 @@ export function buildWhatsAppChannel(deps: WhatsAppChannelDeps = {}): ChannelPlu
           await sendNotification(formatAction(action));
         } catch (err) {
           logger.error('Failed to push action', { error: err });
+        }
+      }),
+    );
+
+    unsubscribers.push(
+      bus.on('alert.promoted', async (event) => {
+        if (!session?.isConnected() || !selfJid) return;
+        if (!(await isNotificationEnabled('whatsapp', 'alert.promoted'))) return;
+        try {
+          await sendNotification(formatAlert(event));
+        } catch (err) {
+          logger.error('Failed to push alert', { error: err });
         }
       }),
     );

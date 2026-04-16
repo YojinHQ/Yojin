@@ -27,7 +27,7 @@ function formatDate(): string {
 
 export default function MorningBriefingCard() {
   const [{ data: portfolioData, fetching: portfolioFetching }] = usePortfolio();
-  const [{ data: alertsData, fetching: alertsFetching }] = useAlerts({ status: 'TRIGGERED' });
+  const [{ data: alertsData, fetching: alertsFetching }] = useAlerts({ status: 'ACTIVE' });
   const [{ data: newsData, fetching: newsFetching }] = useNews({ limit: 5 });
   const navigate = useNavigate();
 
@@ -117,8 +117,18 @@ export default function MorningBriefingCard() {
                 key={alert.id}
                 className="flex items-start gap-2.5 rounded-lg border border-border bg-bg-secondary px-4 py-3"
               >
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-                <span className="text-sm text-text-secondary">{alert.message}</span>
+                <AlertTriangle
+                  className={cn(
+                    'mt-0.5 h-4 w-4 shrink-0',
+                    alert.severityLabel === 'CRITICAL' ? 'text-error' : 'text-warning',
+                  )}
+                />
+                <div>
+                  <div className="text-sm font-medium text-text-primary">
+                    {alert.severityLabel} — {alert.symbol}
+                  </div>
+                  <div className="mt-0.5 text-xs text-text-secondary">{alert.thesis}</div>
+                </div>
               </div>
             ))}
           </div>

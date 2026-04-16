@@ -26,7 +26,6 @@ const sseClient = createSSEClient({
 const cache = cacheExchange({
   keys: {
     Position: (data) => `${data.symbol as string}:${data.platform as string}`,
-    AlertRule: () => null, // embedded, not an entity
     PortfolioHistoryPoint: () => null, // embedded — nested under PortfolioSnapshot
     SectorWeight: () => null,
     Concentration: () => null,
