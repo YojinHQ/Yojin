@@ -18,10 +18,12 @@ const logger = createSubsystemLogger('action-reasoning');
 const ACTION_SYSTEM_PROMPT = `You are a trading strategist. A strategy trigger has fired. Recommend a concrete action.
 
 Your response MUST start with a headline in this exact format:
-ACTION: <BUY|SELL|REVIEW> <TICKER> — <catalyst in 10 words or fewer>
+ACTION: <BUY|SELL|REVIEW> <TICKER> — <catalyst, max 6 words AND 50 characters>
 
 The headline is the catalyst — the specific event or change that makes this actionable NOW.
+The catalyst portion (after the em dash) MUST be 50 characters or fewer and 6 words or fewer — it renders in a compact card where longer text is truncated. Compress aggressively: "Pentagon AI deal signed" not "Alphabet explores Pentagon AI deal, accelerating AI defense strategy".
 Do NOT restate trigger metrics in the headline (those are shown separately in the UI).
+Do NOT include the ticker or verdict inside the catalyst — they are already in the prefix.
 
 If (and only if) the action is SELL, add a second line sizing it as a fraction of the current position:
 SIZE: SELL <N>% of position
@@ -42,7 +44,7 @@ CATALYST_IMPACT: <estimated % move this catalyst is worth, e.g. "3-5%" or "~8% u
 MAX_ENTRY is the price beyond which the trade is stale because the catalyst is already priced in. For BUY it is a ceiling; for SELL it is a floor. Use the price context and your catalyst impact estimate to set this.
 
 Then provide a one-line summary of the action for compact display:
-SUMMARY: <one short sentence, max 140 characters — the key catalyst and why to act now, no metrics or numbers. Must fit in a 3-line compact card without truncation.>
+SUMMARY: <one short sentence, max 110 characters — the key catalyst and why to act now, no metrics, dollar amounts, or numbers. Must fit a 3-line compact card at small font. Trim filler words ("are driving", "is accelerating"); prefer active, compact phrasing.>
 
 Then provide concise analysis (2-4 sentences per point):
 1. Why this trigger matters — reference specific news, data, or discussions

@@ -84,6 +84,16 @@ interface IntelFeedItem {
   pricedIn?: boolean | null;
 }
 
+/** Strip a redundant "VERDICT TICKER — " prefix from an action headline.
+ * The card already shows the verdict badge and the ticker logo, so the prefix
+ * eats into the 2-line clamp without adding information. */
+function stripVerdictPrefix(title: string, verdict?: string, ticker?: string): string {
+  if (!verdict) return title;
+  const escTicker = ticker ? ticker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '[A-Z0-9.]+';
+  const pattern = new RegExp(`^${verdict}\\s+${escTicker}\\s*[—–-]\\s*`, 'i');
+  return title.replace(pattern, '');
+}
+
 /** Map signal type to an icon name. */
 const signalTypeIcon: Record<string, IconName> = {
   NEWS: 'trending',
@@ -273,23 +283,31 @@ function IntelFeedCard({
         >
           <SymbolLogo symbol={item.ticker} size="sm" className="flex-shrink-0" />
           <div className="min-w-0 flex-1">
-            {item.verdict && (
-              <span
-                className={cn(
-                  'mb-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wider',
-                  item.verdict === 'BUY'
-                    ? 'bg-success/15 text-success'
-                    : item.verdict === 'SELL'
-                      ? 'bg-error/15 text-error'
-                      : 'bg-info/15 text-info',
-                )}
-              >
-                {item.verdict}
+            <div className="mb-0.5 flex items-center gap-1.5">
+              {item.verdict && (
+                <span
+                  className={cn(
+                    'inline-block rounded px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wider',
+                    item.verdict === 'BUY'
+                      ? 'bg-success/15 text-success'
+                      : item.verdict === 'SELL'
+                        ? 'bg-error/15 text-error'
+                        : 'bg-info/15 text-info',
+                  )}
+                >
+                  {item.verdict}
+                </span>
+              )}
+              <span className="ml-auto inline-block rounded bg-bg-secondary px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.08em] text-text-muted">
+                {item.signalType.replace(/_/g, ' ')}
               </span>
-            )}
-            <p className="line-clamp-2 text-sm font-medium leading-snug text-text-primary">{item.title}</p>
+              <span className="text-2xs text-text-muted">{item.publishedTime}</span>
+            </div>
+            <p className="line-clamp-2 text-sm font-medium leading-snug text-text-primary">
+              {stripVerdictPrefix(item.title, item.verdict, item.ticker)}
+            </p>
           </div>
-          {selectMode ? (
+          {selectMode && (
             <div
               className={cn(
                 'flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-colors',
@@ -311,13 +329,6 @@ function IntelFeedCard({
                   <path d="M4.5 12.75l6 6 9-13.5" />
                 </svg>
               )}
-            </div>
-          ) : (
-            <div className="flex flex-shrink-0 flex-col items-end gap-0.5">
-              <span className="inline-block rounded bg-bg-secondary px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.08em] text-text-muted">
-                {item.signalType.replace(/_/g, ' ')}
-              </span>
-              <span className="text-2xs text-text-muted">{item.publishedTime}</span>
             </div>
           )}
         </button>
