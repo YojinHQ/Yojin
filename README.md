@@ -379,7 +379,7 @@ Before any agent action executes, it passes through a pipeline of security guard
 
 **Sensitive data is scrubbed before it reaches any AI model.**
 
-Chat messages run through Rehydra (regex + optional NER) with a reversible AES-256-GCM encrypted PII map, so responses are rehydrated before the user sees them. Structured snapshots use SHA-256 hashing for account IDs and range-bucketing for balances before any external API call.
+Chat messages run through Rehydra (regex + optional NER) with a reversible AES-256-GCM encrypted PII map, so responses are rehydrated before the user sees them. Structured snapshots use SHA-256 hashing for account IDs and strip personal identifiers (email, name, phone, SSN) before any external API call. Monetary amounts and quantities pass through unchanged.
 
 ```text
 User: "my email is dean@test.com"
@@ -406,12 +406,11 @@ Raw Snapshot                    Redacted Snapshot
 ┌─────────────────┐            ┌──────────────────┐
 │ accountId: 1234 │  SHA-256   │ accountId:        │
 │                 │ ────────▶  │  <ACCT-a1b2c3d4>  │
-│ balance: 75000  │  range     │ balance:          │
-│                 │ ────────▶  │  $50k-$100k       │
 │ email:          │  strip     │ email:            │
 │  john@test.com  │ ────────▶  │  <EMAIL-REDACT>   │
 │ ownerName:      │  strip     │ ownerName:        │
 │  John Doe       │ ────────▶  │  <NAME-REDACT>    │
+│ balance: 75000  │  preserve  │ balance: 75000    │
 │ symbol: AAPL    │  preserve  │ symbol: AAPL      │
 │ price: 150.25   │ ────────▶  │ price: 150.25     │
 └─────────────────┘            └──────────────────┘
