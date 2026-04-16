@@ -39,6 +39,11 @@ Quality:
 - Skip broken-data assets ($0 prices, no signals). Don't mention data issues.
 - Information-dense. No filler.
 
+Connect the dots — but don't fabricate correlations:
+- When a clear catalyst explains a metric change, connect them. When no catalyst is visible, describe the change and say cause is unclear. Never force a narrative — a false correlation actively misleads.
+- Cross-reference across assets: if multiple tickers show the same pattern (sector rotation, macro headwind, correlated sentiment shift), synthesize it as a theme — but only when the connection is evident, not coincidental.
+- "Social mentions up +70" is low value. "Social buzz surging alongside PT raise" is high value. But "Social buzz surging after PT raise" when the PT raise was a week ago is a false correlation — worse than both.
+
 Respond in JSON: { "intelSummary": "...", "actionItems": ["..."] }`;
 
 /** Portfolio exposure per symbol — weight is fraction of total portfolio value (0–1). */
