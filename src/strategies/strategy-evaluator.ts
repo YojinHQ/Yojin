@@ -26,6 +26,7 @@ import type { TriggerStrength } from './trigger-strength.js';
 import type { Strategy, StrategyEvaluation, StrategyTrigger, TriggerGroup, TriggerType } from './types.js';
 import type { AssetClass } from '../api/graphql/types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
+import { INDEX_TICKER_SET } from '../market-sentiment/types.js';
 import { SignalTypeSchema } from '../signals/types.js';
 import type { Signal, SignalType } from '../signals/types.js';
 
@@ -185,10 +186,15 @@ ${sections.join('\n\n---\n\n')}`;
     ctx: PortfolioContext,
     isMicro = false,
   ): StrategyEvaluation[] {
+    // Index ETFs (SPY, QQQ, DIA, IWM) are excluded from sentiment-style strategies.
+    // Their social sentiment is collected as a macro market-regime indicator, not a trade signal.
+    const effectiveTickers = strategy.style === 'sentiment' ? tickers.filter((t) => !INDEX_TICKER_SET.has(t)) : tickers;
+    if (effectiveTickers.length === 0) return [];
+
     const allEvaluations = strategy.triggerGroups.flatMap((group, groupIndex) => {
       if (isMicro && this.groupHasMacroOnlyTrigger(group)) return [];
       if (isMicro && this.groupHasLookbackPriceMove(group)) return [];
-      return tickers.flatMap((ticker) => this.evaluateGroup(strategy, group, groupIndex, ticker, ctx));
+      return effectiveTickers.flatMap((ticker) => this.evaluateGroup(strategy, group, groupIndex, ticker, ctx));
     });
 
     // Dedup across OR groups: keep only the strongest evaluation per ticker

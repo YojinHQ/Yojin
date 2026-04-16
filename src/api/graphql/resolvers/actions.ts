@@ -7,7 +7,7 @@
  */
 
 import type { ActionStore } from '../../../actions/action-store.js';
-import type { Action, ActionStatus, ActionVerdict } from '../../../actions/types.js';
+import type { Action, ActionStatus, ActionVerdict, ConvictionLevel } from '../../../actions/types.js';
 import type { TriggerStrength } from '../../../strategies/trigger-strength.js';
 
 function deriveSeverityLabel(severity: number | undefined): string {
@@ -48,6 +48,14 @@ interface ActionGql {
   suggestedQuantity: number | null;
   suggestedValue: number | null;
   currentPrice: number | null;
+  entryRange: string | null;
+  targetPrice: number | null;
+  stopLoss: number | null;
+  horizon: string | null;
+  conviction: ConvictionLevel | null;
+  maxEntry: number | null;
+  catalystImpact: string | null;
+  pricedIn: boolean | null;
   severityLabel: string;
   status: ActionStatus;
   expiresAt: string;
@@ -75,6 +83,14 @@ function toGql(action: Action): ActionGql {
     suggestedQuantity: action.suggestedQuantity ?? null,
     suggestedValue: action.suggestedValue ?? null,
     currentPrice: action.currentPrice ?? null,
+    entryRange: action.entryRange ?? null,
+    targetPrice: action.targetPrice ?? null,
+    stopLoss: action.stopLoss ?? null,
+    horizon: action.horizon ?? null,
+    conviction: action.conviction ?? null,
+    maxEntry: action.maxEntry ?? null,
+    catalystImpact: action.catalystImpact ?? null,
+    pricedIn: action.pricedIn ?? null,
     severityLabel: deriveSeverityLabel(action.severity),
     status: action.status,
     expiresAt: action.expiresAt,

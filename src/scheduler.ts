@@ -40,6 +40,8 @@ import type { MicroInsight, MicroInsightSource } from './insights/micro-types.js
 import type { InsightReport } from './insights/types.js';
 import { fetchJintelSignals, fetchMacroIndicators } from './jintel/signal-fetcher.js';
 import { createSubsystemLogger } from './logging/logger.js';
+import type { MarketSentimentBaselineStore } from './market-sentiment/baseline-store.js';
+import { INDEX_TICKER_SET } from './market-sentiment/types.js';
 import type { SignalMemoryStore } from './memory/memory-store.js';
 import type { ReflectionEngine } from './memory/reflection.js';
 import type { MemoryAgentRole } from './memory/types.js';
@@ -51,7 +53,7 @@ import type { Signal } from './signals/types.js';
 import { snapFromInsight } from './snap/snap-from-insight.js';
 import { snapFromMicro } from './snap/snap-from-micro.js';
 import type { SnapStore } from './snap/snap-store.js';
-import { computePositionSizing, generateActionReasoning } from './strategies/action-reasoning.js';
+import { checkPricedIn, computePositionSizing, generateActionReasoning } from './strategies/action-reasoning.js';
 import { capabilitiesToEnrichmentFields, deriveCapabilities } from './strategies/capabilities.js';
 import { formatTriggerContext } from './strategies/format-trigger-context.js';
 import { buildPortfolioContext, buildSingleTickerContext } from './strategies/portfolio-context-builder.js';
@@ -141,6 +143,8 @@ export interface SchedulerOptions {
   signalIngestor?: SignalIngestor;
   /** Notification bus — publishes domain events for channel delivery. */
   notificationBus?: NotificationBus;
+  /** Market sentiment baseline store — accumulates index ETF sentiment for regime detection. */
+  marketSentimentBaseline?: MarketSentimentBaselineStore;
 
   // --- Micro research dependencies ---
   /** Provider router — for micro research LLM calls. */
@@ -240,6 +244,7 @@ export class Scheduler {
   private readonly getJintelClient?: () => JintelClient | undefined;
   private readonly signalIngestor?: SignalIngestor;
   private readonly notificationBus?: NotificationBus;
+  private readonly marketSentimentBaseline?: MarketSentimentBaselineStore;
 
   // Micro research dependencies
   private readonly providerRouter?: ProviderRouter;
@@ -293,6 +298,7 @@ export class Scheduler {
     this.getJintelClient = options.getJintelClient;
     this.signalIngestor = options.signalIngestor;
     this.notificationBus = options.notificationBus;
+    this.marketSentimentBaseline = options.marketSentimentBaseline;
 
     // Micro research
     this.providerRouter = options.providerRouter;
@@ -1091,6 +1097,34 @@ export class Scheduler {
       }
     }
 
+    // Accumulate index ETF sentiment snapshots for the market sentiment baseline.
+    // Runs silently in the background — failures don't affect strategy evaluation.
+    if (this.marketSentimentBaseline) {
+      const today = new Date().toISOString().slice(0, 10);
+      const now = new Date().toISOString();
+      for (const entity of entities) {
+        if (!entity.sentiment) continue;
+        // Entity.tickers is an array — check if any match index ETFs
+        const indexTicker = entity.tickers?.find((t) => INDEX_TICKER_SET.has(t));
+        if (!indexTicker) continue;
+        const s = entity.sentiment;
+        try {
+          this.marketSentimentBaseline.append({
+            ticker: indexTicker,
+            date: today,
+            timestamp: now,
+            rank: s.rank,
+            mentions: s.mentions,
+            mentions24hAgo: s.mentions24hAgo,
+            upvotes: s.upvotes,
+            mentionMomentum: s.mentions24hAgo > 0 ? (s.mentions - s.mentions24hAgo) / s.mentions24hAgo : null,
+          });
+        } catch (err) {
+          logger.debug('Failed to append sentiment baseline entry', { ticker: indexTicker, error: err });
+        }
+      }
+    }
+
     logger.info('Built enriched PortfolioContext for strategy evaluation', {
       tickers: tickers.length,
       quotesAvailable: quotes.length,
@@ -1439,12 +1473,36 @@ export class Scheduler {
       }
 
       this.recordLlmSuccess();
-      const { headline, verdict, reasoning, sizeGuidance } = actionReasoning;
+      const {
+        headline,
+        verdict,
+        reasoning,
+        sizeGuidance,
+        entryRange,
+        targetPrice: tgtPrice,
+        stopLoss,
+        horizon,
+        conviction,
+        maxEntry,
+        catalystImpact,
+      } = actionReasoning;
       const contextParts = formatTriggerContext(evaluation.context);
 
       // Numeric sizing is BUY-only; SELL carries sizeGuidance text, REVIEW has none.
       const sizing =
         verdict === 'BUY' ? computePositionSizing(evaluation.context, currentPrice, totalPortfolioValue) : null;
+
+      // Deterministic priced-in detection
+      const pricedIn = checkPricedIn(verdict, currentPrice, maxEntry) || undefined;
+      if (pricedIn) {
+        logger.info('Action flagged as potentially priced in', {
+          ticker,
+          verdict,
+          currentPrice,
+          maxEntry,
+          catalystImpact,
+        });
+      }
 
       const result = await this.actionStore.create({
         id: randomUUID(),
@@ -1461,7 +1519,15 @@ export class Scheduler {
         triggerStrength: evaluation.triggerStrength,
         suggestedQuantity: sizing?.suggestedQuantity,
         suggestedValue: sizing?.suggestedValue,
-        currentPrice: sizing?.currentPrice,
+        currentPrice: sizing?.currentPrice ?? currentPrice,
+        entryRange,
+        targetPrice: tgtPrice,
+        stopLoss,
+        horizon,
+        conviction,
+        maxEntry,
+        catalystImpact,
+        pricedIn,
         status: 'PENDING',
         expiresAt,
         createdAt: now,

@@ -18,6 +18,7 @@ import type {
   IntelFeedQueryVariables,
   SchedulerStatusQueryResult,
   TriggerStrength,
+  ConvictionLevel,
 } from '../../api/types';
 import { cn, timeAgo } from '../../lib/utils';
 import { useFeatureStatus } from '../../lib/feature-status';
@@ -72,6 +73,14 @@ interface IntelFeedItem {
   suggestedQuantity?: number | null;
   suggestedValue?: number | null;
   currentPrice?: number | null;
+  entryRange?: string | null;
+  targetPrice?: number | null;
+  stopLoss?: number | null;
+  horizon?: string | null;
+  conviction?: ConvictionLevel | null;
+  maxEntry?: number | null;
+  catalystImpact?: string | null;
+  pricedIn?: boolean | null;
 }
 
 /** Map signal type to an icon name. */
@@ -666,6 +675,14 @@ function IntelFeedContent({
       suggestedQuantity: action.suggestedQuantity,
       suggestedValue: action.suggestedValue,
       currentPrice: action.currentPrice,
+      entryRange: action.entryRange,
+      targetPrice: action.targetPrice,
+      stopLoss: action.stopLoss,
+      horizon: action.horizon,
+      conviction: action.conviction,
+      maxEntry: action.maxEntry,
+      catalystImpact: action.catalystImpact,
+      pricedIn: action.pricedIn,
     }));
 
     const merged = [...signalItems, ...actionItems];
@@ -922,6 +939,14 @@ function IntelFeedContent({
             suggestedQuantity: item.suggestedQuantity,
             suggestedValue: item.suggestedValue,
             currentPrice: item.currentPrice,
+            entryRange: item.entryRange ?? null,
+            targetPrice: item.targetPrice ?? null,
+            stopLoss: item.stopLoss ?? null,
+            horizon: item.horizon ?? null,
+            conviction: item.conviction ?? null,
+            maxEntry: item.maxEntry ?? null,
+            catalystImpact: item.catalystImpact ?? null,
+            pricedIn: item.pricedIn ?? null,
           }
         : undefined,
     });

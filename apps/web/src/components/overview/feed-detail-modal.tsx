@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import Modal from '../common/modal';
 import Badge from '../common/badge';
 import type { BadgeVariant } from '../common/badge';
-import type { TriggerStrength } from '../../api/types';
+import type { ConvictionLevel, TriggerStrength } from '../../api/types';
 import { cn, timeUntil } from '../../lib/utils';
 
 /** Lightweight markdown → HTML for LLM-generated analysis text. */
@@ -59,6 +59,14 @@ export interface FeedDetailData {
     suggestedQuantity?: number | null;
     suggestedValue?: number | null;
     currentPrice?: number | null;
+    entryRange?: string | null;
+    targetPrice?: number | null;
+    stopLoss?: number | null;
+    horizon?: string | null;
+    conviction?: ConvictionLevel | null;
+    maxEntry?: number | null;
+    catalystImpact?: string | null;
+    pricedIn?: boolean | null;
   };
 }
 
@@ -73,6 +81,12 @@ const TRIGGER_STRENGTH_VARIANT: Record<TriggerStrength, BadgeVariant> = {
   MODERATE: 'info',
   STRONG: 'warning',
   EXTREME: 'error',
+};
+
+const CONVICTION_VARIANT: Record<ConvictionLevel, BadgeVariant> = {
+  LOW: 'neutral',
+  MEDIUM: 'info',
+  HIGH: 'success',
 };
 
 const sentimentBadge: Record<string, { label: string; variant: BadgeVariant }> = {
@@ -175,11 +189,34 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
             {data.triggerStrength.charAt(0) + data.triggerStrength.slice(1).toLowerCase()} Strength
           </Badge>
         )}
+        {data.actionMeta?.conviction && (
+          <Badge variant={CONVICTION_VARIANT[data.actionMeta.conviction]} outline>
+            {data.actionMeta.conviction.charAt(0) + data.actionMeta.conviction.slice(1).toLowerCase()} Conviction
+          </Badge>
+        )}
       </div>
 
       {/* Summary details */}
       {data.actionMeta && (
         <>
+          {/* Priced-in warning */}
+          {data.actionMeta.pricedIn && (
+            <div className="mt-2 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-2.5">
+              <span className="text-sm text-warning" aria-hidden="true">
+                &#9888;
+              </span>
+              <div>
+                <p className="text-xs font-semibold text-warning">Potentially Priced In</p>
+                <p className="text-2xs text-text-secondary">
+                  Current price has already moved past the max entry
+                  {data.actionMeta.maxEntry != null &&
+                    ` ($${data.actionMeta.maxEntry.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`}
+                  . The catalyst may already be reflected in the price.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Position sizing banner */}
           {data.actionMeta.suggestedQuantity != null && data.actionMeta.suggestedQuantity > 0 && (
             <div
@@ -210,6 +247,81 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
                 )}
               </div>
             </div>
+          )}
+
+          {/* Trading parameters — entry/target/stop/horizon/maxEntry/catalystImpact from LLM */}
+          {(data.actionMeta.entryRange ||
+            data.actionMeta.targetPrice != null ||
+            data.actionMeta.stopLoss != null ||
+            data.actionMeta.horizon ||
+            data.actionMeta.maxEntry != null ||
+            data.actionMeta.catalystImpact) && (
+            <>
+              <SectionRule label="Trading Parameters" />
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                {data.actionMeta.entryRange && (
+                  <div>
+                    <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Entry</span>
+                    <p className="mt-0.5 text-xs text-text-primary">{data.actionMeta.entryRange}</p>
+                  </div>
+                )}
+                {data.actionMeta.targetPrice != null && (
+                  <div>
+                    <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Target</span>
+                    <p className="mt-0.5 text-xs text-text-primary">
+                      $
+                      {data.actionMeta.targetPrice.toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+                  </div>
+                )}
+                {data.actionMeta.stopLoss != null && (
+                  <div>
+                    <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Stop Loss</span>
+                    <p className="mt-0.5 text-xs text-text-primary">
+                      $
+                      {data.actionMeta.stopLoss.toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+                  </div>
+                )}
+                {data.actionMeta.horizon && (
+                  <div>
+                    <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Horizon</span>
+                    <p className="mt-0.5 text-xs text-text-primary">{data.actionMeta.horizon}</p>
+                  </div>
+                )}
+                {data.actionMeta.maxEntry != null && (
+                  <div>
+                    <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Max Entry</span>
+                    <p
+                      className={cn(
+                        'mt-0.5 text-xs',
+                        data.actionMeta.pricedIn ? 'font-semibold text-warning' : 'text-text-primary',
+                      )}
+                    >
+                      $
+                      {data.actionMeta.maxEntry.toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+                  </div>
+                )}
+                {data.actionMeta.catalystImpact && (
+                  <div>
+                    <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">
+                      Catalyst Impact
+                    </span>
+                    <p className="mt-0.5 text-xs text-text-primary">{data.actionMeta.catalystImpact}</p>
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           <SectionRule label="Trigger Details" />

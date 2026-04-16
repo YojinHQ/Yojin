@@ -487,6 +487,110 @@ describe('strategy evaluation integration', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Index ETF sentiment exclusion
+  // -------------------------------------------------------------------------
+
+  function makeEntityWithSentiment(ticker: string, mentions: number, mentions24hAgo: number): Entity {
+    return {
+      id: ticker,
+      name: ticker,
+      type: 'INDEX' as const,
+      tickers: [ticker],
+      market: { quote: null, fundamentals: null },
+      sentiment: {
+        ticker,
+        name: ticker,
+        rank: 1,
+        mentions,
+        upvotes: 100,
+        rank24hAgo: 2,
+        mentions24hAgo,
+      },
+    } as unknown as Entity;
+  }
+
+  it('sentiment-style strategies skip index ETFs (SPY, QQQ, DIA, IWM)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'strategy-eval-'));
+    try {
+      const strategy = makeStrategy({
+        id: 'test-sentiment-momentum',
+        style: 'sentiment',
+        triggers: [
+          {
+            type: 'METRIC_THRESHOLD',
+            description: 'Mention surge > 20%',
+            params: { metric: 'sentiment_momentum_24h', threshold: 0.2, direction: 'above' },
+          },
+        ],
+      });
+      await writeFile(join(dir, `${strategy.id}.json`), JSON.stringify(strategy));
+      const store = new StrategyStore({ dir });
+      await store.initialize();
+
+      // SPY has a 40% mention surge — would fire if not excluded
+      // TSLA has a 50% mention surge — should fire normally
+      const snapshot = makeSnapshot(
+        [
+          { symbol: 'SPY', currentPrice: 500, marketValue: 5000 },
+          { symbol: 'TSLA', currentPrice: 250, marketValue: 2500 },
+        ],
+        7500,
+      );
+      const entities = [
+        makeEntityWithSentiment('SPY', 140, 100), // 40% surge
+        makeEntityWithSentiment('TSLA', 150, 100), // 50% surge
+      ];
+      const ctx = buildPortfolioContext(snapshot, [], entities);
+
+      // Both tickers have metrics above threshold
+      expect(ctx.metrics['SPY'].sentiment_momentum_24h).toBeCloseTo(0.4, 5);
+      expect(ctx.metrics['TSLA'].sentiment_momentum_24h).toBeCloseTo(0.5, 5);
+
+      const evaluator = new StrategyEvaluator(store);
+      const results = evaluator.evaluate(ctx);
+
+      // Only TSLA fires — SPY is excluded as an index ETF
+      expect(results).toHaveLength(1);
+      expect(results[0].context['ticker']).toBe('TSLA');
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  it('non-sentiment strategies still evaluate index ETFs normally', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'strategy-eval-'));
+    try {
+      const strategy = makeStrategy({
+        id: 'test-momentum-spy',
+        style: 'momentum',
+        triggers: [
+          {
+            type: 'METRIC_THRESHOLD',
+            description: 'Mention surge > 20%',
+            params: { metric: 'sentiment_momentum_24h', threshold: 0.2, direction: 'above' },
+          },
+        ],
+      });
+      await writeFile(join(dir, `${strategy.id}.json`), JSON.stringify(strategy));
+      const store = new StrategyStore({ dir });
+      await store.initialize();
+
+      const snapshot = makeSnapshot([{ symbol: 'SPY', currentPrice: 500, marketValue: 5000 }], 5000);
+      const entities = [makeEntityWithSentiment('SPY', 140, 100)];
+      const ctx = buildPortfolioContext(snapshot, [], entities);
+
+      const evaluator = new StrategyEvaluator(store);
+      const results = evaluator.evaluate(ctx);
+
+      // momentum-style strategy is NOT excluded — SPY fires
+      expect(results).toHaveLength(1);
+      expect(results[0].context['ticker']).toBe('SPY');
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  // -------------------------------------------------------------------------
   // SIGNAL_PRESENT
   // -------------------------------------------------------------------------
 

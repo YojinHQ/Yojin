@@ -560,6 +560,15 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       type: SignalType.SENTIMENT,
       tickers,
       confidence: 0.7,
+      metadata: {
+        rank: s.rank,
+        rank24hAgo: s.rank24hAgo,
+        mentions: s.mentions,
+        mentions24hAgo: s.mentions24hAgo,
+        upvotes: s.upvotes,
+        mentionDelta,
+        mentionMomentum: s.mentions24hAgo > 0 ? (s.mentions - s.mentions24hAgo) / s.mentions24hAgo : null,
+      },
     });
   }
 

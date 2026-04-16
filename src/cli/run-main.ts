@@ -47,6 +47,7 @@ import { NotificationBus } from '../core/notification-bus.js';
 import { Gateway } from '../gateway/server.js';
 import { MicroInsightStore } from '../insights/micro-insight-store.js';
 import { createJintelPriceProvider } from '../jintel/price-provider.js';
+import { MarketSentimentBaselineStore } from '../market-sentiment/baseline-store.js';
 import { createReflectionEngine } from '../memory/adapter.js';
 import { resolveDataRoot, resolvePackageRoot, resolvePackageVersion } from '../paths.js';
 import { Scheduler } from '../scheduler.js';
@@ -318,6 +319,10 @@ async function startGateway(): Promise<void> {
     ...channelDeps,
   });
 
+  // Market sentiment baseline — accumulates index ETF sentiment for future regime detection
+  const marketSentimentBaseline = new MarketSentimentBaselineStore(dataRoot);
+  marketSentimentBaseline.initialize();
+
   // Daily insights scheduler — reads digestSchedule from alerts.json
   const scheduler = new Scheduler({
     orchestrator,
@@ -334,6 +339,7 @@ async function startGateway(): Promise<void> {
     getJintelClient: () => services.jintelToolOptions.client,
     signalIngestor: services.signalIngestor,
     notificationBus,
+    marketSentimentBaseline,
     // Micro research deps
     providerRouter,
     microInsightStore,

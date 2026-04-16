@@ -7,8 +7,8 @@ import type { Entity } from '@yojinhq/jintel-client';
 
 import { formatTriggerContext } from './format-trigger-context.js';
 import type { StrategyEvaluation } from './types.js';
-import { parseVerdictFromHeadline } from '../actions/types.js';
-import type { ActionVerdict } from '../actions/types.js';
+import { ConvictionLevelSchema, parseVerdictFromHeadline } from '../actions/types.js';
+import type { ActionVerdict, ConvictionLevel } from '../actions/types.js';
 import type { ProviderRouter } from '../ai-providers/router.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { Signal } from '../signals/types.js';
@@ -18,7 +18,10 @@ const logger = createSubsystemLogger('action-reasoning');
 const ACTION_SYSTEM_PROMPT = `You are a trading strategist. A strategy trigger has fired. Recommend a concrete action.
 
 Your response MUST start with a headline in this exact format:
-ACTION: <BUY|SELL|REVIEW> <TICKER> — <one-sentence reason>
+ACTION: <BUY|SELL|REVIEW> <TICKER> — <catalyst in 10 words or fewer>
+
+The headline is the catalyst — the specific event or change that makes this actionable NOW.
+Do NOT restate trigger metrics in the headline (those are shown separately in the UI).
 
 If (and only if) the action is SELL, add a second line sizing it as a fraction of the current position:
 SIZE: SELL <N>% of position
@@ -27,8 +30,19 @@ Do NOT emit a SIZE line for BUY or REVIEW. BUY sizing is derived from the strate
 
 Prefer BUY or SELL — commit to a direction when the data supports one. Use REVIEW only when the evidence is genuinely contradictory or insufficient to pick a side.
 
-Then provide your analysis:
-1. Why this trigger matters right now — reference specific news, discussions, or data points
+Then provide trading parameters, one per line:
+ENTRY: <price or range, e.g. "$245-250" or "at market">
+TARGET: <target price>
+STOP: <stop loss price>
+HORIZON: <time horizon, e.g. "1-2 weeks", "intraday">
+CONVICTION: <LOW|MEDIUM|HIGH>
+MAX_ENTRY: <for BUY: price ceiling; for SELL: price floor — beyond this the catalyst is priced in>
+CATALYST_IMPACT: <estimated % move this catalyst is worth, e.g. "3-5%" or "~8% upside">
+
+MAX_ENTRY is the price beyond which the trade is stale because the catalyst is already priced in. For BUY it is a ceiling; for SELL it is a floor. Use the price context and your catalyst impact estimate to set this.
+
+Then provide concise analysis (2-4 sentences per point):
+1. Why this trigger matters — reference specific news, data, or discussions
 2. Key risks before acting
 3. Timing or other notes (entry/exit levels if applicable)
 
@@ -43,6 +57,20 @@ interface ActionReasoningResult {
   fromLlm: boolean;
   parsedCleanly: boolean;
   error?: string;
+  /** LLM-suggested entry range, e.g. "$245-250" or "at market". */
+  entryRange?: string;
+  /** LLM-suggested target exit price. */
+  targetPrice?: number;
+  /** LLM-suggested stop loss price. */
+  stopLoss?: number;
+  /** Time horizon, e.g. "1-2 weeks". */
+  horizon?: string;
+  /** LLM's conviction level. */
+  conviction?: ConvictionLevel;
+  /** Price ceiling (BUY) or floor (SELL) beyond which the catalyst is priced in. */
+  maxEntry?: number;
+  /** LLM-estimated catalyst impact, e.g. "3-5%". */
+  catalystImpact?: string;
 }
 
 interface ActionEntityContext {
@@ -108,6 +136,45 @@ export function computePositionSizing(
   return { currentPrice, suggestedQuantity, suggestedValue };
 }
 
+/** Format price context from the Jintel quote so the LLM can assess whether the move already happened. */
+function formatPriceContext(entity: Entity): string {
+  const quote = entity.market?.quote;
+  if (!quote) return '';
+
+  const parts: string[] = [];
+  parts.push(`Current price: $${quote.price.toFixed(2)}`);
+
+  if (quote.previousClose != null) {
+    parts.push(`Previous close: $${quote.previousClose.toFixed(2)}`);
+    const changePct = ((quote.price - quote.previousClose) / quote.previousClose) * 100;
+    parts.push(`Change from close: ${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`);
+  }
+
+  if (quote.preMarketPrice != null) {
+    parts.push(`Pre-market price: $${quote.preMarketPrice.toFixed(2)}`);
+    if (quote.preMarketChangePercent != null) {
+      parts.push(
+        `Pre-market change: ${quote.preMarketChangePercent >= 0 ? '+' : ''}${quote.preMarketChangePercent.toFixed(2)}%`,
+      );
+    }
+  }
+
+  if (quote.postMarketPrice != null) {
+    parts.push(`Post-market price: $${quote.postMarketPrice.toFixed(2)}`);
+    if (quote.postMarketChangePercent != null) {
+      parts.push(
+        `Post-market change: ${quote.postMarketChangePercent >= 0 ? '+' : ''}${quote.postMarketChangePercent.toFixed(2)}%`,
+      );
+    }
+  }
+
+  if (quote.open != null) {
+    parts.push(`Today's open: $${quote.open.toFixed(2)}`);
+  }
+
+  return parts.join('\n');
+}
+
 function formatEntityBrief(ctx: ActionEntityContext): string {
   const sections: string[] = [];
 
@@ -166,12 +233,14 @@ function buildUserMessage(evaluation: StrategyEvaluation, entityContext?: Action
   const contextParts = formatTriggerContext(evaluation.context);
 
   const entityBrief = entityContext ? formatEntityBrief(entityContext) : '';
+  const priceCtx = entityContext ? formatPriceContext(entityContext.entity) : '';
 
   return `Strategy: ${evaluation.strategyName}
 Trigger: ${evaluation.triggerDescription}
 Ticker: ${ticker}
 Trigger data: ${contextParts.join(', ')}
 ${formatAllocationBudget(evaluation.context)}
+${priceCtx ? `\nPrice context:\n${priceCtx}\n` : ''}
 ${entityBrief ? `\nMarket context for ${ticker}:\n${entityBrief}\n` : ''}
 Strategy rules:
 ${evaluation.strategyContent}
@@ -179,11 +248,96 @@ ${evaluation.strategyContent}
 Provide your ACTION headline and analysis. Reference specific news, discussions, or data points — do not speculate about what might be causing the trigger.`;
 }
 
-/** Parse headline + optional SIZE line + reasoning. SIZE is SELL-only; a missing line is not an error. */
+// ---------------------------------------------------------------------------
+// Structured parameter parsing
+// ---------------------------------------------------------------------------
+
+/** Regex for structured parameter lines — used to filter them out of reasoning text. */
+const PARAM_LINE_RE = /^(ENTRY|TARGET|STOP|HORIZON|CONVICTION|MAX_ENTRY|CATALYST_IMPACT):/i;
+
+/** Valid conviction values for clamping LLM output. */
+const VALID_CONVICTIONS: Set<string> = new Set(ConvictionLevelSchema.options);
+
+export interface StructuredParams {
+  entryRange?: string;
+  targetPrice?: number;
+  stopLoss?: number;
+  horizon?: string;
+  conviction?: ConvictionLevel;
+  /** Price ceiling (BUY) or floor (SELL) beyond which the catalyst is priced in. */
+  maxEntry?: number;
+  /** LLM-estimated catalyst impact, e.g. "3-5%". */
+  catalystImpact?: string;
+}
+
+/** Parse structured trading parameters from LLM output lines. Each field parsed independently. */
+export function parseStructuredParams(lines: string[]): StructuredParams {
+  const result: StructuredParams = {};
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    const entryMatch = trimmed.match(/^ENTRY:\s*(.+)/i);
+    if (entryMatch) {
+      result.entryRange = entryMatch[1].trim();
+      continue;
+    }
+
+    const targetMatch = trimmed.match(/^TARGET:\s*\$?([\d,.]+)/i);
+    if (targetMatch) {
+      const val = parseFloat(targetMatch[1].replace(/,/g, ''));
+      if (Number.isFinite(val) && val > 0) result.targetPrice = val;
+      continue;
+    }
+
+    const stopMatch = trimmed.match(/^STOP:\s*\$?([\d,.]+)/i);
+    if (stopMatch) {
+      const val = parseFloat(stopMatch[1].replace(/,/g, ''));
+      if (Number.isFinite(val) && val > 0) result.stopLoss = val;
+      continue;
+    }
+
+    const horizonMatch = trimmed.match(/^HORIZON:\s*(.+)/i);
+    if (horizonMatch) {
+      result.horizon = horizonMatch[1].trim();
+      continue;
+    }
+
+    const convictionMatch = trimmed.match(/^CONVICTION:\s*(\w+)/i);
+    if (convictionMatch) {
+      const val = convictionMatch[1].toUpperCase();
+      if (VALID_CONVICTIONS.has(val)) {
+        result.conviction = val as ConvictionLevel;
+      }
+      continue;
+    }
+
+    const maxEntryMatch = trimmed.match(/^MAX_ENTRY:\s*\$?([\d,.]+)/i);
+    if (maxEntryMatch) {
+      const val = parseFloat(maxEntryMatch[1].replace(/,/g, ''));
+      if (Number.isFinite(val) && val > 0) result.maxEntry = val;
+      continue;
+    }
+
+    const catalystMatch = trimmed.match(/^CATALYST_IMPACT:\s*(.+)/i);
+    if (catalystMatch) {
+      result.catalystImpact = catalystMatch[1].trim();
+      continue;
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Response parsing
+// ---------------------------------------------------------------------------
+
+/** Parse headline + optional SIZE line + structured params + reasoning. */
 export function parseActionResponse(
   rawOutput: string,
   evaluation: StrategyEvaluation,
-): { headline: string; reasoning: string; sizeGuidance?: string; parsedCleanly: boolean } {
+): { headline: string; reasoning: string; sizeGuidance?: string; parsedCleanly: boolean } & StructuredParams {
   const ticker = (evaluation.context.ticker as string | undefined) ?? 'portfolio';
 
   const lines = rawOutput.split('\n').filter(Boolean);
@@ -199,20 +353,30 @@ export function parseActionResponse(
     const verdict = parseVerdictFromHeadline(headline);
     const parsedCleanly = verdict !== 'SELL' || sizeGuidance != null;
 
+    const params = parseStructuredParams(rest);
+    const reasoningLines = rest.filter((l) => !PARAM_LINE_RE.test(l.trim()));
+
     return {
       headline,
-      reasoning: rest.join('\n').trim(),
+      reasoning: reasoningLines.join('\n').trim(),
       sizeGuidance,
       parsedCleanly,
+      ...params,
     };
   }
 
+  const params = parseStructuredParams(lines);
   return {
     headline: `REVIEW ${ticker} — ${evaluation.triggerDescription}`,
     reasoning: rawOutput,
     parsedCleanly: false,
+    ...params,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Main reasoning function
+// ---------------------------------------------------------------------------
 
 /** Run the strategist prompt for one evaluation. Falls back to a static REVIEW when the LLM is unavailable. */
 export async function generateActionReasoning(
@@ -240,7 +404,7 @@ export async function generateActionReasoning(
         model: 'sonnet',
         system: ACTION_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: buildUserMessage(evaluation, entityContext) }],
-        maxTokens: 512,
+        maxTokens: 600,
       });
 
       const rawOutput = llmResult.content
@@ -254,6 +418,13 @@ export async function generateActionReasoning(
           reasoning,
           sizeGuidance: llmSizeGuidance,
           parsedCleanly,
+          entryRange,
+          targetPrice,
+          stopLoss,
+          horizon,
+          conviction,
+          maxEntry,
+          catalystImpact,
         } = parseActionResponse(rawOutput, evaluation);
         const finalHeadline = headline || `REVIEW ${ticker} — ${evaluation.triggerDescription}`;
         const finalReasoning = reasoning || evaluation.triggerDescription;
@@ -283,6 +454,13 @@ export async function generateActionReasoning(
           rawOutput,
           fromLlm: true,
           parsedCleanly,
+          entryRange,
+          targetPrice,
+          stopLoss,
+          horizon,
+          conviction,
+          maxEntry,
+          catalystImpact,
         };
       }
       error = 'Empty LLM response';
@@ -305,4 +483,22 @@ export async function generateActionReasoning(
     parsedCleanly: false,
     error,
   };
+}
+
+/**
+ * Deterministic priced-in check: has the current price already moved past the
+ * LLM's max entry threshold?
+ * - BUY: priced in if currentPrice > maxEntry (stock already above ceiling)
+ * - SELL: priced in if currentPrice < maxEntry (stock already below floor)
+ * Returns `undefined` when data is insufficient to determine.
+ */
+export function checkPricedIn(
+  verdict: ActionVerdict,
+  currentPrice: number | undefined,
+  maxEntry: number | undefined,
+): boolean | undefined {
+  if (currentPrice == null || maxEntry == null) return undefined;
+  if (verdict === 'BUY') return currentPrice > maxEntry;
+  if (verdict === 'SELL') return currentPrice < maxEntry;
+  return undefined;
 }
