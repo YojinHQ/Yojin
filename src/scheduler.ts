@@ -561,10 +561,11 @@ export class Scheduler {
         return;
       }
 
-      // Adaptive per-asset shape:
-      //  - LLM-ready (4h elapsed)  → full enrichment bundle + LLM narration + trigger eval
-      //  - LLM-throttled + active strategies → narrow enrichment (only sub-graphs triggers read) + trigger eval, no LLM
-      //  - LLM-throttled + no strategies → skip (nothing to do this cycle, honors lastMicroAt stamp)
+      // Adaptive per-asset enrichment shape:
+      //  - LLM-ready → full enrichment bundle + LLM narration + trigger eval
+      //  - LLM-throttled → baseline fields (+ strategy-derived fields if active) + trigger eval, no LLM
+      const MICRO_BASELINE_FIELDS: EnrichmentField[] = ['market', 'technicals', 'sentiment'];
+
       const now = Date.now();
       const llmReadySet = new Set(
         assetsWithNewSignals
@@ -576,42 +577,27 @@ export class Scheduler {
           .map((a) => a.symbol),
       );
 
+      // Light-path fields: baseline + any extra sub-graphs active strategies need.
       const activeStrategies = this.strategyEvaluator?.getActiveStrategies() ?? [];
-      const triggerFields: EnrichmentField[] | null = (() => {
-        if (activeStrategies.length === 0) return null;
-        const caps = deriveCapabilities(activeStrategies.flatMap((s) => s.triggerGroups));
-        const fields = capabilitiesToEnrichmentFields(caps);
-        // Baseline: always include `market` so the Entity has a quote for supersede / context building.
-        return fields.length > 0 ? fields : (['market'] satisfies EnrichmentField[]);
+      const lightFields: EnrichmentField[] = (() => {
+        const fields = new Set<EnrichmentField>(MICRO_BASELINE_FIELDS);
+        if (activeStrategies.length > 0) {
+          const caps = deriveCapabilities(activeStrategies.flatMap((s) => s.triggerGroups));
+          for (const f of capabilitiesToEnrichmentFields(caps)) fields.add(f);
+        }
+        return [...fields];
       })();
 
-      // Build the per-asset job list. An asset is skipped entirely only when
-      // LLM is throttled AND no strategies would consume a trigger-only fetch.
-      const scheduled = assetsWithNewSignals
-        .map((asset) => {
-          const readyForLlm = llmReadySet.has(asset.symbol);
-          if (!readyForLlm && !triggerFields) return null;
-          return { asset, readyForLlm };
-        })
-        .filter((x): x is { asset: (typeof assetsWithNewSignals)[number]; readyForLlm: boolean } => x !== null);
-
-      if (scheduled.length === 0) {
-        logger.debug('Micro research skipped — LLM throttled and no active strategies', {
-          symbols: assetsWithNewSignals.map((a) => a.symbol),
-          microLlmIntervalMs: this.microLlmIntervalMs,
-        });
-        for (const asset of assetsWithNewSignals) {
-          const state = this.microRegistry.get(asset.symbol);
-          if (state) state.completedToday = true;
-        }
-        return;
-      }
+      const scheduled = assetsWithNewSignals.map((asset) => ({
+        asset,
+        readyForLlm: llmReadySet.has(asset.symbol),
+      }));
 
       logger.debug('Micro research adaptive gate', {
         withNewSignals: assetsWithNewSignals.length,
         llmReady: [...llmReadySet],
-        triggerOnly: scheduled.filter((s) => !s.readyForLlm).map((s) => s.asset.symbol),
-        triggerFields: triggerFields ?? undefined,
+        lightPath: scheduled.filter((s) => !s.readyForLlm).map((s) => s.asset.symbol),
+        lightFields,
       });
 
       // Note: getJintelClient/signalIngestor are omitted from the top-level deps
@@ -631,9 +617,7 @@ export class Scheduler {
               memoryStores: this.memoryStores ?? new Map(),
               profileStore: this.profileStore,
               signalsSince: isFirstRun ? fourDaysAgo : oneDayAgo,
-              // Narrow the Jintel payload when we're only evaluating triggers —
-              // skip news/research/filings/ownership unless the LLM will read them.
-              enrichFields: readyForLlm ? undefined : (triggerFields ?? undefined),
+              enrichFields: readyForLlm ? undefined : lightFields,
             },
             eventLog: this.eventLog,
           });
