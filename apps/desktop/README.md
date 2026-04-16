@@ -99,11 +99,31 @@ pnpm --filter @yojin/desktop build
 pnpm --filter @yojin/desktop build
 ```
 
-> **Code signing is not yet wired.** Until Apple Developer ID + Windows OV/EV certs are configured, builds will trigger Gatekeeper / SmartScreen warnings. See the parent `feat/desktop-tray-app` PR for the signing rollout plan.
+## Install (end user)
+
+### macOS
+
+Builds are currently **unsigned** — macOS quarantines the app on first launch.
+
+1. Download the `.dmg` from the latest [GitHub release](https://github.com/YojinHQ/Yojin/releases).
+2. Open the `.dmg` and drag **Yojin** to `/Applications`.
+3. Clear the quarantine flag:
+   ```bash
+   sudo xattr -cr /Applications/Yojin.app
+   ```
+4. Double-click to launch. The tray icon appears in the menu bar.
+
+### Windows
+
+Builds are **unsigned** — SmartScreen will warn on first launch.
+
+1. Download the `.msi` or `.exe` from the latest [GitHub release](https://github.com/YojinHQ/Yojin/releases).
+2. Run the installer. If SmartScreen appears, click **More info** → **Run anyway**.
 
 ## Open items
 
 - [ ] Lazy-download Playwright browsers on first scrape (keeps installer small per `Workstream B / decision 2`)
-- [ ] Codesigning certs (Apple Developer ID + Windows OV)
+- [ ] Apple code signing + notarization (Developer ID cert is configured, blocked by slow Apple notarization queue in CI)
+- [ ] Windows OV/EV code signing
 - [ ] Auto-update channel (Tauri updater plugin)
 - [ ] Coexistence story with the legacy `Yojin.app` shipped via `scripts/postinstall-desktop.mjs`

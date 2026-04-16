@@ -4,7 +4,7 @@ import Modal from '../common/modal';
 import Badge from '../common/badge';
 import type { BadgeVariant } from '../common/badge';
 import type { TriggerStrength } from '../../api/types';
-import { timeUntil } from '../../lib/utils';
+import { cn, timeUntil } from '../../lib/utils';
 
 /** Lightweight markdown → HTML for LLM-generated analysis text. */
 function markdownToHtml(md: string): string {
@@ -48,12 +48,16 @@ export interface FeedDetailData {
   recommendation?: string;
   relatedTickers?: string[];
   signals?: FeedSignalLink[];
+  verdict?: 'BUY' | 'SELL' | 'TRIM' | 'HOLD' | 'REVIEW';
   /** Action-specific fields */
   actionMeta?: {
     strategyName: string | null;
     severity: string;
     riskContext: string | null;
     expiresAt: string;
+    suggestedQuantity?: number | null;
+    suggestedValue?: number | null;
+    currentPrice?: number | null;
   };
 }
 
@@ -110,7 +114,16 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
   if (!data) return null;
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="max-w-2xl" aria-labelledby="feed-detail-title">
+    <Modal
+      open={open}
+      onClose={onClose}
+      maxWidth="max-w-2xl"
+      aria-labelledby="feed-detail-title"
+      className={cn(
+        data.verdict === 'BUY' && 'border-success/30 ring-1 ring-success/10',
+        (data.verdict === 'SELL' || data.verdict === 'TRIM') && 'border-error/30 ring-1 ring-error/10',
+      )}
+    >
       {/* Source + time header */}
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted">{data.source}</span>
@@ -166,6 +179,38 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
       {/* Summary details */}
       {data.actionMeta && (
         <>
+          {/* Position sizing banner */}
+          {data.actionMeta.suggestedQuantity != null && data.actionMeta.suggestedQuantity > 0 && (
+            <div
+              className={cn(
+                'mt-2 flex items-center justify-between rounded-lg px-4 py-3',
+                data.verdict === 'BUY'
+                  ? 'bg-success/10 text-success'
+                  : data.verdict === 'SELL' || data.verdict === 'TRIM'
+                    ? 'bg-error/10 text-error'
+                    : 'bg-bg-tertiary text-text-primary',
+              )}
+            >
+              <div>
+                <span className="text-2xs font-semibold uppercase tracking-wider opacity-70">Suggested</span>
+                <p className="text-lg font-bold leading-tight">
+                  {data.verdict === 'SELL' || data.verdict === 'TRIM' ? 'Sell' : 'Buy'}{' '}
+                  {data.actionMeta.suggestedQuantity} shares
+                </p>
+              </div>
+              <div className="text-right">
+                {data.actionMeta.currentPrice != null && (
+                  <p className="text-xs opacity-70">@ ${data.actionMeta.currentPrice.toFixed(2)}</p>
+                )}
+                {data.actionMeta.suggestedValue != null && (
+                  <p className="text-sm font-semibold">
+                    ~${data.actionMeta.suggestedValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           <SectionRule label="Trigger Details" />
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             {data.actionMeta.strategyName && (

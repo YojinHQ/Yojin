@@ -55,6 +55,12 @@ export const ActionSchema = z.object({
   severity: z.number().min(0).max(1).optional(),
   /** Deterministic strength derived from how far past thresholds the trigger conditions are. */
   triggerStrength: TriggerStrengthSchema.default('MODERATE'),
+  /** Suggested number of shares/units — computed from strategy allocation + portfolio. */
+  suggestedQuantity: z.number().int().min(0).optional(),
+  /** Dollar value of the suggested trade. */
+  suggestedValue: z.number().min(0).optional(),
+  /** Price at time of recommendation. */
+  currentPrice: z.number().positive().optional(),
   status: ActionStatusSchema.default('PENDING'),
   expiresAt: DateTimeField,
   createdAt: DateTimeField,

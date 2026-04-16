@@ -19,7 +19,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { Entity, JintelClient } from '@yojinhq/jintel-client';
+import type { EnrichmentField, Entity, JintelClient } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
 import type { ActionStore } from './actions/action-store.js';
@@ -48,7 +48,8 @@ import type { Signal } from './signals/types.js';
 import { snapFromInsight } from './snap/snap-from-insight.js';
 import { snapFromMicro } from './snap/snap-from-micro.js';
 import type { SnapStore } from './snap/snap-store.js';
-import { generateActionReasoning } from './strategies/action-reasoning.js';
+import { computePositionSizing, generateActionReasoning } from './strategies/action-reasoning.js';
+import { capabilitiesToEnrichmentFields, deriveCapabilities } from './strategies/capabilities.js';
 import { formatTriggerContext } from './strategies/format-trigger-context.js';
 import { buildPortfolioContext, buildSingleTickerContext } from './strategies/portfolio-context-builder.js';
 import type { PortfolioContext, StrategyEvaluator } from './strategies/strategy-evaluator.js';
@@ -560,45 +561,55 @@ export class Scheduler {
         return;
       }
 
-      // LLM interval gate: even when new signals exist, don't re-analyze an asset
-      // more often than microLlmIntervalMs. This bounds LLM spend on busy news days.
+      // Adaptive per-asset enrichment shape:
+      //  - LLM-ready → full enrichment bundle + LLM narration + trigger eval
+      //  - LLM-throttled → baseline fields (+ strategy-derived fields if active) + trigger eval, no LLM
+      const MICRO_BASELINE_FIELDS: EnrichmentField[] = ['market', 'technicals', 'sentiment', 'social', 'news'];
+
       const now = Date.now();
-      const assetsReadyForLlm = assetsWithNewSignals.filter((asset) => {
-        const state = this.microRegistry.get(asset.symbol);
-        if (!state?.lastLlmAt) return true; // never analyzed — always eligible
-        return now - new Date(state.lastLlmAt).getTime() >= this.microLlmIntervalMs;
-      });
+      const llmReadySet = new Set(
+        assetsWithNewSignals
+          .filter((asset) => {
+            const state = this.microRegistry.get(asset.symbol);
+            if (!state?.lastLlmAt) return true;
+            return now - new Date(state.lastLlmAt).getTime() >= this.microLlmIntervalMs;
+          })
+          .map((a) => a.symbol),
+      );
 
-      if (assetsReadyForLlm.length === 0) {
-        logger.debug('Micro research skipped — LLM interval not elapsed for batch', {
-          symbols: assetsWithNewSignals.map((a) => a.symbol),
-          microLlmIntervalMs: this.microLlmIntervalMs,
-        });
-        // Mark all assets with new signals as completed today — they were processed, just throttled.
-        for (const asset of assetsWithNewSignals) {
-          const state = this.microRegistry.get(asset.symbol);
-          if (state) state.completedToday = true;
+      // Light-path fields: baseline + any extra sub-graphs active strategies need.
+      const activeStrategies = this.strategyEvaluator?.getActiveStrategies() ?? [];
+      const lightFields: EnrichmentField[] = (() => {
+        const fields = new Set<EnrichmentField>(MICRO_BASELINE_FIELDS);
+        if (activeStrategies.length > 0) {
+          const caps = deriveCapabilities(activeStrategies.flatMap((s) => s.triggerGroups));
+          for (const f of capabilitiesToEnrichmentFields(caps)) fields.add(f);
         }
-        return;
-      }
+        return [...fields];
+      })();
 
-      logger.debug('Micro research LLM gate', {
+      const scheduled = assetsWithNewSignals.map((asset) => ({
+        asset,
+        readyForLlm: llmReadySet.has(asset.symbol),
+      }));
+
+      logger.debug('Micro research adaptive gate', {
         withNewSignals: assetsWithNewSignals.length,
-        readyForLlm: assetsReadyForLlm.length,
-        symbols: assetsReadyForLlm.map((a) => a.symbol),
+        llmReady: [...llmReadySet],
+        lightPath: scheduled.filter((s) => !s.readyForLlm).map((s) => s.asset.symbol),
+        lightFields,
       });
 
-      // Run micro research in parallel (up to MAX_MICRO_CONCURRENCY)
       // Note: getJintelClient/signalIngestor are omitted from the top-level deps
       // (so runMicroResearch won't re-fetch signals per ticker — already batch-fetched above).
-      // getJintelClient IS passed in briefOptions so buildSingleBrief can enrich entities
-      // for fundamentals, risk, technicals etc. that signals alone don't provide.
+      // getJintelClient IS passed in briefOptions so buildSingleBriefEnriched can enrich entities.
       const results = await Promise.allSettled(
-        assetsReadyForLlm.map((asset) => {
+        scheduled.map(({ asset, readyForLlm }) => {
           const isFirstRun = preFetchAt.get(asset.symbol) === null;
           return runMicroResearch(asset.symbol, asset.source, {
             providerRouter,
             microInsightStore,
+            runLlm: readyForLlm,
             briefOptions: {
               snapshotStore,
               signalArchive: archive,
@@ -606,6 +617,7 @@ export class Scheduler {
               memoryStores: this.memoryStores ?? new Map(),
               profileStore: this.profileStore,
               signalsSince: isFirstRun ? fourDaysAgo : oneDayAgo,
+              enrichFields: readyForLlm ? undefined : lightFields,
             },
             eventLog: this.eventLog,
           });
@@ -618,30 +630,42 @@ export class Scheduler {
         return;
       }
 
-      // Update registry timestamps and mark completed today
+      // Update registry timestamps, collect insights, and build trigger inputs from every enriched result.
       const microInsights: MicroInsight[] = [];
+      const microStrategyInputs: Array<{ symbol: string; entity: Entity; signals: Signal[] }> = [];
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
-        const asset = assetsReadyForLlm[i];
-        if (!result || !asset) continue;
+        const entry = scheduled[i];
+        if (!result || !entry) continue;
+        const { asset, readyForLlm } = entry;
         const symbol = asset.symbol;
 
-        if (result.status === 'fulfilled' && result.value.insight) {
-          const state = this.microRegistry.get(symbol);
-          if (state) {
-            state.lastLlmAt = new Date().toISOString();
-            state.completedToday = true;
-          }
+        if (result.status === 'rejected') {
+          logger.error('Micro research failed', { symbol, error: String(result.reason) });
+          continue;
+        }
 
+        const state = this.microRegistry.get(symbol);
+        if (state) state.completedToday = true;
+
+        if (result.value.insight) {
+          if (state) state.lastLlmAt = new Date().toISOString();
           microInsights.push(result.value.insight);
-
           logger.info('Micro research complete', {
             symbol,
             rating: result.value.insight.rating,
             durationMs: result.value.durationMs,
           });
-        } else if (result.status === 'rejected') {
-          logger.error('Micro research failed', { symbol, error: String(result.reason) });
+        } else if (readyForLlm) {
+          logger.warn('Micro research LLM path returned no insight', { symbol });
+        }
+
+        if (result.value.entity) {
+          microStrategyInputs.push({
+            symbol,
+            entity: result.value.entity,
+            signals: result.value.signals ?? [],
+          });
         }
       }
 
@@ -651,19 +675,8 @@ export class Scheduler {
         await this.persistMicroSummaries(microInsights);
       }
 
-      // Evaluate per-asset strategy triggers for tickers that completed micro research
-      const microStrategyInputs = [];
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        const asset = assetsReadyForLlm[i];
-        if (result?.status === 'fulfilled' && result.value.entity && asset) {
-          microStrategyInputs.push({
-            symbol: asset.symbol,
-            entity: result.value.entity,
-            signals: result.value.signals ?? [],
-          });
-        }
-      }
+      // Evaluate per-asset strategy triggers — fires for every asset we enriched,
+      // whether or not the LLM also ran.
       if (microStrategyInputs.length > 0) {
         logger.debug('Evaluating micro strategy triggers', {
           symbols: microStrategyInputs.map((i) => i.symbol),
@@ -1188,6 +1201,7 @@ export class Scheduler {
 
     const totalValue = snapshot.totalValue || 0;
     const allEvaluations: StrategyEvaluation[] = [];
+    const entityByTicker = new Map<string, { entity: Entity; signals: Signal[] }>();
 
     for (const { symbol, entity, signals } of results) {
       const ticker = symbol.toUpperCase();
@@ -1197,6 +1211,8 @@ export class Scheduler {
       // Build a lightweight single-ticker context from the Entity data we already have
       const quote = entity.market?.quote;
       if (!quote) continue; // no quote data — can't evaluate
+
+      entityByTicker.set(ticker, { entity, signals });
 
       const ctx = buildSingleTickerContext(
         ticker,
@@ -1218,7 +1234,7 @@ export class Scheduler {
       triggers: allEvaluations.map((e) => `${e.strategyName}:${e.context.ticker}`),
     });
 
-    await this.processStrategyEvaluations(allEvaluations);
+    await this.processStrategyEvaluations(allEvaluations, entityByTicker);
   }
 
   /**
@@ -1229,7 +1245,10 @@ export class Scheduler {
    * the opinionated BUY/SELL/REVIEW output layer. Neutral intel observations
    * (from insight pipelines) are persisted as Summaries in a separate store.
    */
-  private async processStrategyEvaluations(evaluations: StrategyEvaluation[]): Promise<void> {
+  private async processStrategyEvaluations(
+    evaluations: StrategyEvaluation[],
+    entityByTicker?: Map<string, { entity: Entity; signals: Signal[] }>,
+  ): Promise<void> {
     if (!this.actionStore || evaluations.length === 0) return;
 
     if (this.eventLog) {
@@ -1245,10 +1264,23 @@ export class Scheduler {
     const expiresAt = new Date(Date.now() + ACTION_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
     const now = new Date().toISOString();
 
-    for (const evaluation of evaluations) {
-      const { headline, verdict, reasoning } = await generateActionReasoning(evaluation, this.providerRouter ?? null);
+    // Compute total portfolio value for position sizing
+    const snapshot = await this.snapshotStore?.getLatest();
+    const totalPortfolioValue = snapshot?.totalValue ?? 0;
 
+    for (const evaluation of evaluations) {
       const ticker = evaluation.context.ticker as string | undefined;
+      const entityContext = ticker ? entityByTicker?.get(ticker) : undefined;
+      const currentPrice = entityContext?.entity.market?.quote?.price;
+      const sizing = computePositionSizing(evaluation.context, currentPrice, totalPortfolioValue);
+
+      const { headline, verdict, reasoning } = await generateActionReasoning(
+        evaluation,
+        this.providerRouter ?? null,
+        entityContext,
+        sizing,
+      );
+
       const contextParts = formatTriggerContext(evaluation.context);
 
       const result = await this.actionStore.create({
@@ -1263,6 +1295,9 @@ export class Scheduler {
         tickers: ticker ? [ticker] : [],
         riskContext: contextParts.join('\n'),
         triggerStrength: evaluation.triggerStrength,
+        suggestedQuantity: sizing?.suggestedQuantity,
+        suggestedValue: sizing?.suggestedValue,
+        currentPrice: sizing?.currentPrice,
         status: 'PENDING',
         expiresAt,
         createdAt: now,

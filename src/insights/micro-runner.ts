@@ -31,6 +31,13 @@ export interface MicroRunnerDeps {
   getJintelClient?: () => JintelClient | undefined;
   signalIngestor?: SignalIngestor;
   eventLog?: EventLog;
+  /**
+   * When false, skip the LLM analyzer call but still enrich + return the Entity
+   * and signals so the caller can evaluate strategy triggers. Defaults to true.
+   * Used by the micro flow to run trigger evaluation on the 5-min cadence without
+   * spending an LLM call every time.
+   */
+  runLlm?: boolean;
 }
 
 export interface MicroRunResult {
@@ -73,34 +80,44 @@ export async function runMicroResearch(
   }
   const { brief, entity, signals: curatedSignals } = enriched;
 
-  // 3. AI analysis — wrap so entity/signals are still returned on LLM failure
+  // 3. AI analysis — wrap so entity/signals are still returned on LLM failure.
+  //    When runLlm is false, we skip the LLM entirely and let the caller run
+  //    strategy triggers against the already-enriched entity.
   let insight: MicroInsight | null = null;
-  try {
-    insight = await analyzeTicker(brief, deps.providerRouter, { source });
+  if (deps.runLlm !== false) {
+    try {
+      insight = await analyzeTicker(brief, deps.providerRouter, { source });
 
-    // 4. Save
-    await deps.microInsightStore.save(insight);
+      // 4. Save
+      await deps.microInsightStore.save(insight);
 
-    // 5. Event log
-    if (deps.eventLog) {
-      await deps.eventLog.append({
-        type: 'system',
-        data: {
-          message: `Micro research for ${ticker}: ${insight.rating} (${(insight.conviction * 100).toFixed(0)}% conviction)`,
-        },
+      // 5. Event log
+      if (deps.eventLog) {
+        await deps.eventLog.append({
+          type: 'system',
+          data: {
+            message: `Micro research for ${ticker}: ${insight.rating} (${(insight.conviction * 100).toFixed(0)}% conviction)`,
+          },
+        });
+      }
+
+      logger.info('Micro research complete', {
+        symbol: ticker,
+        rating: insight.rating,
+        signalsIngested,
+        durationMs: Date.now() - start,
+      });
+    } catch (err) {
+      logger.warn('Micro research LLM analysis failed — entity still available for strategy evaluation', {
+        symbol: ticker,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
-
-    logger.info('Micro research complete', {
+  } else {
+    logger.debug('Micro research ran without LLM (trigger-only enrichment)', {
       symbol: ticker,
-      rating: insight.rating,
       signalsIngested,
       durationMs: Date.now() - start,
-    });
-  } catch (err) {
-    logger.warn('Micro research LLM analysis failed — entity still available for strategy evaluation', {
-      symbol: ticker,
-      error: err instanceof Error ? err.message : String(err),
     });
   }
 

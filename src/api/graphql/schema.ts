@@ -629,6 +629,9 @@ export const typeDefs = /* GraphQL */ `
     riskContext: String
     severity: Float
     triggerStrength: TriggerStrength!
+    suggestedQuantity: Int
+    suggestedValue: Float
+    currentPrice: Float
     severityLabel: String!
     status: ActionStatus!
     expiresAt: String!
