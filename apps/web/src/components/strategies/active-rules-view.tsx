@@ -3,9 +3,12 @@ import { useMemo, useState } from 'react';
 import StrategyCard from './strategy-card.js';
 import StrategyDetailModal from './strategy-detail-modal.js';
 import Spinner from '../common/spinner.js';
+import Modal from '../common/modal.js';
 import { useStrategies, useToggleStrategy } from '../../api/hooks/index.js';
 import type { Strategy, StrategyCategory } from './types.js';
 import { cn } from '../../lib/utils.js';
+
+const STRATEGY_DISCLAIMER_ACK_KEY = 'yojin-strategy-disclaimer-ack-v1';
 
 const CATEGORY_FILTERS: Array<{ label: string; value: StrategyCategory | 'ALL' }> = [
   { label: 'All', value: 'ALL' },
@@ -22,6 +25,8 @@ export default function ActiveRulesView() {
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<StrategyCategory | 'ALL'>('ALL');
+  const [pendingActivation, setPendingActivation] = useState<Strategy | null>(null);
+  const [disclaimerAcked, setDisclaimerAcked] = useState(false);
 
   const strategies = useMemo(() => result.data?.strategies ?? [], [result.data?.strategies]);
 
@@ -45,10 +50,36 @@ export default function ActiveRulesView() {
   const active = filtered.filter((s) => s.active);
   const available = filtered.filter((s) => !s.active);
 
+  async function activate(id: string) {
+    const res = await toggleStrategy({ id, active: true });
+    if (res.error) setToggleError(res.error.message);
+  }
+
   async function handleToggle(id: string, newActive: boolean) {
     setToggleError(null);
-    const res = await toggleStrategy({ id, active: newActive });
-    if (res.error) setToggleError(res.error.message);
+    if (!newActive) {
+      const res = await toggleStrategy({ id, active: false });
+      if (res.error) setToggleError(res.error.message);
+      return;
+    }
+    const alreadyAcked = typeof window !== 'undefined' && !!window.localStorage.getItem(STRATEGY_DISCLAIMER_ACK_KEY);
+    if (alreadyAcked) {
+      await activate(id);
+      return;
+    }
+    const strategy = strategies.find((s) => s.id === id) ?? null;
+    setDisclaimerAcked(false);
+    setPendingActivation(strategy);
+  }
+
+  async function confirmActivation() {
+    if (!pendingActivation || !disclaimerAcked) return;
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(STRATEGY_DISCLAIMER_ACK_KEY, new Date().toISOString());
+    }
+    const id = pendingActivation.id;
+    setPendingActivation(null);
+    await activate(id);
   }
 
   if (result.fetching) {
@@ -163,6 +194,63 @@ export default function ActiveRulesView() {
           onClose={() => setSelectedStrategy(null)}
         />
       )}
+
+      <Modal
+        open={!!pendingActivation}
+        onClose={() => setPendingActivation(null)}
+        title="Enable strategy — not financial advice"
+        maxWidth="max-w-xl"
+      >
+        <div className="space-y-4 text-sm text-text-secondary">
+          <p>
+            You&rsquo;re about to enable{' '}
+            <span className="font-semibold text-text-primary">{pendingActivation?.name}</span>. Once active, it can
+            generate BUY/SELL action proposals against your portfolio.
+          </p>
+          <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs leading-relaxed text-text-secondary">
+            <p className="mb-2 font-semibold text-warning">This is not financial advice.</p>
+            <p>
+              Strategies are automated heuristics, not recommendations from a licensed adviser. Outputs may be wrong,
+              incomplete, or out of date. You are solely responsible for every trade you approve. No order is placed
+              without your explicit confirmation. Past performance does not predict future results.
+            </p>
+          </div>
+          <label className="flex cursor-pointer items-start gap-2 text-xs text-text-secondary">
+            <input
+              type="checkbox"
+              checked={disclaimerAcked}
+              onChange={(e) => setDisclaimerAcked(e.target.checked)}
+              className="mt-0.5 h-4 w-4 cursor-pointer accent-accent-primary"
+            />
+            <span>
+              I understand that Yojin does not provide financial advice and that I&rsquo;m responsible for my own
+              investment decisions.
+            </span>
+          </label>
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setPendingActivation(null)}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!disclaimerAcked}
+              onClick={confirmActivation}
+              className={cn(
+                'rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
+                disclaimerAcked
+                  ? 'bg-accent-primary text-white hover:opacity-90'
+                  : 'cursor-not-allowed bg-bg-tertiary text-text-muted',
+              )}
+            >
+              Enable strategy
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
