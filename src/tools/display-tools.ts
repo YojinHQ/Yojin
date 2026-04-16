@@ -18,7 +18,10 @@ import type { Position } from '../api/graphql/types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import { enrichPortfolioSnapshotWithLiveQuotes } from '../portfolio/live-enrichment.js';
 import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
-import { balanceToRange } from '../trust/pii/patterns.js';
+
+function formatUsd(value: number): string {
+  return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+}
 
 export interface DisplayToolsDeps {
   snapshotStore: PortfolioSnapshotStore;
@@ -67,13 +70,12 @@ export function createDisplayTools(deps: DisplayToolsDeps): ToolDefinition[] {
 
       const card = { type: 'portfolio-overview' as const, data };
 
-      // LLM sees redacted values — exact amounts go only to channels via displayCard
       return {
         content:
           `Displaying portfolio overview card (${params.period}).\n` +
-          `Total value: ${balanceToRange(snapshot.totalValue)}, ` +
+          `Total value: ${formatUsd(snapshot.totalValue)}, ` +
           `${snapshot.positions.length} positions, ` +
-          `P&L: ${snapshot.totalPnl >= 0 ? '+' : ''}${balanceToRange(snapshot.totalPnl)}.`,
+          `P&L: ${snapshot.totalPnl >= 0 ? '+' : ''}${formatUsd(snapshot.totalPnl)}.`,
         displayCard: card,
       };
     },
@@ -120,7 +122,7 @@ export function createDisplayTools(deps: DisplayToolsDeps): ToolDefinition[] {
       return {
         content:
           `Displaying ${params.variant} positions (${sorted.length} shown).\n` +
-          `Total portfolio value: ${balanceToRange(snapshot.totalValue)}.`,
+          `Total portfolio value: ${formatUsd(snapshot.totalValue)}.`,
         displayCard: card,
       };
     },
@@ -176,7 +178,6 @@ export function createDisplayTools(deps: DisplayToolsDeps): ToolDefinition[] {
 
       const card = { type: 'allocation' as const, data };
 
-      // LLM sees redacted value + weight percentages (no exact $)
       const topClasses = assetClassRows
         .slice(0, 3)
         .map((r) => `${r.label} ${r.weight.toFixed(0)}%`)
@@ -184,7 +185,7 @@ export function createDisplayTools(deps: DisplayToolsDeps): ToolDefinition[] {
       return {
         content:
           `Displaying allocation breakdown.\n` +
-          `Total value: ${balanceToRange(totalValue)}. ` +
+          `Total value: ${formatUsd(totalValue)}. ` +
           `Asset classes: ${topClasses}. ` +
           `Top concentration: ${topConcentrations[0]?.symbol ?? 'N/A'} at ${topConcentrations[0]?.weight.toFixed(0) ?? 0}%.`,
         displayCard: card,
@@ -234,8 +235,8 @@ export function createDisplayTools(deps: DisplayToolsDeps): ToolDefinition[] {
       return {
         content:
           `Displaying morning briefing card.\n` +
-          `Portfolio: ${balanceToRange(totalValue)} across ${positions.length} positions. ` +
-          `${totalPnl >= 0 ? 'Up' : 'Down'} ${balanceToRange(totalPnl)}.`,
+          `Portfolio: ${formatUsd(totalValue)} across ${positions.length} positions. ` +
+          `${totalPnl >= 0 ? 'Up' : 'Down'} ${formatUsd(Math.abs(totalPnl))}.`,
         displayCard: card,
       };
     },

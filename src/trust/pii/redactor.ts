@@ -7,7 +7,7 @@
 
 import { createHash } from 'node:crypto';
 
-import { DEFAULT_PII_RULES, balanceToRange } from './patterns.js';
+import { DEFAULT_PII_RULES } from './patterns.js';
 import type { PiiRedactor, RedactionMetadata, RedactionRule } from './types.js';
 import type { AuditLog } from '../audit/types.js';
 
@@ -82,15 +82,6 @@ export class DefaultPiiRedactor implements PiiRedactor {
       for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
         const fieldPath = path ? `${path}.${key}` : key;
 
-        // Handle numeric balance fields specially — preserve sign for P&L fields
-        if (this.isBalanceField(key) && typeof value === 'number') {
-          const sign = value < 0 ? '-' : '';
-          result[key] = `${sign}${balanceToRange(value)}`;
-          rulesApplied.add('balance-range');
-          onRedact(1);
-          continue;
-        }
-
         if (typeof value === 'string') {
           const { redacted, applied } = this.applyRules(value, key);
           if (applied.length > 0) {
@@ -139,28 +130,5 @@ export class DefaultPiiRedactor implements PiiRedactor {
     }
 
     return { redacted: result, applied };
-  }
-
-  private isBalanceField(key: string): boolean {
-    const balanceKeys = new Set([
-      'balance',
-      'totalValue',
-      'total_value',
-      'totalCost',
-      'total_cost',
-      'totalPnl',
-      'total_pnl',
-      'marketValue',
-      'market_value',
-      'costBasis',
-      'cost_basis',
-      'unrealizedPnl',
-      'unrealized_pnl',
-      'dayChange',
-      'day_change',
-      'totalGain',
-      'total_gain',
-    ]);
-    return balanceKeys.has(key);
   }
 }

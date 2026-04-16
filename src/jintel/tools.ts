@@ -54,7 +54,10 @@ import type { ToolDefinition, ToolResult } from '../core/types.js';
 import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
 import { SignalTypeSchema, SourceTypeSchema } from '../signals/types.js';
-import { balanceToRange, quantityToRange } from '../trust/pii/patterns.js';
+
+function formatUsd(value: number): string {
+  return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+}
 
 // ── Options ──────────────────────────────────────────────────────────────
 
@@ -741,8 +744,8 @@ function formatPositionContext(position: Position, snapshotTimestamp: string): s
     `Name: ${position.name || position.symbol}`,
     `Asset Class: ${position.assetClass}`,
     `Platform: ${position.platform}`,
-    `Quantity: ${quantityToRange(position.quantity)}`,
-    `Position Value: ${balanceToRange(position.marketValue)}`,
+    `Quantity: ${position.quantity}`,
+    `Position Value: ${formatUsd(position.marketValue)}`,
     `Unrealized P&L: ${position.unrealizedPnlPercent >= 0 ? '+' : ''}${position.unrealizedPnlPercent.toFixed(1)}%`,
     `Snapshot Time: ${snapshotTimestamp}`,
   ];

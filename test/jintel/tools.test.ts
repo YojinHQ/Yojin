@@ -481,7 +481,7 @@ describe('jintel tools', () => {
   });
 
   describe('portfolio enrichment tools', () => {
-    it('enrich_position adds redacted portfolio context', async () => {
+    it('enrich_position adds portfolio context with exact values', async () => {
       const { dir, store } = createSnapshotStore();
       try {
         await store.save({
@@ -508,8 +508,8 @@ describe('jintel tools', () => {
 
         expect(result.isError).toBeUndefined();
         expect(result.content).toContain('## Portfolio Context');
-        expect(result.content).toContain('Quantity: 10-100 units');
-        expect(result.content).toContain('Position Value: $1k-$10k');
+        expect(result.content).toContain('Quantity: 25');
+        expect(result.content).toContain('Position Value: $4,500');
         expect(result.content).toContain('# Apple Inc. (COMPANY)');
       } finally {
         rmSync(dir, { recursive: true, force: true });

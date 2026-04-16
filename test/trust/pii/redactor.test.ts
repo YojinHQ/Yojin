@@ -5,33 +5,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { FileAuditLog } from '../../../src/trust/audit/audit-log.js';
-import { balanceToRange, hashAccountId } from '../../../src/trust/pii/patterns.js';
+import { hashAccountId } from '../../../src/trust/pii/patterns.js';
 import { DefaultPiiRedactor } from '../../../src/trust/pii/redactor.js';
-
-describe('balanceToRange', () => {
-  it('maps values to correct ranges', () => {
-    expect(balanceToRange(0)).toBe('$0-$1k');
-    expect(balanceToRange(500)).toBe('$0-$1k');
-    expect(balanceToRange(999)).toBe('$0-$1k');
-    expect(balanceToRange(1000)).toBe('$1k-$10k');
-    expect(balanceToRange(9999)).toBe('$1k-$10k');
-    expect(balanceToRange(10000)).toBe('$10k-$50k');
-    expect(balanceToRange(49999)).toBe('$10k-$50k');
-    expect(balanceToRange(50000)).toBe('$50k-$100k');
-    expect(balanceToRange(99999)).toBe('$50k-$100k');
-    expect(balanceToRange(100000)).toBe('$100k-$500k');
-    expect(balanceToRange(499999)).toBe('$100k-$500k');
-    expect(balanceToRange(500000)).toBe('$500k-$1M');
-    expect(balanceToRange(999999)).toBe('$500k-$1M');
-    expect(balanceToRange(1000000)).toBe('$1M+');
-    expect(balanceToRange(50000000)).toBe('$1M+');
-  });
-
-  it('handles negative values (uses absolute)', () => {
-    expect(balanceToRange(-500)).toBe('$0-$1k');
-    expect(balanceToRange(-50000)).toBe('$50k-$100k');
-  });
-});
 
 describe('hashAccountId', () => {
   it('is deterministic', () => {
@@ -99,15 +74,15 @@ describe('DefaultPiiRedactor', () => {
     expect(data.symbol).toBe('AAPL');
   });
 
-  it('redacts balance fields to ranges', () => {
+  it('passes numeric balance fields through unchanged', () => {
     const { data } = redactor.redact({
       balance: 75000,
       totalValue: 150000,
       symbol: 'AAPL',
     });
 
-    expect(data.balance).toBe('$50k-$100k');
-    expect(data.totalValue).toBe('$100k-$500k');
+    expect(data.balance).toBe(75000);
+    expect(data.totalValue).toBe(150000);
     expect(data.symbol).toBe('AAPL');
   });
 
@@ -135,11 +110,11 @@ describe('DefaultPiiRedactor', () => {
 
     const portfolio = data.portfolio as Record<string, unknown>;
     expect(portfolio.accountId).toMatch(/^<ACCT-/);
-    expect(portfolio.balance).toBe('$10k-$50k');
+    expect(portfolio.balance).toBe(25000);
 
     const positions = portfolio.positions as Array<Record<string, unknown>>;
     expect(positions[0].symbol).toBe('AAPL');
-    expect(positions[0].marketValue).toBe('$10k-$50k');
+    expect(positions[0].marketValue).toBe(15000);
   });
 
   it('is deterministic — same input produces same output', () => {
@@ -159,10 +134,10 @@ describe('DefaultPiiRedactor', () => {
       ownerName: 'John',
     });
 
-    expect(metadata.fieldsRedacted).toBe(3);
+    expect(metadata.fieldsRedacted).toBe(2);
     expect(metadata.rulesApplied).toContain('account-id');
     expect(metadata.rulesApplied).toContain('name');
-    expect(metadata.rulesApplied).toContain('balance-range');
+    expect(metadata.rulesApplied).not.toContain('balance-range');
     expect(metadata.hash).toBeDefined();
   });
 

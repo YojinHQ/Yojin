@@ -126,7 +126,7 @@ describe('Portfolio tools', () => {
       expect(result.content).toContain('Total Value');
     });
 
-    it('redacts exact dollar amounts — LLM sees ranges, not real values', async () => {
+    it('exposes exact dollar amounts and quantities to the LLM', async () => {
       const saveTool = tools.find((t) => t.name === 'save_portfolio_positions')!;
       const getTool = tools.find((t) => t.name === 'get_portfolio')!;
 
@@ -139,19 +139,14 @@ describe('Portfolio tools', () => {
       });
 
       const getResult = await getTool.execute({});
-      // LLM should see balance ranges, not exact values
-      expect(getResult.content).toContain('$50k-$100k'); // totalValue ~$102k
-      // LLM should NOT see exact dollar amounts
-      expect(getResult.content).not.toContain('67,000');
-      expect(getResult.content).not.toContain('35,000');
-      expect(getResult.content).not.toContain('$102,');
-      // LLM should NOT see exact quantities — only bucketed ranges
-      expect(getResult.content).not.toMatch(/: 1 unit/);
-      expect(getResult.content).toContain('1-10 units'); // quantity 1 → "1-10 units" bucket
-      expect(getResult.content).toContain('10-100 units'); // quantity 10 → "10-100 units" bucket
+      expect(getResult.content).toContain('$67,000');
+      expect(getResult.content).toContain('$35,000');
+      expect(getResult.content).toContain('$102,000');
+      expect(getResult.content).toContain('1 units');
+      expect(getResult.content).toContain('10 units');
     });
 
-    it('save response redacts exact totals', async () => {
+    it('save response includes exact totals', async () => {
       const saveTool = tools.find((t) => t.name === 'save_portfolio_positions')!;
 
       const result = await saveTool.execute({
@@ -161,10 +156,8 @@ describe('Portfolio tools', () => {
         ],
       });
 
-      // Save response shows ranges, not exact values
-      expect(result.content).toContain('$50k-$100k'); // totalValue $67k
-      expect(result.content).not.toContain('67,000');
-      expect(result.content).not.toContain('$67,');
+      expect(result.content).toContain('$67,000');
+      expect(result.content).toContain('Total P&L: +$17,000');
     });
   });
 });

@@ -11,30 +11,6 @@ export function hashAccountId(id: string): string {
   return '<ACCT-' + createHash('sha256').update(id).digest('hex').slice(0, 8) + '>';
 }
 
-/** Convert an exact quantity to a bucketed range string. Preserves sign for short positions. */
-export function quantityToRange(value: number): string {
-  const sign = value < 0 ? '-' : '';
-  const abs = Math.abs(value);
-  if (abs < 1) return `${sign}<1 unit`;
-  if (abs < 10) return `${sign}1-10 units`;
-  if (abs < 100) return `${sign}10-100 units`;
-  if (abs < 1_000) return `${sign}100-1k units`;
-  if (abs < 10_000) return `${sign}1k-10k units`;
-  return `${sign}10k+ units`;
-}
-
-/** Convert an exact balance to a range string. */
-export function balanceToRange(value: number): string {
-  const abs = Math.abs(value);
-  if (abs < 1_000) return '$0-$1k';
-  if (abs < 10_000) return '$1k-$10k';
-  if (abs < 50_000) return '$10k-$50k';
-  if (abs < 100_000) return '$50k-$100k';
-  if (abs < 500_000) return '$100k-$500k';
-  if (abs < 1_000_000) return '$500k-$1M';
-  return '$1M+';
-}
-
 export const DEFAULT_PII_RULES: RedactionRule[] = [
   // Account IDs: numeric sequences 6-12 digits in specific fields
   {

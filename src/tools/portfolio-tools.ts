@@ -12,7 +12,10 @@ import { AssetClassSchema } from '../api/graphql/types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
 import { PlatformSchema } from '../scraper/types.js';
-import { balanceToRange, quantityToRange } from '../trust/pii/patterns.js';
+
+function formatUsd(value: number): string {
+  return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+}
 
 const PositionInputSchema = z.object({
   symbol: z.string().min(1).describe('Ticker symbol (e.g. AAPL, BTC)'),
@@ -71,16 +74,14 @@ export function createPortfolioTools(options: PortfolioToolsOptions): ToolDefini
 
       onPortfolioSaved?.(snapshot);
 
-      // Redact exact values — the LLM should not see real balances.
-      // The UI reads exact values directly from the snapshot store via GraphQL.
       return {
         content:
           `Portfolio saved successfully.\n` +
           `Snapshot ID: ${snapshot.id}\n` +
           `Platform: ${params.platform}\n` +
           `Positions: ${positions.length}\n` +
-          `Total Value: ${balanceToRange(snapshot.totalValue)}\n` +
-          `Total P&L: ${snapshot.totalPnl < 0 ? '-' : '+'}${balanceToRange(snapshot.totalPnl)}`,
+          `Total Value: ${formatUsd(snapshot.totalValue)}\n` +
+          `Total P&L: ${snapshot.totalPnl < 0 ? '-' : '+'}${formatUsd(Math.abs(snapshot.totalPnl))}`,
       };
     },
   };
@@ -99,12 +100,10 @@ export function createPortfolioTools(options: PortfolioToolsOptions): ToolDefini
         };
       }
 
-      // Redact exact values — the LLM sees symbols, bucketed quantities, and balance
-      // ranges but NOT exact dollar amounts or quantities. The UI shows real values via GraphQL.
       const summary = snapshot.positions
         .map(
           (p) =>
-            `  ${p.symbol}: ${quantityToRange(p.quantity)}, value: ${balanceToRange(p.marketValue)} ` +
+            `  ${p.symbol}: ${p.quantity} units, value: ${formatUsd(p.marketValue)} ` +
             `(P&L: ${p.unrealizedPnlPercent >= 0 ? '+' : ''}${p.unrealizedPnlPercent.toFixed(1)}%)`,
         )
         .join('\n');
@@ -113,7 +112,7 @@ export function createPortfolioTools(options: PortfolioToolsOptions): ToolDefini
         content:
           `Portfolio (${snapshot.platform ?? 'ALL'}) — ${snapshot.timestamp}\n` +
           `Positions:\n${summary}\n\n` +
-          `Total Value: ${balanceToRange(snapshot.totalValue)}\n` +
+          `Total Value: ${formatUsd(snapshot.totalValue)}\n` +
           `Total P&L: ${snapshot.totalPnlPercent.toFixed(1)}%`,
       };
     },
