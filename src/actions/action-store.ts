@@ -5,10 +5,13 @@
  * appended as new lines — the highest-version entry for each ID wins on read.
  *
  * Supersede-on-triggerId: when a fresh evaluation arrives for a triggerId that
- * already has a PENDING record, the old record is marked EXPIRED with
- * `resolvedBy: 'superseded'` and the new record is appended. This lets later
- * flows (e.g. macro refining a micro-fired trigger) update the Action instead
- * of being silently skipped.
+ * already has a PENDING record (including a dismissed one), the old record is
+ * marked EXPIRED with `resolvedBy: 'superseded'` and the new record is appended.
+ * This lets later flows (e.g. macro refining a micro-fired trigger) update the
+ * Action instead of being silently skipped, while keeping the invariant that at
+ * most one PENDING record exists per triggerId at a time. Callers gate on
+ * `getRecentResolutions` to avoid re-firing on an active user dismissal unless
+ * the new trigger strength escalates past the dismissed record.
  *
  * No cross-strategy conflict resolution: multiple strategies can produce
  * competing PENDING actions for the same ticker. The user decides which to act on.
@@ -29,6 +32,27 @@ import type { TriggerStrength } from '../strategies/trigger-strength.js';
 import { STRENGTH_ORDER } from '../strategies/trigger-strength.js';
 
 const logger = createSubsystemLogger('action-store');
+
+/**
+ * Timestamp of the most recent **active** user decision on this action, or null.
+ *
+ * Active means the decision still reflects the record's current state:
+ * - APPROVED/REJECTED records via user resolve (not supersede/timeout).
+ * - PENDING records carrying `dismissedAt` (dismiss is a soft-hide that keeps
+ *   status PENDING until a fresh action supersedes it).
+ *
+ * Superseded or timed-out records are no longer "active" even if they retain
+ * a `dismissedAt` field — their dismissal has been overtaken by a fresh Action.
+ */
+function userDecisionTs(a: Action): string | null {
+  if ((a.status === 'APPROVED' || a.status === 'REJECTED') && a.resolvedBy === 'user') {
+    return a.resolvedAt ?? null;
+  }
+  if (a.status === 'PENDING' && a.dismissedAt) {
+    return a.dismissedAt;
+  }
+  return null;
+}
 
 export interface ActionStoreOptions {
   dir: string; // e.g. 'data/actions'
@@ -250,10 +274,13 @@ export class ActionStore {
   }
 
   /**
-   * Batch-check which triggerIds were recently resolved (APPROVED/REJECTED).
-   * Returns Map<triggerId, resolvedAction> for entries whose new strength does
-   * NOT exceed the resolved strength — callers should skip these. Entries with
-   * escalated strength are excluded (absent from the map) so the caller fires.
+   * Batch-check which triggerIds carry a recent active user decision — either a
+   * user-driven resolution (APPROVED/REJECTED) or an active dismissal (PENDING
+   * record with `dismissedAt` set). Returns Map<triggerId, action> for entries
+   * whose new strength does NOT exceed the decision's strength — callers should
+   * skip these. Entries with escalated strength are excluded (absent from the
+   * map) so the caller fires. Once a dismissed record is superseded (status
+   * becomes EXPIRED), its dismissal no longer suppresses new actions.
    */
   async getRecentResolutions(
     entries: ReadonlyArray<{ triggerId: string; newStrength: TriggerStrength }>,
@@ -265,28 +292,28 @@ export class ActionStore {
     const files = (await this.listFiles()).reverse();
     const triggerIds = new Set(entries.map((e) => e.triggerId));
 
-    // Build a map of triggerId → latest resolved action within the cutoff window.
-    const latestByTrigger = new Map<string, Action>();
+    // Latest active user decision (resolve or dismiss) per triggerId within window.
+    const latestByTrigger = new Map<string, { action: Action; ts: string }>();
     for (const file of files) {
       const actions = await this.readFile(file);
       for (const action of actions) {
         if (!triggerIds.has(action.triggerId)) continue;
-        if (action.status !== 'APPROVED' && action.status !== 'REJECTED') continue;
-        if (!action.resolvedAt || action.resolvedAt < cutoff) continue;
+        const ts = userDecisionTs(action);
+        if (!ts || ts < cutoff) continue;
         const existing = latestByTrigger.get(action.triggerId);
-        if (!existing || action.resolvedAt > (existing.resolvedAt ?? '')) {
-          latestByTrigger.set(action.triggerId, action);
+        if (!existing || ts > existing.ts) {
+          latestByTrigger.set(action.triggerId, { action, ts });
         }
       }
     }
 
-    // Exclude entries whose new strength escalates past the resolved strength.
+    // Exclude entries whose new strength escalates past the decision's strength.
     const result = new Map<string, Action>();
     for (const { triggerId, newStrength } of entries) {
-      const resolved = latestByTrigger.get(triggerId);
-      if (!resolved) continue;
-      if (STRENGTH_ORDER[newStrength] > STRENGTH_ORDER[resolved.triggerStrength]) continue;
-      result.set(triggerId, resolved);
+      const entry = latestByTrigger.get(triggerId);
+      if (!entry) continue;
+      if (STRENGTH_ORDER[newStrength] > STRENGTH_ORDER[entry.action.triggerStrength]) continue;
+      result.set(triggerId, entry.action);
     }
 
     return result;
@@ -329,10 +356,11 @@ export class ActionStore {
   // ---------------------------------------------------------------------------
 
   /**
-   * Mark every PENDING (non-expired, non-dismissed) record sharing this
-   * triggerId as EXPIRED with resolvedBy='superseded'. Called just before
-   * appending a fresh Action to ensure the triggerId dedup guarantees that
-   * at most one PENDING record exists per triggerId at a time.
+   * Mark every PENDING (non-expired) record sharing this triggerId as EXPIRED
+   * with resolvedBy='superseded'. Dismissed PENDINGs are swept too so the
+   * invariant holds: at most one PENDING record exists per triggerId at a time.
+   * Callers gate on `getRecentResolutions` to avoid re-firing on an active
+   * dismissal; reaching this point means the new action should take over.
    */
   private async supersedePendingByTriggerId(triggerId: string, all?: Action[]): Promise<void> {
     const actions = all ?? (await this.queryAll());
@@ -341,7 +369,6 @@ export class ActionStore {
     for (const existing of actions) {
       if (existing.triggerId !== triggerId) continue;
       if (existing.status !== 'PENDING') continue;
-      if (existing.dismissedAt) continue;
       if (existing.expiresAt <= now) continue;
 
       const superseded: Action = {

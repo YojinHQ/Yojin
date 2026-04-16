@@ -4,6 +4,7 @@ import Modal from '../common/modal';
 import Badge from '../common/badge';
 import type { BadgeVariant } from '../common/badge';
 import type { ConvictionLevel, TriggerStrength } from '../../api/types';
+import { useQuote } from '../../api/hooks/use-market';
 import { cn, timeUntil } from '../../lib/utils';
 
 /** Lightweight markdown → HTML for LLM-generated analysis text. */
@@ -106,16 +107,29 @@ function Field({
   value,
   className,
   valueClass,
+  statusDot,
 }: {
   label: string;
   value: string;
   className?: string;
   valueClass?: string;
+  statusDot?: 'success' | 'warning';
 }) {
   return (
     <div className={className}>
       <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">{label}</span>
-      <p className={cn('mt-0.5 text-xs text-text-primary', valueClass)}>{value}</p>
+      <p className={cn('mt-0.5 flex items-center gap-1.5 text-xs text-text-primary', valueClass)}>
+        {statusDot && (
+          <span
+            className={cn(
+              'inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full',
+              statusDot === 'success' ? 'bg-success' : 'bg-warning animate-pulse',
+            )}
+            aria-hidden="true"
+          />
+        )}
+        {value}
+      </p>
     </div>
   );
 }
@@ -145,7 +159,17 @@ function AnalysisSection({ analysis, isAction }: { analysis: string; isAction: b
 }
 
 export default function FeedDetailModal({ open, onClose, data }: FeedDetailModalProps) {
+  const actionTicker =
+    data?.actionMeta && data.relatedTickers && data.relatedTickers.length > 0 ? data.relatedTickers[0] : undefined;
+  const [{ data: quoteData }] = useQuote(open && actionTicker ? actionTicker : undefined);
+  const livePrice = quoteData?.quote?.price ?? null;
+
   if (!data) return null;
+
+  const anchorPrice = data.actionMeta?.currentPrice ?? null;
+  const displayPrice = livePrice ?? anchorPrice;
+  const priceDelta = livePrice != null && anchorPrice != null && anchorPrice > 0 ? livePrice - anchorPrice : null;
+  const priceDeltaPct = priceDelta != null && anchorPrice ? (priceDelta / anchorPrice) * 100 : null;
 
   return (
     <Modal
@@ -268,6 +292,73 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
           {/* Consolidated trade + trigger parameters */}
           <SectionRule label="Trade Parameters" />
           <div className="grid grid-cols-3 gap-x-3 gap-y-1.5">
+            {displayPrice != null &&
+              (() => {
+                const actionMeta = data.actionMeta;
+                if (!actionMeta) return null;
+                const maxEntry = actionMeta.maxEntry;
+                const livePricedIn =
+                  maxEntry != null && livePrice != null
+                    ? data.verdict === 'BUY'
+                      ? livePrice > maxEntry
+                      : data.verdict === 'SELL'
+                        ? livePrice < maxEntry
+                        : null
+                    : null;
+                const inRangeKnown =
+                  maxEntry != null && (data.verdict === 'BUY' || data.verdict === 'SELL') && livePrice != null;
+                const status: 'success' | 'warning' | undefined =
+                  livePricedIn === true || (livePricedIn == null && actionMeta.pricedIn === true)
+                    ? 'warning'
+                    : inRangeKnown
+                      ? 'success'
+                      : undefined;
+                const deltaUp = priceDelta != null && priceDelta > 0;
+                return (
+                  <div>
+                    <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Current</span>
+                    <p
+                      className={cn(
+                        'mt-0.5 flex items-center gap-1.5 text-xs font-semibold',
+                        status === 'warning'
+                          ? 'text-warning'
+                          : status === 'success'
+                            ? 'text-success'
+                            : 'text-text-primary',
+                      )}
+                    >
+                      {status && (
+                        <span
+                          className={cn(
+                            'inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full',
+                            status === 'success' ? 'bg-success' : 'bg-warning animate-pulse',
+                          )}
+                          aria-hidden="true"
+                        />
+                      )}
+                      ${displayPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    {livePrice != null &&
+                      priceDelta != null &&
+                      priceDeltaPct != null &&
+                      Math.abs(priceDeltaPct) >= 0.01 && (
+                        <p
+                          className={cn(
+                            'mt-0.5 flex items-center gap-0.5 text-2xs',
+                            deltaUp ? 'text-success' : 'text-error',
+                          )}
+                          title="Change since action was created"
+                        >
+                          <span aria-hidden="true">{deltaUp ? '▲' : '▼'}</span>
+                          {deltaUp ? '+' : ''}
+                          {priceDelta.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (
+                          {deltaUp ? '+' : ''}
+                          {priceDeltaPct.toFixed(2)}%) since signal
+                        </p>
+                      )}
+                  </div>
+                );
+              })()}
             {data.actionMeta.entryRange && <Field label="Entry" value={data.actionMeta.entryRange} />}
             {data.actionMeta.targetPrice != null && (
               <Field

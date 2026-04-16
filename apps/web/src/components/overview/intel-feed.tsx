@@ -216,6 +216,36 @@ function LastUpdateLabel({ ingestedAt }: { ingestedAt: string }) {
 
 /* ── Card ──────────────────────────────────────────────────────────── */
 
+function TradeParamChip({
+  label,
+  value,
+  variant,
+  bold,
+}: {
+  label: string;
+  value: string;
+  variant?: 'success' | 'error' | 'warning';
+  bold?: boolean;
+}) {
+  return (
+    <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
+      <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">{label}</span>
+      <span
+        className={cn(
+          'text-2xs',
+          bold && 'font-semibold',
+          variant === 'success' && 'text-success',
+          variant === 'error' && 'text-error',
+          variant === 'warning' && 'font-semibold text-warning',
+          !variant && 'text-text-primary',
+        )}
+      >
+        {value}
+      </span>
+    </span>
+  );
+}
+
 function IntelFeedCard({
   item,
   expanded,
@@ -242,7 +272,7 @@ function IntelFeedCard({
   return (
     <div
       className={cn(
-        'relative rounded-xl border transition-colors',
+        'group relative rounded-xl border transition-colors',
         selected
           ? 'border-accent-primary/40 bg-accent-primary/5'
           : item.verdict === 'BUY'
@@ -333,6 +363,36 @@ function IntelFeedCard({
           )}
         </button>
       </div>
+
+      {/* Hover popover — trade parameters floating card for actions (collapsed only) */}
+      {item.isAction && !expanded && !selectMode && (
+        <div
+          role="tooltip"
+          className="pointer-events-none invisible absolute left-1/2 top-full z-20 mt-1 w-max max-w-sm -translate-x-1/2 translate-y-1 rounded-lg border border-border bg-bg-card px-3 py-2 opacity-0 shadow-xl transition-[opacity,transform,visibility] duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100"
+        >
+          <div className="mb-1 text-3xs font-semibold uppercase tracking-wider text-text-muted">Trade Parameters</div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            {item.currentPrice != null && (
+              <TradeParamChip label="Now" value={`$${item.currentPrice.toFixed(2)}`} bold />
+            )}
+            {item.entryRange && <TradeParamChip label="Entry" value={item.entryRange} />}
+            {item.targetPrice != null && (
+              <TradeParamChip label="Target" value={`$${item.targetPrice.toFixed(2)}`} variant="success" />
+            )}
+            {item.stopLoss != null && (
+              <TradeParamChip label="Stop" value={`$${item.stopLoss.toFixed(2)}`} variant="error" />
+            )}
+            {item.maxEntry != null && (
+              <TradeParamChip
+                label="Max"
+                value={`$${item.maxEntry.toFixed(2)}`}
+                variant={item.pricedIn ? 'warning' : undefined}
+              />
+            )}
+            {item.horizon && <TradeParamChip label="Horizon" value={item.horizon} />}
+          </div>
+        </div>
+      )}
 
       {/* Expanded content */}
       <div
