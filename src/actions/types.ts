@@ -22,7 +22,7 @@ import { DateTimeField, IdField } from '../types/base.js';
 // ---------------------------------------------------------------------------
 
 /** Concrete recommendation emitted by the Strategist LLM. */
-export const ActionVerdictSchema = z.enum(['BUY', 'SELL', 'TRIM', 'HOLD', 'REVIEW']);
+export const ActionVerdictSchema = z.enum(['BUY', 'SELL', 'REVIEW']);
 export type ActionVerdict = z.infer<typeof ActionVerdictSchema>;
 
 export const ActionStatusSchema = z.enum(['PENDING', 'APPROVED', 'REJECTED', 'EXPIRED']);
@@ -41,12 +41,14 @@ export const ActionSchema = z.object({
   /** Dedup/supersede key: "${strategyId}-${triggerType}-${ticker}". */
   triggerId: IdField,
   triggerType: z.string().min(1),
-  /** Concrete verdict parsed from LLM headline (BUY/SELL/TRIM/HOLD/REVIEW). */
+  /** Concrete verdict parsed from LLM headline (BUY/SELL/REVIEW). */
   verdict: ActionVerdictSchema,
   /** Headline, e.g. "BUY AAPL — golden cross + expanding volume". */
   what: z.string().min(1),
   /** Reasoning trace from the LLM (why this action, risks, sizing). */
   why: z.string().min(1),
+  /** One-line sizing clause from the LLM, e.g. "BUY to 5% of portfolio (now 2.1%)" or "SELL 25% of position". */
+  sizeGuidance: z.string().min(1).optional(),
   /** Related tickers — typically one for per-asset evaluations. */
   tickers: z.array(z.string().min(1)).default([]),
   /** Formatted trigger context (key=value lines) for audit/debug. */
@@ -74,7 +76,7 @@ export type Action = z.infer<typeof ActionSchema>;
 export function parseVerdictFromHeadline(headline: string): ActionVerdict {
   const head = headline.trim().toUpperCase();
   // Check word-boundary so "BUYBACK" doesn't match BUY
-  const match = head.match(/^(BUY|SELL|TRIM|HOLD|REVIEW)\b/);
+  const match = head.match(/^(BUY|SELL|REVIEW)\b/);
   if (match) {
     return match[1] as ActionVerdict;
   }

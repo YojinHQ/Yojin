@@ -40,6 +40,7 @@ interface ActionGql {
   verdict: ActionVerdict;
   what: string;
   why: string;
+  sizeGuidance: string | null;
   tickers: string[];
   riskContext: string | null;
   severity: number | null;
@@ -63,6 +64,7 @@ function toGql(action: Action): ActionGql {
     verdict: action.verdict,
     what: action.what,
     why: action.why,
+    sizeGuidance: action.sizeGuidance ?? null,
     tickers: action.tickers ?? [],
     riskContext: action.riskContext ?? null,
     severity: action.severity ?? null,

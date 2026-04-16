@@ -63,7 +63,8 @@ interface IntelFeedItem {
   link: string | null;
   data?: DataRow[];
   isAction?: boolean;
-  verdict?: 'BUY' | 'SELL' | 'TRIM' | 'HOLD' | 'REVIEW';
+  verdict?: 'BUY' | 'SELL' | 'REVIEW';
+  sizeGuidance?: string;
   triggerStrength?: TriggerStrength;
   strategyName?: string;
   riskContext?: string;
@@ -225,7 +226,7 @@ function IntelFeedCard({
           ? 'border-accent-primary/40 bg-accent-primary/5'
           : item.verdict === 'BUY'
             ? 'border-success/30 bg-success/[0.06]'
-            : item.verdict === 'SELL' || item.verdict === 'TRIM'
+            : item.verdict === 'SELL'
               ? 'border-error/30 bg-error/[0.06]'
               : 'border-border-light bg-bg-tertiary/60',
         !selectMode && (expanded ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary'),
@@ -239,7 +240,7 @@ function IntelFeedCard({
             'absolute -top-2 -right-2 z-10 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wider text-white shadow-sm motion-safe:animate-badge-in',
             item.verdict === 'BUY'
               ? 'bg-success'
-              : item.verdict === 'SELL' || item.verdict === 'TRIM'
+              : item.verdict === 'SELL'
                 ? 'bg-error'
                 : item.type === 'alert'
                   ? 'bg-warning'
@@ -267,11 +268,9 @@ function IntelFeedCard({
                   'mb-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wider',
                   item.verdict === 'BUY'
                     ? 'bg-success/15 text-success'
-                    : item.verdict === 'SELL' || item.verdict === 'TRIM'
+                    : item.verdict === 'SELL'
                       ? 'bg-error/15 text-error'
-                      : item.verdict === 'HOLD'
-                        ? 'bg-warning/15 text-warning'
-                        : 'bg-info/15 text-info',
+                      : 'bg-info/15 text-info',
                 )}
               >
                 {item.verdict}
@@ -324,6 +323,22 @@ function IntelFeedCard({
           <div className="px-3 pb-3 pt-0.5">
             {item.description && (
               <p className="line-clamp-3 text-xs leading-relaxed text-text-secondary">{item.description}</p>
+            )}
+
+            {item.sizeGuidance && (
+              <div
+                className={cn(
+                  'mt-2 rounded-md border px-2.5 py-1.5 text-xs font-medium',
+                  item.verdict === 'BUY'
+                    ? 'border-success/30 bg-success/10 text-success'
+                    : item.verdict === 'SELL'
+                      ? 'border-error/30 bg-error/10 text-error'
+                      : 'border-border-light bg-bg-primary/50 text-text-secondary',
+                )}
+              >
+                <span className="mr-1.5 text-2xs font-bold uppercase tracking-wider opacity-70">Size</span>
+                {item.sizeGuidance}
+              </div>
             )}
 
             {/* Meta row */}
@@ -643,6 +658,7 @@ function IntelFeedContent({
       strategyName: action.strategyName,
       riskContext: action.riskContext ?? undefined,
       expiresAt: action.expiresAt,
+      sizeGuidance: action.sizeGuidance ?? undefined,
     }));
 
     const merged = [...signalItems, ...actionItems];
@@ -869,15 +885,13 @@ function IntelFeedContent({
       tagVariant:
         item.verdict === 'BUY'
           ? 'success'
-          : item.verdict === 'SELL' || item.verdict === 'TRIM'
+          : item.verdict === 'SELL'
             ? 'error'
-            : item.verdict === 'HOLD'
-              ? 'warning'
-              : item.verdict === 'REVIEW'
-                ? 'info'
-                : item.type === 'alert'
-                  ? 'warning'
-                  : 'success',
+            : item.verdict === 'REVIEW'
+              ? 'info'
+              : item.type === 'alert'
+                ? 'warning'
+                : 'success',
       sentiment:
         item.sentiment === 'bullish' || item.sentiment === 'bearish' || item.sentiment === 'neutral'
           ? item.sentiment
@@ -896,6 +910,7 @@ function IntelFeedContent({
             severity: item.severity,
             riskContext: item.riskContext ?? null,
             expiresAt: item.expiresAt ?? '',
+            sizeGuidance: item.sizeGuidance ?? null,
           }
         : undefined,
     });
@@ -952,6 +967,23 @@ function IntelFeedContent({
               </button>
             ))}
           </div>
+
+          {/* LLM health warning — lastLlmErrorAt is set atomically with lastLlmError in
+              recordLlmError(), so the assertion is safe when lastLlmError is non-null. */}
+          {schedulerData?.schedulerStatus.lastLlmError &&
+            (!schedulerData.schedulerStatus.lastLlmSuccessAt ||
+              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- set with lastLlmError
+              schedulerData.schedulerStatus.lastLlmErrorAt! > schedulerData.schedulerStatus.lastLlmSuccessAt) && (
+              <div className="mx-4 mt-2 mb-1 flex items-start gap-2 rounded-lg border border-warning/20 bg-warning/5 px-3 py-2 text-[11px] text-warning">
+                <span className="mt-px shrink-0">⚠</span>
+                <span>
+                  AI analysis paused — credentials may be invalid.{' '}
+                  <Link to="/settings#ai-provider" className="underline hover:text-text-primary">
+                    Check Settings
+                  </Link>
+                </span>
+              </div>
+            )}
         </div>
 
         {/* Scrollable content */}

@@ -12,7 +12,7 @@
  * trigger, sends the evaluation through the real ProviderRouter (same prompt as the
  * scheduler), then runs deterministic consistency checks on the LLM output:
  *   - FORMAT:    Did the LLM respond with the required ACTION: headline?
- *   - VERDICT:   Is the parsed verdict valid (BUY/SELL/TRIM/HOLD/REVIEW)?
+ *   - VERDICT:   Is the parsed verdict valid (BUY/SELL/REVIEW)?
  *   - TICKER:    Does the headline contain the correct ticker?
  *   - DATA_REF:  Does the reasoning reference the trigger's data points?
  *   - DIRECTION: Is the verdict directionally consistent with the trigger?
@@ -212,6 +212,7 @@ interface ActionEvalResult {
   headline: string;
   verdict: ActionVerdict;
   reasoning: string;
+  sizeGuidance?: string;
   checks: ConsistencyCheck[];
   passed: number;
   warned: number;
@@ -246,7 +247,7 @@ function runConsistencyChecks(
   });
 
   // 2. VERDICT — is the parsed verdict valid (not a fallback REVIEW from parse failure)?
-  const verdictMatch = headline.match(/^(BUY|SELL|TRIM|HOLD|REVIEW)\b/i);
+  const verdictMatch = headline.match(/^(BUY|SELL|REVIEW)\b/i);
   checks.push({
     name: 'VERDICT',
     result: verdictMatch ? 'PASS' : 'WARN',
@@ -293,7 +294,7 @@ function runConsistencyChecks(
       name: 'DIRECTION',
       result: isContradictory ? 'FAIL' : 'PASS',
       detail: isContradictory
-        ? `${verdict} contradicts ${evaluation.triggerType} trigger — should be ${['SELL', 'TRIM', 'REVIEW'].filter((v) => v !== verdict).join('/')}`
+        ? `${verdict} contradicts ${evaluation.triggerType} trigger — should be ${['SELL', 'REVIEW'].filter((v) => v !== verdict).join('/')}`
         : `${verdict} is directionally consistent with ${evaluation.triggerType}`,
     });
   } else {
@@ -349,6 +350,7 @@ async function runActionEval(
         headline: result.headline,
         verdict: result.verdict,
         reasoning: result.reasoning,
+        sizeGuidance: result.sizeGuidance,
         checks: [
           {
             name: 'LLM_CALL',
@@ -383,6 +385,7 @@ async function runActionEval(
       headline: result.headline,
       verdict: result.verdict,
       reasoning: result.reasoning,
+      sizeGuidance: result.sizeGuidance,
       checks,
       passed,
       warned,
@@ -415,6 +418,7 @@ function renderActionEvalReport(results: ActionEvalResult[]): string {
     lines.push(`- **Trigger:** ${result.triggerType} (${result.triggerStrength})`);
     lines.push(`- **Verdict:** ${result.verdict}`);
     lines.push(`- **Headline:** ${result.headline}`);
+    if (result.sizeGuidance) lines.push(`- **Size:** ${result.sizeGuidance}`);
     lines.push('');
 
     // Checks

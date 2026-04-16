@@ -20,13 +20,22 @@ const logger = createSubsystemLogger('action-reasoning');
 
 export const ACTION_SYSTEM_PROMPT = `You are a trading strategist. A strategy trigger has fired. Analyze and recommend a specific action.
 
-Your response MUST start with a one-line headline in this exact format:
-ACTION: <BUY|SELL|TRIM|HOLD|REVIEW> <TICKER> — <one-sentence reason>
+Your response MUST start with TWO lines in this exact format:
+ACTION: <BUY|SELL|REVIEW> <TICKER> — <one-sentence reason>
+SIZE: <one-line sizing clause, or "N/A" for REVIEW>
+
+Sizing rules:
+- SELL: percentage of the current position. Example: "SELL 25% of position".
+- BUY with an allocation budget in context: target that allocation. Example: "BUY to 5% of portfolio (now 2.1%)".
+- BUY without an allocation budget: suggest a soft cap as % of portfolio. Example: "BUY up to 2% of portfolio".
+- REVIEW: use "N/A".
+
+Never quote dollar amounts, share counts, or assume cash availability.
 
 Then provide your analysis:
 1. Why this trigger matters right now
 2. Key risks before acting
-3. Position sizing or timing guidance
+3. Timing or other notes
 
 Be direct and concise. No hedging or disclaimers.`;
 
@@ -38,9 +47,13 @@ export interface ActionReasoningResult {
   headline: string;
   verdict: ActionVerdict;
   reasoning: string;
+  /** Sizing clause parsed from the SIZE: line, or undefined when absent / N/A. */
+  sizeGuidance?: string;
   rawOutput: string;
   /** Whether the LLM produced the result (vs static fallback). */
   fromLlm: boolean;
+  /** Whether the LLM output matched the expected ACTION: format (false = parse fell back to REVIEW). */
+  parsedCleanly: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,20 +85,26 @@ ${evaluation.strategyContent}
 Provide your ACTION headline and analysis.`;
 }
 
-/** Parse the LLM response into headline + reasoning. */
+/** Parse the LLM response into headline + optional SIZE: + reasoning. */
 export function parseActionResponse(
   rawOutput: string,
   evaluation: StrategyEvaluation,
-): { headline: string; reasoning: string } {
+): { headline: string; reasoning: string; sizeGuidance?: string; parsedCleanly: boolean } {
   const ticker = (evaluation.context.ticker as string | undefined) ?? 'portfolio';
 
   const lines = rawOutput.split('\n').filter(Boolean);
   const actionMatch = lines[0]?.match(/^ACTION:\s*(.+)/i);
 
   if (actionMatch) {
+    const sizeMatch = lines[1]?.match(/^SIZE:\s*(.+)/i);
+    const rest = sizeMatch ? lines.slice(2) : lines.slice(1);
+    const sizeRaw = sizeMatch?.[1].trim();
+    const sizeGuidance = sizeRaw && sizeRaw.toUpperCase() !== 'N/A' ? sizeRaw : undefined;
     return {
       headline: actionMatch[1].trim(),
-      reasoning: lines.slice(1).join('\n').trim(),
+      reasoning: rest.join('\n').trim(),
+      sizeGuidance,
+      parsedCleanly: true,
     };
   }
 
@@ -93,6 +112,7 @@ export function parseActionResponse(
   return {
     headline: `REVIEW ${ticker} — ${evaluation.triggerDescription}`,
     reasoning: rawOutput,
+    parsedCleanly: false,
   };
 }
 
@@ -112,7 +132,12 @@ export async function generateActionReasoning(
 ): Promise<ActionReasoningResult> {
   const ticker = (evaluation.context.ticker as string | undefined) ?? 'portfolio';
 
-  if (providerRouter) {
+  if (!providerRouter) {
+    logger.warn('LLM provider unavailable for action reasoning', {
+      strategyId: evaluation.strategyId,
+      ticker,
+    });
+  } else {
     logger.info('Requesting LLM reasoning for strategy trigger', {
       strategyId: evaluation.strategyId,
       ticker,
@@ -131,23 +156,32 @@ export async function generateActionReasoning(
         .join('');
 
       if (rawOutput) {
-        const { headline, reasoning } = parseActionResponse(rawOutput, evaluation);
+        const { headline, reasoning, sizeGuidance, parsedCleanly } = parseActionResponse(rawOutput, evaluation);
         const finalHeadline = headline || `REVIEW ${ticker} — ${evaluation.triggerDescription}`;
         const finalReasoning = reasoning || evaluation.triggerDescription;
 
-        logger.info('LLM reasoning generated for strategy trigger', {
-          strategyId: evaluation.strategyId,
-          ticker,
-          headline: finalHeadline,
-          length: rawOutput.length,
-        });
+        if (!parsedCleanly) {
+          logger.warn('LLM response did not match ACTION: format, falling back to REVIEW', {
+            strategyId: evaluation.strategyId,
+            ticker,
+            firstLine: rawOutput.split('\n')[0]?.slice(0, 120),
+          });
+        } else {
+          logger.info('LLM reasoning generated for strategy trigger', {
+            strategyId: evaluation.strategyId,
+            ticker,
+            headline: finalHeadline,
+          });
+        }
 
         return {
           headline: finalHeadline,
           verdict: parseVerdictFromHeadline(finalHeadline),
           reasoning: finalReasoning,
+          sizeGuidance,
           rawOutput,
           fromLlm: true,
+          parsedCleanly,
         };
       }
     } catch (err) {
@@ -158,7 +192,6 @@ export async function generateActionReasoning(
     }
   }
 
-  // Static fallback
   const headline = `REVIEW ${ticker} — ${evaluation.triggerDescription}`;
   return {
     headline,
@@ -166,5 +199,6 @@ export async function generateActionReasoning(
     reasoning: evaluation.triggerDescription,
     rawOutput: '',
     fromLlm: false,
+    parsedCleanly: false,
   };
 }

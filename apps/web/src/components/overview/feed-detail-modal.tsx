@@ -54,6 +54,7 @@ export interface FeedDetailData {
     severity: string;
     riskContext: string | null;
     expiresAt: string;
+    sizeGuidance: string | null;
   };
 }
 
@@ -182,6 +183,12 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
               <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Expires</span>
               <p className="mt-0.5 text-xs text-text-primary">{timeUntil(data.actionMeta.expiresAt)}</p>
             </div>
+            {data.actionMeta.sizeGuidance && (
+              <div className="col-span-2">
+                <span className="text-3xs font-semibold uppercase tracking-wider text-text-muted">Size</span>
+                <p className="mt-0.5 text-xs text-text-primary">{data.actionMeta.sizeGuidance}</p>
+              </div>
+            )}
           </div>
           {data.actionMeta.riskContext && (
             <div className="mt-3 rounded-lg border border-border-light bg-bg-primary/50 px-3 py-2">

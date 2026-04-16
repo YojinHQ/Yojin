@@ -25,6 +25,8 @@ import { dirname, join } from 'node:path';
 import type { Action, ActionStatus } from './types.js';
 import { ActionSchema } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
+import type { TriggerStrength } from '../strategies/trigger-strength.js';
+import { STRENGTH_ORDER } from '../strategies/trigger-strength.js';
 
 const logger = createSubsystemLogger('action-store');
 
@@ -245,6 +247,49 @@ export class ActionStore {
     }
 
     return null;
+  }
+
+  /**
+   * Batch-check which triggerIds were recently resolved (APPROVED/REJECTED).
+   * Returns Map<triggerId, resolvedAction> for entries whose new strength does
+   * NOT exceed the resolved strength — callers should skip these. Entries with
+   * escalated strength are excluded (absent from the map) so the caller fires.
+   */
+  async getRecentResolutions(
+    entries: ReadonlyArray<{ triggerId: string; newStrength: TriggerStrength }>,
+    windowMs: number,
+  ): Promise<Map<string, Action>> {
+    if (entries.length === 0) return new Map();
+
+    const cutoff = new Date(Date.now() - windowMs).toISOString();
+    const files = (await this.listFiles(cutoff)).reverse(); // newest first
+    const triggerIds = new Set(entries.map((e) => e.triggerId));
+
+    // Build a map of triggerId → latest resolved action within the cutoff window.
+    const latestByTrigger = new Map<string, Action>();
+    for (const file of files) {
+      const actions = await this.readFile(file);
+      for (const action of actions) {
+        if (!triggerIds.has(action.triggerId)) continue;
+        if (action.status !== 'APPROVED' && action.status !== 'REJECTED') continue;
+        if (!action.resolvedAt || action.resolvedAt < cutoff) continue;
+        const existing = latestByTrigger.get(action.triggerId);
+        if (!existing || action.resolvedAt > (existing.resolvedAt ?? '')) {
+          latestByTrigger.set(action.triggerId, action);
+        }
+      }
+    }
+
+    // Exclude entries whose new strength escalates past the resolved strength.
+    const result = new Map<string, Action>();
+    for (const { triggerId, newStrength } of entries) {
+      const resolved = latestByTrigger.get(triggerId);
+      if (!resolved) continue;
+      if (STRENGTH_ORDER[newStrength] > STRENGTH_ORDER[resolved.triggerStrength]) continue;
+      result.set(triggerId, resolved);
+    }
+
+    return result;
   }
 
   /** Query actions with optional filters. */

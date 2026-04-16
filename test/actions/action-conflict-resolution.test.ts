@@ -70,24 +70,24 @@ describe('ActionStore — cross-strategy and supersede behavior', () => {
       triggerStrength: 'MODERATE' as const,
       ticker: 'AAPL',
     });
-    const trimAction = makeAction({
+    const sellAction = makeAction({
       id: randomUUID(),
       strategyId: 'strat-risk',
       strategyName: 'Risk Rebalance',
       triggerId: 'strat-risk-CONCENTRATION-AAPL',
-      verdict: 'TRIM',
+      verdict: 'SELL',
       triggerStrength: 'STRONG' as const,
       ticker: 'AAPL',
     });
 
     await store.create(buyAction);
-    await store.create(trimAction);
+    await store.create(sellAction);
 
     const pending = await store.getPending();
     expect(pending).toHaveLength(2);
     const ids = new Set(pending.map((a) => a.id));
     expect(ids).toContain(buyAction.id);
-    expect(ids).toContain(trimAction.id);
+    expect(ids).toContain(sellAction.id);
   });
 
   it('different tickers both stay PENDING', async () => {
@@ -99,23 +99,23 @@ describe('ActionStore — cross-strategy and supersede behavior', () => {
       triggerStrength: 'STRONG' as const,
       ticker: 'AAPL',
     });
-    const trimGOOG = makeAction({
+    const sellGOOG = makeAction({
       id: randomUUID(),
       strategyId: 'strat-risk',
       triggerId: 'strat-risk-CONCENTRATION-GOOG',
-      verdict: 'TRIM',
+      verdict: 'SELL',
       triggerStrength: 'MODERATE' as const,
       ticker: 'GOOG',
     });
 
     await store.create(buyAAPL);
-    await store.create(trimGOOG);
+    await store.create(sellGOOG);
 
     const pending = await store.getPending();
     expect(pending).toHaveLength(2);
     const ids = new Set(pending.map((a) => a.id));
     expect(ids).toContain(buyAAPL.id);
-    expect(ids).toContain(trimGOOG.id);
+    expect(ids).toContain(sellGOOG.id);
   });
 
   it('triggerId supersede replaces stale PENDING from same strategy+trigger', async () => {

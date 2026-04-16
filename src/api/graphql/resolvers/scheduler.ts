@@ -34,7 +34,15 @@ export function setTriggerStrategyEvaluation(fn: () => Promise<void>): void {
 
 export function schedulerStatusQuery(): SchedulerStatus {
   if (!getSchedulerStatus) {
-    return { microLlmIntervalHours: 4, pendingCount: 0, throttledCount: 0, assets: [] };
+    return {
+      microLlmIntervalHours: 4,
+      pendingCount: 0,
+      throttledCount: 0,
+      assets: [],
+      lastLlmError: null,
+      lastLlmErrorAt: null,
+      lastLlmSuccessAt: null,
+    };
   }
   return getSchedulerStatus();
 }

@@ -400,6 +400,9 @@ export const SCHEDULER_STATUS_QUERY = gql`
       microLlmIntervalHours
       pendingCount
       throttledCount
+      lastLlmError
+      lastLlmErrorAt
+      lastLlmSuccessAt
       assets {
         symbol
         source
@@ -1626,6 +1629,7 @@ export const ACTION_FIELDS = gql`
     verdict
     what
     why
+    sizeGuidance
     tickers
     riskContext
     severity
