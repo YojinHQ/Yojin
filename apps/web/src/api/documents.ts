@@ -1634,6 +1634,9 @@ export const ACTION_FIELDS = gql`
     riskContext
     severity
     triggerStrength
+    suggestedQuantity
+    suggestedValue
+    currentPrice
     severityLabel
     status
     expiresAt

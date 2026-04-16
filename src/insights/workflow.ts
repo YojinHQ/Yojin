@@ -136,12 +136,23 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
             const dataBriefs = prev.get('__data_briefs')?.text;
             const warmBriefs = prev.get('__warm_briefs')?.text;
             const coldSummary = prev.get('__cold_summary')?.text;
+            const portfolioTickers = prev.get('__portfolio_tickers')?.text;
 
             // If pre-aggregated data exists, use it (no tool calls needed)
             if (dataBriefs) {
               let prompt =
                 `All portfolio data has been pre-aggregated below — no data-gathering tools are available. ` +
-                `Analyze ONLY using the data provided.\n\n` +
+                `Analyze ONLY using the data provided.\n\n`;
+
+              if (portfolioTickers) {
+                prompt +=
+                  `## Portfolio Boundary\n` +
+                  `Portfolio positions: ${portfolioTickers}\n` +
+                  `Other tickers mentioned in signal titles or content are watchlist entries or external references. ` +
+                  `Mention them ONLY as context for portfolio positions — do NOT analyze them as portfolio holdings.\n\n`;
+              }
+
+              prompt +=
                 `## Data Quality Guidance\n` +
                 `Evaluate source quality critically:\n` +
                 `- Lead with real EVENTS and CATALYSTS (earnings, analyst actions, regulatory filings, corporate developments, macro shifts) — not technicals.\n` +
@@ -249,6 +260,7 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
           const bearOutput = prev.get('bear-researcher')?.text ?? '';
           const coldSummary = prev.get('__cold_summary')?.text;
           const snapshotId = prev.get('__snapshot_id')?.text ?? '';
+          const portfolioTickers = prev.get('__portfolio_tickers')?.text;
 
           // Truncate agent outputs to reduce context — keep most important content.
           // Must be high enough to preserve signal IDs (sig-xxx) for all positions.
@@ -264,10 +276,18 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
           const bull = debateTruncate(bullOutput);
           const bear = debateTruncate(bearOutput);
 
-          let prompt =
-            `Synthesize insights and save a report. Be extremely concise in all string fields.\n\n` +
-            `## Research\n${research}\n\n` +
-            `## Risk\n${risk}\n\n`;
+          let prompt = `Synthesize insights and save a report. Be extremely concise in all string fields.\n\n`;
+
+          if (portfolioTickers) {
+            prompt +=
+              `## Portfolio Boundary — CRITICAL\n` +
+              `Portfolio positions: ${portfolioTickers}\n` +
+              `Do NOT create positions[] entries for tickers not in this list. ` +
+              `Other tickers in signals are watchlist entries — reference them only as context within portfolio position analysis, ` +
+              `never as portfolio holdings. Do NOT use portfolio language ("portfolio's risk", "our position") for non-portfolio tickers.\n\n`;
+          }
+
+          prompt += `## Research\n${research}\n\n` + `## Risk\n${risk}\n\n`;
 
           if (bull || bear) {
             prompt +=
@@ -331,6 +351,7 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
               injectPseudoOutput(outputs, '__data_briefs', macroResult.microSummaries);
               injectPseudoOutput(outputs, '__risk_metrics', macroResult.riskMetrics);
               injectPseudoOutput(outputs, '__snapshot_id', macroResult.snapshotId);
+              injectPseudoOutput(outputs, '__portfolio_tickers', macroResult.portfolioTickers.join(', '));
               return;
             }
 
@@ -353,6 +374,7 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
               injectColdSummary(outputs, triage.cold);
               injectPseudoOutput(outputs, '__risk_metrics', macroResult.riskMetrics);
               injectPseudoOutput(outputs, '__snapshot_id', macroResult.snapshotId);
+              injectPseudoOutput(outputs, '__portfolio_tickers', macroResult.portfolioTickers.join(', '));
               return;
             }
           }
@@ -395,6 +417,7 @@ export function registerProcessInsightsWorkflow(orchestrator: Orchestrator, opti
           injectColdSummary(outputs, triage.cold);
           injectPseudoOutput(outputs, '__risk_metrics', formatRiskMetrics(result.briefs));
           injectPseudoOutput(outputs, '__snapshot_id', result.snapshotId);
+          injectPseudoOutput(outputs, '__portfolio_tickers', result.briefs.map((b) => b.symbol).join(', '));
         }
       : undefined,
 
@@ -469,19 +492,30 @@ function buildStanceMessage(stance: 'BULLISH' | 'BEARISH', prev: Map<string, { t
   const researchOutput = prev.get('research-analyst')?.text ?? '';
   const riskOutput = prev.get('risk-manager')?.text ?? '';
   const dataBriefs = prev.get('__data_briefs')?.text ?? '';
+  const portfolioTickers = prev.get('__portfolio_tickers')?.text;
 
   const oppositeNoun = stance === 'BULLISH' ? 'bears' : 'bulls';
   const closingDetail = stance === 'BULLISH' ? 'upcoming catalysts' : 'downside risks';
 
-  return (
+  let prompt =
     `Build the strongest possible ${stance} case for each position.\n` +
-    `Use ONLY the data provided — do NOT call any tools.\n\n` +
+    `Use ONLY the data provided — do NOT call any tools.\n\n`;
+
+  if (portfolioTickers) {
+    prompt +=
+      `## Portfolio Boundary\n` +
+      `Portfolio positions: ${portfolioTickers}\n` +
+      `Only argue for/against these portfolio positions. Other tickers in signals are watchlist entries — not portfolio holdings.\n\n`;
+  }
+
+  prompt +=
     `## Research Brief\n${researchOutput}\n\n` +
     `## Risk Assessment\n${riskOutput}\n\n` +
     (dataBriefs ? `## Position Data\n${dataBriefs}\n\n` : '') +
     `For each position: ${stance.toLowerCase()} thesis, supporting evidence (cite specific numbers/signals), ` +
-    `why ${oppositeNoun} are wrong, ${closingDetail}, and conviction (1-5).`
-  );
+    `why ${oppositeNoun} are wrong, ${closingDetail}, and conviction (1-5).`;
+
+  return prompt;
 }
 
 // ---------------------------------------------------------------------------

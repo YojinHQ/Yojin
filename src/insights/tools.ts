@@ -20,6 +20,7 @@ import {
 } from './types.js';
 import type { ToolDefinition, ToolResult } from '../core/types.js';
 import { getLogger } from '../logging/index.js';
+import type { PortfolioSnapshotStore } from '../portfolio/snapshot-store.js';
 import type { SignalArchive } from '../signals/archive.js';
 import { DEFAULT_SPAM_PATTERNS, filterSignals } from '../signals/signal-filter.js';
 
@@ -28,10 +29,12 @@ const log = getLogger().sub('insight-tools');
 export interface InsightToolsOptions {
   insightStore: InsightStore;
   signalArchive?: SignalArchive;
+  /** Portfolio snapshot store — used to validate that positions are real portfolio holdings. */
+  snapshotStore?: PortfolioSnapshotStore;
 }
 
 export function createInsightTools(options: InsightToolsOptions): ToolDefinition[] {
-  const { insightStore, signalArchive } = options;
+  const { insightStore, signalArchive, snapshotStore } = options;
 
   const saveInsightReport: ToolDefinition = {
     name: 'save_insight_report',
@@ -121,7 +124,34 @@ export function createInsightTools(options: InsightToolsOptions): ToolDefinition
       const startMs = Date.now();
 
       // Validate position schemas
-      const positions = params.positions.map((p) => PositionInsightSchema.parse(p));
+      let positions = params.positions.map((p) => PositionInsightSchema.parse(p));
+
+      // Safety net: filter out positions that aren't in the portfolio.
+      // The LLM may create PositionInsight entries for watchlist tickers
+      // that appeared in multi-ticker signals — drop them with a warning.
+      // Use the snapshot the pipeline analyzed (by snapshotId), not the latest,
+      // to avoid race conditions if the portfolio changes during the run.
+      if (snapshotStore) {
+        const snapshot = (await snapshotStore.getById(params.snapshotId)) ?? (await snapshotStore.getLatest());
+        if (snapshot) {
+          const portfolioSymbols = new Set(snapshot.positions.map((p) => p.symbol.split('-')[0].toUpperCase()));
+          const beforeCount = positions.length;
+          positions = positions.filter((p) => {
+            const base = p.symbol.split('-')[0].toUpperCase();
+            if (!portfolioSymbols.has(base)) {
+              log.warn('Dropping non-portfolio position from insight report', { symbol: p.symbol });
+              return false;
+            }
+            return true;
+          });
+          if (positions.length < beforeCount) {
+            log.warn('Filtered non-portfolio positions', {
+              dropped: beforeCount - positions.length,
+              remaining: positions.length,
+            });
+          }
+        }
+      }
 
       // Enrich position keySignals with canonical data from curated store.
       // Drop signals that belong to a different position (LLM misattribution).

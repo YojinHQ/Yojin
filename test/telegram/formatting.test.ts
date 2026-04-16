@@ -109,10 +109,10 @@ describe('formatAction', () => {
   });
 
   it('falls back to verdict-only header when no ticker is present', () => {
-    const action: Action = { ...baseAction, tickers: [], verdict: 'REVIEW', what: 'REVIEW portfolio — concentration' };
+    const action: Action = { ...baseAction, tickers: [], verdict: 'SELL', what: 'SELL portfolio — concentration' };
     const result = formatAction(action);
-    expect(result).toContain('<b>REVIEW</b>');
-    expect(result).not.toContain('REVIEW  —');
+    expect(result).toContain('<b>SELL</b>');
+    expect(result).not.toContain('SELL  —');
   });
 
   it('escapes HTML special characters from headlines and reasoning', () => {

@@ -223,9 +223,9 @@ describe('formatAction', () => {
   });
 
   it('falls back to verdict-only header when no ticker is provided', () => {
-    const noTicker: Action = { ...action, tickers: [], verdict: 'REVIEW' };
+    const noTicker: Action = { ...action, tickers: [], verdict: 'SELL' };
     const result = formatAction(noTicker);
-    expect(result).toContain('*REVIEW*');
+    expect(result).toContain('*SELL*');
   });
 
   it('does not use HTML tags', () => {

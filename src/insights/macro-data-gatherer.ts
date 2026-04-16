@@ -41,6 +41,8 @@ export interface MacroGathererResult {
   usedFallback: boolean;
   /** Raw briefs (only present when using fallback). */
   briefs?: DataBrief[];
+  /** Portfolio ticker symbols — used for boundary enforcement in LLM prompts. */
+  portfolioTickers: string[];
 }
 
 /**
@@ -59,6 +61,7 @@ export async function gatherMacroData(options: MacroGathererOptions): Promise<Ma
 
   const snapshotId = snapshot.id;
   const totalPositions = snapshot.positions.length;
+  const portfolioTickers = snapshot.positions.map((p) => p.symbol);
 
   // Read all latest micro insights
   const microInsights = await microInsightStore.getAllLatest();
@@ -84,6 +87,7 @@ export async function gatherMacroData(options: MacroGathererOptions): Promise<Ma
       totalPositions,
       gatherDurationMs: Date.now() - start,
       usedFallback: false,
+      portfolioTickers,
     };
   }
 
@@ -96,6 +100,9 @@ export async function gatherMacroData(options: MacroGathererOptions): Promise<Ma
     });
 
     const result = await gatherDataBriefs(fallbackGathererOptions);
+    // Derive tickers from the briefs the fallback actually analyzed — not
+    // the snapshot read above, which may have changed between reads.
+    const fallbackTickers = result.briefs.map((b) => b.symbol);
     return {
       microSummaries: formatBriefsForContext(result.briefs),
       riskMetrics: formatRiskMetrics(result.briefs),
@@ -105,6 +112,7 @@ export async function gatherMacroData(options: MacroGathererOptions): Promise<Ma
       gatherDurationMs: Date.now() - start,
       usedFallback: true,
       briefs: result.briefs,
+      portfolioTickers: fallbackTickers,
     };
   }
 

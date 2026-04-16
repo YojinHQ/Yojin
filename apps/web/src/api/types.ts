@@ -1199,6 +1199,9 @@ export interface Action {
   riskContext: string | null;
   severity: number | null;
   triggerStrength: TriggerStrength;
+  suggestedQuantity: number | null;
+  suggestedValue: number | null;
+  currentPrice: number | null;
   severityLabel: string;
   status: ActionStatus;
   expiresAt: string;

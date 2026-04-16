@@ -45,6 +45,9 @@ interface ActionGql {
   riskContext: string | null;
   severity: number | null;
   triggerStrength: TriggerStrength;
+  suggestedQuantity: number | null;
+  suggestedValue: number | null;
+  currentPrice: number | null;
   severityLabel: string;
   status: ActionStatus;
   expiresAt: string;
@@ -69,6 +72,9 @@ function toGql(action: Action): ActionGql {
     riskContext: action.riskContext ?? null,
     severity: action.severity ?? null,
     triggerStrength: action.triggerStrength,
+    suggestedQuantity: action.suggestedQuantity ?? null,
+    suggestedValue: action.suggestedValue ?? null,
+    currentPrice: action.currentPrice ?? null,
     severityLabel: deriveSeverityLabel(action.severity),
     status: action.status,
     expiresAt: action.expiresAt,

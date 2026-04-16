@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DataCapabilitySchema,
+  capabilitiesToEnrichmentFields,
   checkCapabilities,
   getAvailableCapabilities,
 } from '../../src/strategies/capabilities.js';
@@ -55,5 +56,40 @@ describe('checkCapabilities', () => {
     const result = checkCapabilities(['derivatives'], [...subset]);
     expect(result.status).toBe('unavailable');
     expect(result.missing).toEqual(['derivatives']);
+  });
+});
+
+describe('capabilitiesToEnrichmentFields', () => {
+  it('maps market_data and fundamentals to market', () => {
+    const fields = capabilitiesToEnrichmentFields(['market_data', 'fundamentals']);
+    expect(fields).toEqual(['market']);
+  });
+
+  it('maps technicals to technicals', () => {
+    const fields = capabilitiesToEnrichmentFields(['technicals']);
+    expect(fields).toEqual(['technicals']);
+  });
+
+  it('maps news, research, sentiment, filings, derivatives', () => {
+    const fields = capabilitiesToEnrichmentFields(['news', 'research', 'sentiment', 'filings', 'derivatives']);
+    expect(fields).toEqual(
+      expect.arrayContaining(['news', 'research', 'sentiment', 'social', 'regulatory', 'derivatives']),
+    );
+    expect(fields).toHaveLength(6);
+  });
+
+  it('returns empty for portfolio-only capabilities', () => {
+    const fields = capabilitiesToEnrichmentFields(['portfolio', 'macro_data']);
+    expect(fields).toEqual([]);
+  });
+
+  it('deduplicates fields when multiple capabilities map to the same field', () => {
+    const fields = capabilitiesToEnrichmentFields(['market_data', 'fundamentals', 'technicals']);
+    expect(fields.filter((f) => f === 'market')).toHaveLength(1);
+    expect(fields).toEqual(expect.arrayContaining(['market', 'technicals']));
+  });
+
+  it('returns empty for empty input', () => {
+    expect(capabilitiesToEnrichmentFields([])).toEqual([]);
   });
 });

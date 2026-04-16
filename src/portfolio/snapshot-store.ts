@@ -86,6 +86,28 @@ export class PortfolioSnapshotStore {
     return snapshot;
   }
 
+  /** Retrieve a specific snapshot by ID. Scans the JSONL from the end for efficiency. */
+  async getById(snapshotId: string): Promise<PortfolioSnapshot | null> {
+    let content: string;
+    try {
+      content = await readFile(this.filePath, 'utf-8');
+    } catch {
+      return null;
+    }
+
+    const lines = content.trim().split('\n').filter(Boolean);
+    // Scan from end — most lookups target recent snapshots
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const snap = JSON.parse(lines[i]) as PortfolioSnapshot;
+        if (snap.id === snapshotId) return snap;
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }
+
   /** Read the latest snapshot (last line of the JSONL file). Returns null if no snapshots exist. */
   async getLatest(): Promise<PortfolioSnapshot | null> {
     let content: string;

@@ -69,6 +69,9 @@ interface IntelFeedItem {
   strategyName?: string;
   riskContext?: string;
   expiresAt?: string;
+  suggestedQuantity?: number | null;
+  suggestedValue?: number | null;
+  currentPrice?: number | null;
 }
 
 /** Map signal type to an icon name. */
@@ -659,6 +662,9 @@ function IntelFeedContent({
       riskContext: action.riskContext ?? undefined,
       expiresAt: action.expiresAt,
       sizeGuidance: action.sizeGuidance ?? undefined,
+      suggestedQuantity: action.suggestedQuantity,
+      suggestedValue: action.suggestedValue,
+      currentPrice: action.currentPrice,
     }));
 
     const merged = [...signalItems, ...actionItems];
@@ -903,6 +909,7 @@ function IntelFeedContent({
       triggerStrength: item.triggerStrength,
       keyPoints: item.isAction ? [] : item.description ? [item.description] : [],
       analysis: item.isAction ? item.description || '' : item.description || item.title,
+      verdict: item.verdict,
       relatedTickers: item.tickers,
       actionMeta: item.isAction
         ? {
@@ -911,6 +918,9 @@ function IntelFeedContent({
             riskContext: item.riskContext ?? null,
             expiresAt: item.expiresAt ?? '',
             sizeGuidance: item.sizeGuidance ?? null,
+            suggestedQuantity: item.suggestedQuantity,
+            suggestedValue: item.suggestedValue,
+            currentPrice: item.currentPrice,
           }
         : undefined,
     });

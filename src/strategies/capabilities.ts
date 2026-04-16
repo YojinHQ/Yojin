@@ -1,3 +1,4 @@
+import type { EnrichmentField } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
 import type { TriggerGroup } from './types.js';
@@ -106,6 +107,32 @@ export function deriveCapabilities(triggerGroups: TriggerGroup[]): DataCapabilit
   }
 
   return [...caps];
+}
+
+/**
+ * Map DataCapabilities to Jintel enrichment field names. Used by the micro flow
+ * to narrow the Jintel payload to only what active strategies actually read —
+ * avoids fetching news/research/filings/ownership when no trigger consumes them.
+ */
+const CAPABILITY_TO_FIELDS: Record<DataCapability, readonly EnrichmentField[]> = {
+  market_data: ['market'],
+  fundamentals: ['market'],
+  technicals: ['technicals'],
+  news: ['news'],
+  research: ['research'],
+  sentiment: ['sentiment', 'social'],
+  filings: ['regulatory'],
+  derivatives: ['derivatives'],
+  portfolio: [],
+  macro_data: [],
+};
+
+export function capabilitiesToEnrichmentFields(caps: DataCapability[]): EnrichmentField[] {
+  const out = new Set<EnrichmentField>();
+  for (const cap of caps) {
+    for (const field of CAPABILITY_TO_FIELDS[cap] ?? []) out.add(field);
+  }
+  return [...out];
 }
 
 export function checkCapabilities(

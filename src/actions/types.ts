@@ -1,5 +1,5 @@
 /**
- * Action data model — BUY/SELL/REVIEW outcomes produced by Strategies/Strategies.
+ * Action data model — BUY/SELL outcomes produced by Strategies.
  *
  * An Action is opinionated: a Strategy trigger fires, an LLM assesses it, and
  * the result is a concrete recommendation (verdict + headline + reasoning) that
@@ -57,6 +57,12 @@ export const ActionSchema = z.object({
   severity: z.number().min(0).max(1).optional(),
   /** Deterministic strength derived from how far past thresholds the trigger conditions are. */
   triggerStrength: TriggerStrengthSchema.default('MODERATE'),
+  /** Suggested number of shares/units — computed from strategy allocation + portfolio. */
+  suggestedQuantity: z.number().int().min(0).optional(),
+  /** Dollar value of the suggested trade. */
+  suggestedValue: z.number().min(0).optional(),
+  /** Price at time of recommendation. */
+  currentPrice: z.number().positive().optional(),
   status: ActionStatusSchema.default('PENDING'),
   expiresAt: DateTimeField,
   createdAt: DateTimeField,
@@ -70,8 +76,7 @@ export type Action = z.infer<typeof ActionSchema>;
  * Parse a verdict from an LLM headline like:
  *   "BUY AAPL — golden cross"
  *   "SELL TSLA — breakdown"
- *   "REVIEW portfolio — concentration drift"
- * Falls back to REVIEW when no verdict keyword is present.
+ * Falls back to BUY when no verdict keyword is present.
  */
 export function parseVerdictFromHeadline(headline: string): ActionVerdict {
   const head = headline.trim().toUpperCase();
@@ -80,5 +85,8 @@ export function parseVerdictFromHeadline(headline: string): ActionVerdict {
   if (match) {
     return match[1] as ActionVerdict;
   }
+  // Legacy/loose mappings: TRIM → SELL. Anything else falls back to REVIEW
+  // so the UI surfaces it for manual inspection rather than silently picking a side.
+  if (/^TRIM\b/.test(head)) return 'SELL';
   return 'REVIEW';
 }

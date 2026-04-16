@@ -9,7 +9,7 @@
  * injecting into an agent's context without overflow.
  */
 
-import type { EnrichOptions, Entity, JintelClient, MarketQuote } from '@yojinhq/jintel-client';
+import type { EnrichOptions, EnrichmentField, Entity, JintelClient, MarketQuote } from '@yojinhq/jintel-client';
 import { buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
 import type { InsightStore } from './insight-store.js';
@@ -564,39 +564,55 @@ export function formatRiskMetrics(briefs: DataBrief[]): string {
 // Unified Jintel enrichment — single query for ALL signal types
 // ---------------------------------------------------------------------------
 
-/** Batch enrich query: market + risk + regulatory + technicals + sentiment + news + research + ownership data. */
+/** Full-bundle enrich fields — used when LLM narration needs the rich context (news, research, filings, ownership). */
+const BATCH_ENRICH_DEFAULT_FIELDS: EnrichmentField[] = [
+  'market',
+  'risk',
+  'regulatory',
+  'technicals',
+  'sentiment',
+  'social',
+  'news',
+  'research',
+  'institutionalHoldings',
+  'ownership',
+  'topHolders',
+];
 const BATCH_ENRICH_OPTS: EnrichOptions = { topHolders: { limit: 10 } };
-const BATCH_ENRICH_QUERY = buildBatchEnrichQuery(
-  [
-    'market',
-    'risk',
-    'regulatory',
-    'technicals',
-    'sentiment',
-    'news',
-    'research',
-    'institutionalHoldings',
-    'ownership',
-    'topHolders',
-  ],
-  BATCH_ENRICH_OPTS,
-);
+
+// Query strings are stable per field-set. Cache to avoid rebuilding on every micro tick.
+const enrichQueryCache = new Map<string, string>();
+function getBatchEnrichQuery(fields: EnrichmentField[]): string {
+  const key = [...fields].sort().join(',');
+  const cached = enrichQueryCache.get(key);
+  if (cached) return cached;
+  const query = buildBatchEnrichQuery(fields, BATCH_ENRICH_OPTS);
+  enrichQueryCache.set(key, query);
+  return query;
+}
 
 /**
- * Batch enrich tickers with ALL fields (market, risk, regulatory, news)
- * in a single GraphQL call per chunk.
+ * Batch enrich tickers in a single GraphQL call per chunk.
+ *
+ * `fields` selects which Jintel sub-graphs to request. Defaults to the full bundle;
+ * the micro flow narrows this to only what active strategy triggers read when skipping LLM.
  *
  * Returns a Map keyed by the **input** portfolio ticker → entity. This guarantees
  * that downstream code always knows which portfolio position an entity belongs to,
  * even if the entity's own `tickers` field has a different format or ordering.
  */
-async function batchEnrichAllChunked(client: JintelClient, tickers: string[]): Promise<Map<string, Entity>> {
+async function batchEnrichAllChunked(
+  client: JintelClient,
+  tickers: string[],
+  fields: EnrichmentField[] = BATCH_ENRICH_DEFAULT_FIELDS,
+): Promise<Map<string, Entity>> {
   const CHUNK_SIZE = 20;
   const result = new Map<string, Entity>();
+  const query = getBatchEnrichQuery(fields);
   for (let i = 0; i < tickers.length; i += CHUNK_SIZE) {
     const chunk = tickers.slice(i, i + CHUNK_SIZE);
     try {
-      const data = await client.request<Entity[]>(BATCH_ENRICH_QUERY, { tickers: chunk });
+      const data = await client.request<Entity[]>(query, { tickers: chunk });
 
       // Build a case-insensitive lookup: entity ticker → entity
       const entityByTicker = new Map<string, Entity>();
@@ -899,6 +915,8 @@ export interface SingleBriefOptions {
   profileStore?: TickerProfileStore;
   /** Override the signal lookback window (ISO date string). Defaults to 24 hours; first-run assets use 4 days. */
   signalsSince?: string;
+  /** Narrow the Jintel enrichment payload. Defaults to the full bundle (for LLM narration). */
+  enrichFields?: EnrichmentField[];
 }
 
 /** Enriched result from buildSingleBriefEnriched — includes the raw Entity + signals for downstream use. */
@@ -960,7 +978,9 @@ export async function buildSingleBriefEnriched(
 
   // Parallel lookups for this single ticker
   const [enrichmentMap, curatedSignals, memories] = await Promise.all([
-    jintelClient ? batchEnrichAllChunked(jintelClient, [ticker]) : Promise.resolve(new Map<string, Entity>()),
+    jintelClient
+      ? batchEnrichAllChunked(jintelClient, [ticker], options.enrichFields)
+      : Promise.resolve(new Map<string, Entity>()),
     signalArchive
       .query({ tickers: [ticker], since: signalsSince, limit: 100 })
       .then((raw) => filterSignals(raw, { relevantTickers: new Set([ticker]), spamPatterns: DEFAULT_SPAM_PATTERNS })),
