@@ -44,7 +44,17 @@ CATALYST_IMPACT: <estimated % move this catalyst is worth, e.g. "3-5%" or "~8% u
 MAX_ENTRY is the price beyond which the trade is stale because the catalyst is already priced in. For BUY it is a ceiling; for SELL it is a floor. Use the price context and your catalyst impact estimate to set this.
 
 Then provide a one-line summary of the action for compact display:
-SUMMARY: <one short sentence, max 110 characters — the key catalyst and why to act now, no metrics, dollar amounts, or numbers. Must fit a 3-line compact card at small font. Trim filler words ("are driving", "is accelerating"); prefer active, compact phrasing.>
+SUMMARY: <STRICT max 90 characters — count every character including spaces. The key catalyst and why to act now in one compressed sentence. NO metrics, NO dollar amounts, NO numbers, NO time windows, NO ticker name, NO "act within Xh" phrasing (sizing and timing render separately in the UI).>
+
+SUMMARY examples — GOOD (under 90 chars):
+- "Social momentum signals crowd rotation into gold as safe-haven." (65 chars)
+- "Pentagon AI deal validates defense revenue thesis." (51 chars)
+
+SUMMARY examples — BAD (too long, too much detail):
+- "Sharp social sentiment momentum on GLD signals crowd rotation into gold as a safe-haven; act within 2-hour entry window before signal fades." (140 chars — includes ticker, timing, redundant "sharp/sentiment" adjectives)
+- "FCC greenlight on Amazon-Globalstar deal + Altimeter's $511M stake add are driving fresh bullish social momentum — act within the 2-hour window." (145 chars — includes dollar amount, timing, filler verbs)
+
+Before emitting SUMMARY, count the characters. If over 90, rewrite shorter.
 
 Then provide concise analysis (2-4 sentences per point):
 1. Why this trigger matters — reference specific news, data, or discussions
