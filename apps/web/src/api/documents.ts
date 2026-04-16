@@ -1629,6 +1629,7 @@ export const ACTION_FIELDS = gql`
     verdict
     what
     why
+    summary
     sizeGuidance
     tickers
     riskContext

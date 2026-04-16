@@ -41,6 +41,9 @@ CATALYST_IMPACT: <estimated % move this catalyst is worth, e.g. "3-5%" or "~8% u
 
 MAX_ENTRY is the price beyond which the trade is stale because the catalyst is already priced in. For BUY it is a ceiling; for SELL it is a floor. Use the price context and your catalyst impact estimate to set this.
 
+Then provide a one-line summary of the action for compact display:
+SUMMARY: <1-2 sentences — the key catalyst and why to act now, no metrics or numbers>
+
 Then provide concise analysis (2-4 sentences per point):
 1. Why this trigger matters — reference specific news, data, or discussions
 2. Key risks before acting
@@ -52,6 +55,7 @@ interface ActionReasoningResult {
   headline: string;
   verdict: ActionVerdict;
   reasoning: string;
+  summary?: string;
   sizeGuidance?: string;
   rawOutput: string;
   fromLlm: boolean;
@@ -253,7 +257,7 @@ Provide your ACTION headline and analysis. Reference specific news, discussions,
 // ---------------------------------------------------------------------------
 
 /** Regex for structured parameter lines — used to filter them out of reasoning text. */
-const PARAM_LINE_RE = /^(ENTRY|TARGET|STOP|HORIZON|CONVICTION|MAX_ENTRY|CATALYST_IMPACT):/i;
+const PARAM_LINE_RE = /^(ENTRY|TARGET|STOP|HORIZON|CONVICTION|MAX_ENTRY|CATALYST_IMPACT|SUMMARY):/i;
 
 /** Valid conviction values for clamping LLM output. */
 const VALID_CONVICTIONS: Set<string> = new Set(ConvictionLevelSchema.options);
@@ -268,6 +272,8 @@ export interface StructuredParams {
   maxEntry?: number;
   /** LLM-estimated catalyst impact, e.g. "3-5%". */
   catalystImpact?: string;
+  /** 1-2 sentence condensed summary for compact UI cards. */
+  summary?: string;
 }
 
 /** Parse structured trading parameters from LLM output lines. Each field parsed independently. */
@@ -322,6 +328,12 @@ export function parseStructuredParams(lines: string[]): StructuredParams {
     const catalystMatch = trimmed.match(/^CATALYST_IMPACT:\s*(.+)/i);
     if (catalystMatch) {
       result.catalystImpact = catalystMatch[1].trim();
+      continue;
+    }
+
+    const summaryMatch = trimmed.match(/^SUMMARY:\s*(.+)/i);
+    if (summaryMatch) {
+      result.summary = summaryMatch[1].trim();
       continue;
     }
   }
@@ -416,6 +428,7 @@ export async function generateActionReasoning(
         const {
           headline,
           reasoning,
+          summary,
           sizeGuidance: llmSizeGuidance,
           parsedCleanly,
           entryRange,
@@ -450,6 +463,7 @@ export async function generateActionReasoning(
           headline: finalHeadline,
           verdict,
           reasoning: finalReasoning,
+          summary,
           sizeGuidance,
           rawOutput,
           fromLlm: true,

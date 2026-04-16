@@ -63,6 +63,7 @@ interface IntelFeedItem {
   source: string | null;
   link: string | null;
   data?: DataRow[];
+  summary?: string | null;
   isAction?: boolean;
   verdict?: 'BUY' | 'SELL' | 'REVIEW';
   sizeGuidance?: string;
@@ -333,8 +334,10 @@ function IntelFeedCard({
       >
         <div className="overflow-hidden">
           <div className="px-3 pb-3 pt-0.5">
-            {item.description && (
-              <p className="line-clamp-3 text-xs leading-relaxed text-text-secondary">{item.description}</p>
+            {(item.summary || item.description) && (
+              <p className="line-clamp-3 text-xs leading-relaxed text-text-secondary">
+                {item.summary ?? item.description}
+              </p>
             )}
 
             {item.sizeGuidance && (
@@ -663,6 +666,7 @@ function IntelFeedContent({
       publishedTime: timeAgo(action.createdAt),
       icon: 'zap' as IconName,
       description: action.why,
+      summary: action.summary,
       source: action.strategyName,
       link: null,
       isAction: true,

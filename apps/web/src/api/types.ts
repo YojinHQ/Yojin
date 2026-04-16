@@ -1195,6 +1195,7 @@ export interface Action {
   verdict: ActionVerdict;
   what: string;
   why: string;
+  summary: string | null;
   sizeGuidance: string | null;
   tickers: string[];
   riskContext: string | null;

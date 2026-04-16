@@ -51,6 +51,8 @@ export const ActionSchema = z.object({
   what: z.string().min(1),
   /** Reasoning trace from the LLM (why this action, risks, sizing). */
   why: z.string().min(1),
+  /** 1-2 sentence condensed summary for compact UI cards. */
+  summary: z.string().min(1).optional(),
   /** One-line sizing clause from the LLM, e.g. "BUY to 5% of portfolio (now 2.1%)" or "SELL 25% of position". */
   sizeGuidance: z.string().min(1).optional(),
   /** Related tickers — typically one for per-asset evaluations. */

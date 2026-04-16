@@ -131,6 +131,13 @@ describe('parseStructuredParams', () => {
     expect(params.conviction).toBeUndefined();
   });
 
+  it('parses SUMMARY line', () => {
+    const params = parseStructuredParams([
+      'SUMMARY: Social sentiment surging ahead of earnings — act before the catalyst window closes.',
+    ]);
+    expect(params.summary).toBe('Social sentiment surging ahead of earnings — act before the catalyst window closes.');
+  });
+
   it('returns empty object when no params are present', () => {
     const params = parseStructuredParams(['## Why Now', 'The stock broke out above resistance...']);
     expect(params).toEqual({});
@@ -337,6 +344,7 @@ describe('parseStructuredParams — priced-in fields', () => {
       'CONVICTION: HIGH',
       'MAX_ENTRY: $260',
       'CATALYST_IMPACT: 5-8% upside',
+      'SUMMARY: AI5 partnership confirmed — momentum window open before broader market catches up.',
       '',
       'The partnership has been confirmed.',
     ].join('\n');
@@ -349,6 +357,8 @@ describe('parseStructuredParams — priced-in fields', () => {
     expect(result.conviction).toBe('HIGH');
     expect(result.maxEntry).toBe(260);
     expect(result.catalystImpact).toBe('5-8% upside');
+    expect(result.summary).toBe('AI5 partnership confirmed — momentum window open before broader market catches up.');
+    expect(result.reasoning).not.toContain('SUMMARY:');
     expect(result.reasoning).toContain('partnership has been confirmed');
   });
 });

@@ -629,6 +629,7 @@ export const typeDefs = /* GraphQL */ `
     verdict: ActionVerdict!
     what: String!
     why: String!
+    summary: String
     sizeGuidance: String
     tickers: [String!]!
     riskContext: String
