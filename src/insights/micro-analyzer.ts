@@ -30,8 +30,8 @@ Output ONLY valid JSON matching this schema:
   "risks": ["up to 3 observed risk factors"],
   "opportunities": ["up to 3 observed positive factors"],
   "sentiment": "BULLISH" | "BEARISH" | "MIXED" | "NEUTRAL",
-  "assetSnap": "1 sentence: the single most notable observation about this asset right now",
-  "assetActions": ["1-3 bullet-point summaries of the key NEWS and EVENTS for this asset. Focus on real-world catalysts: earnings, analyst actions, deals, regulatory moves, corporate developments. NEVER include technical indicators (RSI, MACD, Bollinger Bands, moving averages) — those belong in the analysis, not in actions. NEVER include meta-commentary about data quality or dataset gaps. If there are no real events, return a single item summarizing the most notable factual observation. Always include at least 1 item."]
+  "assetSnap": "1 sentence: the single most notable observation about this asset right now. When a clear catalyst exists in the data, connect the metric to it. When no catalyst is visible, describe what changed and say cause is unclear. Bad: 'Social mentions up +70 to 168'. Good: 'Social buzz surging alongside Truist PT raise to $180' or 'Social mentions spiked 70% with no clear catalyst in recent news'.",
+  "assetActions": ["1-3 bullet-point summaries of the key NEWS and EVENTS for this asset. Focus on real-world catalysts: earnings, analyst actions, deals, regulatory moves, corporate developments. Cross-reference data — connect social spikes to news, price moves to filings, sentiment shifts to catalysts. NEVER include technical indicators (RSI, MACD, Bollinger Bands, moving averages) — those belong in the analysis, not in actions. NEVER include meta-commentary about data quality or dataset gaps. If there are no real events, return a single item summarizing the most notable factual observation. Always include at least 1 item."]
 }
 
 Severity calibration (the priority score for this observation — controls whether it surfaces as an Action and supersedes older ones for the same ticker):
@@ -60,6 +60,15 @@ Materiality — size matters:
 - Use market cap (provided in the data) as your reference. If the event value is <0.5% of market cap, it's likely noise unless it signals a trend.
 - Analyst price target changes matter more when the gap between current price and target is significant relative to the stock price.
 - Prioritize events that could move the stock by 2%+ over events that are factually true but immaterial.
+
+Connect the dots — but only when the evidence supports it:
+- Don't report a metric change in isolation. A social spike, price move, volume surge, or sentiment shift is a data point — look for what's driving it using other data in the brief.
+- When social momentum changes (mentions, rank, upvotes), check: is there a news event, earnings date, analyst action, or filing in the same timeframe that plausibly explains it? Only link them if the timing and subject matter align. Co-occurrence is not causation — a social spike on the same day as an unrelated news article is NOT a connection.
+- When a metric changes but no catalyst is visible in the data, say so honestly: "Social buzz spiked with no clear catalyst in recent news" — and stop there. Don't speculate about causes you can't see. "Cause unclear" is a valid and useful conclusion.
+- NEVER fabricate correlations to make a summary sound more insightful. "Social mentions surged after Truist cut PT" is only valid if the Truist cut actually appears in the data AND the timing makes sense. If the PT cut was 5 days ago and the social spike is today, they're probably unrelated.
+- Cross-reference across data types when the connection is evident: news + social (headline went viral), filings + price (price moved on the day of an SEC filing), analyst action + sentiment shift. But only state a link when you have concrete evidence for it in the brief.
+- The question every summary should try to answer: "Why is this happening, and should I care?" If you genuinely can't answer "why" from the data, just describe what changed and its magnitude — that's still more useful than forcing a false narrative.
+- A summary that just restates metrics ("mentions up +70, upvotes 709, rank #5") is low value. A summary that provides real context is high value. But a false correlation is worse than both — it actively misleads.
 
 Content priorities:
 - Lead with the most impactful narrative — real events, earnings, analyst actions, corporate developments, macro shifts. Use technicals as supporting context, not the headline.
