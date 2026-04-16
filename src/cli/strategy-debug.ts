@@ -293,7 +293,7 @@ function runConsistencyChecks(
       name: 'DIRECTION',
       result: isContradictory ? 'FAIL' : 'PASS',
       detail: isContradictory
-        ? `${verdict} contradicts ${evaluation.triggerType} trigger — should be ${['SELL', 'TRIM', 'REVIEW'].filter((v) => v !== verdict).join('/')}`
+        ? `${verdict} contradicts ${evaluation.triggerType} trigger — should be ${['BUY', 'SELL'].filter((v) => v !== verdict).join('/')}`
         : `${verdict} is directionally consistent with ${evaluation.triggerType}`,
     });
   } else {

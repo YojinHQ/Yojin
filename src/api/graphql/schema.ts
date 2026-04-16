@@ -597,9 +597,6 @@ export const typeDefs = /* GraphQL */ `
   enum ActionVerdict {
     BUY
     SELL
-    TRIM
-    HOLD
-    REVIEW
   }
 
   enum ActionStatus {

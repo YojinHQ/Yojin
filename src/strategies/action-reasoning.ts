@@ -24,16 +24,16 @@ const logger = createSubsystemLogger('action-reasoning');
 export const ACTION_SYSTEM_PROMPT = `You are a trading strategist. A strategy trigger has fired. Recommend a concrete action.
 
 Your response MUST start with a one-line headline in this exact format:
-ACTION: <BUY|SELL|TRIM|HOLD> <TICKER> — <one-sentence reason>
+ACTION: <BUY|SELL> <TICKER> — <one-sentence reason>
 
-Be decisive — commit to BUY or SELL when the trigger and data support it. Use HOLD only when a position exists and the trigger confirms staying. REVIEW is a last resort for genuinely ambiguous data.
+Every action is either BUY or SELL. No hedging, no "review later", no "hold and wait". The trigger fired — commit to a direction.
 
 Then provide your analysis:
 1. Why this trigger matters right now — reference specific news, discussions, or data points
 2. Key risks before acting
 3. Timing guidance (entry/exit levels if applicable)
 
-Be direct and concise. No hedging or disclaimers.`;
+Be direct and concise. No disclaimers.`;
 
 // ---------------------------------------------------------------------------
 // Types

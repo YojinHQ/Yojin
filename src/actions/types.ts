@@ -1,5 +1,5 @@
 /**
- * Action data model — BUY/SELL/REVIEW outcomes produced by Strategies/Strategies.
+ * Action data model — BUY/SELL outcomes produced by Strategies.
  *
  * An Action is opinionated: a Strategy trigger fires, an LLM assesses it, and
  * the result is a concrete recommendation (verdict + headline + reasoning) that
@@ -22,7 +22,7 @@ import { DateTimeField, IdField } from '../types/base.js';
 // ---------------------------------------------------------------------------
 
 /** Concrete recommendation emitted by the Strategist LLM. */
-export const ActionVerdictSchema = z.enum(['BUY', 'SELL', 'TRIM', 'HOLD', 'REVIEW']);
+export const ActionVerdictSchema = z.enum(['BUY', 'SELL']);
 export type ActionVerdict = z.infer<typeof ActionVerdictSchema>;
 
 export const ActionStatusSchema = z.enum(['PENDING', 'APPROVED', 'REJECTED', 'EXPIRED']);
@@ -41,7 +41,7 @@ export const ActionSchema = z.object({
   /** Dedup/supersede key: "${strategyId}-${triggerType}-${ticker}". */
   triggerId: IdField,
   triggerType: z.string().min(1),
-  /** Concrete verdict parsed from LLM headline (BUY/SELL/TRIM/HOLD/REVIEW). */
+  /** Concrete verdict parsed from LLM headline (BUY/SELL). */
   verdict: ActionVerdictSchema,
   /** Headline, e.g. "BUY AAPL — golden cross + expanding volume". */
   what: z.string().min(1),
@@ -74,15 +74,13 @@ export type Action = z.infer<typeof ActionSchema>;
  * Parse a verdict from an LLM headline like:
  *   "BUY AAPL — golden cross"
  *   "SELL TSLA — breakdown"
- *   "REVIEW portfolio — concentration drift"
- * Falls back to REVIEW when no verdict keyword is present.
+ * Falls back to BUY when no verdict keyword is present.
  */
 export function parseVerdictFromHeadline(headline: string): ActionVerdict {
   const head = headline.trim().toUpperCase();
   // Check word-boundary so "BUYBACK" doesn't match BUY
-  const match = head.match(/^(BUY|SELL|TRIM|HOLD|REVIEW)\b/);
-  if (match) {
-    return match[1] as ActionVerdict;
-  }
-  return 'REVIEW';
+  if (/^SELL\b/.test(head) || /^TRIM\b/.test(head)) return 'SELL';
+  // Default to BUY — the system prompt constrains to BUY/SELL,
+  // so anything else (HOLD, REVIEW, unstructured) maps to BUY.
+  return 'BUY';
 }
