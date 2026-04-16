@@ -99,19 +99,17 @@ const signalTypeIcon: Record<string, IconName> = {
 };
 
 /** Promote higher-severity items into the alerts lane.
- * Only CRITICAL signals and explicit SUMMARY outputs qualify as alerts —
- * HIGH signals remain visible as prominent insights but don't clutter the alerts tab.
+ * Only CRITICAL signals qualify as alerts — HIGH and below remain visible as
+ * insights but don't clutter the alerts tab.
  *
  * Signals sourced purely from Jintel ENRICHMENT (ownership breakdowns, fundamentals
  * snapshots, technicals readings) are raw data points, not synthesized insights, so
  * they classify as 'data' and stay out of the Insights tab. */
 function classifySignal(signal: {
-  outputType?: string | null;
   severity: IntelFeedItem['severity'];
   sources?: { type?: string | null }[];
 }): ItemType {
   if (signal.severity === 'CRITICAL') return 'alert';
-  if (signal.outputType === 'SUMMARY') return 'alert';
   const sources = signal.sources ?? [];
   if (sources.length > 0 && sources.every((s) => s.type === 'ENRICHMENT')) return 'data';
   return 'insight';
@@ -334,11 +332,7 @@ function IntelFeedCard({
       >
         <div className="overflow-hidden">
           <div className="px-3 pb-3 pt-0.5">
-            {(item.summary || item.description) && (
-              <p className="line-clamp-3 text-xs leading-relaxed text-text-secondary">
-                {item.summary ?? item.description}
-              </p>
-            )}
+            {item.summary && <p className="line-clamp-3 text-xs leading-relaxed text-text-secondary">{item.summary}</p>}
 
             {item.sizeGuidance && (
               <div
@@ -607,7 +601,7 @@ function IntelFeedContent({
     const signalItems: IntelFeedItem[] = (data?.curatedSignals ?? []).map((cs) => {
       const s = cs.signal;
       const severity = cs.severity ?? 'LOW';
-      const itemType = classifySignal({ outputType: s.outputType, severity, sources: s.sources });
+      const itemType = classifySignal({ severity, sources: s.sources });
       const topScore =
         cs.scores.length > 0
           ? cs.scores.reduce((best, sc) => (sc.compositeScore > best.compositeScore ? sc : best), cs.scores[0])
@@ -615,7 +609,8 @@ function IntelFeedContent({
       const sourceName = s.sources?.[0]?.name;
       const ticker = topScore?.ticker ?? s.tickers[0] ?? 'MACRO';
       const headline = s.tier1 ?? s.title;
-      const detail = s.tier2 ?? s.content ?? '';
+      const shortSummary = s.tier2 && s.tier2 !== headline ? s.tier2 : null;
+      const fullDetail = s.content && s.content !== headline ? s.content : (shortSummary ?? '');
       return {
         id: s.id,
         type: itemType,
@@ -630,7 +625,8 @@ function IntelFeedContent({
         ingestedAt: s.ingestedAt,
         publishedTime: timeAgo(s.publishedAt),
         icon: signalTypeIcon[s.type] ?? 'trending',
-        description: detail !== headline ? detail : '',
+        summary: shortSummary,
+        description: fullDetail,
         source: sourceName ?? null,
         link: s.link ?? null,
         data:

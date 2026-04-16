@@ -42,7 +42,7 @@ CATALYST_IMPACT: <estimated % move this catalyst is worth, e.g. "3-5%" or "~8% u
 MAX_ENTRY is the price beyond which the trade is stale because the catalyst is already priced in. For BUY it is a ceiling; for SELL it is a floor. Use the price context and your catalyst impact estimate to set this.
 
 Then provide a one-line summary of the action for compact display:
-SUMMARY: <1-2 sentences — the key catalyst and why to act now, no metrics or numbers>
+SUMMARY: <one short sentence, max 140 characters — the key catalyst and why to act now, no metrics or numbers. Must fit in a 3-line compact card without truncation.>
 
 Then provide concise analysis (2-4 sentences per point):
 1. Why this trigger matters — reference specific news, data, or discussions
@@ -259,6 +259,18 @@ Provide your ACTION headline and analysis. Reference specific news, discussions,
 /** Regex for structured parameter lines — used to filter them out of reasoning text. */
 const PARAM_LINE_RE = /^(ENTRY|TARGET|STOP|HORIZON|CONVICTION|MAX_ENTRY|CATALYST_IMPACT|SUMMARY):/i;
 
+/** Max summary length that reliably fits the 3-line Intel Feed action card. */
+const SUMMARY_MAX_CHARS = 140;
+
+/** Clamp an LLM-emitted summary to fit the compact action card without truncation. */
+function clampSummary(summary: string): string {
+  if (summary.length <= SUMMARY_MAX_CHARS) return summary;
+  const cut = summary.slice(0, SUMMARY_MAX_CHARS);
+  const lastSpace = cut.lastIndexOf(' ');
+  const safe = lastSpace > 80 ? cut.slice(0, lastSpace) : cut;
+  return safe.replace(/[,\s]+$/, '') + '…';
+}
+
 /** Valid conviction values for clamping LLM output. */
 const VALID_CONVICTIONS: Set<string> = new Set(ConvictionLevelSchema.options);
 
@@ -333,7 +345,7 @@ export function parseStructuredParams(lines: string[]): StructuredParams {
 
     const summaryMatch = trimmed.match(/^SUMMARY:\s*(.+)/i);
     if (summaryMatch) {
-      result.summary = summaryMatch[1].trim();
+      result.summary = clampSummary(summaryMatch[1].trim());
       continue;
     }
   }
