@@ -539,7 +539,7 @@ function IntelFeedContent({
     unseenImportantRef.current = unseenImportantIds;
   }, [unseenImportantIds]);
 
-  const [{ data: schedulerData }] = useQuery<SchedulerStatusQueryResult>({
+  const [{ data: schedulerData }, reexecuteScheduler] = useQuery<SchedulerStatusQueryResult>({
     query: SCHEDULER_STATUS_QUERY,
     requestPolicy: 'cache-and-network',
   });
@@ -585,9 +585,10 @@ function IntelFeedContent({
     const id = setInterval(() => {
       reexecute({ requestPolicy: 'network-only' });
       reexecuteActions({ requestPolicy: 'network-only' });
+      reexecuteScheduler({ requestPolicy: 'network-only' });
     }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [reexecute, reexecuteActions]);
+  }, [reexecute, reexecuteActions, reexecuteScheduler]);
 
   // Map API data into IntelFeedItem[]
   const items: IntelFeedItem[] = useMemo(() => {
@@ -978,12 +979,11 @@ function IntelFeedContent({
             ))}
           </div>
 
-          {/* LLM health warning — lastLlmErrorAt is set atomically with lastLlmError in
-              recordLlmError(), so the assertion is safe when lastLlmError is non-null. */}
-          {schedulerData?.schedulerStatus.lastLlmError &&
-            (!schedulerData.schedulerStatus.lastLlmSuccessAt ||
-              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- set with lastLlmError
-              schedulerData.schedulerStatus.lastLlmErrorAt! > schedulerData.schedulerStatus.lastLlmSuccessAt) && (
+          {(() => {
+            const s = schedulerData?.schedulerStatus;
+            if (!s?.lastLlmError || !s.lastLlmErrorAt) return null;
+            if (s.lastLlmSuccessAt && s.lastLlmErrorAt <= s.lastLlmSuccessAt) return null;
+            return (
               <div className="mx-4 mt-2 mb-1 flex items-start gap-2 rounded-lg border border-warning/20 bg-warning/5 px-3 py-2 text-[11px] text-warning">
                 <span className="mt-px shrink-0">⚠</span>
                 <span>
@@ -993,7 +993,8 @@ function IntelFeedContent({
                   </Link>
                 </span>
               </div>
-            )}
+            );
+          })()}
         </div>
 
         {/* Scrollable content */}

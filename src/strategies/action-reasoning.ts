@@ -42,6 +42,7 @@ interface ActionReasoningResult {
   rawOutput: string;
   fromLlm: boolean;
   parsedCleanly: boolean;
+  error?: string;
 }
 
 interface ActionEntityContext {
@@ -186,18 +187,23 @@ export function parseActionResponse(
   const ticker = (evaluation.context.ticker as string | undefined) ?? 'portfolio';
 
   const lines = rawOutput.split('\n').filter(Boolean);
-  const actionMatch = lines[0]?.match(/^ACTION:\s*(.+)/i);
+  const actionIdx = lines.findIndex((l) => /^ACTION:\s*.+/i.test(l));
 
-  if (actionMatch) {
-    const sizeMatch = lines[1]?.match(/^SIZE:\s*(.+)/i);
-    const rest = sizeMatch ? lines.slice(2) : lines.slice(1);
+  if (actionIdx >= 0) {
+    const headline = lines[actionIdx].replace(/^ACTION:\s*/i, '').trim();
+    const sizeMatch = lines[actionIdx + 1]?.match(/^SIZE:\s*(.+)/i);
+    const rest = sizeMatch ? lines.slice(actionIdx + 2) : lines.slice(actionIdx + 1);
     const sizeRaw = sizeMatch?.[1].trim();
     const sizeGuidance = sizeRaw && sizeRaw.toUpperCase() !== 'N/A' ? sizeRaw : undefined;
+
+    const verdict = parseVerdictFromHeadline(headline);
+    const parsedCleanly = verdict !== 'SELL' || sizeGuidance != null;
+
     return {
-      headline: actionMatch[1].trim(),
+      headline,
       reasoning: rest.join('\n').trim(),
       sizeGuidance,
-      parsedCleanly: true,
+      parsedCleanly,
     };
   }
 
@@ -216,7 +222,10 @@ export async function generateActionReasoning(
 ): Promise<ActionReasoningResult> {
   const ticker = (evaluation.context.ticker as string | undefined) ?? 'portfolio';
 
+  let error: string | undefined;
+
   if (!providerRouter) {
+    error = 'LLM provider not configured';
     logger.warn('LLM provider unavailable for action reasoning', {
       strategyId: evaluation.strategyId,
       ticker,
@@ -258,13 +267,7 @@ export async function generateActionReasoning(
               ? llmSizeGuidance
               : undefined;
 
-        if (!parsedCleanly) {
-          logger.warn('LLM response did not match ACTION: format, falling back to REVIEW', {
-            strategyId: evaluation.strategyId,
-            ticker,
-            firstLine: rawOutput.split('\n')[0]?.slice(0, 120),
-          });
-        } else {
+        if (parsedCleanly) {
           logger.info('LLM reasoning generated for strategy trigger', {
             strategyId: evaluation.strategyId,
             ticker,
@@ -282,10 +285,12 @@ export async function generateActionReasoning(
           parsedCleanly,
         };
       }
+      error = 'Empty LLM response';
     } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
       logger.warn('LLM reasoning failed for strategy trigger, using static content', {
         strategyId: evaluation.strategyId,
-        error: err instanceof Error ? err.message : String(err),
+        error,
       });
     }
   }
@@ -298,5 +303,6 @@ export async function generateActionReasoning(
     rawOutput: '',
     fromLlm: false,
     parsedCleanly: false,
+    error,
   };
 }

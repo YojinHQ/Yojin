@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { parseVerdictFromHeadline } from '../../src/actions/types.js';
 import {
   formatAllocationBudget,
   formatBuySizeGuidance,
@@ -100,5 +101,50 @@ describe('parseActionResponse', () => {
     expect(result.parsedCleanly).toBe(false);
     expect(result.headline).toBe('REVIEW AAPL — AAPL below target allocation');
     expect(result.reasoning).toBe(raw);
+  });
+
+  it('marks SELL without a SIZE line as parsedCleanly=false', () => {
+    const raw = 'ACTION: SELL TSLA — breakdown below support\n\nTrend broken.';
+    const result = parseActionResponse(raw, evaluation);
+    expect(result.parsedCleanly).toBe(false);
+    expect(result.sizeGuidance).toBeUndefined();
+    expect(result.headline).toBe('SELL TSLA — breakdown below support');
+  });
+
+  it('marks SELL with SIZE: N/A as parsedCleanly=false', () => {
+    const raw = 'ACTION: SELL TSLA — breakdown below support\nSIZE: N/A\n\nTrend broken.';
+    const result = parseActionResponse(raw, evaluation);
+    expect(result.parsedCleanly).toBe(false);
+    expect(result.sizeGuidance).toBeUndefined();
+  });
+
+  it('tolerates a short preamble before the ACTION line', () => {
+    const raw = 'Based on the strategy rules:\nACTION: BUY AAPL — momentum intact\n\nAnalysis.';
+    const result = parseActionResponse(raw, evaluation);
+    expect(result.parsedCleanly).toBe(true);
+    expect(result.headline).toBe('BUY AAPL — momentum intact');
+    expect(result.reasoning).toContain('Analysis');
+  });
+});
+
+describe('parseVerdictFromHeadline', () => {
+  it('parses BUY/SELL/REVIEW at word boundary', () => {
+    expect(parseVerdictFromHeadline('BUY AAPL — golden cross')).toBe('BUY');
+    expect(parseVerdictFromHeadline('SELL TSLA — breakdown')).toBe('SELL');
+    expect(parseVerdictFromHeadline('REVIEW NVDA — mixed signals')).toBe('REVIEW');
+  });
+
+  it('maps legacy TRIM to SELL', () => {
+    expect(parseVerdictFromHeadline('TRIM AAPL — take profits')).toBe('SELL');
+  });
+
+  it('defaults unrecognized verbs to REVIEW (not BUY)', () => {
+    expect(parseVerdictFromHeadline('HOLD AAPL — waiting')).toBe('REVIEW');
+    expect(parseVerdictFromHeadline('WAIT AAPL — unclear')).toBe('REVIEW');
+    expect(parseVerdictFromHeadline('gibberish')).toBe('REVIEW');
+  });
+
+  it('requires a word boundary — does not match BUYBACK as BUY', () => {
+    expect(parseVerdictFromHeadline('BUYBACK announced')).toBe('REVIEW');
   });
 });

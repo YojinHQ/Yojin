@@ -376,4 +376,39 @@ describe('ActionStore.getRecentResolutions', () => {
     expect(result.has('rsi-PRICE-AAPL')).toBe(true);
     expect(result.has('rsi-PRICE-GOOG')).toBe(false);
   });
+
+  it('finds resolutions whose createdAt file is older than the cooldown cutoff', async () => {
+    // Regression: files are partitioned by `createdAt`, but we filter by
+    // `resolvedAt`. An action created 2 days ago and resolved within the 24h
+    // cooldown window still lives in the 2-day-old file — file listing must
+    // include it.
+    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+
+    await store.create(
+      makeAction({
+        id: 'old-action',
+        triggerId: 'rsi-PRICE-AAPL',
+        createdAt: twoDaysAgo,
+        expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+      }),
+    );
+
+    // Append the APPROVED record manually (store.approve uses `Date.now()` for
+    // resolvedAt; we want a specific timestamp inside the cooldown window).
+    await store.create({
+      ...makeAction({
+        id: 'old-action',
+        triggerId: 'rsi-PRICE-AAPL',
+        createdAt: twoDaysAgo,
+      }),
+      status: 'APPROVED',
+      resolvedAt: twelveHoursAgo,
+      resolvedBy: 'user',
+    });
+
+    const result = await store.getRecentResolutions([{ triggerId: 'rsi-PRICE-AAPL', newStrength: 'MODERATE' }], WINDOW);
+    expect(result.has('rsi-PRICE-AAPL')).toBe(true);
+    expect(result.get('rsi-PRICE-AAPL')?.resolvedAt).toBe(twelveHoursAgo);
+  });
 });

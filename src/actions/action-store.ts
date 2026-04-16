@@ -262,7 +262,7 @@ export class ActionStore {
     if (entries.length === 0) return new Map();
 
     const cutoff = new Date(Date.now() - windowMs).toISOString();
-    const files = (await this.listFiles(cutoff)).reverse(); // newest first
+    const files = (await this.listFiles()).reverse();
     const triggerIds = new Set(entries.map((e) => e.triggerId));
 
     // Build a map of triggerId → latest resolved action within the cutoff window.

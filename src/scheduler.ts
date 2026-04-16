@@ -653,7 +653,7 @@ export class Scheduler {
         const symbol = asset.symbol;
 
         if (result.status === 'rejected') {
-          this.recordLlmError(result.reason);
+          if (readyForLlm) this.recordLlmError(result.reason);
           logger.error('Micro research failed', { symbol, error: String(result.reason) });
           continue;
         }
@@ -1328,13 +1328,17 @@ export class Scheduler {
 
       // Skip actions without clean LLM reasoning — no value in a bare REVIEW card
       if (!actionReasoning.fromLlm || !actionReasoning.parsedCleanly) {
-        if (!actionReasoning.fromLlm) this.recordLlmError('LLM provider unavailable for action reasoning');
+        const reason = !actionReasoning.fromLlm
+          ? (actionReasoning.error ?? 'LLM provider unavailable for action reasoning')
+          : `Malformed action response: ${actionReasoning.rawOutput.split('\n')[0]?.slice(0, 120) ?? '<empty>'}`;
+        this.recordLlmError(reason);
         logger.warn('Skipping action — LLM reasoning unavailable or unparseable', {
           strategyId: evaluation.strategyId,
           triggerId: evaluation.triggerId,
           ticker,
           fromLlm: actionReasoning.fromLlm,
           parsedCleanly: actionReasoning.parsedCleanly,
+          reason,
         });
         continue;
       }

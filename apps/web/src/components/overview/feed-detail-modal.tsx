@@ -195,7 +195,8 @@ export default function FeedDetailModal({ open, onClose, data }: FeedDetailModal
               <div>
                 <span className="text-2xs font-semibold uppercase tracking-wider opacity-70">Suggested</span>
                 <p className="text-lg font-bold leading-tight">
-                  {data.verdict === 'SELL' ? 'Sell' : 'Buy'} {data.actionMeta.suggestedQuantity} shares
+                  {data.verdict === 'BUY' ? 'Buy' : data.verdict === 'SELL' ? 'Sell' : 'Review'}{' '}
+                  {data.actionMeta.suggestedQuantity} shares
                 </p>
               </div>
               <div className="text-right">

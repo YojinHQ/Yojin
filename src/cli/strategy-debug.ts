@@ -234,6 +234,7 @@ function runConsistencyChecks(
   headline: string,
   verdict: ActionVerdict,
   reasoning: string,
+  parsedCleanly: boolean,
 ): ConsistencyCheck[] {
   const checks: ConsistencyCheck[] = [];
   const ticker = (evaluation.context.ticker as string | undefined) ?? '';
@@ -248,10 +249,15 @@ function runConsistencyChecks(
 
   // 2. VERDICT — is the parsed verdict valid (not a fallback REVIEW from parse failure)?
   const verdictMatch = headline.match(/^(BUY|SELL|REVIEW)\b/i);
+  const verdictOk = verdictMatch !== null && parsedCleanly;
   checks.push({
     name: 'VERDICT',
-    result: verdictMatch ? 'PASS' : 'WARN',
-    detail: verdictMatch ? `Parsed verdict: ${verdict}` : `No explicit verdict in headline — defaulted to REVIEW`,
+    result: verdictOk ? 'PASS' : 'WARN',
+    detail: verdictOk
+      ? `Parsed verdict: ${verdict}`
+      : !verdictMatch
+        ? `No explicit verdict in headline — defaulted to REVIEW`
+        : `Parse fell back (parsedCleanly=false) — verdict ${verdict} is synthetic`,
   });
 
   // 3. TICKER — does the headline contain the correct ticker?
@@ -290,11 +296,12 @@ function runConsistencyChecks(
   const contradictions = CONTRADICTORY_VERDICTS[evaluation.triggerType];
   if (contradictions) {
     const isContradictory = contradictions.has(verdict);
+    const allowed = (['BUY', 'SELL', 'REVIEW'] as ActionVerdict[]).filter((v) => !contradictions.has(v));
     checks.push({
       name: 'DIRECTION',
       result: isContradictory ? 'FAIL' : 'PASS',
       detail: isContradictory
-        ? `${verdict} contradicts ${evaluation.triggerType} trigger — should be ${['SELL', 'REVIEW'].filter((v) => v !== verdict).join('/')}`
+        ? `${verdict} contradicts ${evaluation.triggerType} trigger — should be ${allowed.join('/')}`
         : `${verdict} is directionally consistent with ${evaluation.triggerType}`,
     });
   } else {
@@ -371,6 +378,7 @@ async function runActionEval(
       result.headline,
       result.verdict,
       result.reasoning,
+      result.parsedCleanly,
     );
     const passed = checks.filter((c) => c.result === 'PASS').length;
     const warned = checks.filter((c) => c.result === 'WARN').length;
