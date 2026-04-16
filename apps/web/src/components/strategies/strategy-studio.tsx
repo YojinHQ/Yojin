@@ -12,6 +12,45 @@ import { StrategyFormPanel } from './strategy-form-panel.js';
 import type { StrategyFormData } from './strategy-form-panel.js';
 import type { Strategy } from './types.js';
 
+/** Apply strategy-specific tool card side effects (propose-strategy). */
+function applyStrategyProposal(
+  card: ToolCardRef,
+  setFormData: React.Dispatch<React.SetStateAction<StrategyFormData>>,
+  setFormVisible: React.Dispatch<React.SetStateAction<boolean>>,
+): void {
+  if (card.tool !== 'propose-strategy') return;
+  try {
+    const proposed = JSON.parse(card.params) as Partial<StrategyFormData>;
+    if (proposed.triggerGroups) {
+      proposed.triggerGroups = proposed.triggerGroups.map((g) => ({
+        ...g,
+        id: crypto.randomUUID(),
+        label: g.label ?? '',
+        conditions: g.conditions.map((c) => ({ ...c, id: crypto.randomUUID(), params: c.params ?? {} })),
+      }));
+    }
+    if (proposed.requires) {
+      proposed.requires = proposed.requires.map((r) => r.toUpperCase());
+    }
+    if (typeof proposed.style === 'string') {
+      proposed.style = proposed.style.toUpperCase();
+    }
+    if (typeof proposed.category === 'string') {
+      proposed.category = proposed.category.toUpperCase();
+    }
+    const rawWeights = (proposed as { targetWeights?: unknown }).targetWeights;
+    if (rawWeights && !Array.isArray(rawWeights) && typeof rawWeights === 'object') {
+      proposed.targetWeights = Object.entries(rawWeights as Record<string, unknown>)
+        .filter(([, v]) => typeof v === 'number' && Number.isFinite(v))
+        .map(([ticker, weight]) => ({ ticker: ticker.toUpperCase(), weight: weight as number }));
+    }
+    setFormData((prev) => ({ ...prev, ...proposed }));
+    setFormVisible(true);
+  } catch (err) {
+    console.error('Failed to parse strategy proposal params', err);
+  }
+}
+
 export interface StrategyStudioProps {
   open: boolean;
   onClose: () => void;
@@ -154,114 +193,63 @@ export function StrategyStudio({ open, onClose, strategy, editMode }: StrategySt
     scrollToBottom();
   }, [messages, streamingContent, scrollToBottom]);
 
-  // Pure accumulator — no side effects. Events are processed in the useEffect below.
-  const handleSubscription = useCallback(
-    (prev: ChatEvent[] | undefined, data: { onChatMessage: ChatEvent }): ChatEvent[] => {
-      return [...(prev ?? []), data.onChatMessage];
-    },
-    [],
-  );
+  // Synchronous subscription handler — processes events inline (same pattern as main chat).
+  // Avoids the deferred useEffect+setTimeout approach that causes race conditions and
+  // StrictMode double-processing.
+  const handleSubscription = useCallback((_prev: unknown, data: { onChatMessage: ChatEvent }) => {
+    const event = data.onChatMessage;
 
-  const [{ data: subscriptionData }] = useSubscription(
-    { query: CHAT_SUBSCRIPTION, variables: { threadId }, pause: !open },
-    handleSubscription,
-  );
-
-  const processedCountRef = useRef(0);
-
-  const handleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    const events: ChatEvent[] = subscriptionData ?? [];
-    const toProcess = events.slice(processedCountRef.current);
-    if (toProcess.length === 0) return;
-    processedCountRef.current = events.length;
-
-    handleTimeoutRef.current = setTimeout(() => {
-      for (const event of toProcess) {
-        if (event.type === 'THINKING') {
-          setIsLoading(true);
-        } else if (event.type === 'TOOL_CARD' && event.toolCard) {
-          const card = event.toolCard;
-          const isDuplicate = toolCardsRef.current.some((c) => c.tool === card.tool && c.params === card.params);
-          if (!isDuplicate) {
-            toolCardsRef.current.push(card);
-          }
-          if (card.tool === 'propose-strategy') {
-            try {
-              const proposed = JSON.parse(card.params) as Partial<StrategyFormData>;
-              // Ensure condition.params is always an object (server may send undefined)
-              if (proposed.triggerGroups) {
-                proposed.triggerGroups = proposed.triggerGroups.map((g) => ({
-                  ...g,
-                  id: crypto.randomUUID(),
-                  label: g.label ?? '',
-                  conditions: g.conditions.map((c) => ({ ...c, id: crypto.randomUUID(), params: c.params ?? {} })),
-                }));
-              }
-              // GraphQL returns uppercase capabilities; normalize for form
-              if (proposed.requires) {
-                proposed.requires = proposed.requires.map((r) => r.toUpperCase());
-              }
-              // LLM may emit lowercase enum values — normalize to the GraphQL enum casing
-              if (typeof proposed.style === 'string') {
-                proposed.style = proposed.style.toUpperCase();
-              }
-              if (typeof proposed.category === 'string') {
-                proposed.category = proposed.category.toUpperCase();
-              }
-              // The LLM may emit targetWeights as a Record<ticker, weight> — normalize to the array shape.
-              const rawWeights = (proposed as { targetWeights?: unknown }).targetWeights;
-              if (rawWeights && !Array.isArray(rawWeights) && typeof rawWeights === 'object') {
-                proposed.targetWeights = Object.entries(rawWeights as Record<string, unknown>)
-                  .filter(([, v]) => typeof v === 'number' && Number.isFinite(v))
-                  .map(([ticker, weight]) => ({ ticker: ticker.toUpperCase(), weight: weight as number }));
-              }
-              setFormData((prev) => ({ ...prev, ...proposed }));
-              setFormVisible(true);
-            } catch (err) {
-              console.error('Failed to parse strategy proposal params', err);
-            }
-          }
-        } else if (event.type === 'TEXT_DELTA') {
-          if (event.accumulatedText != null) {
-            setStreamingContent(event.accumulatedText);
-          } else if (event.delta != null) {
-            setStreamingContent((prev) => prev + event.delta);
-          }
-        } else if (event.type === 'MESSAGE_COMPLETE') {
-          const msgId = event.messageId ?? crypto.randomUUID();
-          if (completedIdsRef.current.has(msgId)) continue;
-          completedIdsRef.current.add(msgId);
-          const toolCards = toolCardsRef.current.length > 0 ? [...toolCardsRef.current] : undefined;
-          setMessages((prev) => [...prev, { id: msgId, role: 'assistant', content: event.content ?? '', toolCards }]);
-          setStreamingContent('');
-          setIsLoading(false);
-          toolCardsRef.current = [];
-        } else if (event.type === 'ERROR') {
-          if (event.messageId) {
-            if (completedIdsRef.current.has(event.messageId)) continue;
-            completedIdsRef.current.add(event.messageId);
-          }
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: event.messageId ?? crypto.randomUUID(),
-              role: 'assistant',
-              content: `Something went wrong. ${event.error ?? ''}`,
-            },
-          ]);
-          setStreamingContent('');
-          setIsLoading(false);
-          toolCardsRef.current = [];
-        }
+    if (event.type === 'THINKING') {
+      setIsLoading(true);
+    } else if (event.type === 'TOOL_CARD' && event.toolCard) {
+      const card = event.toolCard;
+      const isDuplicate = toolCardsRef.current.some((c) => c.tool === card.tool && c.params === card.params);
+      if (!isDuplicate) {
+        toolCardsRef.current.push(card);
       }
-    }, 0);
+      applyStrategyProposal(card, setFormData, setFormVisible);
+    } else if (event.type === 'TOOL_USE') {
+      setIsLoading(true);
+    } else if (event.type === 'TEXT_DELTA' && event.delta != null) {
+      setIsLoading(false);
+      // Use accumulatedText (idempotent set) to avoid doubling when StrictMode
+      // creates two concurrent subscriptions that both process the same delta.
+      if (event.accumulatedText != null) {
+        setStreamingContent(event.accumulatedText);
+      } else {
+        setStreamingContent((prev) => prev + event.delta);
+      }
+    } else if (event.type === 'MESSAGE_COMPLETE') {
+      const msgId = event.messageId ?? crypto.randomUUID();
+      if (completedIdsRef.current.has(msgId)) return data;
+      completedIdsRef.current.add(msgId);
+      const toolCards = toolCardsRef.current.length > 0 ? [...toolCardsRef.current] : undefined;
+      setMessages((prev) => [...prev, { id: msgId, role: 'assistant', content: event.content ?? '', toolCards }]);
+      setStreamingContent('');
+      setIsLoading(false);
+      toolCardsRef.current = [];
+    } else if (event.type === 'ERROR') {
+      if (event.messageId) {
+        if (completedIdsRef.current.has(event.messageId)) return data;
+        completedIdsRef.current.add(event.messageId);
+      }
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: event.messageId ?? crypto.randomUUID(),
+          role: 'assistant',
+          content: `Something went wrong. ${event.error ?? ''}`,
+        },
+      ]);
+      setStreamingContent('');
+      setIsLoading(false);
+      toolCardsRef.current = [];
+    }
 
-    return () => {
-      if (handleTimeoutRef.current !== null) clearTimeout(handleTimeoutRef.current);
-    };
-  }, [subscriptionData]);
+    return data;
+  }, []);
+
+  useSubscription({ query: CHAT_SUBSCRIPTION, variables: { threadId }, pause: !open }, handleSubscription);
 
   useEffect(() => {
     if (!open || hasSentInitialRef.current) return;
