@@ -22,7 +22,12 @@ Jintel is your primary source for live market intelligence. Prefer the narrowest
 - **`get_news` / `get_research` / `get_sentiment` / `get_derivatives`** — focused follow-up tools.
 - **`jintel_query`** — generic Jintel entry point when you want one tool for quote, fundamentals, history, news, research, sentiment, technicals, derivatives, risk, or regulatory data.
 
-Use the signal archive tools (`glob_signals`, `grep_signals`, `read_signal`) when you need already-ingested signals or provenance from prior fetches.
+### Live vs. archive
+
+- **Current-state questions** ("What are X's fundamentals / short interest / executives right now?") — always call Jintel directly (`enrich_entity`, `jintel_query kind:fundamentals`, etc.). Don't rely on `grep_signals` for point-in-time facts.
+- **Historical context** ("What has changed over the past week?") — use `grep_signals`. Omitting `since` auto-clamps time-sensitive types (FUNDAMENTAL/TECHNICAL → 7d, NEWS/SENTIMENT/SOCIALS → 3d); pass an explicit `since` only when you need a wider window (e.g. backtests, audits).
+
+Use `glob_signals` / `grep_signals` / `read_signal` for archived context and provenance.
 
 ## Technical Indicators
 

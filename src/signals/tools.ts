@@ -15,6 +15,22 @@ export interface SignalToolsOptions {
   archive: SignalArchive;
 }
 
+const DEFAULT_SINCE_DAYS: Record<string, number> = {
+  FUNDAMENTAL: 7,
+  TECHNICAL: 7,
+  NEWS: 3,
+  SENTIMENT: 3,
+  SOCIALS: 3,
+};
+
+function resolveSince(type: string | undefined, since: string | undefined): string | undefined {
+  if (since) return since;
+  if (!type) return undefined;
+  const days = DEFAULT_SINCE_DAYS[type.toUpperCase()];
+  if (!days) return undefined;
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 export function createSignalTools(options: SignalToolsOptions): ToolDefinition[] {
   const { archive } = options;
 
@@ -51,7 +67,15 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
         .optional()
         .describe('Filter by multiple tickers at once (e.g. ["AAPL","MSFT","GOOG"]). Takes precedence over ticker.'),
       sourceId: z.string().optional().describe('Filter by data source ID'),
-      since: z.string().optional().describe('ISO date — signals on or after this date'),
+      since: z
+        .string()
+        .optional()
+        .describe(
+          'ISO date — signals on or after this date. ' +
+            'When omitted, time-sensitive types are clamped automatically: FUNDAMENTAL/TECHNICAL → 7 days, ' +
+            'NEWS/SENTIMENT/SOCIALS → 3 days. Other types (MACRO, FILINGS, …) return full history. ' +
+            'Pass an explicit old date to override (e.g. to backtest or audit).',
+        ),
       until: z.string().optional().describe('ISO date — signals on or before this date'),
       search: z.string().optional().describe('Text search in title and content'),
       limit: z
@@ -72,13 +96,15 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
       search?: string;
       limit: number;
     }): Promise<ToolResult> {
+      const effectiveSince = resolveSince(params.type, params.since);
+
       // Batch mode: single query for all tickers, then group in memory
       if (params.tickers) {
         const allSignals = await archive.query({
           type: params.type,
           tickers: params.tickers,
           sourceId: params.sourceId,
-          since: params.since,
+          since: effectiveSince,
           until: params.until,
           search: params.search,
           limit: params.limit * params.tickers.length,
@@ -131,7 +157,7 @@ export function createSignalTools(options: SignalToolsOptions): ToolDefinition[]
         type: params.type,
         ticker: params.ticker,
         sourceId: params.sourceId,
-        since: params.since,
+        since: effectiveSince,
         until: params.until,
         search: params.search,
         limit: params.limit,
