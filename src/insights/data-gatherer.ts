@@ -84,6 +84,10 @@ export interface DataBrief {
   ownership: OwnershipBrief | null;
   // Top institutional holders
   topHolders: TopHolderBrief[];
+  // Insider trades (Form 4, last 30d)
+  insiderTrades: InsiderTradeSummaryBrief | null;
+  // Earnings press releases (8-K EX-99.1, latest)
+  earningsPressRelease: EarningsPressReleaseBrief | null;
   // Ticker profile (per-asset institutional knowledge)
   profile: TickerProfileBrief | null;
 }
@@ -190,6 +194,32 @@ interface TopHolderBrief {
   value: number;
   shares: number;
   reportDate: string;
+}
+
+interface InsiderTradeSummaryBrief {
+  windowDays: number;
+  buyCount: number;
+  sellCount: number;
+  buyValue: number;
+  sellValue: number;
+  plannedCount: number;
+  latestFilingDate: string;
+  topTrades: Array<{
+    date: string;
+    direction: 'BUY' | 'SELL';
+    reporterName: string;
+    officerTitle: string;
+    shares: number;
+    value: number;
+  }>;
+}
+
+interface EarningsPressReleaseBrief {
+  reportDate: string;
+  filingDate: string;
+  items: string;
+  excerpt: string;
+  url: string;
 }
 
 interface GatherResult {
@@ -439,6 +469,29 @@ export function formatBriefsForContext(briefs: DataBrief[]): string {
       }
     }
 
+    // Insider trades (Form 4, 30d summary)
+    if (b.insiderTrades) {
+      const it = b.insiderTrades;
+      const parts = [
+        `${it.buyCount} buy${it.buyCount === 1 ? '' : 's'} $${formatLargeNumber(it.buyValue)}`,
+        `${it.sellCount} sell${it.sellCount === 1 ? '' : 's'} $${formatLargeNumber(it.sellValue)}`,
+      ];
+      if (it.plannedCount > 0) parts.push(`${it.plannedCount} under 10b5-1`);
+      lines.push(`Insider trading (last ${it.windowDays}d): ${parts.join(' | ')}`);
+      for (const t of it.topTrades.slice(0, 3)) {
+        lines.push(
+          `  - ${t.date} ${t.direction}: ${t.reporterName} (${t.officerTitle}) — ${formatLargeNumber(t.shares)} shares, $${formatLargeNumber(t.value)}`,
+        );
+      }
+    }
+
+    // Latest earnings press release (8-K EX-99.1)
+    if (b.earningsPressRelease) {
+      const er = b.earningsPressRelease;
+      lines.push(`Earnings press release (${er.reportDate}, 8-K items ${er.items}):`);
+      if (er.excerpt) lines.push(`  ${er.excerpt.slice(0, 300)}`);
+    }
+
     // Memories (prioritize reflected memories with lessons)
     if (b.memories.length > 0) {
       lines.push(`Past analysis:`);
@@ -581,6 +634,8 @@ const BATCH_ENRICH_DEFAULT_FIELDS: EnrichmentField[] = [
   'institutionalHoldings',
   'ownership',
   'topHolders',
+  'insiderTrades',
+  'earningsPressReleases',
 ];
 const BATCH_ENRICH_OPTS: EnrichOptions = { topHolders: { limit: 10 } };
 
@@ -888,8 +943,52 @@ export function buildBrief(
       shares: h.shares,
       reportDate: h.reportDate,
     })),
+    insiderTrades: buildInsiderTradesBrief(entity?.insiderTrades ?? null),
+    earningsPressRelease: buildEarningsPressReleaseBrief(entity?.earningsPressReleases ?? null),
     memories,
     profile,
+  };
+}
+
+function buildInsiderTradesBrief(trades: Entity['insiderTrades'] | null): InsiderTradeSummaryBrief | null {
+  if (!trades?.length) return null;
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const recent = trades.filter((t) => !t.isDerivative && new Date(t.transactionDate) >= cutoff);
+  if (recent.length === 0) return null;
+  const buys = recent.filter((t) => t.acquiredDisposed === 'A');
+  const sells = recent.filter((t) => t.acquiredDisposed === 'D');
+  const totalValue = (ts: typeof recent): number =>
+    ts.reduce((sum, t) => sum + (t.transactionValue ?? (t.pricePerShare ?? 0) * t.shares), 0);
+  return {
+    windowDays: 30,
+    buyCount: buys.length,
+    sellCount: sells.length,
+    buyValue: totalValue(buys),
+    sellValue: totalValue(sells),
+    plannedCount: recent.filter((t) => t.isUnder10b5One).length,
+    latestFilingDate: recent[0].filingDate,
+    topTrades: recent.slice(0, 5).map((t) => ({
+      date: t.transactionDate,
+      direction: t.acquiredDisposed === 'A' ? 'BUY' : 'SELL',
+      reporterName: t.reporterName,
+      officerTitle: t.officerTitle,
+      shares: t.shares,
+      value: t.transactionValue ?? (t.pricePerShare ?? 0) * t.shares,
+    })),
+  };
+}
+
+function buildEarningsPressReleaseBrief(
+  releases: Entity['earningsPressReleases'] | null,
+): EarningsPressReleaseBrief | null {
+  if (!releases?.length) return null;
+  const latest = releases[0];
+  return {
+    reportDate: latest.reportDate,
+    filingDate: latest.filingDate,
+    items: latest.items,
+    excerpt: latest.excerpt.trim(),
+    url: latest.pressReleaseUrl ?? latest.filingUrl,
   };
 }
 
