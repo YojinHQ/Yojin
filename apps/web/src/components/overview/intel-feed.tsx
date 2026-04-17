@@ -368,7 +368,7 @@ function IntelFeedCard({
       {item.isAction && !expanded && !selectMode && (
         <div
           role="tooltip"
-          className="pointer-events-none invisible absolute left-1/2 top-full z-20 mt-1 w-max max-w-sm -translate-x-1/2 translate-y-1 rounded-lg border border-border bg-bg-card px-3 py-2 opacity-0 shadow-xl transition-[opacity,transform,visibility] duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100"
+          className="pointer-events-none invisible absolute inset-x-0 top-full z-20 mt-1 translate-y-1 rounded-lg border border-border bg-bg-card px-3 py-2 opacity-0 shadow-xl transition-[opacity,transform,visibility] duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100"
         >
           <div className="mb-1 text-3xs font-semibold uppercase tracking-wider text-text-muted">Trade Parameters</div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1">
