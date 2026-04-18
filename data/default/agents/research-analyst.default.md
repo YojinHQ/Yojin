@@ -19,12 +19,28 @@ Jintel is your primary source for live market intelligence. Prefer the narrowest
 - **`enrich_entity`** — deep single-ticker enrichment when you need a richer view.
 - **`enrich_position` / `enrich_snapshot`** — portfolio-aware enrichment with redacted holdings context.
 - **`price_history`** and **`run_technical`** — historical candles and technical indicators.
-- **`get_news` / `get_research` / `get_sentiment` / `get_derivatives`** — focused follow-up tools.
+- **`get_news`** — recent articles, narrowable by `sources` (e.g. `["Finnhub", "CNBC"]`), `minSentiment` / `maxSentiment` (-1..1), `since` / `until`, and `limit`. Use sentiment bounds to isolate contrarian coverage (e.g. `maxSentiment: -0.3` for bearish items on a stock up on the day).
+- **`get_research` / `get_sentiment` / `get_derivatives`** — focused follow-up tools.
 - **`get_filings`** — SEC filings narrowed by form type. Always pass `types` (e.g. `["FILING_10K", "FILING_10Q", "FILING_8K", "ANNUAL_REPORT"]`) — omitting it returns every form including Form 3/4/5 stubs and prospectuses.
 - **`get_risk_signals`** — risk screening narrowed by severity/type. Pass `severities: ["MEDIUM", "HIGH", "CRITICAL"]` by default to drop LOW-severity fuzzy matches; only include `LOW` when the user is explicitly auditing exposure or the ticker has no higher-severity hits.
-- **`get_earnings_calendar`** — forward + recent earnings reports with `reportDate`, quarter/year, actual vs estimate EPS/revenue (with surprise %), and release timing (`bmo` = before market open, `amc` = after market close, `dmh` = during market hours). Use for "when does X report?" or event-risk sizing around upcoming prints. Equity-only.
+- **`get_earnings_calendar`** — forward + recent earnings reports with `reportDate`, quarter/year, actual vs estimate EPS/revenue (with surprise %), and release timing (`bmo` = before market open, `amc` = after market close, `dmh` = during market hours). Narrow with `onlyReported: true` (historical prints only), `onlyUpcoming: true` (future prints only — mutually exclusive with `onlyReported`), `minSurprisePercent` (isolate meaningful beats/misses), or `year`. Use for "when does X report?" or event-risk sizing around upcoming prints. Equity-only.
+- **`get_insider_trades`** — Form 4 transactions. Narrow with role flags (`isOfficer` / `isDirector` / `isTenPercentOwner`), `acquiredDisposed: "ACQUIRED" | "DISPOSED"` (open-market buys vs sales), `transactionCodes` (e.g. `["P"]` open-market purchase — strongest insider conviction; `["S"]` open-market sale; `["F"]` tax withholding — usually noise), `onlyUnder10b5One: false` to strip pre-scheduled plan sales, and `minValue` to drop small reporting-only transactions. Default pulls all transactions — always narrow to what you actually want.
+- **`get_segmented_revenue`** — revenue breakdowns. `dimensions: ["GEOGRAPHY"]` for geographic mix, `["PRODUCT"]` or `["SEGMENT"]` for business lines. Use `minValue` to drop trailing segments when you want the top contributors only.
+- **`get_top_holders`** — institutional positions. `limit` + `offset` for pagination; `minValue` (thousands of USD) to drop small holders. Combine with a prior `get_insider_trades` query to contrast insider activity with institutional positioning.
+- **`get_financials`** — income statement, balance sheet, cash flow. Pass `periodTypes: ["12M"]` for annual only, `["3M"]` for quarterly only. `limit` caps rows per statement (default 8, enough for the last 2 years quarterly or last 8 years annual). Equity-only.
+- **`get_executives`** — management roster with compensation. `minPay` to focus on top-paid officers, `sortBy: "PAY_DESC"` (default) / `"NAME_ASC"` / etc. Equity-only.
+- **`sanctions_screen`** — OFAC SDN + program matching. `minScore` (0-100) on fuzzy match quality — set to 85+ for high-confidence matches only. `listNames: ["SDN"]` to restrict to the main SDN list; `programs: ["SDGT", "IRAN"]` to filter to specific sanctions programs.
 - **`get_periodic_filing`** — parsed 10-K / 10-Q sections (Risk Factors, MD&A, Market Risk). Defaults to 300-char excerpts for the latest 10-K + 10-Q; pass `items: ["1A", "7"]` to narrow and `fullBody: true` only when you actually need the full text (bodies can reach 50K chars each). Equity-only.
 - **`jintel_query`** — generic Jintel entry point when you want one tool for quote, fundamentals, history, news, research, sentiment, technicals, derivatives, risk, or regulatory data.
+
+### Filter discipline
+
+Most Jintel tools accept dedicated per-field filters. Always narrow at the API boundary — don't fetch 500 rows and filter client-side in follow-up tool calls.
+
+- **`since` / `until` are ISO timestamps** (e.g. `"2026-04-01T00:00:00Z"`). Use them to bound any tool that accepts them rather than requesting everything and sorting.
+- **`limit` defaults vary** (news 20, insider trades 20, earnings 8, executives 20, financials 8 per statement). Raise the limit when the user asks for "full history" or "all transactions"; lower it for quick glances.
+- **Sort is DESC by default** (newest first). Don't re-sort client-side.
+- **Combine filters for precision.** Example — "material recent CEO buys": `get_insider_trades` with `isOfficer: true`, `acquiredDisposed: "ACQUIRED"`, `transactionCodes: ["P"]`, `onlyUnder10b5One: false`, `minValue: 100000`, `since: "<last 90 days>"`.
 
 ### Options & derivatives
 

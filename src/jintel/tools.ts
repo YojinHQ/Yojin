@@ -44,6 +44,7 @@ import {
   type SP500Series,
   SP500SeriesSchema,
   SP500_MULTIPLES,
+  type SanctionsFilterOptions,
   type SanctionsMatch,
   type SegmentRevenue,
   type Severity,
@@ -1038,14 +1039,40 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
   const sanctionsScreen: ToolDefinition = {
     name: 'sanctions_screen',
     description:
-      'Screen a person or entity name against global sanctions lists. ' + 'Shows matches with severity warnings.',
+      'Screen a person or entity name against global sanctions lists (OFAC SDN and related). ' +
+      'Shows matches with severity warnings. Narrow by minScore (0–100 fuzzy match), restrict to specific SDN ' +
+      "listNames (e.g. ['SDN']) or sanctions programs (e.g. ['SDGT', 'IRAN']), cap rows with limit, " +
+      'or flip sort (default DESC — best match first).',
     parameters: z.object({
       name: z.string().describe('Name to screen'),
       country: z.string().optional().describe('Country filter (ISO code)'),
+      minScore: z.number().min(0).max(100).optional().describe('Only return matches with score >= this value (0-100)'),
+      listNames: z.array(z.string()).optional().describe("Restrict to SDN list names (e.g. ['SDN'])"),
+      programs: z.array(z.string()).optional().describe("Restrict to sanctions programs (e.g. ['SDGT', 'IRAN'])"),
+      limit: z.number().int().min(1).max(100).optional().describe('Max matches to return (default 20)'),
+      sort: z.enum(['ASC', 'DESC']).optional().describe('Sort direction by score (default DESC)'),
     }),
-    async execute(params: { name: string; country?: string }): Promise<ToolResult> {
+    async execute(params: {
+      name: string;
+      country?: string;
+      minScore?: number;
+      listNames?: string[];
+      programs?: string[];
+      limit?: number;
+      sort?: 'ASC' | 'DESC';
+    }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
-      const result = await options.client.sanctionsScreen(params.name, params.country);
+      const filter: Record<string, unknown> = {};
+      if (params.minScore != null) filter.minScore = params.minScore;
+      if (params.listNames?.length) filter.listNames = params.listNames;
+      if (params.programs?.length) filter.programs = params.programs;
+      if (params.limit != null) filter.limit = params.limit;
+      if (params.sort) filter.sort = params.sort;
+      const result = await options.client.sanctionsScreen(
+        params.name,
+        params.country,
+        Object.keys(filter).length ? (filter as SanctionsFilterOptions) : undefined,
+      );
       const handled = handleResult(result);
       if (!handled.ok) return handled.toolResult;
       return { content: formatSanctions(handled.data) };
@@ -1303,22 +1330,57 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     name: 'get_news',
     description:
       'Get recent news articles for a ticker. Returns headlines, sources, snippets, and links.\n\n' +
-      'Use when the user asks about recent news, events, or headlines for a specific stock or crypto asset.',
+      'Use when the user asks about recent news, events, or headlines for a specific stock or crypto asset. ' +
+      'Narrow by `sources` (e.g. ["CNBC", "Reuters"]) or by `minSentiment`/`maxSentiment` (-1 to +1) to ' +
+      'focus on bullish/bearish coverage.',
     parameters: z.object({
       ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, BTC, TSLA)'),
       since: z
         .string()
         .optional()
         .describe('ISO timestamp — only return articles published after this date (e.g. "2026-04-01T00:00:00Z")'),
+      until: z.string().optional().describe('ISO timestamp — only return articles published before this date'),
       limit: z.number().int().min(1).max(50).optional().describe('Max articles to return (default 20)'),
+      sources: z
+        .array(z.string())
+        .optional()
+        .describe('Restrict to these source names (case-insensitive exact match, e.g. ["CNBC", "Reuters"])'),
+      minSentiment: z
+        .number()
+        .min(-1)
+        .max(1)
+        .optional()
+        .describe('Only articles with sentimentScore >= this value (-1 to +1)'),
+      maxSentiment: z
+        .number()
+        .min(-1)
+        .max(1)
+        .optional()
+        .describe('Only articles with sentimentScore <= this value (-1 to +1)'),
     }),
-    async execute(params: { ticker: string; since?: string; limit?: number }): Promise<ToolResult> {
+    async execute(params: {
+      ticker: string;
+      since?: string;
+      until?: string;
+      limit?: number;
+      sources?: string[];
+      minSentiment?: number;
+      maxSentiment?: number;
+    }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
-      const { opts, vars } = buildFilter(params.since, params.limit);
-      const query = buildEnrichQuery(['news'] as EnrichmentField[], opts);
+      const newsFilter: Record<string, unknown> = { sort: 'DESC' };
+      if (params.since) newsFilter.since = params.since;
+      if (params.until) newsFilter.until = params.until;
+      if (params.limit) newsFilter.limit = params.limit;
+      if (params.sources?.length) newsFilter.sources = params.sources;
+      if (params.minSentiment != null) newsFilter.minSentiment = params.minSentiment;
+      if (params.maxSentiment != null) newsFilter.maxSentiment = params.maxSentiment;
+      const query = buildEnrichQuery(['news'] as EnrichmentField[], {
+        newsFilter: newsFilter as EnrichOptions['newsFilter'],
+      });
       const result = await safeCall(() =>
-        client.request<Entity>(query, { id: params.ticker.toUpperCase(), filter: vars }),
+        client.request<Entity>(query, { id: params.ticker.toUpperCase(), newsFilter }),
       );
       if (!result.ok) return result.toolResult;
 
@@ -1709,15 +1771,47 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     parameters: z.object({
       ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, TSLA, NVDA)'),
       limit: z.number().int().min(1).max(100).optional().describe('Max holders to return (default 20)'),
+      offset: z.number().int().nonnegative().optional().describe('Number of holders to skip (for pagination)'),
+      minValue: z
+        .number()
+        .positive()
+        .optional()
+        .describe('Minimum position value in thousands of USD (drops small holders)'),
+      since: z.string().optional().describe('ISO date — only filings on/after this date'),
+      until: z.string().optional().describe('ISO date — only filings on/before this date'),
     }),
-    async execute(params: { ticker: string; limit?: number }): Promise<ToolResult> {
+    async execute(params: {
+      ticker: string;
+      limit?: number;
+      offset?: number;
+      minValue?: number;
+      since?: string;
+      until?: string;
+    }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
       const ticker = params.ticker.toUpperCase();
+      // Only build a filter when the caller passes something — otherwise let the server default apply.
+      const hasFilter =
+        params.limit != null ||
+        params.offset != null ||
+        params.minValue != null ||
+        params.since != null ||
+        params.until != null;
+      const topHoldersFilter: Record<string, unknown> | undefined = hasFilter ? {} : undefined;
+      if (topHoldersFilter) {
+        if (params.limit) topHoldersFilter.limit = params.limit;
+        if (params.offset != null) topHoldersFilter.offset = params.offset;
+        if (params.minValue != null) topHoldersFilter.minValue = params.minValue;
+        if (params.since) topHoldersFilter.since = params.since;
+        if (params.until) topHoldersFilter.until = params.until;
+      }
       const query = buildEnrichQuery(['topHolders'] as EnrichmentField[], {
-        topHolders: params.limit ? { limit: params.limit } : undefined,
+        topHoldersFilter: topHoldersFilter as EnrichOptions['topHoldersFilter'],
       });
-      const result = await safeCall(() => client.request<Entity>(query, { id: ticker }));
+      const vars: Record<string, unknown> = { id: ticker };
+      if (topHoldersFilter) vars.topHoldersFilter = topHoldersFilter;
+      const result = await safeCall(() => client.request<Entity>(query, vars));
       if (!result.ok) return result.toolResult;
       const entity = result.data;
       if (!entity.topHolders?.length) {
@@ -1874,29 +1968,46 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'Get financial statements for an equity ticker — income statement, balance sheet, and cash flow. ' +
       'Returns revenue, net income, EPS, EBITDA, free cash flow, debt, equity, and more.\n\n' +
       'Equity-only: returns no data for crypto or ETFs. Use for valuation analysis, earnings quality, ' +
-      'balance sheet health, or comparing periods.',
+      'balance sheet health, or comparing periods. Narrow by period with periodTypes ' +
+      "(e.g. ['12M'] for annual, ['3M'] for quarterly), or cap rows with limit.",
     parameters: z.object({
       ticker: z.string().min(1).describe('Equity ticker symbol (e.g. AAPL, NVDA, MSFT)'),
+      periodTypes: z
+        .array(z.string())
+        .optional()
+        .describe("Restrict to period-type codes (e.g. ['12M'] for annual only, ['3M'] for quarterly only)"),
+      since: z.string().optional().describe('ISO date — only include periods ending on/after this date'),
+      until: z.string().optional().describe('ISO date — only include periods ending on/before this date'),
+      limit: z.number().int().min(1).max(40).optional().describe('Max periods per statement (server default applies)'),
     }),
-    async execute(params: { ticker: string }): Promise<ToolResult> {
+    async execute(params: {
+      ticker: string;
+      periodTypes?: string[];
+      since?: string;
+      until?: string;
+      limit?: number;
+    }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
-      // 'financials' is a planned enrichment field — request 'market' as fallback until client ships it
-      const result = await safeCall(() =>
-        client.enrichEntity(params.ticker.toUpperCase(), ['market'] as EnrichmentField[]),
-      );
+      const ticker = params.ticker.toUpperCase();
+      const financialStatementsFilter: Record<string, unknown> = { sort: 'DESC' };
+      if (params.limit != null) financialStatementsFilter.limit = params.limit;
+      if (params.periodTypes?.length) financialStatementsFilter.periodTypes = params.periodTypes;
+      if (params.since) financialStatementsFilter.since = params.since;
+      if (params.until) financialStatementsFilter.until = params.until;
+      const query = buildEnrichQuery(['financials'] as EnrichmentField[], {
+        financialStatementsFilter: financialStatementsFilter as EnrichOptions['financialStatementsFilter'],
+      });
+      const result = await safeCall(() => client.request<Entity>(query, { id: ticker, financialStatementsFilter }));
       if (!result.ok) return result.toolResult;
-      const handled = handleResult(result.data);
-      if (!handled.ok) return handled.toolResult;
-      const entity = handled.data as Entity;
-      const ext = entity as Entity & { financials?: FinancialStatements };
-      if (!ext.financials) {
+      const entity = result.data;
+      if (!entity.financials) {
         return {
           content: `No financial statement data available for ${params.ticker}. (Equity-only field — not available for crypto or ETFs.)`,
         };
       }
       return {
-        content: `# ${entity.name ?? params.ticker} — Financial Statements\n\n${formatFinancials(ext.financials)}`,
+        content: `# ${entity.name ?? params.ticker} — Financial Statements\n\n${formatFinancials(entity.financials)}`,
       };
     },
   };
@@ -1906,29 +2017,43 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     description:
       'Get key executives and officers for an equity ticker — names, titles, compensation, and age.\n\n' +
       'Equity-only: returns no data for crypto or ETFs. Use when the user asks about management, ' +
-      'leadership, CEO, board composition, or executive compensation.',
+      'leadership, CEO, board composition, or executive compensation. Narrow by minPay, cap rows with limit, ' +
+      'or reorder with sortBy (PAY_DESC | PAY_ASC | NAME_ASC | NAME_DESC).',
     parameters: z.object({
       ticker: z.string().min(1).describe('Equity ticker symbol (e.g. AAPL, TSLA, NVDA)'),
+      minPay: z.number().positive().optional().describe('Only include executives with annual pay >= this USD amount'),
+      limit: z.number().int().min(1).max(50).optional().describe('Max executives to return (default 20)'),
+      sortBy: z
+        .enum(['PAY_DESC', 'PAY_ASC', 'NAME_ASC', 'NAME_DESC'])
+        .optional()
+        .describe('Sort order (default PAY_DESC)'),
     }),
-    async execute(params: { ticker: string }): Promise<ToolResult> {
+    async execute(params: {
+      ticker: string;
+      minPay?: number;
+      limit?: number;
+      sortBy?: 'PAY_DESC' | 'PAY_ASC' | 'NAME_ASC' | 'NAME_DESC';
+    }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
-      // 'executives' is a planned enrichment field — request 'market' as fallback until client ships it
-      const result = await safeCall(() =>
-        client.enrichEntity(params.ticker.toUpperCase(), ['market'] as EnrichmentField[]),
-      );
+      const ticker = params.ticker.toUpperCase();
+      const executivesFilter: Record<string, unknown> = {};
+      if (params.minPay != null) executivesFilter.minPay = params.minPay;
+      if (params.limit != null) executivesFilter.limit = params.limit;
+      if (params.sortBy) executivesFilter.sortBy = params.sortBy;
+      const query = buildEnrichQuery(['executives'] as EnrichmentField[], {
+        executivesFilter: executivesFilter as EnrichOptions['executivesFilter'],
+      });
+      const result = await safeCall(() => client.request<Entity>(query, { id: ticker, executivesFilter }));
       if (!result.ok) return result.toolResult;
-      const handled = handleResult(result.data);
-      if (!handled.ok) return handled.toolResult;
-      const entity = handled.data as Entity;
-      const ext = entity as Entity & { executives?: KeyExecutive[] };
-      if (!ext.executives?.length) {
+      const entity = result.data;
+      if (!entity.executives?.length) {
         return {
           content: `No executive data available for ${params.ticker}. (Equity-only field — not available for crypto or ETFs.)`,
         };
       }
       return {
-        content: `# ${entity.name ?? params.ticker} — Key Executives\n\n${formatExecutives(ext.executives)}`,
+        content: `# ${entity.name ?? params.ticker} — Key Executives\n\n${formatExecutives(entity.executives)}`,
       };
     },
   };
@@ -1939,22 +2064,60 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'Get recent insider trades (SEC Form 4) for an equity ticker — officers, directors, and 10% owners ' +
       'reporting share acquisitions/dispositions with transaction codes, prices, and 10b5-1 plan flags.\n\n' +
       'Equity-only: returns no data for crypto or ETFs. Use when the user asks about insider buying/selling, ' +
-      'CEO/CFO transactions, Form 4 filings, or tracking insider sentiment on a specific stock.',
+      'CEO/CFO transactions, Form 4 filings, or tracking insider sentiment on a specific stock. Narrow by ' +
+      'role flags (isOfficer/isDirector/isTenPercentOwner), acquiredDisposed (A/D), transactionCodes ' +
+      '(P=open-market buy, S=open-market sale, F=tax withholding, etc.), onlyUnder10b5One, or minValue.',
     parameters: z.object({
       ticker: z.string().min(1).describe('Equity ticker symbol (e.g. AAPL, NVDA, MSFT)'),
       since: z.string().optional().describe('ISO date — only include transactions filed on/after this date'),
       until: z.string().optional().describe('ISO date — only include transactions filed on/before this date'),
       limit: z.number().int().min(1).max(200).optional().describe('Max trades to return (default 20)'),
+      isOfficer: z.boolean().optional().describe('Only include transactions by officers'),
+      isDirector: z.boolean().optional().describe('Only include transactions by directors'),
+      isTenPercentOwner: z.boolean().optional().describe('Only include transactions by 10% owners'),
+      onlyUnder10b5One: z.boolean().optional().describe('Only include transactions under a Rule 10b5-1 plan'),
+      transactionCodes: z
+        .array(z.string())
+        .optional()
+        .describe('Restrict to Form 4 transaction codes (P, S, A, F, M, G, J, D)'),
+      acquiredDisposed: z.enum(['ACQUIRED', 'DISPOSED']).optional().describe('Restrict to acquisitions or disposals'),
+      minValue: z
+        .number()
+        .positive()
+        .optional()
+        .describe('Only include transactions with transactionValue >= this USD amount'),
     }),
-    async execute(params: { ticker: string; since?: string; until?: string; limit?: number }): Promise<ToolResult> {
+    async execute(params: {
+      ticker: string;
+      since?: string;
+      until?: string;
+      limit?: number;
+      isOfficer?: boolean;
+      isDirector?: boolean;
+      isTenPercentOwner?: boolean;
+      onlyUnder10b5One?: boolean;
+      transactionCodes?: string[];
+      acquiredDisposed?: 'ACQUIRED' | 'DISPOSED';
+      minValue?: number;
+    }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
       const ticker = params.ticker.toUpperCase();
-      const { opts } = buildFilter(params.since, params.limit);
-      if (params.until) opts.until = params.until;
-      const query = buildEnrichQuery(['insiderTrades'] as EnrichmentField[], opts);
-      const vars: Record<string, unknown> = { id: ticker, filter: opts };
-      const result = await safeCall(() => client.request<Entity>(query, vars));
+      const insiderTradesFilter: Record<string, unknown> = { sort: 'DESC' };
+      if (params.since) insiderTradesFilter.since = params.since;
+      if (params.until) insiderTradesFilter.until = params.until;
+      if (params.limit) insiderTradesFilter.limit = params.limit;
+      if (params.isOfficer != null) insiderTradesFilter.isOfficer = params.isOfficer;
+      if (params.isDirector != null) insiderTradesFilter.isDirector = params.isDirector;
+      if (params.isTenPercentOwner != null) insiderTradesFilter.isTenPercentOwner = params.isTenPercentOwner;
+      if (params.onlyUnder10b5One != null) insiderTradesFilter.onlyUnder10b5One = params.onlyUnder10b5One;
+      if (params.transactionCodes?.length) insiderTradesFilter.transactionCodes = params.transactionCodes;
+      if (params.acquiredDisposed) insiderTradesFilter.acquiredDisposed = params.acquiredDisposed;
+      if (params.minValue != null) insiderTradesFilter.minValue = params.minValue;
+      const query = buildEnrichQuery(['insiderTrades'] as EnrichmentField[], {
+        insiderTradesFilter: insiderTradesFilter as EnrichOptions['insiderTradesFilter'],
+      });
+      const result = await safeCall(() => client.request<Entity>(query, { id: ticker, insiderTradesFilter }));
       if (!result.ok) return result.toolResult;
       const entity = result.data;
       if (!entity.insiderTrades?.length) {
@@ -2009,7 +2172,8 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'Get revenue broken down by product, segment, or geography for an equity ticker — parsed from XBRL data ' +
       'in 10-K/10-Q filings. Returns the segment label, period, and dollar value per dimension.\n\n' +
       'Equity-only: returns no data for crypto or ETFs. Use when the user asks about revenue mix, product-line ' +
-      'performance, geographic concentration, or segment-by-segment revenue breakdowns.',
+      'performance, geographic concentration, or segment-by-segment revenue breakdowns. Narrow with ' +
+      '`dimensions` (PRODUCT, SEGMENT, GEOGRAPHY) or `minValue` (USD) to focus on material segments.',
     parameters: z.object({
       ticker: z.string().min(1).describe('Equity ticker symbol (e.g. AAPL, NVDA, MSFT)'),
       since: z.string().optional().describe('ISO date — only include filings on/after this date'),
@@ -2021,16 +2185,33 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         .max(500)
         .optional()
         .describe('Max segment rows to return (default 100 — one filing can emit many rows)'),
+      dimensions: z
+        .array(z.enum(['PRODUCT', 'SEGMENT', 'GEOGRAPHY']))
+        .optional()
+        .describe('Restrict to one or more breakdown dimensions'),
+      minValue: z.number().positive().optional().describe('Only include rows with value >= this USD amount'),
     }),
-    async execute(params: { ticker: string; since?: string; until?: string; limit?: number }): Promise<ToolResult> {
+    async execute(params: {
+      ticker: string;
+      since?: string;
+      until?: string;
+      limit?: number;
+      dimensions?: Array<'PRODUCT' | 'SEGMENT' | 'GEOGRAPHY'>;
+      minValue?: number;
+    }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
       const ticker = params.ticker.toUpperCase();
-      const { opts } = buildFilter(params.since, params.limit);
-      if (params.until) opts.until = params.until;
-      const query = buildEnrichQuery(['segmentedRevenue'] as EnrichmentField[], opts);
-      const vars: Record<string, unknown> = { id: ticker, filter: opts };
-      const result = await safeCall(() => client.request<Entity>(query, vars));
+      const segmentedRevenueFilter: Record<string, unknown> = { sort: 'DESC' };
+      if (params.since) segmentedRevenueFilter.since = params.since;
+      if (params.until) segmentedRevenueFilter.until = params.until;
+      if (params.limit) segmentedRevenueFilter.limit = params.limit;
+      if (params.dimensions?.length) segmentedRevenueFilter.dimensions = params.dimensions;
+      if (params.minValue != null) segmentedRevenueFilter.minValue = params.minValue;
+      const query = buildEnrichQuery(['segmentedRevenue'] as EnrichmentField[], {
+        segmentedRevenueFilter: segmentedRevenueFilter as EnrichOptions['segmentedRevenueFilter'],
+      });
+      const result = await safeCall(() => client.request<Entity>(query, { id: ticker, segmentedRevenueFilter }));
       if (!result.ok) return result.toolResult;
       const entity = result.data;
       if (!entity.segmentedRevenue?.length) {
@@ -2051,7 +2232,8 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'actual vs estimate EPS and revenue (with surprise %), and release timing (BMO = before market open, ' +
       'AMC = after market close, DMH = during market hours).\n\n' +
       'Equity-only: returns no data for crypto or ETFs. Use when the user asks "when does X report earnings?", ' +
-      '"what was the EPS surprise last quarter?", or needs to check upcoming earnings timing for event-risk positioning.',
+      '"what was the EPS surprise last quarter?", or needs to check upcoming earnings timing for event-risk positioning. ' +
+      'Narrow with `onlyReported`/`onlyUpcoming`, `minSurprisePercent` (absolute EPS surprise), or `year`.',
     parameters: z.object({
       ticker: z.string().min(1).describe('Equity ticker symbol (e.g. AAPL, NVDA, MSFT)'),
       since: z.string().optional().describe('ISO date — only include reports on/after this date'),
@@ -2063,16 +2245,39 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         .max(40)
         .optional()
         .describe('Max reports to return (default 8 — ~2 years of quarters)'),
+      onlyReported: z.boolean().optional().describe('Only include periods already reported (epsActual is set)'),
+      onlyUpcoming: z.boolean().optional().describe('Only include forward-looking periods not yet reported'),
+      minSurprisePercent: z
+        .number()
+        .nonnegative()
+        .optional()
+        .describe('Only reported periods with absolute EPS surprise >= this percent'),
+      year: z.number().int().optional().describe('Restrict to a single fiscal year'),
     }),
-    async execute(params: { ticker: string; since?: string; until?: string; limit?: number }): Promise<ToolResult> {
+    async execute(params: {
+      ticker: string;
+      since?: string;
+      until?: string;
+      limit?: number;
+      onlyReported?: boolean;
+      onlyUpcoming?: boolean;
+      minSurprisePercent?: number;
+      year?: number;
+    }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
       const ticker = params.ticker.toUpperCase();
-      const { opts } = buildFilter(params.since, params.limit ?? 8);
-      if (params.until) opts.until = params.until;
-      const query = buildEnrichQuery(['earnings'] as EnrichmentField[], opts);
-      const vars: Record<string, unknown> = { id: ticker, filter: opts };
-      const result = await safeCall(() => client.request<Entity>(query, vars));
+      const earningsFilter: Record<string, unknown> = { sort: 'DESC', limit: params.limit ?? 8 };
+      if (params.since) earningsFilter.since = params.since;
+      if (params.until) earningsFilter.until = params.until;
+      if (params.onlyReported != null) earningsFilter.onlyReported = params.onlyReported;
+      if (params.onlyUpcoming != null) earningsFilter.onlyUpcoming = params.onlyUpcoming;
+      if (params.minSurprisePercent != null) earningsFilter.minSurprisePercent = params.minSurprisePercent;
+      if (params.year != null) earningsFilter.year = params.year;
+      const query = buildEnrichQuery(['earnings'] as EnrichmentField[], {
+        earningsFilter: earningsFilter as EnrichOptions['earningsFilter'],
+      });
+      const result = await safeCall(() => client.request<Entity>(query, { id: ticker, earningsFilter }));
       if (!result.ok) return result.toolResult;
       const entity = result.data;
       if (!entity.earnings?.length) {

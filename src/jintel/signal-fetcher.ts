@@ -20,7 +20,7 @@ import { buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
 import { isShortInterestFresh } from './freshness.js';
 import { formatNumber, riskSignalsToRaw } from './tools.js';
-import type { FinancialStatements, KeyExecutive, RedditComment } from './types.js';
+import type { RedditComment } from './types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 import type { RawSignalInput, SignalIngestor } from '../signals/ingestor.js';
 import { JUNK_DOMAIN_RE, JUNK_TITLE_RE } from '../signals/quality-patterns.js';
@@ -102,14 +102,22 @@ export async function fetchJintelSignals(
 ): Promise<JintelFetchResult> {
   if (tickers.length === 0) return { ingested: 0, duplicates: 0, tickers: 0 };
 
+  // Generic `filter` applies to the array sub-graphs that still take ArrayFilterInput in 0.21.0
+  // (market.history/keyEvents/shortInterest, social, discussions, institutionalHoldings, earningsPressReleases).
   const arrayFilter = { sort: 'DESC' as const, ...(options?.since ? { since: options.since } : {}) };
   const filingsFilter = { types: MATERIAL_FILING_TYPES, sort: 'DESC' as const, limit: 10 };
   const riskSignalFilter = { severities: MEANINGFUL_RISK_SEVERITIES, sort: 'DESC' as const, limit: 10 };
+  // Per-field filters — 0.21.0 split these out of the generic `filter`.
+  const newsFilter = { sort: 'DESC' as const, ...(options?.since ? { since: options.since } : {}) };
+  const insiderTradesFilter = { sort: 'DESC' as const, ...(options?.since ? { since: options.since } : {}) };
+  const topHoldersFilter = { limit: 20, sort: 'DESC' as const };
   const enrichOpts: EnrichOptions = {
     filter: arrayFilter,
     filingsFilter,
     riskSignalFilter,
-    topHolders: { limit: 20 },
+    newsFilter,
+    insiderTradesFilter,
+    topHoldersFilter,
   };
   const query = buildBatchEnrichQuery([...ENRICHMENT_FIELDS], enrichOpts);
   // Build variables to pass alongside the query — must match the $filter declarations emitted above.
@@ -128,6 +136,9 @@ export async function fetchJintelSignals(
         filter,
         filingsFilter,
         riskSignalFilter,
+        newsFilter,
+        insiderTradesFilter,
+        topHoldersFilter,
       });
 
       // Build ticker → entity map
@@ -682,11 +693,9 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
   // 13. Financial statements — most recent period across all three families (equity only; null for crypto/ETF).
   // Stable title for content-hash dedup; period context goes in content + metadata.
   // Reads income, balance sheet, and cash flow independently so no family is silently dropped.
-  // 'financials' is a planned jintel-client field — cast until client ships it natively.
-  const extEntity = entity as Entity & { financials?: FinancialStatements; executives?: KeyExecutive[] };
-  const inc = extEntity.financials?.income?.[0];
-  const bs = extEntity.financials?.balanceSheet?.[0];
-  const cf = extEntity.financials?.cashFlow?.[0];
+  const inc = entity.financials?.income?.[0];
+  const bs = entity.financials?.balanceSheet?.[0];
+  const cf = entity.financials?.cashFlow?.[0];
   const periodSrc = inc ?? bs ?? cf;
   if (periodSrc) {
     const parts: string[] = [];
@@ -726,8 +735,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
 
   // 14. Key executives (equity only; null for crypto/ETF).
   // Stable title for content-hash dedup. Executive roster changes infrequently.
-  // 'executives' is a planned jintel-client field — using cast from section 13.
-  const executives = extEntity.executives;
+  const executives = entity.executives;
   if (executives?.length) {
     const lines = executives.map((exec) => {
       let line = `${exec.title}: ${exec.name}`;

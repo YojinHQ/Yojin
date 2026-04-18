@@ -637,7 +637,7 @@ const BATCH_ENRICH_DEFAULT_FIELDS: EnrichmentField[] = [
   'insiderTrades',
   'earningsPressReleases',
 ];
-const BATCH_ENRICH_OPTS: EnrichOptions = { topHolders: { limit: 10 } };
+const BATCH_ENRICH_OPTS: EnrichOptions = { topHoldersFilter: { limit: 10, sort: 'DESC' } };
 
 // Query strings are stable per field-set. Cache to avoid rebuilding on every micro tick.
 const enrichQueryCache = new Map<string, string>();
@@ -671,7 +671,10 @@ async function batchEnrichAllChunked(
   for (let i = 0; i < tickers.length; i += CHUNK_SIZE) {
     const chunk = tickers.slice(i, i + CHUNK_SIZE);
     try {
-      const data = await client.request<Entity[]>(query, { tickers: chunk });
+      const data = await client.request<Entity[]>(query, {
+        tickers: chunk,
+        topHoldersFilter: BATCH_ENRICH_OPTS.topHoldersFilter,
+      });
 
       // Build a case-insensitive lookup: entity ticker → entity
       const entityByTicker = new Map<string, Entity>();
