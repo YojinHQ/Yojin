@@ -9,12 +9,14 @@ import type {
   EconomicDataPoint,
   EnrichOptions,
   Entity,
+  FilingType,
   InsiderTrade,
   JintelClient,
   SP500DataPoint,
+  Severity,
   Social,
 } from '@yojinhq/jintel-client';
-import { GDP, INFLATION, INTEREST_RATES, SP500_MULTIPLES, buildBatchEnrichQuery } from '@yojinhq/jintel-client';
+import { buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
 import { isShortInterestFresh } from './freshness.js';
 import { formatNumber, riskSignalsToRaw } from './tools.js';
@@ -70,6 +72,11 @@ const SOCIAL_MIN_REDDIT_COMMENT_SCORE = 3;
 const SOCIAL_MIN_HN_POINTS = 5;
 const DEFAULT_CHUNK_SIZE = 10;
 
+// Material SEC filings only — drop OTHER (prospectuses, 3/5 stubs, etc.) at the source.
+const MATERIAL_FILING_TYPES: FilingType[] = ['FILING_10K', 'FILING_10Q', 'FILING_8K', 'ANNUAL_REPORT'];
+// Drop LOW-severity risk signal noise; keep everything MEDIUM and above.
+const MEANINGFUL_RISK_SEVERITIES: Severity[] = ['MEDIUM', 'HIGH', 'CRITICAL'];
+
 export interface JintelFetchResult {
   ingested: number;
   duplicates: number;
@@ -96,9 +103,16 @@ export async function fetchJintelSignals(
   if (tickers.length === 0) return { ingested: 0, duplicates: 0, tickers: 0 };
 
   const arrayFilter = { sort: 'DESC' as const, ...(options?.since ? { since: options.since } : {}) };
-  const enrichOpts: EnrichOptions = { filter: arrayFilter, topHolders: { limit: 20 } };
+  const filingsFilter = { types: MATERIAL_FILING_TYPES, sort: 'DESC' as const, limit: 10 };
+  const riskSignalFilter = { severities: MEANINGFUL_RISK_SEVERITIES, sort: 'DESC' as const, limit: 10 };
+  const enrichOpts: EnrichOptions = {
+    filter: arrayFilter,
+    filingsFilter,
+    riskSignalFilter,
+    topHolders: { limit: 20 },
+  };
   const query = buildBatchEnrichQuery([...ENRICHMENT_FIELDS], enrichOpts);
-  // Build filter variable to pass alongside the query — must match $filter: ArrayFilterInput declaration
+  // Build variables to pass alongside the query — must match the $filter declarations emitted above.
   const filter: Record<string, unknown> = { sort: arrayFilter.sort };
   if (arrayFilter.since) filter.since = arrayFilter.since;
 
@@ -109,7 +123,12 @@ export async function fetchJintelSignals(
   for (let i = 0; i < tickers.length; i += chunkSize) {
     const chunk = tickers.slice(i, i + chunkSize);
     try {
-      const entities = await client.request<Entity[]>(query, { tickers: chunk, filter });
+      const entities = await client.request<Entity[]>(query, {
+        tickers: chunk,
+        filter,
+        filingsFilter,
+        riskSignalFilter,
+      });
 
       // Build ticker → entity map
       const entityByTicker = new Map<string, Entity>();
@@ -933,18 +952,22 @@ export interface MacroFetchResult {
 export async function fetchMacroIndicators(client: JintelClient, ingestor: SignalIngestor): Promise<MacroFetchResult> {
   const signals: RawSignalInput[] = [];
 
-  // Fire all macro queries in parallel
-  const [gdpResult, inflationResult, ratesResult, peResult, shillerResult] = await Promise.allSettled([
-    client.request<EconomicDataPoint[]>(GDP, { country: 'US', type: 'REAL' }),
-    client.request<EconomicDataPoint[]>(INFLATION, { country: 'US' }),
-    client.request<EconomicDataPoint[]>(INTEREST_RATES, { country: 'US' }),
-    client.request<SP500DataPoint[]>(SP500_MULTIPLES, { series: 'PE_MONTH' }),
-    client.request<SP500DataPoint[]>(SP500_MULTIPLES, { series: 'SHILLER_PE_MONTH' }),
+  // Only the latest data point is needed for the macro snapshot — limit=1, DESC.
+  const latestOnly = { limit: 1, sort: 'DESC' as const };
+
+  // Fire all macro queries in parallel via typed client methods (v0.20.0+ accept ArrayFilterInput).
+  // These return JintelResult<T> and never throw — no Promise.allSettled needed.
+  const [gdpResult, inflationResult, ratesResult, peResult, shillerResult] = await Promise.all([
+    client.gdp('US', 'REAL', latestOnly),
+    client.inflation('US', latestOnly),
+    client.interestRates('US', latestOnly),
+    client.sp500Multiples('PE_MONTH', latestOnly),
+    client.sp500Multiples('SHILLER_PE_MONTH', latestOnly),
   ]);
 
   // GDP
-  if (gdpResult.status === 'fulfilled' && gdpResult.value.length > 0) {
-    const latest = latestEconomic(gdpResult.value);
+  if (gdpResult.success && gdpResult.data.length > 0) {
+    const latest = latestEconomic(gdpResult.data);
     if (latest?.value != null) {
       signals.push({
         sourceId: 'jintel-macro-gdp',
@@ -958,13 +981,13 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
         confidence: 0.95,
       });
     }
-  } else if (gdpResult.status === 'rejected') {
-    logger.warn('Macro GDP fetch failed', { error: String(gdpResult.reason) });
+  } else if (!gdpResult.success) {
+    logger.warn('Macro GDP fetch failed', { error: gdpResult.error });
   }
 
   // Inflation
-  if (inflationResult.status === 'fulfilled' && inflationResult.value.length > 0) {
-    const latest = latestEconomic(inflationResult.value);
+  if (inflationResult.success && inflationResult.data.length > 0) {
+    const latest = latestEconomic(inflationResult.data);
     if (latest?.value != null) {
       signals.push({
         sourceId: 'jintel-macro-inflation',
@@ -978,13 +1001,13 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
         confidence: 0.95,
       });
     }
-  } else if (inflationResult.status === 'rejected') {
-    logger.warn('Macro inflation fetch failed', { error: String(inflationResult.reason) });
+  } else if (!inflationResult.success) {
+    logger.warn('Macro inflation fetch failed', { error: inflationResult.error });
   }
 
   // Interest rates
-  if (ratesResult.status === 'fulfilled' && ratesResult.value.length > 0) {
-    const latest = latestEconomic(ratesResult.value);
+  if (ratesResult.success && ratesResult.data.length > 0) {
+    const latest = latestEconomic(ratesResult.data);
     if (latest?.value != null) {
       signals.push({
         sourceId: 'jintel-macro-rates',
@@ -998,13 +1021,13 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
         confidence: 0.95,
       });
     }
-  } else if (ratesResult.status === 'rejected') {
-    logger.warn('Macro interest rates fetch failed', { error: String(ratesResult.reason) });
+  } else if (!ratesResult.success) {
+    logger.warn('Macro interest rates fetch failed', { error: ratesResult.error });
   }
 
   // S&P 500 P/E
-  if (peResult.status === 'fulfilled' && peResult.value.length > 0) {
-    const latest = latestSP500(peResult.value);
+  if (peResult.success && peResult.data.length > 0) {
+    const latest = latestSP500(peResult.data);
     if (latest) {
       signals.push({
         sourceId: 'jintel-macro-sp500-pe',
@@ -1018,13 +1041,13 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
         confidence: 0.95,
       });
     }
-  } else if (peResult.status === 'rejected') {
-    logger.warn('Macro S&P 500 P/E fetch failed', { error: String(peResult.reason) });
+  } else if (!peResult.success) {
+    logger.warn('Macro S&P 500 P/E fetch failed', { error: peResult.error });
   }
 
   // Shiller P/E (CAPE)
-  if (shillerResult.status === 'fulfilled' && shillerResult.value.length > 0) {
-    const latest = latestSP500(shillerResult.value);
+  if (shillerResult.success && shillerResult.data.length > 0) {
+    const latest = latestSP500(shillerResult.data);
     if (latest) {
       signals.push({
         sourceId: 'jintel-macro-sp500-cape',
@@ -1038,8 +1061,8 @@ export async function fetchMacroIndicators(client: JintelClient, ingestor: Signa
         confidence: 0.95,
       });
     }
-  } else if (shillerResult.status === 'rejected') {
-    logger.warn('Macro S&P 500 CAPE fetch failed', { error: String(shillerResult.reason) });
+  } else if (!shillerResult.success) {
+    logger.warn('Macro S&P 500 CAPE fetch failed', { error: shillerResult.error });
   }
 
   if (signals.length === 0) {

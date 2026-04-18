@@ -56,8 +56,10 @@ describe('buildContext', () => {
     // + 1 new Jintel tool (get_institutional_holdings)
     // + 2 new Jintel tools (get_ownership, get_top_holders)
     // + 3 new Jintel tools (get_insider_trades, get_earnings_press_releases, get_segmented_revenue)
-    // = 73
-    expect(schemas.length).toBe(73);
+    // + 2 new Jintel tools (get_filings, get_risk_signals)
+    // + 2 new Jintel tools (get_earnings_calendar, get_periodic_filing)
+    // = 77
+    expect(schemas.length).toBe(77);
 
     const names = schemas.map((s) => s.name).sort();
     expect(names).toContain('get_current_time');

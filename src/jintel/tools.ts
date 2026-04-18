@@ -11,6 +11,7 @@ import {
   type DerivativesData,
   type EarningsPressRelease,
   type EconomicDataPoint,
+  type EnrichOptions,
   type EnrichmentField,
   type Entity,
   type EntityType,
@@ -18,6 +19,7 @@ import {
   type FactorDataPoint,
   type FamaFrenchSeries,
   FamaFrenchSeriesSchema,
+  type FilingType,
   GDP,
   type GdpType,
   GdpTypeSchema,
@@ -31,16 +33,20 @@ import {
   type JintelResult,
   type MarketQuote,
   type NewsArticle,
+  type OptionType,
+  type OptionsChainSort,
   type OwnershipBreakdown,
   type PredictionMarket,
   type ResearchResult,
   type RiskSignal,
+  type RiskSignalType,
   type SP500DataPoint,
   type SP500Series,
   SP500SeriesSchema,
   SP500_MULTIPLES,
   type SanctionsMatch,
   type SegmentRevenue,
+  type Severity,
   type ShortInterestReport,
   type Social,
   type SocialSentiment,
@@ -107,6 +113,8 @@ const JINTEL_QUERY_KIND = z.enum([
   'insider_trades',
   'earnings_press_releases',
   'segmented_revenue',
+  'earnings_calendar',
+  'periodic_filing',
 ]);
 
 type JintelQueryKind = z.infer<typeof JINTEL_QUERY_KIND>;
@@ -130,6 +138,8 @@ const ENRICHMENT_FIELDS = z.enum([
   'insiderTrades',
   'earningsPressReleases',
   'segmentedRevenue',
+  'earnings',
+  'periodicFilings',
 ]);
 
 const SEVERITY_CONFIDENCE: Record<string, number> = {
@@ -140,6 +150,20 @@ const SEVERITY_CONFIDENCE: Record<string, number> = {
 };
 
 const DEFAULT_PORTFOLIO_FIELDS: EnrichmentField[] = ['market', 'risk'];
+
+// Local z.enum mirrors of jintel-client schemas (re-declared to avoid cross-package Zod version conflicts).
+const OPTION_TYPE = z.enum(['CALL', 'PUT']);
+const OPTIONS_CHAIN_SORT = z.enum([
+  'EXPIRATION_ASC',
+  'EXPIRATION_DESC',
+  'STRIKE_ASC',
+  'STRIKE_DESC',
+  'VOLUME_DESC',
+  'OPEN_INTEREST_DESC',
+]);
+const FILING_TYPE = z.enum(['FILING_10K', 'FILING_10Q', 'FILING_8K', 'ANNUAL_REPORT', 'OTHER']);
+const SEVERITY = z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
+const RISK_SIGNAL_TYPE = z.enum(['SANCTIONS', 'LITIGATION', 'REGULATORY_ACTION', 'ADVERSE_MEDIA', 'PEP']);
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -406,6 +430,14 @@ function formatEnrichment(entity: Entity): string {
     sections.push(`## Segmented Revenue\n${formatSegmentedRevenue(entity.segmentedRevenue)}`);
   }
 
+  if (entity.earnings?.length) {
+    sections.push(`## Earnings Calendar\n${formatEarningsCalendar(entity.earnings)}`);
+  }
+
+  if (entity.periodicFilings?.length) {
+    sections.push(`## Periodic Filings (10-K / 10-Q)\n${formatPeriodicFilings(entity.periodicFilings)}`);
+  }
+
   // financials & executives are planned jintel-client fields (not yet in Entity type).
   // Access via cast until the client ships these as first-class enrichment fields.
   const ext = entity as Entity & { financials?: FinancialStatements; executives?: KeyExecutive[] };
@@ -656,6 +688,60 @@ function formatSegmentedRevenue(rows: SegmentRevenue[]): string {
     sections.push(`### ${key}\n${lines.join('\n')}`);
   }
   return sections.join('\n\n');
+}
+
+type EarningsReport = NonNullable<Entity['earnings']>[number];
+type PeriodicFiling = NonNullable<Entity['periodicFilings']>[number];
+
+function formatEarningsCalendar(reports: EarningsReport[]): string {
+  if (reports.length === 0) return 'No earnings reports available.';
+  const sorted = [...reports].sort((a, b) => (a.reportDate < b.reportDate ? 1 : -1));
+  return sorted
+    .map((r) => {
+      const quarter = r.quarter && r.year ? `Q${r.quarter} ${r.year}` : r.period;
+      const parts = [`- ${r.reportDate} — ${quarter}`];
+      if (r.hour) parts.push(`(${r.hour.toUpperCase()})`);
+      const metrics: string[] = [];
+      if (r.epsActual != null && r.epsEstimate != null) {
+        const surprise =
+          r.surprisePercent != null ? ` (${r.surprisePercent >= 0 ? '+' : ''}${r.surprisePercent.toFixed(1)}%)` : '';
+        metrics.push(`EPS $${r.epsActual.toFixed(2)} vs est $${r.epsEstimate.toFixed(2)}${surprise}`);
+      } else if (r.epsEstimate != null) {
+        metrics.push(`EPS est $${r.epsEstimate.toFixed(2)} (not yet reported)`);
+      }
+      if (r.revenueActual != null && r.revenueEstimate != null) {
+        const surprise =
+          r.revenueSurprisePercent != null
+            ? ` (${r.revenueSurprisePercent >= 0 ? '+' : ''}${r.revenueSurprisePercent.toFixed(1)}%)`
+            : '';
+        metrics.push(`Rev $${formatNumber(r.revenueActual)} vs est $${formatNumber(r.revenueEstimate)}${surprise}`);
+      } else if (r.revenueEstimate != null) {
+        metrics.push(`Rev est $${formatNumber(r.revenueEstimate)}`);
+      }
+      return metrics.length ? `${parts.join(' ')}\n  ${metrics.join(' | ')}` : parts.join(' ');
+    })
+    .join('\n');
+}
+
+function formatPeriodicFilings(filings: PeriodicFiling[], itemFilter?: string[], fullBody?: boolean): string {
+  if (filings.length === 0) return 'No periodic filings available.';
+  const wantedItems = itemFilter?.length ? new Set(itemFilter.map((i) => i.toUpperCase())) : null;
+  return filings
+    .map((f) => {
+      const header = `## ${f.form} — filed ${f.filingDate} (report ${f.reportDate})`;
+      const sectionsFiltered = wantedItems
+        ? f.sections.filter((s) => wantedItems.has(s.item.toUpperCase()))
+        : f.sections;
+      if (sectionsFiltered.length === 0) {
+        return `${header}\n  No matching sections.\n  ${f.filingUrl}`;
+      }
+      const sectionBlocks = sectionsFiltered.map((s) => {
+        const body = fullBody ? s.body : s.excerpt;
+        return `### Item ${s.item} — ${s.title} (${formatNumber(s.bodyLength)} chars)\n${body}`;
+      });
+      return `${header}\n${sectionBlocks.join('\n\n')}\n\n  Filing: ${f.filingUrl}\n  Document: ${f.documentUrl}`;
+    })
+    .join('\n\n---\n\n');
 }
 
 function formatFactorData(data: FactorDataPoint[], series: string): string {
@@ -1332,26 +1418,200 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'expiration/price and options with strike, type, delta, implied volatility, open interest, ' +
       'and bid/ask.\n\n' +
       'Primarily available for crypto assets. Use when the user asks about options flow, ' +
-      'futures contango/backwardation, implied volatility, or derivatives positioning.',
+      'futures contango/backwardation, implied volatility, or derivatives positioning.\n\n' +
+      'Options chains can exceed 5000 rows — narrow with optionType/strikeMin/strikeMax/minOpenInterest.',
     parameters: z.object({
       ticker: z.string().min(1).describe('Ticker symbol (e.g. BTC, ETH)'),
+      optionType: OPTION_TYPE.optional().describe('Restrict options to CALL or PUT only'),
+      strikeMin: z.number().positive().optional().describe('Minimum strike price (inclusive)'),
+      strikeMax: z.number().positive().optional().describe('Maximum strike price (inclusive)'),
+      minOpenInterest: z.number().int().nonnegative().optional().describe('Drop contracts with OI below this'),
+      minVolume: z.number().int().nonnegative().optional().describe('Drop contracts with volume below this'),
+      optionsLimit: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .optional()
+        .describe('Max options contracts to return (default 100)'),
+      optionsSort: OPTIONS_CHAIN_SORT.optional().describe('Options sort order (default EXPIRATION_ASC)'),
+      futuresLimit: z
+        .number()
+        .int()
+        .min(1)
+        .max(200)
+        .optional()
+        .describe('Max futures contracts to return (default 50)'),
     }),
-    async execute(params: { ticker: string }): Promise<ToolResult> {
+    async execute(params: {
+      ticker: string;
+      optionType?: OptionType;
+      strikeMin?: number;
+      strikeMax?: number;
+      minOpenInterest?: number;
+      minVolume?: number;
+      optionsLimit?: number;
+      optionsSort?: OptionsChainSort;
+      futuresLimit?: number;
+    }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
-      const result = await safeCall(() =>
-        client.enrichEntity(params.ticker.toUpperCase(), ['derivatives'] as EnrichmentField[]),
-      );
-      if (!result.ok) return result.toolResult;
-      const handled = handleResult(result.data);
-      if (!handled.ok) return handled.toolResult;
 
-      const entity = handled.data as Entity;
+      const optionsFilter = {
+        ...(params.optionType ? { optionType: params.optionType } : {}),
+        ...(params.strikeMin != null ? { strikeMin: params.strikeMin } : {}),
+        ...(params.strikeMax != null ? { strikeMax: params.strikeMax } : {}),
+        ...(params.minOpenInterest != null ? { minOpenInterest: params.minOpenInterest } : {}),
+        ...(params.minVolume != null ? { minVolume: params.minVolume } : {}),
+        ...(params.optionsLimit != null ? { limit: params.optionsLimit } : {}),
+        ...(params.optionsSort ? { sort: params.optionsSort } : {}),
+      };
+      const futuresFilter = params.futuresLimit != null ? { limit: params.futuresLimit } : undefined;
+      const enrichOpts: EnrichOptions = {
+        ...(Object.keys(optionsFilter).length > 0 ? { optionsFilter } : {}),
+        ...(futuresFilter ? { futuresFilter } : {}),
+      };
+      const query = buildEnrichQuery(['derivatives'] as EnrichmentField[], enrichOpts);
+      const variables: Record<string, unknown> = { id: params.ticker.toUpperCase() };
+      if (Object.keys(optionsFilter).length > 0) variables.optionsFilter = optionsFilter;
+      if (futuresFilter) variables.futuresFilter = futuresFilter;
+
+      const result = await safeCall(() => client.request<Entity>(query, variables));
+      if (!result.ok) return result.toolResult;
+
+      const entity = result.data;
       if (!entity.derivatives) {
         return { content: `No derivatives data available for ${params.ticker}.` };
       }
 
       return { content: formatDerivatives(entity.derivatives, entity.name ?? params.ticker) };
+    },
+  };
+
+  const getFilings: ToolDefinition = {
+    name: 'get_filings',
+    description:
+      'Get SEC regulatory filings for a ticker, narrowed by form type. Returns filing type, date, ' +
+      'description, and URL.\n\n' +
+      'Use when the user asks about 10-K/10-Q/8-K filings, annual reports, or material regulatory events. ' +
+      'Filter by `types` to limit to material filings and avoid noise from Form 3/4/5 and prospectuses.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, TSLA)'),
+      types: z
+        .array(FILING_TYPE)
+        .optional()
+        .describe('Restrict to form types (e.g. ["FILING_10K", "FILING_10Q", "FILING_8K", "ANNUAL_REPORT"])'),
+      since: z.string().optional().describe('ISO timestamp — only filings on/after this date'),
+      until: z.string().optional().describe('ISO timestamp — only filings on/before this date'),
+      limit: z.number().int().min(1).max(100).optional().describe('Max filings to return (default 20)'),
+    }),
+    async execute(params: {
+      ticker: string;
+      types?: FilingType[];
+      since?: string;
+      until?: string;
+      limit?: number;
+    }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+
+      const filingsFilter: Record<string, unknown> = { sort: 'DESC' };
+      if (params.types?.length) filingsFilter.types = params.types;
+      if (params.since) filingsFilter.since = params.since;
+      if (params.until) filingsFilter.until = params.until;
+      if (params.limit) filingsFilter.limit = params.limit;
+
+      const query = buildEnrichQuery(['regulatory'] as EnrichmentField[], {
+        filingsFilter: filingsFilter as EnrichOptions['filingsFilter'],
+      });
+      const result = await safeCall(() =>
+        client.request<Entity>(query, { id: params.ticker.toUpperCase(), filingsFilter }),
+      );
+      if (!result.ok) return result.toolResult;
+
+      const entity = result.data;
+      const filings = entity.regulatory?.filings ?? [];
+      if (filings.length === 0) {
+        return { content: `No filings found for ${params.ticker}.` };
+      }
+
+      const lines = filings.map((f) => {
+        const parts = [`- **${f.type}** — ${f.date}`];
+        if (f.description) parts.push(`  ${f.description}`);
+        if (f.url) parts.push(`  ${f.url}`);
+        return parts.join('\n');
+      });
+      return {
+        content: `# ${entity.name ?? params.ticker} — Filings (${filings.length})\n\n${lines.join('\n')}`,
+      };
+    },
+  };
+
+  const getRiskSignals: ToolDefinition = {
+    name: 'get_risk_signals',
+    description:
+      'Get risk signals for a ticker (sanctions, litigation, regulatory actions, adverse media, PEP). ' +
+      'Returns signal type, severity, description, source, and date.\n\n' +
+      'Use when the user asks about legal/regulatory risk, sanctions exposure, or material adverse events. ' +
+      'Filter by `severities` (e.g. ["HIGH", "CRITICAL"]) to drop low-severity noise and fuzzy false positives.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, Gazprom)'),
+      severities: z
+        .array(SEVERITY)
+        .optional()
+        .describe('Restrict to these severities (e.g. ["MEDIUM", "HIGH", "CRITICAL"])'),
+      types: z
+        .array(RISK_SIGNAL_TYPE)
+        .optional()
+        .describe('Restrict to these risk types (e.g. ["SANCTIONS", "LITIGATION"])'),
+      since: z.string().optional().describe('ISO timestamp — only signals on/after this date'),
+      limit: z.number().int().min(1).max(100).optional().describe('Max signals to return (default 20)'),
+    }),
+    async execute(params: {
+      ticker: string;
+      severities?: Severity[];
+      types?: RiskSignalType[];
+      since?: string;
+      limit?: number;
+    }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+
+      const riskSignalFilter: Record<string, unknown> = { sort: 'DESC' };
+      if (params.severities?.length) riskSignalFilter.severities = params.severities;
+      if (params.types?.length) riskSignalFilter.types = params.types;
+      if (params.since) riskSignalFilter.since = params.since;
+      if (params.limit) riskSignalFilter.limit = params.limit;
+
+      const query = buildEnrichQuery(['risk'] as EnrichmentField[], {
+        riskSignalFilter: riskSignalFilter as EnrichOptions['riskSignalFilter'],
+      });
+      const result = await safeCall(() =>
+        client.request<Entity>(query, { id: params.ticker.toUpperCase(), riskSignalFilter }),
+      );
+      if (!result.ok) return result.toolResult;
+
+      const entity = result.data;
+      const signals = entity.risk?.signals ?? [];
+      if (signals.length === 0) {
+        return { content: `No risk signals found for ${params.ticker}.` };
+      }
+
+      // Best-effort ingest as signals — same path as enrich_entity.
+      await bestEffortIngest(
+        options.ingestor,
+        riskSignalsToRaw(signals, entity.tickers ?? [params.ticker.toUpperCase()]),
+      );
+
+      const lines = signals.map((s) => {
+        const parts = [`- [${s.severity}] **${s.type}**: ${s.description}`];
+        if (s.source) parts.push(`  Source: ${s.source}`);
+        if (s.date) parts.push(`  Date: ${s.date}`);
+        return parts.join('\n');
+      });
+      const score = entity.risk?.overallScore;
+      const header = `# ${entity.name ?? params.ticker} — Risk Signals${score != null ? ` (score: ${score})` : ''}`;
+      return { content: `${header}\n\n${lines.join('\n')}` };
     },
   };
 
@@ -1363,11 +1623,18 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'Use when the user asks about short sellers, bearish positioning, or squeeze potential.',
     parameters: z.object({
       ticker: z.string().min(1).describe('Ticker symbol (e.g. GME, TSLA, AMC)'),
+      since: z.string().optional().describe('ISO date — only include reports on/after this date'),
+      until: z.string().optional().describe('ISO date — only include reports on/before this date'),
+      limit: z.number().int().min(1).max(100).optional().describe('Max reports to return (default 20)'),
     }),
-    async execute(params: { ticker: string }): Promise<ToolResult> {
+    async execute(params: { ticker: string; since?: string; until?: string; limit?: number }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
-      const result = await safeCall(() => client.shortInterest(params.ticker.toUpperCase()));
+      const filter: ArraySubGraphOptions = { sort: 'DESC' };
+      if (params.since) filter.since = params.since;
+      if (params.until) filter.until = params.until;
+      if (params.limit) filter.limit = params.limit;
+      const result = await safeCall(() => client.shortInterest(params.ticker.toUpperCase(), filter));
       if (!result.ok) return result.toolResult;
       const handled = handleResult(result.data);
       if (!handled.ok) return handled.toolResult;
@@ -1474,11 +1741,32 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     parameters: z.object({
       series: FamaFrenchSeriesSchema.describe('Factor series to fetch'),
       range: z.string().optional().describe('Date range filter (e.g. "1y", "6m"). Leave empty for full history.'),
+      since: z.string().optional().describe('ISO date — only include factors on/after this date'),
+      until: z.string().optional().describe('ISO date — only include factors on/before this date'),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(10000)
+        .optional()
+        .describe(
+          'Max data points to return (default 20). Daily series can emit thousands — set explicitly for wide windows.',
+        ),
     }),
-    async execute(params: { series: FamaFrenchSeries; range?: string }): Promise<ToolResult> {
+    async execute(params: {
+      series: FamaFrenchSeries;
+      range?: string;
+      since?: string;
+      until?: string;
+      limit?: number;
+    }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
-      const result = await safeCall(() => client.famaFrenchFactors(params.series, params.range));
+      const filter: ArraySubGraphOptions = { sort: 'DESC' };
+      if (params.since) filter.since = params.since;
+      if (params.until) filter.until = params.until;
+      if (params.limit) filter.limit = params.limit;
+      const result = await safeCall(() => client.famaFrenchFactors(params.series, params.range, filter));
       if (!result.ok) return result.toolResult;
       const handled = handleResult(result.data);
       if (!handled.ok) return handled.toolResult;
@@ -1756,16 +2044,114 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     },
   };
 
+  const getEarningsCalendar: ToolDefinition = {
+    name: 'get_earnings_calendar',
+    description:
+      'Get forward earnings calendar + recent reports for an equity ticker. Returns reportDate, fiscal quarter/year, ' +
+      'actual vs estimate EPS and revenue (with surprise %), and release timing (BMO = before market open, ' +
+      'AMC = after market close, DMH = during market hours).\n\n' +
+      'Equity-only: returns no data for crypto or ETFs. Use when the user asks "when does X report earnings?", ' +
+      '"what was the EPS surprise last quarter?", or needs to check upcoming earnings timing for event-risk positioning.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Equity ticker symbol (e.g. AAPL, NVDA, MSFT)'),
+      since: z.string().optional().describe('ISO date — only include reports on/after this date'),
+      until: z.string().optional().describe('ISO date — only include reports on/before this date'),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(40)
+        .optional()
+        .describe('Max reports to return (default 8 — ~2 years of quarters)'),
+    }),
+    async execute(params: { ticker: string; since?: string; until?: string; limit?: number }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const ticker = params.ticker.toUpperCase();
+      const { opts } = buildFilter(params.since, params.limit ?? 8);
+      if (params.until) opts.until = params.until;
+      const query = buildEnrichQuery(['earnings'] as EnrichmentField[], opts);
+      const vars: Record<string, unknown> = { id: ticker, filter: opts };
+      const result = await safeCall(() => client.request<Entity>(query, vars));
+      if (!result.ok) return result.toolResult;
+      const entity = result.data;
+      if (!entity.earnings?.length) {
+        return {
+          content: `No earnings calendar data available for ${ticker}. (Equity-only field — not available for crypto or ETFs.)`,
+        };
+      }
+      return {
+        content: `# ${entity.name ?? ticker} — Earnings Calendar\n\n${formatEarningsCalendar(entity.earnings)}`,
+      };
+    },
+  };
+
+  const getPeriodicFiling: ToolDefinition = {
+    name: 'get_periodic_filing',
+    description:
+      'Get parsed sections from recent 10-K and 10-Q filings (Risk Factors, MD&A, etc.) for an equity ticker. ' +
+      'Each section is extracted from the raw SEC filing with HTML stripped. By default returns 300-char excerpts ' +
+      'per section — pass `fullBody: true` for the complete text (up to 50K chars per section).\n\n' +
+      'Common section items: "1A" = Risk Factors, "7" = Management Discussion & Analysis (MD&A), ' +
+      '"7A" = Quantitative & Qualitative Market Risk (10-K), "II-1A" = Part II Item 1A update (10-Q).\n\n' +
+      'Equity-only: returns no data for crypto or ETFs. Use when the user asks "what are the risk factors for X?", ' +
+      '"summarize management\'s discussion from the latest 10-K", or needs deep qualitative research from filings.',
+    parameters: z.object({
+      ticker: z.string().min(1).describe('Equity ticker symbol (e.g. AAPL, NVDA, MSFT)'),
+      items: z
+        .array(z.string())
+        .optional()
+        .describe('Restrict to specific section items (e.g. ["1A", "7"]). Omit for all sections.'),
+      fullBody: z
+        .boolean()
+        .optional()
+        .describe('Return full section bodies (up to 50K chars each) instead of 300-char excerpts. Default: false.'),
+      since: z.string().optional().describe('ISO date — only include filings on/after this date'),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(10)
+        .optional()
+        .describe('Max filings to return (default 2 — latest 10-K + 10-Q)'),
+    }),
+    async execute(params: {
+      ticker: string;
+      items?: string[];
+      fullBody?: boolean;
+      since?: string;
+      limit?: number;
+    }): Promise<ToolResult> {
+      if (!options.client) return notConfigured();
+      const client = options.client;
+      const ticker = params.ticker.toUpperCase();
+      const { opts } = buildFilter(params.since, params.limit ?? 2);
+      const query = buildEnrichQuery(['periodicFilings'] as EnrichmentField[], opts);
+      const vars: Record<string, unknown> = { id: ticker, filter: opts };
+      const result = await safeCall(() => client.request<Entity>(query, vars));
+      if (!result.ok) return result.toolResult;
+      const entity = result.data;
+      if (!entity.periodicFilings?.length) {
+        return {
+          content: `No periodic filings (10-K/10-Q) available for ${ticker}. (Equity-only field — not available for crypto or ETFs.)`,
+        };
+      }
+      return {
+        content: `# ${entity.name ?? ticker} — Periodic Filings (10-K / 10-Q)\n\n${formatPeriodicFilings(entity.periodicFilings, params.items, params.fullBody)}`,
+      };
+    },
+  };
+
   const jintelQuery: ToolDefinition = {
     name: 'jintel_query',
     description:
       'Generic Jintel query tool for quotes, fundamentals, market data, history, news, research, sentiment, ' +
       'technicals, derivatives, risk, regulatory, short_interest, financials, executives, institutional_holdings, ' +
-      'ownership, top_holders, insider_trades, earnings_press_releases, or segmented_revenue. Use this when you ' +
-      'want one Jintel-backed entry point instead of choosing a more specialized tool.',
+      'ownership, top_holders, insider_trades, earnings_press_releases, segmented_revenue, earnings_calendar, or ' +
+      'periodic_filing. Use this when you want one Jintel-backed entry point instead of choosing a more specialized tool.',
     parameters: z.object({
       kind: JINTEL_QUERY_KIND.describe(
-        'What to fetch: quote, market, fundamentals, history, news, research, sentiment, technicals, derivatives, risk, regulatory, short_interest, financials, executives, institutional_holdings, ownership, top_holders, insider_trades, earnings_press_releases, or segmented_revenue',
+        'What to fetch: quote, market, fundamentals, history, news, research, sentiment, technicals, derivatives, risk, regulatory, short_interest, financials, executives, institutional_holdings, ownership, top_holders, insider_trades, earnings_press_releases, segmented_revenue, earnings_calendar, or periodic_filing',
       ),
       ticker: z
         .string()
@@ -1840,6 +2226,10 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
           return getEarningsPressReleases.execute({ ticker: singleTicker });
         case 'segmented_revenue':
           return getSegmentedRevenue.execute({ ticker: singleTicker });
+        case 'earnings_calendar':
+          return getEarningsCalendar.execute({ ticker: singleTicker });
+        case 'periodic_filing':
+          return getPeriodicFiling.execute({ ticker: singleTicker });
       }
 
       return { content: `Unsupported Jintel query kind: ${params.kind}`, isError: true };
@@ -1976,6 +2366,8 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     getResearch,
     getSentiment,
     getDerivatives,
+    getFilings,
+    getRiskSignals,
     getGdp,
     getInflation,
     getInterestRates,
@@ -1993,5 +2385,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     getInsiderTrades,
     getEarningsPressReleases,
     getSegmentedRevenue,
+    getEarningsCalendar,
+    getPeriodicFiling,
   ];
 }

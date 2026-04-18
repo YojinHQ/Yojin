@@ -83,7 +83,7 @@
     "@hono/node-server": "1.19.14",
     "@slack/bolt": "4.7.0",
     "@whiskeysockets/baileys": "7.0.0-rc.9",
-    "@yojinhq/jintel-client": "0.18.0",
+    "@yojinhq/jintel-client": "0.20.0",
     "dotenv": "17.3.1",
     "grammy": "1.42.0",
     "graphql": "16.13.2",

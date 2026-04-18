@@ -20,6 +20,7 @@ export function createRiskManagerProfile(): AgentProfile {
       'check_api_health',
       // Jintel
       'sanctions_screen',
+      'get_earnings_calendar',
       // Memory tools
       'store_signal_memory',
       'recall_signal_memories',

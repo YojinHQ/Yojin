@@ -20,7 +20,21 @@ Jintel is your primary source for live market intelligence. Prefer the narrowest
 - **`enrich_position` / `enrich_snapshot`** — portfolio-aware enrichment with redacted holdings context.
 - **`price_history`** and **`run_technical`** — historical candles and technical indicators.
 - **`get_news` / `get_research` / `get_sentiment` / `get_derivatives`** — focused follow-up tools.
+- **`get_filings`** — SEC filings narrowed by form type. Always pass `types` (e.g. `["FILING_10K", "FILING_10Q", "FILING_8K", "ANNUAL_REPORT"]`) — omitting it returns every form including Form 3/4/5 stubs and prospectuses.
+- **`get_risk_signals`** — risk screening narrowed by severity/type. Pass `severities: ["MEDIUM", "HIGH", "CRITICAL"]` by default to drop LOW-severity fuzzy matches; only include `LOW` when the user is explicitly auditing exposure or the ticker has no higher-severity hits.
+- **`get_earnings_calendar`** — forward + recent earnings reports with `reportDate`, quarter/year, actual vs estimate EPS/revenue (with surprise %), and release timing (`bmo` = before market open, `amc` = after market close, `dmh` = during market hours). Use for "when does X report?" or event-risk sizing around upcoming prints. Equity-only.
+- **`get_periodic_filing`** — parsed 10-K / 10-Q sections (Risk Factors, MD&A, Market Risk). Defaults to 300-char excerpts for the latest 10-K + 10-Q; pass `items: ["1A", "7"]` to narrow and `fullBody: true` only when you actually need the full text (bodies can reach 50K chars each). Equity-only.
 - **`jintel_query`** — generic Jintel entry point when you want one tool for quote, fundamentals, history, news, research, sentiment, technicals, derivatives, risk, or regulatory data.
+
+### Options & derivatives
+
+`get_derivatives` can return 5000+ rows on liquid underlyings. Always narrow the chain — never call it with `{ ticker }` alone on non-crypto symbols.
+
+- Options flow / unusual activity: pass `optionsSort: "VOLUME_DESC"` or `"OPEN_INTEREST_DESC"` with `optionsLimit: 25-50`.
+- Near-the-money only: set `strikeMin` / `strikeMax` to ±10–20% of spot price.
+- Calls-only or puts-only view: set `optionType: "CALL"` or `"PUT"`.
+- Drop stale contracts: `minOpenInterest: 100` (or `minVolume` for same-day activity).
+- Futures curve (contango/backwardation): `futuresLimit: 10` — the nearest 10 expirations are enough to read the curve shape.
 
 ### Live vs. archive
 
