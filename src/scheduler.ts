@@ -38,13 +38,19 @@ import type { MicroInsightStore } from './insights/micro-insight-store.js';
 import { runMicroResearch } from './insights/micro-runner.js';
 import type { MicroInsight, MicroInsightSource } from './insights/micro-types.js';
 import type { InsightReport } from './insights/types.js';
-import { fetchJintelSignals, fetchMacroIndicators } from './jintel/signal-fetcher.js';
+import {
+  COLD_ENRICHMENT_FIELDS,
+  HOT_ENRICHMENT_FIELDS,
+  fetchJintelSignals,
+  fetchMacroIndicators,
+} from './jintel/signal-fetcher.js';
 import { createSubsystemLogger } from './logging/logger.js';
 import type { MarketSentimentBaselineStore } from './market-sentiment/baseline-store.js';
 import { INDEX_TICKER_SET } from './market-sentiment/types.js';
 import type { SignalMemoryStore } from './memory/memory-store.js';
 import type { ReflectionEngine } from './memory/reflection.js';
 import type { MemoryAgentRole } from './memory/types.js';
+import { isUSMarketOpen } from './portfolio/live-enrichment.js';
 import type { PortfolioSnapshotStore } from './portfolio/snapshot-store.js';
 import type { TickerProfileStore } from './profiles/profile-store.js';
 import type { SignalArchive } from './signals/archive.js';
@@ -184,6 +190,13 @@ const RESOLUTION_COOLDOWN_MS = ACTION_EXPIRY_HOURS * 60 * 60 * 1000;
 /** Default micro research interval (5 minutes). */
 const DEFAULT_MICRO_INTERVAL_MS = 5 * 60 * 1000;
 
+/**
+ * Cold-field refresh interval (1 hour). Fields like SEC filings, 13F, Form 4,
+ * ownership, and 8-K earnings releases update daily at best — pulling them
+ * every 5 min is pure waste. 1h cadence still catches same-day filings.
+ */
+const COLD_MICRO_INTERVAL_MS = 60 * 60 * 1000;
+
 /** Default LLM analysis interval per asset (10 minutes). */
 const DEFAULT_MICRO_LLM_INTERVAL_MS = 10 * 60 * 1000;
 
@@ -216,6 +229,15 @@ interface MicroAssetState {
   lastLlmAt: string | null;
   /** Whether this asset has completed LLM analysis today. */
   completedToday: boolean;
+  /** Asset class — drives market-hours gating for equity tickers. Unknown is treated as equity. */
+  assetClass?: AssetClass;
+  /** Timestamp of last cold-field Jintel fetch (regulatory, holdings, filings). Null = never. */
+  lastColdMicroAt: string | null;
+}
+
+/** True when the ticker trades 24/7 (crypto). Unknown asset classes are treated as equity. */
+function isAlwaysOnAsset(state: MicroAssetState | undefined): boolean {
+  return state?.assetClass === 'CRYPTO';
 }
 
 export interface SchedulerAssetStatus {
@@ -425,6 +447,8 @@ export class Scheduler {
         lastMicroAt: null, // force immediate run
         lastLlmAt: null, // force LLM on next eligible tick
         completedToday: existing?.completedToday ?? false,
+        assetClass: existing?.assetClass,
+        lastColdMicroAt: existing?.lastColdMicroAt ?? null,
       });
     }
     if (this.pendingMicroTimer) return; // already debounced
@@ -454,6 +478,8 @@ export class Scheduler {
               lastMicroAt: null,
               lastLlmAt: null,
               completedToday: false,
+              assetClass: pos.assetClass,
+              lastColdMicroAt: null,
             });
           }
         }
@@ -470,6 +496,8 @@ export class Scheduler {
             lastMicroAt: null,
             lastLlmAt: null,
             completedToday: false,
+            assetClass: entry.assetClass,
+            lastColdMicroAt: null,
           });
         }
       }
@@ -544,45 +572,97 @@ export class Scheduler {
     logger.info('Micro research batch started', { symbols });
 
     try {
-      // Fetch Jintel signals. Split assets into two buckets so a single first-run asset
-      // doesn't drag the whole (possibly 50+) batch to a 7-day window:
-      //   - first-run (lastMicroAt === null) → 7-day window
-      //   - recurring → oldest lastMicroAt across the recurring set
-      // fetchJintelSignals chunks internally (DEFAULT_CHUNK_SIZE) to stay under the
-      // Jintel 20-symbol-per-request cap — we just pass the whole bucket.
+      // Fetch Jintel signals. Two-axis split:
+      //   1. Field cadence: HOT fields (quote/news/social) every tick, COLD fields
+      //      (filings, 13F, Form 4, ownership) only hourly. Cuts credit burn ~55%.
+      //   2. Market-hours gating: equities skip the HOT fetch outside US market hours
+      //      — news/sentiment barely change overnight. Crypto runs HOT 24/7.
+      // Within each fetch, bucket first-run (7d window) vs recurring (oldest lastMicroAt)
+      // so a single cold start doesn't drag the batch to 7d. fetchJintelSignals chunks
+      // internally to stay under the Jintel 20-symbol-per-request cap.
       const jintelClient = this.getJintelClient?.();
       if (jintelClient && this.signalIngestor) {
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        const firstRunSymbols: string[] = [];
-        const recurringSymbols: string[] = [];
-        let recurringSince: string | null = null;
-        for (const asset of assets) {
-          const t = this.microRegistry.get(asset.symbol)?.lastMicroAt ?? null;
-          if (!t) {
-            firstRunSymbols.push(asset.symbol);
-          } else {
-            recurringSymbols.push(asset.symbol);
-            if (recurringSince === null || t < recurringSince) recurringSince = t;
+        const nowMs = Date.now();
+        const marketOpen = isUSMarketOpen();
+        const ingestor = this.signalIngestor;
+
+        const hotEligible = assets.filter((a) => {
+          const state = this.microRegistry.get(a.symbol);
+          return isAlwaysOnAsset(state) || marketOpen;
+        });
+
+        const coldEligible = assets.filter((a) => {
+          const last = this.microRegistry.get(a.symbol)?.lastColdMicroAt;
+          if (!last) return true;
+          return nowMs - new Date(last).getTime() >= COLD_MICRO_INTERVAL_MS;
+        });
+
+        const runFetch = async (
+          symbols: string[],
+          fields: readonly EnrichmentField[],
+        ): Promise<{ ingested: number; duplicates: number }> => {
+          if (symbols.length === 0) return { ingested: 0, duplicates: 0 };
+          const firstRunSymbols: string[] = [];
+          const recurringSymbols: string[] = [];
+          let recurringSince: string | null = null;
+          for (const symbol of symbols) {
+            const t = this.microRegistry.get(symbol)?.lastMicroAt ?? null;
+            if (!t) {
+              firstRunSymbols.push(symbol);
+            } else {
+              recurringSymbols.push(symbol);
+              if (recurringSince === null || t < recurringSince) recurringSince = t;
+            }
+          }
+          const buckets: Array<{ symbols: string[]; since: string }> = [];
+          if (firstRunSymbols.length > 0) buckets.push({ symbols: firstRunSymbols, since: sevenDaysAgo });
+          if (recurringSymbols.length > 0 && recurringSince !== null) {
+            buckets.push({ symbols: recurringSymbols, since: recurringSince });
+          }
+          let ingested = 0;
+          let duplicates = 0;
+          for (const bucket of buckets) {
+            const result = await fetchJintelSignals(jintelClient, ingestor, bucket.symbols, {
+              since: bucket.since,
+              fields,
+            });
+            ingested += result.ingested;
+            duplicates += result.duplicates;
+          }
+          return { ingested, duplicates };
+        };
+
+        const hotResult = await runFetch(
+          hotEligible.map((a) => a.symbol),
+          HOT_ENRICHMENT_FIELDS,
+        );
+        const coldResult = await runFetch(
+          coldEligible.map((a) => a.symbol),
+          COLD_ENRICHMENT_FIELDS,
+        );
+
+        // Stamp lastColdMicroAt for successfully-fetched cold assets so they
+        // rotate back in after COLD_MICRO_INTERVAL_MS.
+        if (coldEligible.length > 0) {
+          const coldStamp = new Date().toISOString();
+          for (const asset of coldEligible) {
+            const state = this.microRegistry.get(asset.symbol);
+            if (state) state.lastColdMicroAt = coldStamp;
           }
         }
 
-        const buckets: Array<{ symbols: string[]; since: string }> = [];
-        if (firstRunSymbols.length > 0) buckets.push({ symbols: firstRunSymbols, since: sevenDaysAgo });
-        if (recurringSymbols.length > 0 && recurringSince !== null) {
-          buckets.push({ symbols: recurringSymbols, since: recurringSince });
-        }
-
-        let totalIngested = 0;
-        let totalDuplicates = 0;
-        for (const bucket of buckets) {
-          const result = await fetchJintelSignals(jintelClient, this.signalIngestor, bucket.symbols, {
-            since: bucket.since,
+        const totalIngested = hotResult.ingested + coldResult.ingested;
+        const totalDuplicates = hotResult.duplicates + coldResult.duplicates;
+        if (totalIngested > 0 || hotEligible.length !== assets.length || coldEligible.length > 0) {
+          logger.info('Micro research Jintel fetch', {
+            ingested: totalIngested,
+            duplicates: totalDuplicates,
+            hotSymbols: hotEligible.length,
+            coldSymbols: coldEligible.length,
+            skippedEquitiesOffHours: assets.length - hotEligible.length,
+            marketOpen,
           });
-          totalIngested += result.ingested;
-          totalDuplicates += result.duplicates;
-        }
-        if (totalIngested > 0) {
-          logger.info('Micro research Jintel fetch', { ingested: totalIngested, duplicates: totalDuplicates });
         }
       }
 

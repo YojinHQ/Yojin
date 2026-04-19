@@ -18,7 +18,7 @@ const actionData: FeedDetailData = {
     'DXY weakness persisting despite hawkish Fed commentary',
   ],
   analysis:
-    '## Why now\n\nRetail sentiment has pivoted sharply toward gold as a safe-haven trade. Options flow confirms positioning shift.\n\n## Risks\n\n- **Reversal risk:** If DXY strengthens, trade invalidates quickly.\n- **Crowded positioning:** Could unwind fast on any macro surprise.',
+    "Retail sentiment pivoted hard into gold as a safe-haven trade this week — social mentions up 340% and ETF inflows just broke a 6-month range. Options flow confirms the positioning shift is real, not noise.\n\nDXY is the swing factor. If the dollar strengthens, this invalidates fast; positioning is already crowded enough that any macro surprise unwinds it in a hurry. Scale in, don't chase.\n\nNot financial advice — your call.",
   recommendation: 'Scale into position over 3-5 days. Stop below $180 invalidates thesis.',
   relatedTickers: ['GLD', 'IAU', 'GDX', 'SLV'],
   actionMeta: {

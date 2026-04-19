@@ -8,6 +8,7 @@
 import type {
   EconomicDataPoint,
   EnrichOptions,
+  EnrichmentField,
   Entity,
   FilingType,
   InsiderTrade,
@@ -42,27 +43,37 @@ function sentimentScoreToEnum(score: number): SignalSentiment {
 
 const logger = createSubsystemLogger('jintel-signal-fetcher');
 
-// Request all fields that produce signals — regulatory enables SEC filing signals.
-// social: Reddit posts + comments → SOCIALS signals (dedup by hash).
-// discussions: HN stories → NEWS signals (tech/investor community commentary).
+// Split fields by update cadence so the scheduler can pull hot fields every
+// micro tick (5 min) but cold fields only hourly — cuts Jintel credit burn
+// ~55% vs pulling everything every tick.
+//
+// HOT: intraday-changing — quotes, news articles, social/HN posts, sentiment.
+// COLD: updates daily or less — SEC filings, 13F holdings, Form 4, ownership,
+//       earnings press releases. Polling these every 5 min is pure waste.
+//
 // financials/executives: equity-only; server returns null for crypto/ETF.
 // predictions intentionally excluded — too niche for automated runs, agent-only.
 // research excluded — Exa-backed, returns low-quality web search results (score 0,
 // no URLs, duplicate "Market Snapshot" titles). Available on-demand via get_research tool.
-const ENRICHMENT_FIELDS = [
+export const HOT_ENRICHMENT_FIELDS: readonly EnrichmentField[] = [
   'market',
   'technicals',
   'news',
   'sentiment',
-  'regulatory',
   'social',
   'discussions',
+];
+
+export const COLD_ENRICHMENT_FIELDS: readonly EnrichmentField[] = [
+  'regulatory',
   'institutionalHoldings',
   'ownership',
   'topHolders',
   'insiderTrades',
   'earningsPressReleases',
-] as const;
+];
+
+export const ENRICHMENT_FIELDS: readonly EnrichmentField[] = [...HOT_ENRICHMENT_FIELDS, ...COLD_ENRICHMENT_FIELDS];
 
 // Reddit-owned domains — native media/shortlinks, not external articles
 const REDDIT_DOMAIN_RE = /\b(reddit\.com|redd\.it|i\.redd\.it|v\.redd\.it|preview\.redd\.it)\b/;
@@ -108,6 +119,12 @@ export interface JintelFetchOptions {
   since?: string;
   /** Number of tickers to fetch per Jintel API call (default: 10). */
   chunkSize?: number;
+  /**
+   * Subset of enrichment fields to request. Defaults to all fields (HOT + COLD).
+   * Use `HOT_ENRICHMENT_FIELDS` for frequent polls and `COLD_ENRICHMENT_FIELDS`
+   * for infrequent refresh of filings/13F/ownership data.
+   */
+  fields?: readonly EnrichmentField[];
 }
 
 /**
@@ -144,7 +161,8 @@ export async function fetchJintelSignals(
     discussionsFilter,
     institutionalHoldingsFilter,
   };
-  const query = buildBatchEnrichQuery([...ENRICHMENT_FIELDS], enrichOpts);
+  const fields = options?.fields ?? ENRICHMENT_FIELDS;
+  const query = buildBatchEnrichQuery([...fields], enrichOpts);
   // Build variables to pass alongside the query — must match the $filter declarations emitted above.
   const filter: Record<string, unknown> = { sort: arrayFilter.sort };
   if (arrayFilter.since) filter.since = arrayFilter.since;

@@ -1,5 +1,9 @@
 import type { Action } from '../../../src/actions/types.js';
-import { chunkMessage as chunkMessageBase, escapeHtml, formatTriggerStrength } from '../../../src/formatting/index.js';
+import {
+  canonicalActionHeadline,
+  chunkMessage as chunkMessageBase,
+  escapeHtml,
+} from '../../../src/formatting/index.js';
 import type { InsightReport } from '../../../src/insights/types.js';
 import type { Snap } from '../../../src/snap/types.js';
 
@@ -28,15 +32,11 @@ export function formatSnap(snap: Snap): string {
   return lines.join('\n');
 }
 
-/** Format an Action for Telegram HTML: verdict badge + headline + reasoning. */
+/** Format an Action for Telegram HTML: bold headline + reasoning. Like a text from a friend. */
 export function formatAction(action: Action): string {
-  const ticker = action.tickers[0];
-  const header = ticker
-    ? `\u{26A1} <b>${escapeHtml(action.verdict)} ${escapeHtml(ticker)}</b>`
-    : `\u{26A1} <b>${escapeHtml(action.verdict)}</b>`;
-  const strength = action.triggerStrength ? `[${formatTriggerStrength(action.triggerStrength)}]` : '';
-  const lines = [header, strength ? `${escapeHtml(strength)} ${escapeHtml(action.what)}` : escapeHtml(action.what)];
-  if (action.why && action.why !== action.what) {
+  const headline = canonicalActionHeadline(action);
+  const lines = [`<b>${escapeHtml(headline)}</b>`];
+  if (action.why && action.why !== headline && action.why !== action.what) {
     lines.push('', escapeHtml(action.why));
   }
   return lines.join('\n');

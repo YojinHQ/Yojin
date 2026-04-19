@@ -200,14 +200,9 @@ describe('formatAction', () => {
     createdAt: '2026-03-30T08:00:00Z',
   };
 
-  it('renders verdict + ticker header with WhatsApp bold', () => {
+  it('bolds the full headline (action.what) as one line', () => {
     const result = formatAction(action);
-    expect(result).toContain('*BUY AAPL*');
-  });
-
-  it('includes the headline (what) field', () => {
-    const result = formatAction(action);
-    expect(result).toContain('golden cross');
+    expect(result).toContain('*BUY AAPL — golden cross + expanding volume*');
   });
 
   it('includes the reasoning (why) when distinct from the headline', () => {
@@ -222,10 +217,22 @@ describe('formatAction', () => {
     expect(occurrences).toBe(1);
   });
 
-  it('falls back to verdict-only header when no ticker is provided', () => {
-    const noTicker: Action = { ...action, tickers: [], verdict: 'SELL' };
+  it('does not prepend a verdict badge or lightning emoji', () => {
+    const result = formatAction(action);
+    expect(result).not.toMatch(/\u26A1/);
+    expect(result.startsWith('*BUY AAPL —')).toBe(true);
+  });
+
+  it('reconstructs verdict + ticker when action.what omits them', () => {
+    const offShape: Action = { ...action, what: 'golden cross + expanding volume' };
+    const result = formatAction(offShape);
+    expect(result.startsWith('*BUY AAPL — golden cross + expanding volume*')).toBe(true);
+  });
+
+  it('reconstructs verdict-only headline when no ticker is present', () => {
+    const noTicker: Action = { ...action, tickers: [], verdict: 'SELL', what: 'concentration risk' };
     const result = formatAction(noTicker);
-    expect(result).toContain('*SELL*');
+    expect(result.startsWith('*SELL — concentration risk*')).toBe(true);
   });
 
   it('does not use HTML tags', () => {

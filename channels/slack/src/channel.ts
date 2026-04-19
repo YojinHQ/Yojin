@@ -7,7 +7,7 @@ import { normalizeMimeToMedia } from '../../../src/channels/image-media-type.js'
 import { QUICK_ACTIONS } from '../../../src/channels/quick-actions.js';
 import type { NotificationBus } from '../../../src/core/notification-bus.js';
 import type { ImageMediaType } from '../../../src/core/types.js';
-import { formatTriggerStrength } from '../../../src/formatting/index.js';
+import { canonicalActionHeadline } from '../../../src/formatting/index.js';
 import type { InsightStore } from '../../../src/insights/insight-store.js';
 import type { InsightReport } from '../../../src/insights/types.js';
 import { createSubsystemLogger } from '../../../src/logging/logger.js';
@@ -57,13 +57,11 @@ function formatAlert(event: { symbol: string; severity: number; thesis: string }
   return [`${icon} *${label} Alert: ${event.symbol}*`, '', event.thesis].join('\n');
 }
 
-/** Format an Action for Slack: verdict badge + headline + reasoning. */
+/** Format an Action for Slack: bold headline + reasoning. Like a text from a friend. */
 function formatAction(action: Action): string {
-  const ticker = action.tickers[0];
-  const header = ticker ? `:zap: *${action.verdict} ${ticker}*` : `:zap: *${action.verdict}*`;
-  const strength = action.triggerStrength ? `[${formatTriggerStrength(action.triggerStrength)}]` : '';
-  const lines = [header, strength ? `${strength} ${action.what}` : action.what];
-  if (action.why && action.why !== action.what) {
+  const headline = canonicalActionHeadline(action);
+  const lines = [`*${headline}*`];
+  if (action.why && action.why !== headline && action.why !== action.what) {
     lines.push('', action.why);
   }
   return lines.join('\n');

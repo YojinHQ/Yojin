@@ -94,10 +94,9 @@ describe('formatAction', () => {
     createdAt: '2026-03-30T08:00:00Z',
   };
 
-  it('renders verdict and ticker in the header', () => {
+  it('bolds the full headline (action.what) as one line', () => {
     const result = formatAction(baseAction);
-    expect(result).toContain('<b>BUY AAPL</b>');
-    expect(result).toContain('golden cross');
+    expect(result).toContain('<b>BUY AAPL — golden cross + expanding volume</b>');
     expect(result).toContain('RSI reclaimed 50');
   });
 
@@ -108,11 +107,16 @@ describe('formatAction', () => {
     expect(occurrences).toBe(1);
   });
 
-  it('falls back to verdict-only header when no ticker is present', () => {
-    const action: Action = { ...baseAction, tickers: [], verdict: 'SELL', what: 'SELL portfolio — concentration' };
-    const result = formatAction(action);
-    expect(result).toContain('<b>SELL</b>');
-    expect(result).not.toContain('SELL  —');
+  it('does not prepend a verdict badge or lightning emoji', () => {
+    const result = formatAction(baseAction);
+    expect(result).not.toMatch(/\u26A1/);
+    expect(result.startsWith('<b>BUY AAPL —')).toBe(true);
+  });
+
+  it('reconstructs verdict + ticker when action.what omits them', () => {
+    const offShape: Action = { ...baseAction, what: 'golden cross + expanding volume' };
+    const result = formatAction(offShape);
+    expect(result.startsWith('<b>BUY AAPL — golden cross + expanding volume</b>')).toBe(true);
   });
 
   it('escapes HTML special characters from headlines and reasoning', () => {
