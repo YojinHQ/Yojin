@@ -157,9 +157,9 @@ export async function fetchJintelSignals(
         if (!entity) continue;
 
         const entityTickers = entity.tickers ?? [];
-        const signalTickers = entityTickers.some((t) => t.toUpperCase() === inputTicker.toUpperCase())
-          ? entityTickers
-          : [inputTicker, ...entityTickers];
+        // Put the queried ticker first so formatAssetLabel(entity.name, tickers[0]) shows the alias the caller asked for.
+        const inputTickerUpper = inputTicker.toUpperCase();
+        const signalTickers = [inputTicker, ...entityTickers.filter((t) => t.toUpperCase() !== inputTickerUpper)];
 
         rawSignals.push(...enrichmentToSignals(entity, signalTickers));
       }

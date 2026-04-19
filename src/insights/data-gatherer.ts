@@ -1013,7 +1013,7 @@ export function buildBrief(
   return {
     symbol: pos.symbol,
     // Broker-scraped names lag rebrands; prefer Jintel's so the header matches the signal titles.
-    name: entity?.name ?? pos.name,
+    name: entity?.name?.trim() || pos.name,
     quantity: pos.quantity,
     costBasis: pos.costBasis,
     currentPrice: pos.currentPrice,

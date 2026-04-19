@@ -18,4 +18,14 @@ describe('formatAssetLabel', () => {
     expect(formatAssetLabel('AAPL', 'AAPL')).toBe('AAPL');
     expect(formatAssetLabel('btc', 'BTC')).toBe('BTC');
   });
+
+  it('treats whitespace-only names as missing', () => {
+    expect(formatAssetLabel('   ', 'MSTR')).toBe('MSTR');
+    expect(formatAssetLabel('\t\n', 'AAPL')).toBe('AAPL');
+  });
+
+  it('trims padded names before formatting and equality check', () => {
+    expect(formatAssetLabel('  Strategy  ', 'MSTR')).toBe('Strategy (MSTR)');
+    expect(formatAssetLabel('  AAPL  ', 'AAPL')).toBe('AAPL');
+  });
 });

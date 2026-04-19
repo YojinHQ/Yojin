@@ -554,7 +554,7 @@ function formatSentiment(s: SocialSentiment): string {
   const mentionDir = mentionDelta > 0 ? `+${mentionDelta}` : `${mentionDelta}`;
 
   const lines = [
-    `# ${s.name} (${s.ticker}) — Social Sentiment`,
+    `# ${formatAssetLabel(s.name, s.ticker)} — Social Sentiment`,
     `Rank: #${s.rank} (${rankDir} in 24h)`,
     `Mentions: ${s.mentions} (${mentionDir} in 24h)`,
     `Upvotes: ${s.upvotes}`,
