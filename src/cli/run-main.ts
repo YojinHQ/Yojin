@@ -35,6 +35,7 @@ import {
 import { setPortfolioChangedCallback } from '../api/graphql/resolvers/portfolio.js';
 import { onAppDataCleared } from '../api/graphql/resolvers/profile.js';
 import {
+  setClearSchedulerLlmError,
   setSchedulerStatusProvider,
   setTriggerMicroAnalysis,
   setTriggerStrategyEvaluation,
@@ -404,6 +405,9 @@ async function startGateway(): Promise<void> {
     }
   });
   setTriggerStrategyEvaluation(() => scheduler.evaluateStrategies());
+  // Let credential resolvers clear the "AI analysis paused" banner immediately
+  // when a token re-validates, instead of waiting for the next scheduled run.
+  setClearSchedulerLlmError(() => scheduler.clearLlmError());
 
   const gateway = new Gateway(services.config, agentRuntime, {
     snapshotStore: services.snapshotStore,

@@ -15,6 +15,7 @@ import type { SchedulerStatus } from '../../../scheduler.js';
 let getSchedulerStatus: (() => SchedulerStatus) | undefined;
 let triggerMicroAnalysisFn: (() => void) | undefined;
 let triggerStrategyEvaluationFn: (() => Promise<void>) | undefined;
+let clearSchedulerLlmErrorFn: (() => void) | undefined;
 
 export function setSchedulerStatusProvider(fn: () => SchedulerStatus): void {
   getSchedulerStatus = fn;
@@ -26,6 +27,19 @@ export function setTriggerMicroAnalysis(fn: () => void): void {
 
 export function setTriggerStrategyEvaluation(fn: () => Promise<void>): void {
   triggerStrategyEvaluationFn = fn;
+}
+
+export function setClearSchedulerLlmError(fn: () => void): void {
+  clearSchedulerLlmErrorFn = fn;
+}
+
+/**
+ * Clear the scheduler's cached LLM error flags. Safe to call from credential
+ * resolvers after a successful re-validation — hides the "AI analysis paused"
+ * banner without waiting for the next scheduled run.
+ */
+export function clearSchedulerLlmError(): void {
+  clearSchedulerLlmErrorFn?.();
 }
 
 // ---------------------------------------------------------------------------

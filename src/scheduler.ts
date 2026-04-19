@@ -824,6 +824,17 @@ export class Scheduler {
   }
 
   /**
+   * Clear cached LLM error flags. Called when credentials are re-validated out
+   * of band (keychain refresh, OAuth re-auth, API key save) so the "AI analysis
+   * paused" banner disappears immediately instead of waiting for the next
+   * scheduled run to overwrite `lastLlmSuccessAt`.
+   */
+  clearLlmError(): void {
+    this.lastLlmError = null;
+    this.lastLlmErrorAt = null;
+  }
+
+  /**
    * Run the full macro flow:
    *   1. Fetch CLI/RSS/MCP data sources
    *   2. Signal assessment (RA + Strategist via full-curation workflow)

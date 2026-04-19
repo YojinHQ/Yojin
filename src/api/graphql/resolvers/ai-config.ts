@@ -8,6 +8,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { clearSchedulerLlmError } from './scheduler.js';
 import type { ClaudeCodeProvider } from '../../../ai-providers/claude-code.js';
 import { registerCredentialErrorHandler } from '../../../ai-providers/credential-error.js';
 import type { ProviderRouter } from '../../../ai-providers/router.js';
@@ -288,6 +289,10 @@ export async function saveAiCredentialMutation(
       // Best-effort
     }
   }
+
+  // Fresh credential — drop any stale "AI analysis paused" banner state so the
+  // UI reflects the new key immediately instead of waiting for the next run.
+  clearSchedulerLlmError();
 
   logger.info('AI credential saved', { provider: args.provider });
   return { success: true };

@@ -10,6 +10,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
+import { clearSchedulerLlmError } from './scheduler.js';
 import type { ClaudeCodeProvider } from '../../../ai-providers/claude-code.js';
 import { buildClaudeOAuthUrl, exchangeClaudeOAuthCode, generatePkceParams } from '../../../auth/claude-oauth.js';
 import { readCodexCredentials } from '../../../auth/codex-credentials.js';
@@ -175,6 +176,8 @@ export async function detectKeychainTokenQuery(): Promise<KeychainTokenResult> {
   // Try the token as-is first
   if (await validateOAuthToken(token)) {
     activateOAuthToken(token);
+    // Token validated — drop any stale "AI analysis paused" banner state.
+    clearSchedulerLlmError();
     return { found: true, model: 'Claude (Keychain)' };
   }
 
@@ -217,6 +220,8 @@ export async function detectCodexTokenQuery(): Promise<KeychainTokenResult> {
       if (vault?.isUnlocked) {
         await vault.set('openai_api_key', creds.accessToken);
       }
+      // Token validated — drop any stale "AI analysis paused" banner state.
+      clearSchedulerLlmError();
       const label = creds.authMode === 'chatgpt' ? 'Codex (ChatGPT)' : 'Codex (API key)';
       return { found: true, model: label };
     }
@@ -315,6 +320,8 @@ export async function completeOAuthFlowMutation(
     if (result.refreshToken) {
       process.env.CLAUDE_CODE_OAUTH_REFRESH_TOKEN = result.refreshToken;
     }
+    // Fresh OAuth token — drop any stale "AI analysis paused" banner state.
+    clearSchedulerLlmError();
 
     return { success: true, model: 'Claude (OAuth)' };
   } catch (err) {
@@ -482,6 +489,8 @@ export async function completeMagicLinkMutation(
       }
       process.env.CLAUDE_CODE_OAUTH_REFRESH_TOKEN = result.refreshToken;
     }
+    // Fresh OAuth token — drop any stale "AI analysis paused" banner state.
+    clearSchedulerLlmError();
     return { success: true, model: result.model || 'Claude (OAuth)' };
   }
 
