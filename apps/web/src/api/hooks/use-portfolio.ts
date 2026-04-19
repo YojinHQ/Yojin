@@ -7,6 +7,8 @@ import {
   ADD_MANUAL_POSITION_MUTATION,
   EDIT_POSITION_MUTATION,
   REMOVE_POSITION_MUTATION,
+  SET_CASH_BALANCE_MUTATION,
+  REMOVE_CASH_BALANCE_MUTATION,
   ON_PORTFOLIO_UPDATE_SUBSCRIPTION,
 } from '../documents.js';
 import type {
@@ -20,6 +22,10 @@ import type {
   EditPositionVariables,
   RemovePositionMutationResult,
   RemovePositionVariables,
+  SetCashBalanceMutationResult,
+  SetCashBalanceVariables,
+  RemoveCashBalanceMutationResult,
+  RemoveCashBalanceVariables,
 } from '../types.js';
 
 /** Full portfolio snapshot with positions, history, sector exposure, and P&L. */
@@ -65,4 +71,14 @@ export function useEditPosition() {
 /** Remove a position from the portfolio. */
 export function useRemovePosition() {
   return useMutation<RemovePositionMutationResult, RemovePositionVariables>(REMOVE_POSITION_MUTATION);
+}
+
+/** Upsert a cash balance for a (platform, currency) pair. */
+export function useSetCashBalance() {
+  return useMutation<SetCashBalanceMutationResult, SetCashBalanceVariables>(SET_CASH_BALANCE_MUTATION);
+}
+
+/** Remove a cash balance for a (platform, currency) pair. */
+export function useRemoveCashBalance() {
+  return useMutation<RemoveCashBalanceMutationResult, RemoveCashBalanceVariables>(REMOVE_CASH_BALANCE_MUTATION);
 }

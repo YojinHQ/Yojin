@@ -77,6 +77,7 @@ function normPlatform(p: Position): string {
 const EMPTY_SNAPSHOT: PortfolioSnapshot = {
   id: 'empty',
   positions: [],
+  cashBalances: [],
   totalValue: 0,
   totalCost: 0,
   totalPnl: 0,
@@ -358,6 +359,35 @@ export async function removePositionMutation(
   const enriched = await enrichAndOverlay(snapshot);
   pubsub.publish('portfolioUpdate', enriched);
   onPortfolioChangedCb?.([targetSymbol]);
+  return enriched;
+}
+
+export async function setCashBalanceMutation(
+  _parent: unknown,
+  args: { platform: string; currency: string; amount: number },
+): Promise<PortfolioSnapshot> {
+  if (!snapshotStore) throw new Error('Snapshot store not available');
+  const snapshot = await snapshotStore.setCashBalance({
+    platform: args.platform,
+    currency: args.currency,
+    amount: args.amount,
+  });
+  const enriched = await enrichAndOverlay(snapshot);
+  pubsub.publish('portfolioUpdate', enriched);
+  return enriched;
+}
+
+export async function removeCashBalanceMutation(
+  _parent: unknown,
+  args: { platform: string; currency: string },
+): Promise<PortfolioSnapshot> {
+  if (!snapshotStore) throw new Error('Snapshot store not available');
+  const snapshot = await snapshotStore.removeCashBalance({
+    platform: args.platform,
+    currency: args.currency,
+  });
+  const enriched = await enrichAndOverlay(snapshot);
+  pubsub.publish('portfolioUpdate', enriched);
   return enriched;
 }
 

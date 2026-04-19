@@ -4,6 +4,8 @@ export {
   useAddManualPosition,
   useEditPosition,
   useRemovePosition,
+  useSetCashBalance,
+  useRemoveCashBalance,
 } from './use-portfolio.js';
 export { useRiskReport } from './use-risk.js';
 export { useAlerts, useDismissAlert, useOnAlert } from './use-alerts.js';

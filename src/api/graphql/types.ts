@@ -70,9 +70,20 @@ export interface Position {
   entryDate?: string;
 }
 
+/**
+ * Cash held on a platform in a specific currency. Keyed by (platform, currency).
+ * Amounts are stored and displayed in native currency — no FX conversion applied.
+ */
+export interface CashBalance {
+  platform: Platform;
+  currency: string;
+  amount: number;
+}
+
 export interface PortfolioSnapshot {
   id: string;
   positions: Position[];
+  cashBalances: CashBalance[];
   totalValue: number;
   totalCost: number;
   totalPnl: number;

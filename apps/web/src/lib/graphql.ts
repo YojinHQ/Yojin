@@ -26,6 +26,7 @@ const sseClient = createSSEClient({
 const cache = cacheExchange({
   keys: {
     Position: (data) => `${data.symbol as string}:${data.platform as string}`,
+    CashBalance: () => null, // embedded — nested under PortfolioSnapshot, keyed by (platform, currency)
     PortfolioHistoryPoint: () => null, // embedded — nested under PortfolioSnapshot
     SectorWeight: () => null,
     Concentration: () => null,
@@ -111,6 +112,12 @@ const cache = cacheExchange({
         cache.invalidate('Query', 'portfolio');
         cache.invalidate('Query', 'signals');
         cache.invalidate('Query', 'curatedSignals');
+      },
+      setCashBalance(_result, _args, cache) {
+        cache.invalidate('Query', 'portfolio');
+      },
+      removeCashBalance(_result, _args, cache) {
+        cache.invalidate('Query', 'portfolio');
       },
       processInsights(_result, _args, cache) {
         cache.invalidate('Query', 'signals');

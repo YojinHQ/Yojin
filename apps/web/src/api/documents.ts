@@ -52,6 +52,14 @@ export const ALERT_FIELDS = gql`
   }
 `;
 
+export const CASH_BALANCE_FIELDS = gql`
+  fragment CashBalanceFields on CashBalance {
+    platform
+    currency
+    amount
+  }
+`;
+
 // ---------------------------------------------------------------------------
 // Queries — Portfolio
 // ---------------------------------------------------------------------------
@@ -62,6 +70,9 @@ export const PORTFOLIO_QUERY = gql`
       id
       positions {
         ...PositionFields
+      }
+      cashBalances {
+        ...CashBalanceFields
       }
       totalValue
       totalCost
@@ -89,6 +100,7 @@ export const PORTFOLIO_QUERY = gql`
     }
   }
   ${POSITION_FIELDS}
+  ${CASH_BALANCE_FIELDS}
 `;
 
 // ---------------------------------------------------------------------------
@@ -593,6 +605,9 @@ export const REFRESH_POSITIONS_MUTATION = gql`
       positions {
         ...PositionFields
       }
+      cashBalances {
+        ...CashBalanceFields
+      }
       totalValue
       totalCost
       totalPnl
@@ -603,6 +618,7 @@ export const REFRESH_POSITIONS_MUTATION = gql`
     }
   }
   ${POSITION_FIELDS}
+  ${CASH_BALANCE_FIELDS}
 `;
 
 export const DISMISS_ALERT_MUTATION = gql`
@@ -621,6 +637,9 @@ export const ADD_MANUAL_POSITION_MUTATION = gql`
       positions {
         ...PositionFields
       }
+      cashBalances {
+        ...CashBalanceFields
+      }
       totalValue
       totalCost
       totalPnl
@@ -631,6 +650,7 @@ export const ADD_MANUAL_POSITION_MUTATION = gql`
     }
   }
   ${POSITION_FIELDS}
+  ${CASH_BALANCE_FIELDS}
 `;
 
 export const EDIT_POSITION_MUTATION = gql`
@@ -640,24 +660,8 @@ export const EDIT_POSITION_MUTATION = gql`
       positions {
         ...PositionFields
       }
-      totalValue
-      totalCost
-      totalPnl
-      totalPnlPercent
-      timestamp
-      platform
-      warnings
-    }
-  }
-  ${POSITION_FIELDS}
-`;
-
-export const REMOVE_POSITION_MUTATION = gql`
-  mutation RemovePosition($symbol: String!, $platform: String!) {
-    removePosition(symbol: $symbol, platform: $platform) {
-      id
-      positions {
-        ...PositionFields
+      cashBalances {
+        ...CashBalanceFields
       }
       totalValue
       totalCost
@@ -669,6 +673,76 @@ export const REMOVE_POSITION_MUTATION = gql`
     }
   }
   ${POSITION_FIELDS}
+  ${CASH_BALANCE_FIELDS}
+`;
+
+export const REMOVE_POSITION_MUTATION = gql`
+  mutation RemovePosition($symbol: String!, $platform: String!) {
+    removePosition(symbol: $symbol, platform: $platform) {
+      id
+      positions {
+        ...PositionFields
+      }
+      cashBalances {
+        ...CashBalanceFields
+      }
+      totalValue
+      totalCost
+      totalPnl
+      totalPnlPercent
+      timestamp
+      platform
+      warnings
+    }
+  }
+  ${POSITION_FIELDS}
+  ${CASH_BALANCE_FIELDS}
+`;
+
+export const SET_CASH_BALANCE_MUTATION = gql`
+  mutation SetCashBalance($platform: String!, $currency: String!, $amount: Float!) {
+    setCashBalance(platform: $platform, currency: $currency, amount: $amount) {
+      id
+      positions {
+        ...PositionFields
+      }
+      cashBalances {
+        ...CashBalanceFields
+      }
+      totalValue
+      totalCost
+      totalPnl
+      totalPnlPercent
+      timestamp
+      platform
+      warnings
+    }
+  }
+  ${POSITION_FIELDS}
+  ${CASH_BALANCE_FIELDS}
+`;
+
+export const REMOVE_CASH_BALANCE_MUTATION = gql`
+  mutation RemoveCashBalance($platform: String!, $currency: String!) {
+    removeCashBalance(platform: $platform, currency: $currency) {
+      id
+      positions {
+        ...PositionFields
+      }
+      cashBalances {
+        ...CashBalanceFields
+      }
+      totalValue
+      totalCost
+      totalPnl
+      totalPnlPercent
+      timestamp
+      platform
+      warnings
+    }
+  }
+  ${POSITION_FIELDS}
+  ${CASH_BALANCE_FIELDS}
 `;
 
 // ---------------------------------------------------------------------------
@@ -1305,6 +1379,9 @@ export const ON_PORTFOLIO_UPDATE_SUBSCRIPTION = gql`
       positions {
         ...PositionFields
       }
+      cashBalances {
+        ...CashBalanceFields
+      }
       totalValue
       totalCost
       totalPnl
@@ -1317,6 +1394,7 @@ export const ON_PORTFOLIO_UPDATE_SUBSCRIPTION = gql`
     }
   }
   ${POSITION_FIELDS}
+  ${CASH_BALANCE_FIELDS}
 `;
 
 export const ON_CONNECTION_STATUS_SUBSCRIPTION = gql`

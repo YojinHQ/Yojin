@@ -365,6 +365,116 @@ describe('PortfolioSnapshotStore', () => {
     });
   });
 
+  describe('cash balances', () => {
+    it('defaults to empty cashBalances on save', async () => {
+      const snap = await store.save({ positions: TEST_POSITIONS, platform: 'INTERACTIVE_BROKERS' });
+      expect(snap.cashBalances).toEqual([]);
+    });
+
+    it('setCashBalance upserts a (platform, currency) pair', async () => {
+      const snap = await store.setCashBalance({ platform: 'ROBINHOOD', currency: 'USD', amount: 1500 });
+      expect(snap.cashBalances).toHaveLength(1);
+      expect(snap.cashBalances[0]).toEqual({ platform: 'ROBINHOOD', currency: 'USD', amount: 1500 });
+    });
+
+    it('setCashBalance updates the existing entry for the same (platform, currency)', async () => {
+      await store.setCashBalance({ platform: 'ROBINHOOD', currency: 'USD', amount: 1500 });
+      const snap = await store.setCashBalance({ platform: 'ROBINHOOD', currency: 'USD', amount: 2500 });
+      expect(snap.cashBalances).toHaveLength(1);
+      expect(snap.cashBalances[0].amount).toBe(2500);
+    });
+
+    it('setCashBalance keeps entries for other platforms or currencies', async () => {
+      await store.setCashBalance({ platform: 'ROBINHOOD', currency: 'USD', amount: 1000 });
+      await store.setCashBalance({ platform: 'COINBASE', currency: 'USD', amount: 500 });
+      const snap = await store.setCashBalance({ platform: 'ROBINHOOD', currency: 'EUR', amount: 200 });
+
+      expect(snap.cashBalances).toHaveLength(3);
+      const keys = snap.cashBalances.map((b) => `${b.platform}|${b.currency}`).sort();
+      expect(keys).toEqual(['COINBASE|USD', 'ROBINHOOD|EUR', 'ROBINHOOD|USD']);
+    });
+
+    it('setCashBalance uppercases platform and currency', async () => {
+      const snap = await store.setCashBalance({ platform: 'robinhood', currency: 'usd', amount: 100 });
+      expect(snap.cashBalances[0].platform).toBe('ROBINHOOD');
+      expect(snap.cashBalances[0].currency).toBe('USD');
+    });
+
+    it('setCashBalance rejects negative amounts', async () => {
+      await expect(store.setCashBalance({ platform: 'ROBINHOOD', currency: 'USD', amount: -1 })).rejects.toThrow(
+        /non-negative/,
+      );
+    });
+
+    it('setCashBalance rejects non-finite amounts', async () => {
+      await expect(
+        store.setCashBalance({ platform: 'ROBINHOOD', currency: 'USD', amount: Number.NaN }),
+      ).rejects.toThrow(/non-negative/);
+    });
+
+    it('setCashBalance rejects non-ISO currency codes', async () => {
+      await expect(store.setCashBalance({ platform: 'ROBINHOOD', currency: 'DOLLARS', amount: 100 })).rejects.toThrow(
+        /3-letter ISO/,
+      );
+    });
+
+    it('removeCashBalance removes only the matching (platform, currency)', async () => {
+      await store.setCashBalance({ platform: 'ROBINHOOD', currency: 'USD', amount: 1000 });
+      await store.setCashBalance({ platform: 'COINBASE', currency: 'USD', amount: 500 });
+      const snap = await store.removeCashBalance({ platform: 'ROBINHOOD', currency: 'USD' });
+
+      expect(snap.cashBalances).toHaveLength(1);
+      expect(snap.cashBalances[0].platform).toBe('COINBASE');
+    });
+
+    it('removeCashBalance is a no-op for a missing key but still appends a snapshot', async () => {
+      await store.setCashBalance({ platform: 'ROBINHOOD', currency: 'USD', amount: 1000 });
+      const snap = await store.removeCashBalance({ platform: 'COINBASE', currency: 'USD' });
+      expect(snap.cashBalances).toHaveLength(1);
+    });
+
+    it('preserves positions when only cash changes', async () => {
+      await store.save({ positions: TEST_POSITIONS, platform: 'INTERACTIVE_BROKERS' });
+      const snap = await store.setCashBalance({ platform: 'ROBINHOOD', currency: 'USD', amount: 1500 });
+
+      expect(snap.positions).toHaveLength(2);
+      expect(snap.positions.map((p) => p.symbol).sort()).toEqual(['AAPL', 'BTC']);
+    });
+
+    it('preserves cash when positions are saved', async () => {
+      await store.setCashBalance({ platform: 'ROBINHOOD', currency: 'USD', amount: 1500 });
+      const snap = await store.save({ positions: TEST_POSITIONS, platform: 'INTERACTIVE_BROKERS' });
+
+      expect(snap.cashBalances).toHaveLength(1);
+      expect(snap.cashBalances[0].amount).toBe(1500);
+    });
+
+    it('getLatest back-fills cashBalances=[] for snapshots persisted before the field existed', async () => {
+      const { appendFile, mkdir } = await import('node:fs/promises');
+      const { join } = await import('node:path');
+      const path = join(tmpDir, 'snapshots', 'portfolio.jsonl');
+      await mkdir(join(tmpDir, 'snapshots'), { recursive: true });
+
+      const legacy = {
+        id: 'snap-legacy',
+        positions: [],
+        totalValue: 0,
+        totalCost: 0,
+        totalPnl: 0,
+        totalPnlPercent: 0,
+        totalDayChange: 0,
+        totalDayChangePercent: 0,
+        timestamp: '2026-04-01T12:00:00.000Z',
+        platform: null,
+      };
+      await appendFile(path, JSON.stringify(legacy) + '\n');
+
+      const latest = await store.getLatest();
+      expect(latest).not.toBeNull();
+      expect(latest!.cashBalances).toEqual([]);
+    });
+  });
+
   it('MANUAL same-symbol update preserves other platforms (simulates addManualPosition flow)', async () => {
     // Save ROBINHOOD position
     await store.save({

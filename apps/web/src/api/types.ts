@@ -146,9 +146,16 @@ export interface Position {
   entryDate: string | null;
 }
 
+export interface CashBalance {
+  platform: Platform;
+  currency: string;
+  amount: number;
+}
+
 export interface PortfolioSnapshot {
   id: string;
   positions: Position[];
+  cashBalances: CashBalance[];
   totalValue: number;
   totalCost: number;
   totalPnl: number;
@@ -1019,6 +1026,25 @@ export interface RemovePositionMutationResult {
 export interface RemovePositionVariables {
   symbol: string;
   platform: string;
+}
+
+export interface SetCashBalanceMutationResult {
+  setCashBalance: PortfolioSnapshot;
+}
+
+export interface SetCashBalanceVariables {
+  platform: string;
+  currency: string;
+  amount: number;
+}
+
+export interface RemoveCashBalanceMutationResult {
+  removeCashBalance: PortfolioSnapshot;
+}
+
+export interface RemoveCashBalanceVariables {
+  platform: string;
+  currency: string;
 }
 
 // ---------------------------------------------------------------------------

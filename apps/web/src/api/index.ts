@@ -5,6 +5,8 @@ export {
   useAddManualPosition,
   useEditPosition,
   useRemovePosition,
+  useSetCashBalance,
+  useRemoveCashBalance,
   useRiskReport,
   useAlerts,
   useDismissAlert,
@@ -29,6 +31,7 @@ export {
 export type {
   ManualPositionInput,
   Position,
+  CashBalance,
   PortfolioSnapshot,
   PortfolioHistoryPoint,
   SectorWeight,

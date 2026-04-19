@@ -109,7 +109,9 @@ import {
   portfolioSnapshotFieldResolvers,
   positionFieldResolvers,
   refreshPositionsMutation,
+  removeCashBalanceMutation,
   removePositionMutation,
+  setCashBalanceMutation,
 } from './resolvers/portfolio.js';
 import { clearAppDataMutation, deviceInfoResolver } from './resolvers/profile.js';
 import { tickerProfileQuery, tickerProfilesQuery } from './resolvers/profiles.js';
@@ -225,6 +227,8 @@ const schema = createSchema({
       addManualPosition: addManualPositionMutation,
       editPosition: editPositionMutation,
       removePosition: removePositionMutation,
+      setCashBalance: setCashBalanceMutation,
+      removeCashBalance: removeCashBalanceMutation,
       dismissAlert: dismissAlertMutation,
       sendMessage: sendMessageMutation,
       createSession: createSessionMutation,

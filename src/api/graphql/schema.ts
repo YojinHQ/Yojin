@@ -124,9 +124,20 @@ export const typeDefs = /* GraphQL */ `
     entryDate: String
   }
 
+  """
+  Cash held on a platform in a specific currency. Keyed by (platform, currency).
+  Amounts are reported in native currency; no FX conversion is applied yet.
+  """
+  type CashBalance {
+    platform: String!
+    currency: String!
+    amount: Float!
+  }
+
   type PortfolioSnapshot {
     id: ID!
     positions: [Position!]!
+    cashBalances: [CashBalance!]!
     totalValue: Float!
     totalCost: Float!
     totalPnl: Float!
@@ -1417,6 +1428,15 @@ export const typeDefs = /* GraphQL */ `
     addManualPosition(input: ManualPositionInput!): PortfolioSnapshot!
     editPosition(symbol: String!, platform: String!, input: ManualPositionInput!): PortfolioSnapshot!
     removePosition(symbol: String!, platform: String!): PortfolioSnapshot!
+    """
+    Upsert a cash balance for (platform, currency). Amount must be >= 0.
+    Currency is a 3-letter ISO 4217 code (e.g. USD, ILS, EUR).
+    """
+    setCashBalance(platform: String!, currency: String!, amount: Float!): PortfolioSnapshot!
+    """
+    Remove the cash balance for (platform, currency). No-op if missing.
+    """
+    removeCashBalance(platform: String!, currency: String!): PortfolioSnapshot!
     dismissAlert(id: ID!): Alert!
     dismissSignal(signalId: ID!): Boolean!
     batchDismissSignals(signalIds: [ID!]!): Boolean!

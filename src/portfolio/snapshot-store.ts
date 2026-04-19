@@ -14,7 +14,7 @@ import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { Platform, PortfolioSnapshot, Position } from '../api/graphql/types.js';
+import type { CashBalance, Platform, PortfolioSnapshot, Position } from '../api/graphql/types.js';
 import { createSubsystemLogger } from '../logging/logger.js';
 
 const logger = createSubsystemLogger('snapshot-store');
@@ -23,6 +23,29 @@ export interface SaveSnapshotParams {
   positions: Position[];
   platform: Platform;
   existingSnapshot?: PortfolioSnapshot | null;
+}
+
+export interface SetCashBalanceParams {
+  platform: Platform;
+  currency: string;
+  amount: number;
+}
+
+export interface RemoveCashBalanceParams {
+  platform: Platform;
+  currency: string;
+}
+
+/**
+ * Backfill `cashBalances: []` on snapshots persisted before the field existed.
+ * JSONL is append-only, so callers must tolerate older records.
+ */
+function withCashDefault(snap: PortfolioSnapshot): PortfolioSnapshot {
+  return snap.cashBalances ? snap : { ...snap, cashBalances: [] };
+}
+
+function cashKey(b: Pick<CashBalance, 'platform' | 'currency'>): string {
+  return `${String(b.platform).toUpperCase()}|${b.currency.toUpperCase()}`;
 }
 
 export class PortfolioSnapshotStore {
@@ -63,6 +86,7 @@ export class PortfolioSnapshotStore {
     const snapshot: PortfolioSnapshot = {
       id: `snap-${randomUUID().slice(0, 8)}`,
       positions: merged,
+      cashBalances: existing?.cashBalances ?? [],
       totalValue,
       totalCost,
       totalPnl,
@@ -84,6 +108,77 @@ export class PortfolioSnapshotStore {
     return snapshot;
   }
 
+  /**
+   * Upsert a cash balance for (platform, currency) and append a new snapshot
+   * preserving all positions and other cash balances. Amounts must be non-negative.
+   */
+  async setCashBalance(params: SetCashBalanceParams): Promise<PortfolioSnapshot> {
+    if (!Number.isFinite(params.amount) || params.amount < 0) {
+      throw new Error(`setCashBalance: amount must be a non-negative number (got ${params.amount})`);
+    }
+    const currency = params.currency.toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) {
+      throw new Error(`setCashBalance: currency must be a 3-letter ISO code (got "${params.currency}")`);
+    }
+    const platform = String(params.platform).toUpperCase();
+    const key = cashKey({ platform, currency });
+
+    const existing = (await this.getLatest()) ?? null;
+    const prevBalances = existing?.cashBalances ?? [];
+    const nextBalance: CashBalance = { platform, currency, amount: params.amount };
+    const keptBalances = prevBalances.filter((b) => cashKey(b) !== key);
+    const nextBalances = [...keptBalances, nextBalance];
+
+    return this.appendCashSnapshot(existing, nextBalances, `Cash balance set: ${platform} ${currency}`);
+  }
+
+  /**
+   * Remove a cash balance for (platform, currency) and append a new snapshot.
+   * Missing keys are a no-op — still appends a snapshot so the UI refreshes.
+   */
+  async removeCashBalance(params: RemoveCashBalanceParams): Promise<PortfolioSnapshot> {
+    const currency = params.currency.toUpperCase();
+    const platform = String(params.platform).toUpperCase();
+    const key = cashKey({ platform, currency });
+
+    const existing = (await this.getLatest()) ?? null;
+    const prevBalances = existing?.cashBalances ?? [];
+    const nextBalances = prevBalances.filter((b) => cashKey(b) !== key);
+
+    return this.appendCashSnapshot(existing, nextBalances, `Cash balance removed: ${platform} ${currency}`);
+  }
+
+  private async appendCashSnapshot(
+    existing: PortfolioSnapshot | null,
+    cashBalances: CashBalance[],
+    logMessage: string,
+  ): Promise<PortfolioSnapshot> {
+    await mkdir(join(this.filePath, '..'), { recursive: true });
+
+    const positions = existing?.positions ?? [];
+    const totalValue = positions.reduce((sum, p) => sum + p.marketValue, 0);
+    const totalCost = positions.reduce((sum, p) => sum + p.costBasis * p.quantity, 0);
+    const totalPnl = totalValue - totalCost;
+
+    const snapshot: PortfolioSnapshot = {
+      id: `snap-${randomUUID().slice(0, 8)}`,
+      positions,
+      cashBalances,
+      totalValue,
+      totalCost,
+      totalPnl,
+      totalPnlPercent: totalCost > 0 ? (totalPnl / totalCost) * 100 : 0,
+      totalDayChange: 0,
+      totalDayChangePercent: 0,
+      timestamp: new Date().toISOString(),
+      platform: null,
+    };
+
+    await appendFile(this.filePath, JSON.stringify(snapshot) + '\n');
+    logger.info(logMessage, { id: snapshot.id, cashEntries: cashBalances.length });
+    return snapshot;
+  }
+
   /** Retrieve a specific snapshot by ID. Scans the JSONL from the end for efficiency. */
   async getById(snapshotId: string): Promise<PortfolioSnapshot | null> {
     let content: string;
@@ -98,7 +193,7 @@ export class PortfolioSnapshotStore {
     for (let i = lines.length - 1; i >= 0; i--) {
       try {
         const snap = JSON.parse(lines[i]) as PortfolioSnapshot;
-        if (snap.id === snapshotId) return snap;
+        if (snap.id === snapshotId) return withCashDefault(snap);
       } catch {
         continue;
       }
@@ -119,7 +214,7 @@ export class PortfolioSnapshotStore {
     if (lines.length === 0) return null;
 
     try {
-      return JSON.parse(lines[lines.length - 1]) as PortfolioSnapshot;
+      return withCashDefault(JSON.parse(lines[lines.length - 1]) as PortfolioSnapshot);
     } catch {
       logger.warn('Failed to parse latest snapshot line');
       return null;

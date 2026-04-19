@@ -4,6 +4,7 @@ import EmptyState from '../components/common/empty-state';
 import Button from '../components/common/button';
 import PortfolioStats from '../components/portfolio/portfolio-stats';
 import PositionTable from '../components/portfolio/position-table';
+import CashBalancesCard from '../components/portfolio/cash-balances-card';
 import { PageBlurGate } from '../components/common/page-blur-gate';
 import { useAddPositionModal } from '../lib/add-position-modal-context';
 import { cn } from '../lib/utils';
@@ -22,6 +23,7 @@ function PositionsContent() {
 
   const portfolio = portfolioData?.portfolio ?? null;
   const positions = portfolio?.positions ?? [];
+  const cashBalances = portfolio?.cashBalances ?? [];
 
   if (fetching) {
     return (
@@ -37,6 +39,9 @@ function PositionsContent() {
       <div className="flex-1 p-6">
         <PortfolioStats portfolio={portfolio} />
         <div className="mt-6">
+          <CashBalancesCard cashBalances={cashBalances} />
+        </div>
+        <div className="mt-6">
           <EmptyState title="Failed to load portfolio" description={error.message} />
         </div>
       </div>
@@ -47,6 +52,9 @@ function PositionsContent() {
     return (
       <div className="flex-1 p-6">
         <PortfolioStats portfolio={portfolio} />
+        <div className="mt-6">
+          <CashBalancesCard cashBalances={cashBalances} />
+        </div>
         <div className="mt-6">
           <EmptyState
             icon={
@@ -73,8 +81,11 @@ function PositionsContent() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden p-6 max-w-5xl mx-auto">
-      <div className="shrink-0 pb-6">
+      <div className="shrink-0 pb-4">
         <PortfolioStats portfolio={portfolio} />
+      </div>
+      <div className="shrink-0 pb-4">
+        <CashBalancesCard cashBalances={cashBalances} />
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         <PositionTable positions={positions} onAdd={openAddPosition} />

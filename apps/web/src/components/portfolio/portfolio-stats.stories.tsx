@@ -75,6 +75,7 @@ const mockPortfolio: PortfolioSnapshot = {
   warnings: [],
   history: [],
   sectorExposure: [],
+  cashBalances: [],
 };
 
 export const Default: Story = {
