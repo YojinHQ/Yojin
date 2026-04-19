@@ -18,6 +18,7 @@ import {
   type AnonymizerConfig,
   type EncryptedPIIMap,
   InMemoryKeyProvider,
+  PIIType,
   createAnonymizer,
   decryptPIIMap,
   generateKey,
@@ -25,6 +26,26 @@ import {
 } from 'rehydra';
 
 import type { AuditLog } from '../audit/types.js';
+
+/**
+ * PII categories we actually want to strip before sending chat text to the LLM.
+ *
+ * We deliberately exclude URL, IP_ADDRESS, DATE, CASE_ID, CUSTOMER_ID, and every
+ * NER-only soft category (PERSON, ORG, LOCATION, ADDRESS, DATE_OF_BIRTH). Those
+ * mangle public-market content — e.g. "Amazon.com" gets caught by URL, dates
+ * inside news bodies get pseudonymized, and the LLM can no longer reason about
+ * the text. Only truly sensitive high-confidence identifiers stay.
+ */
+const CHAT_ENABLED_PII_TYPES: readonly PIIType[] = [
+  PIIType.EMAIL,
+  PIIType.PHONE,
+  PIIType.IBAN,
+  PIIType.BIC_SWIFT,
+  PIIType.ACCOUNT_NUMBER,
+  PIIType.CREDIT_CARD,
+  PIIType.TAX_ID,
+  PIIType.NATIONAL_ID,
+];
 
 export interface ChatPiiScannerOptions {
   auditLog: AuditLog;
@@ -59,10 +80,18 @@ export class ChatPiiScanner {
 
     const keyProvider = new InMemoryKeyProvider(this.encryptionKey);
 
+    const enabledTypes = new Set<PIIType>(CHAT_ENABLED_PII_TYPES);
+    const regexEnabledTypes = new Set<PIIType>(CHAT_ENABLED_PII_TYPES);
+
     const config: AnonymizerConfig = {
       mode: 'pseudonymize',
       keyProvider,
       ner: options.enableNer ? { mode: options.nerMode ?? 'quantized' } : { mode: 'disabled' },
+      defaultPolicy: {
+        enabledTypes,
+        regexEnabledTypes,
+        nerEnabledTypes: new Set<PIIType>(),
+      },
     };
 
     this.anonymizer = createAnonymizer(config);

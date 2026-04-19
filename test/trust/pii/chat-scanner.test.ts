@@ -53,11 +53,16 @@ describe('ChatPiiScanner', () => {
     expect(result.typesFound).toContain('CREDIT_CARD');
   });
 
-  it('masks IP addresses', async () => {
+  it('does not mask IP addresses (passes through non-sensitive technical content)', async () => {
     const result = await scanner.scrub('Server is at 192.168.1.100');
-    expect(result.sanitized).not.toContain('192.168.1.100');
-    expect(result.entitiesFound).toBeGreaterThanOrEqual(1);
-    expect(result.typesFound).toContain('IP_ADDRESS');
+    expect(result.sanitized).toBe('Server is at 192.168.1.100');
+    expect(result.entitiesFound).toBe(0);
+  });
+
+  it('does not mask URLs (public-market content like Amazon.com must reach the LLM intact)', async () => {
+    const result = await scanner.scrub('Amazon.com announced a partnership with OpenAI');
+    expect(result.sanitized).toBe('Amazon.com announced a partnership with OpenAI');
+    expect(result.entitiesFound).toBe(0);
   });
 
   it('restores PII in LLM response', async () => {
