@@ -1717,14 +1717,32 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       since: z.string().optional().describe('ISO timestamp — only return holdings from filings after this date'),
       until: z.string().optional().describe('ISO timestamp — only return holdings from filings before this date'),
       limit: z.number().int().min(1).max(200).optional().describe('Max holdings to return (default: all)'),
+      offset: z.number().int().nonnegative().optional().describe('Rows to skip for pagination (default 0)'),
+      minValue: z
+        .number()
+        .positive()
+        .optional()
+        .describe('Only include holdings with position value >= this amount (thousands of USD)'),
+      cusip: z.string().optional().describe('Filter to a single CUSIP — useful to track one security across filers'),
     }),
-    async execute(params: { cik: string; since?: string; until?: string; limit?: number }): Promise<ToolResult> {
+    async execute(params: {
+      cik: string;
+      since?: string;
+      until?: string;
+      limit?: number;
+      offset?: number;
+      minValue?: number;
+      cusip?: string;
+    }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
-      const filter: { since?: string; until?: string; limit?: number; sort?: 'ASC' | 'DESC' } = { sort: 'DESC' };
+      const filter: NonNullable<EnrichOptions['institutionalHoldingsFilter']> = { sort: 'DESC' };
       if (params.since) filter.since = params.since;
       if (params.until) filter.until = params.until;
       if (params.limit) filter.limit = params.limit;
+      if (params.offset != null) filter.offset = params.offset;
+      if (params.minValue != null) filter.minValue = params.minValue;
+      if (params.cusip) filter.cusip = params.cusip;
       const result = await safeCall(() => client.institutionalHoldings(params.cik, filter));
       if (!result.ok) return result.toolResult;
       const handled = handleResult(result.data);
@@ -1908,17 +1926,47 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       'markets, event probabilities, or market-implied odds for a specific asset.',
     parameters: z.object({
       ticker: z.string().min(1).describe('Ticker symbol (e.g. AAPL, BTC)'),
+      since: z.string().optional().describe('ISO date — only include events created on/after this date'),
+      until: z.string().optional().describe('ISO date — only include events created on/before this date'),
+      limit: z.number().int().min(1).max(100).optional().describe('Max events to return (default 20)'),
+      offset: z.number().int().nonnegative().optional().describe('Rows to skip for pagination (default 0)'),
+      minVolume24hr: z
+        .number()
+        .nonnegative()
+        .optional()
+        .describe('Only include events with 24-hour USD volume >= this amount'),
+      minLiquidity: z.number().nonnegative().optional().describe('Only include events with liquidity >= this amount'),
+      onlyOpen: z
+        .boolean()
+        .optional()
+        .describe('If true, exclude resolved events — only return events with unresolved outcomes'),
     }),
-    async execute(params: { ticker: string }): Promise<ToolResult> {
+    async execute(params: {
+      ticker: string;
+      since?: string;
+      until?: string;
+      limit?: number;
+      offset?: number;
+      minVolume24hr?: number;
+      minLiquidity?: number;
+      onlyOpen?: boolean;
+    }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
+      const predictionsFilter: NonNullable<EnrichOptions['predictionsFilter']> = { sort: 'DESC' };
+      if (params.since) predictionsFilter.since = params.since;
+      if (params.until) predictionsFilter.until = params.until;
+      if (params.limit) predictionsFilter.limit = params.limit;
+      if (params.offset != null) predictionsFilter.offset = params.offset;
+      if (params.minVolume24hr != null) predictionsFilter.minVolume24hr = params.minVolume24hr;
+      if (params.minLiquidity != null) predictionsFilter.minLiquidity = params.minLiquidity;
+      if (params.onlyOpen != null) predictionsFilter.onlyOpen = params.onlyOpen;
+      const query = buildEnrichQuery(['predictions'] as EnrichmentField[], { predictionsFilter });
       const result = await safeCall(() =>
-        client.enrichEntity(params.ticker.toUpperCase(), ['predictions'] as EnrichmentField[]),
+        client.request<Entity>(query, { id: params.ticker.toUpperCase(), predictionsFilter }),
       );
       if (!result.ok) return result.toolResult;
-      const handled = handleResult(result.data);
-      if (!handled.ok) return handled.toolResult;
-      const entity = handled.data as Entity;
+      const entity = result.data;
       if (!entity.predictions?.length) {
         return { content: `No prediction markets found for ${params.ticker}.` };
       }
@@ -1941,15 +1989,38 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         .string()
         .optional()
         .describe('ISO timestamp — only return stories published after this date (e.g. "2026-04-01T00:00:00Z")'),
+      until: z.string().optional().describe('ISO timestamp — only return stories published before this date'),
       limit: z.number().int().min(1).max(50).optional().describe('Max stories to return (default 20)'),
+      offset: z.number().int().nonnegative().optional().describe('Rows to skip for pagination (default 0)'),
+      minPoints: z.number().int().nonnegative().optional().describe('Only include stories with points >= this value'),
+      minComments: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .describe('Only include stories with comment count >= this value'),
     }),
-    async execute(params: { ticker: string; since?: string; limit?: number }): Promise<ToolResult> {
+    async execute(params: {
+      ticker: string;
+      since?: string;
+      until?: string;
+      limit?: number;
+      offset?: number;
+      minPoints?: number;
+      minComments?: number;
+    }): Promise<ToolResult> {
       if (!options.client) return notConfigured();
       const client = options.client;
-      const { opts, vars } = buildFilter(params.since, params.limit);
-      const query = buildEnrichQuery(['discussions'] as EnrichmentField[], opts);
+      const discussionsFilter: NonNullable<EnrichOptions['discussionsFilter']> = { sort: 'DESC' };
+      if (params.since) discussionsFilter.since = params.since;
+      if (params.until) discussionsFilter.until = params.until;
+      if (params.limit) discussionsFilter.limit = params.limit;
+      if (params.offset != null) discussionsFilter.offset = params.offset;
+      if (params.minPoints != null) discussionsFilter.minPoints = params.minPoints;
+      if (params.minComments != null) discussionsFilter.minComments = params.minComments;
+      const query = buildEnrichQuery(['discussions'] as EnrichmentField[], { discussionsFilter });
       const result = await safeCall(() =>
-        client.request<Entity>(query, { id: params.ticker.toUpperCase(), filter: vars }),
+        client.request<Entity>(query, { id: params.ticker.toUpperCase(), discussionsFilter }),
       );
       if (!result.ok) return result.toolResult;
       const entity = result.data;

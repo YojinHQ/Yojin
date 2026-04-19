@@ -819,7 +819,10 @@ const BATCH_ENRICH_DEFAULT_FIELDS: EnrichmentField[] = [
   // triggers only ask for extras beyond this baseline.
   'analyst',
 ];
-const BATCH_ENRICH_OPTS: EnrichOptions = { topHoldersFilter: { limit: 10, sort: 'DESC' } };
+const BATCH_ENRICH_OPTS: EnrichOptions = {
+  topHoldersFilter: { limit: 10, sort: 'DESC' },
+  institutionalHoldingsFilter: { limit: 10, sort: 'DESC' },
+};
 
 // Query strings are stable per field-set. Cache to avoid rebuilding on every micro tick.
 const enrichQueryCache = new Map<string, string>();
@@ -856,6 +859,7 @@ async function batchEnrichAllChunked(
       const data = await client.request<Entity[]>(query, {
         tickers: chunk,
         topHoldersFilter: BATCH_ENRICH_OPTS.topHoldersFilter,
+        institutionalHoldingsFilter: BATCH_ENRICH_OPTS.institutionalHoldingsFilter,
       });
 
       // Build a case-insensitive lookup: entity ticker → entity

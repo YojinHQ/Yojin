@@ -27,8 +27,8 @@ importers:
         specifier: 7.0.0-rc.9
         version: 7.0.0-rc.9(sharp@0.34.5)
       '@yojinhq/jintel-client':
-        specifier: 0.21.0
-        version: 0.21.0
+        specifier: 0.22.0
+        version: 0.22.0
       dotenv:
         specifier: 17.3.1
         version: 17.3.1
@@ -1837,8 +1837,8 @@ packages:
     resolution: {tarball: https://codeload.github.com/whiskeysockets/libsignal-node/tar.gz/1c30d7d7e76a3b0aa120b04dc6a26f5a12dccf67}
     version: 2.0.1
 
-  '@yojinhq/jintel-client@0.21.0':
-    resolution: {integrity: sha512-5EKavk1NeQEd4BmnM1ltTgwm+bVvP4SuJWtbpbHu2puTmbNSjCrkriXn4MWrfUVU2E7B8PTJDge+HfwSU/QNog==}
+  '@yojinhq/jintel-client@0.22.0':
+    resolution: {integrity: sha512-LJb8666w+U7b1ATsO7W3v77CMEDe0T6njwbP4k5VVQSDMIGRvfy/4Ln5+Xx6mqAQTB+buYP1A1ir+0dTE8/Bzg==}
     engines: {node: '>=20.0.0'}
 
   abort-controller@3.0.0:
@@ -5642,7 +5642,7 @@ snapshots:
       curve25519-js: 0.0.4
       protobufjs: 6.8.8
 
-  '@yojinhq/jintel-client@0.21.0':
+  '@yojinhq/jintel-client@0.22.0':
     dependencies:
       zod: 3.25.76
 
