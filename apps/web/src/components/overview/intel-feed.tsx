@@ -30,7 +30,7 @@ import type { FeedDetailData } from './feed-detail-modal';
 import Spinner from '../common/spinner';
 import { SymbolLogo } from '../common/symbol-logo';
 
-type ItemType = 'alert' | 'insight' | 'action' | 'data';
+type ItemType = 'alert' | 'insight' | 'action';
 type FilterTab = 'all' | 'alerts' | 'insights' | 'actions';
 type IconName = 'rebalance' | 'dollar' | 'box' | 'warehouse' | 'clock' | 'trending' | 'bubble' | 'trending-up' | 'zap';
 
@@ -108,28 +108,23 @@ const signalTypeIcon: Record<string, IconName> = {
   ACTION: 'zap',
 };
 
-/** Promote higher-severity items into the alerts lane.
- * Only CRITICAL signals qualify as alerts — HIGH and below remain visible as
- * insights but don't clutter the alerts tab.
- *
- * Signals sourced purely from Jintel ENRICHMENT (ownership breakdowns, fundamentals
- * snapshots, technicals readings) are raw data points, not synthesized insights, so
- * they classify as 'data' and stay out of the Insights tab. */
-function classifySignal(signal: {
-  severity: IntelFeedItem['severity'];
-  sources?: { type?: string | null }[];
-}): ItemType {
-  if (signal.severity === 'CRITICAL') return 'alert';
-  const sources = signal.sources ?? [];
-  if (sources.length > 0 && sources.every((s) => s.type === 'ENRICHMENT')) return 'data';
-  return 'insight';
+/** Only CRITICAL signals qualify as alerts — HIGH and below render as insights. */
+function classifySignal(severity: IntelFeedItem['severity']): 'alert' | 'insight' {
+  return severity === 'CRITICAL' ? 'alert' : 'insight';
+}
+
+/** Signals sourced purely from Jintel ENRICHMENT (ownership breakdowns, fundamentals
+ * snapshots, technicals readings) are raw data points, not synthesized intel, and
+ * must not surface in the Intel Feed — only Alerts, Insights, and Actions belong here. */
+function isEnrichmentOnly(sources?: { type?: string | null }[] | null): boolean {
+  const s = sources ?? [];
+  return s.length > 0 && s.every((x) => x.type === 'ENRICHMENT');
 }
 
 const categoryLabel: Record<ItemType, string> = {
   alert: 'ALERT',
   insight: 'INSIGHT',
   action: 'ACTION',
-  data: 'DATA',
 };
 
 const filterTabs: { key: FilterTab; label: string }[] = [
@@ -669,54 +664,56 @@ function IntelFeedContent({
 
   // Map API data into IntelFeedItem[]
   const items: IntelFeedItem[] = useMemo(() => {
-    const signalItems: IntelFeedItem[] = (data?.curatedSignals ?? []).map((cs) => {
-      const s = cs.signal;
-      const severity = cs.severity ?? 'LOW';
-      const itemType = classifySignal({ severity, sources: s.sources });
-      const topScore =
-        cs.scores.length > 0
-          ? cs.scores.reduce((best, sc) => (sc.compositeScore > best.compositeScore ? sc : best), cs.scores[0])
-          : null;
-      const sourceName = s.sources?.[0]?.name;
-      const ticker = topScore?.ticker ?? s.tickers[0] ?? 'MACRO';
-      const headline = s.tier1 ?? s.title;
-      const shortSummary = s.tier2 && s.tier2 !== headline ? s.tier2 : null;
-      const fullDetail = s.content && s.content !== headline ? s.content : (shortSummary ?? '');
-      return {
-        id: s.id,
-        type: itemType,
-        severity,
-        signalType: s.type,
-        ticker,
-        tickers: s.tickers,
-        sentiment: s.sentiment ?? null,
-        title: headline,
-        time: timeAgo(s.ingestedAt),
-        publishedAt: s.publishedAt,
-        ingestedAt: s.ingestedAt,
-        publishedTime: timeAgo(s.publishedAt),
-        icon: signalTypeIcon[s.type] ?? 'trending',
-        summary: shortSummary,
-        description: fullDetail,
-        source: sourceName ?? null,
-        link: s.link ?? null,
-        data:
-          s.tickers.length > 0
-            ? [
-                { label: 'Confidence', value: `${Math.round(s.confidence * 100)}%`, highlight: s.confidence >= 0.8 },
-                ...(topScore
-                  ? [
-                      {
-                        label: 'Relevance',
-                        value: `${Math.round(topScore.compositeScore * 100)}%`,
-                        highlight: topScore.compositeScore >= 0.6,
-                      },
-                    ]
-                  : []),
-              ]
-            : undefined,
-      };
-    });
+    const signalItems: IntelFeedItem[] = (data?.curatedSignals ?? [])
+      .filter((cs) => !isEnrichmentOnly(cs.signal.sources))
+      .map((cs) => {
+        const s = cs.signal;
+        const severity = cs.severity ?? 'LOW';
+        const itemType = classifySignal(severity);
+        const topScore =
+          cs.scores.length > 0
+            ? cs.scores.reduce((best, sc) => (sc.compositeScore > best.compositeScore ? sc : best), cs.scores[0])
+            : null;
+        const sourceName = s.sources?.[0]?.name;
+        const ticker = topScore?.ticker ?? s.tickers[0] ?? 'MACRO';
+        const headline = s.tier1 ?? s.title;
+        const shortSummary = s.tier2 && s.tier2 !== headline ? s.tier2 : null;
+        const fullDetail = s.content && s.content !== headline ? s.content : (shortSummary ?? '');
+        return {
+          id: s.id,
+          type: itemType,
+          severity,
+          signalType: s.type,
+          ticker,
+          tickers: s.tickers,
+          sentiment: s.sentiment ?? null,
+          title: headline,
+          time: timeAgo(s.ingestedAt),
+          publishedAt: s.publishedAt,
+          ingestedAt: s.ingestedAt,
+          publishedTime: timeAgo(s.publishedAt),
+          icon: signalTypeIcon[s.type] ?? 'trending',
+          summary: shortSummary,
+          description: fullDetail,
+          source: sourceName ?? null,
+          link: s.link ?? null,
+          data:
+            s.tickers.length > 0
+              ? [
+                  { label: 'Confidence', value: `${Math.round(s.confidence * 100)}%`, highlight: s.confidence >= 0.8 },
+                  ...(topScore
+                    ? [
+                        {
+                          label: 'Relevance',
+                          value: `${Math.round(topScore.compositeScore * 100)}%`,
+                          highlight: topScore.compositeScore >= 0.6,
+                        },
+                      ]
+                    : []),
+                ]
+              : undefined,
+        };
+      });
 
     const actionItems: IntelFeedItem[] = (actionsData?.actions ?? []).map((action) => ({
       id: `action:${action.id}`,
