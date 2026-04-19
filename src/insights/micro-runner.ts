@@ -80,22 +80,28 @@ export async function runMicroResearch(
     logger.warn('Could not build brief — no snapshot', { symbol: ticker });
     return { insight: null, signalsIngested, durationMs: Date.now() - start };
   }
-  const { brief, signals: curatedSignals } = enriched;
+  let { brief } = enriched;
+  const { signals: curatedSignals } = enriched;
   let entity = enriched.entity;
 
   // 2a. Progressive enrichment — evaluate Phase-1 triggers and, if any fire with
-  //     extra fields, fetch those sub-graphs and merge them onto the base entity.
-  //     Trigger reasons are forwarded to the LLM as focus hints.
+  //     extra fields, fetch those sub-graphs, merge them onto the base entity,
+  //     and rebuild the brief so the analyzer actually sees the fetched fields.
+  //     Trigger reasons are also forwarded to the LLM as focus hints.
   const hits: TriggerHit[] = evaluateTriggers(brief, entity);
   const extras = unionFields(hits);
   if (extras.length > 0 && jintelClient) {
     const before = entity;
     entity = await fetchAndMergeEntityExtras(jintelClient, ticker, entity, extras);
+    const merged = entity !== before;
+    if (merged) {
+      brief = enriched.rebuildWithEntity(entity);
+    }
     logger.info('Tier-1 enrichment fetched', {
       symbol: ticker,
       triggers: hits.map((h) => h.id),
       extras,
-      merged: entity !== before,
+      merged,
     });
   } else if (hits.length > 0) {
     logger.debug('Triggers fired (focus-only, no extra fetch)', {

@@ -92,6 +92,74 @@ export interface DataBrief {
   earningsPressRelease: EarningsPressReleaseBrief | null;
   // Ticker profile (per-asset institutional knowledge)
   profile: TickerProfileBrief | null;
+  // --- Tier-1 progressive-enrichment sub-graphs (populated when triggers fire) ---
+  // Analyst consensus (Tier-0 default so T4 can fire, but displayed alongside Tier-1 data).
+  analyst?: AnalystBrief | null;
+  // Earnings history — used when T1 (earnings soon) or T2 (surprise) fires.
+  earningsHistory?: EarningsReportBrief[];
+  // Income-statement snapshot (latest period) — fetched by T2 as `financials`.
+  financialsSnap?: FinancialsSnapBrief | null;
+  // Segmented revenue (top segments for latest period) — fetched by T2.
+  segmentedRevenue?: SegmentedRevenueBrief[];
+  // Most-recent periodic filing with section excerpts — fetched by T6.
+  periodicFilings?: PeriodicFilingBrief[];
+  // Futures & options summary — fetched by T5 (price shock) and T8 (short squeeze).
+  derivatives?: DerivativesBrief | null;
+}
+
+interface AnalystBrief {
+  targetMean: number | null;
+  targetHigh: number | null;
+  targetLow: number | null;
+  recommendation: string | null;
+  numberOfAnalysts: number | null;
+}
+
+interface EarningsReportBrief {
+  period: string;
+  reportDate: string;
+  epsActual: number | null;
+  epsEstimate: number | null;
+  epsSurprisePercent: number | null;
+  revenueActual: number | null;
+  revenueEstimate: number | null;
+  revenueSurprisePercent: number | null;
+}
+
+interface FinancialsSnapBrief {
+  periodEnding: string;
+  periodType: string | null;
+  totalRevenue: number | null;
+  grossProfit: number | null;
+  operatingIncome: number | null;
+  netIncome: number | null;
+  ebitda: number | null;
+  dilutedEps: number | null;
+  freeCashFlow: number | null;
+  totalDebt: number | null;
+  cashAndEquivalents: number | null;
+}
+
+interface SegmentedRevenueBrief {
+  reportDate: string;
+  dimension: string;
+  segment: string;
+  value: number;
+}
+
+interface PeriodicFilingBrief {
+  form: string;
+  filingDate: string;
+  reportDate: string;
+  sections: Array<{ item: string; title: string; excerpt: string }>;
+}
+
+interface DerivativesBrief {
+  futuresCount: number;
+  nearestFuture: { expiration: string; price: number | null } | null;
+  optionsCount: number;
+  nearestOptionExpiration: string | null;
+  sampleImpliedVolatility: number | null;
 }
 
 interface FilingBrief {
@@ -509,6 +577,99 @@ export function formatBriefsForContext(briefs: DataBrief[]): string {
       if (er.excerpt) lines.push(`  ${er.excerpt.slice(0, 300)}`);
     }
 
+    // Analyst consensus (Tier-0 default)
+    if (b.analyst) {
+      const a = b.analyst;
+      const parts: string[] = [];
+      if (a.targetMean != null) parts.push(`PT mean: $${a.targetMean.toFixed(2)}`);
+      if (a.targetLow != null && a.targetHigh != null)
+        parts.push(`range $${a.targetLow.toFixed(2)}–$${a.targetHigh.toFixed(2)}`);
+      if (a.recommendation) parts.push(`rec: ${a.recommendation}`);
+      if (a.numberOfAnalysts != null) parts.push(`n=${a.numberOfAnalysts}`);
+      if (parts.length > 0) lines.push(`Analyst: ${parts.join(' | ')}`);
+    }
+
+    // Earnings history (Tier-1 via T1/T2)
+    if (b.earningsHistory && b.earningsHistory.length > 0) {
+      lines.push(`Earnings history:`);
+      for (const e of b.earningsHistory.slice(0, 3)) {
+        const eps =
+          e.epsActual != null
+            ? `EPS ${e.epsActual.toFixed(2)}${e.epsEstimate != null ? ` vs est ${e.epsEstimate.toFixed(2)}` : ''}`
+            : null;
+        const epsSurp =
+          e.epsSurprisePercent != null
+            ? ` (${e.epsSurprisePercent > 0 ? '+' : ''}${e.epsSurprisePercent.toFixed(1)}%)`
+            : '';
+        const rev =
+          e.revenueActual != null
+            ? `Rev $${formatLargeNumber(e.revenueActual)}${e.revenueEstimate != null ? ` vs est $${formatLargeNumber(e.revenueEstimate)}` : ''}`
+            : null;
+        const revSurp =
+          e.revenueSurprisePercent != null
+            ? ` (${e.revenueSurprisePercent > 0 ? '+' : ''}${e.revenueSurprisePercent.toFixed(1)}%)`
+            : '';
+        const parts = [eps ? `${eps}${epsSurp}` : null, rev ? `${rev}${revSurp}` : null].filter(Boolean);
+        lines.push(`  - ${e.period} (${e.reportDate}): ${parts.join(' | ')}`);
+      }
+    }
+
+    // Financials snapshot (Tier-1 via T2)
+    if (b.financialsSnap) {
+      const f = b.financialsSnap;
+      const parts: string[] = [];
+      if (f.totalRevenue != null) parts.push(`Rev $${formatLargeNumber(f.totalRevenue)}`);
+      if (f.grossProfit != null) parts.push(`GP $${formatLargeNumber(f.grossProfit)}`);
+      if (f.operatingIncome != null) parts.push(`OpInc $${formatLargeNumber(f.operatingIncome)}`);
+      if (f.netIncome != null) parts.push(`NetInc $${formatLargeNumber(f.netIncome)}`);
+      if (f.ebitda != null) parts.push(`EBITDA $${formatLargeNumber(f.ebitda)}`);
+      if (f.dilutedEps != null) parts.push(`dEPS ${f.dilutedEps.toFixed(2)}`);
+      if (f.freeCashFlow != null) parts.push(`FCF $${formatLargeNumber(f.freeCashFlow)}`);
+      if (f.totalDebt != null) parts.push(`Debt $${formatLargeNumber(f.totalDebt)}`);
+      if (f.cashAndEquivalents != null) parts.push(`Cash $${formatLargeNumber(f.cashAndEquivalents)}`);
+      if (parts.length > 0) {
+        const periodLabel = f.periodType ? `${f.periodType} ${f.periodEnding}` : f.periodEnding;
+        lines.push(`Financials (${periodLabel}): ${parts.join(' | ')}`);
+      }
+    }
+
+    // Segmented revenue (Tier-1 via T2)
+    if (b.segmentedRevenue && b.segmentedRevenue.length > 0) {
+      lines.push(`Segment revenue (${b.segmentedRevenue[0].reportDate}):`);
+      for (const s of b.segmentedRevenue.slice(0, 6)) {
+        lines.push(`  - ${s.dimension}/${s.segment}: $${formatLargeNumber(s.value)}`);
+      }
+    }
+
+    // Periodic filings (Tier-1 via T6)
+    if (b.periodicFilings && b.periodicFilings.length > 0) {
+      lines.push(`Periodic filing sections:`);
+      for (const f of b.periodicFilings.slice(0, 1)) {
+        lines.push(`  [${f.form}] filed ${f.filingDate} (period ${f.reportDate})`);
+        for (const s of f.sections.slice(0, 2)) {
+          lines.push(`    - ${s.item} ${s.title}`);
+          if (s.excerpt) lines.push(`      ${s.excerpt.slice(0, 250)}`);
+        }
+      }
+    }
+
+    // Derivatives (Tier-1 via T5/T8)
+    if (b.derivatives) {
+      const d = b.derivatives;
+      const parts: string[] = [];
+      if (d.futuresCount > 0) {
+        const nf = d.nearestFuture;
+        const priceStr = nf?.price != null ? ` @ $${nf.price.toFixed(2)}` : '';
+        parts.push(`Futures: ${d.futuresCount} (nearest ${nf?.expiration ?? '—'}${priceStr})`);
+      }
+      if (d.optionsCount > 0) {
+        const iv =
+          d.sampleImpliedVolatility != null ? ` (IV sample ${(d.sampleImpliedVolatility * 100).toFixed(1)}%)` : '';
+        parts.push(`Options: ${d.optionsCount} (nearest ${d.nearestOptionExpiration ?? '—'}${iv})`);
+      }
+      if (parts.length > 0) lines.push(`Derivatives: ${parts.join(' | ')}`);
+    }
+
     // Memories (prioritize reflected memories with lessons)
     if (b.memories.length > 0) {
       lines.push(`Past analysis:`);
@@ -653,6 +814,10 @@ const BATCH_ENRICH_DEFAULT_FIELDS: EnrichmentField[] = [
   'topHolders',
   'insiderTrades',
   'earningsPressReleases',
+  // Included at Tier-0 so the T4 (analyst PT gap) trigger has the data it needs
+  // to fire in production. The Tier-1 fetch set never re-requests 'analyst' —
+  // triggers only ask for extras beyond this baseline.
+  'analyst',
 ];
 const BATCH_ENRICH_OPTS: EnrichOptions = { topHoldersFilter: { limit: 10, sort: 'DESC' } };
 
@@ -967,6 +1132,111 @@ export function buildBrief(
     earningsPressRelease: buildEarningsPressReleaseBrief(entity?.earningsPressReleases ?? null),
     memories,
     profile,
+    analyst: buildAnalystBrief(entity?.analyst ?? null),
+    earningsHistory: buildEarningsHistoryBriefs(entity?.earnings ?? null),
+    financialsSnap: buildFinancialsSnap(entity?.financials ?? null),
+    segmentedRevenue: buildSegmentedRevenueBriefs(entity?.segmentedRevenue ?? null),
+    periodicFilings: buildPeriodicFilingsBriefs(entity?.periodicFilings ?? null),
+    derivatives: buildDerivativesBrief(entity?.derivatives ?? null),
+  };
+}
+
+function buildAnalystBrief(analyst: Entity['analyst'] | null): AnalystBrief | null {
+  if (!analyst) return null;
+  const { targetMean, targetHigh, targetLow, recommendation, numberOfAnalysts } = analyst;
+  if (targetMean == null && targetHigh == null && targetLow == null && !recommendation && numberOfAnalysts == null) {
+    return null;
+  }
+  return {
+    targetMean: targetMean ?? null,
+    targetHigh: targetHigh ?? null,
+    targetLow: targetLow ?? null,
+    recommendation: recommendation ?? null,
+    numberOfAnalysts: numberOfAnalysts ?? null,
+  };
+}
+
+function buildEarningsHistoryBriefs(earnings: Entity['earnings'] | null): EarningsReportBrief[] {
+  if (!earnings?.length) return [];
+  return earnings.slice(0, 4).map((e) => ({
+    period: e.period,
+    reportDate: e.reportDate,
+    epsActual: e.epsActual ?? null,
+    epsEstimate: e.epsEstimate ?? null,
+    epsSurprisePercent: e.surprisePercent ?? null,
+    revenueActual: e.revenueActual ?? null,
+    revenueEstimate: e.revenueEstimate ?? null,
+    revenueSurprisePercent: e.revenueSurprisePercent ?? null,
+  }));
+}
+
+function buildFinancialsSnap(financials: Entity['financials'] | null): FinancialsSnapBrief | null {
+  if (!financials) return null;
+  const inc = financials.income?.[0];
+  const bs = financials.balanceSheet?.[0];
+  const cf = financials.cashFlow?.[0];
+  if (!inc && !bs && !cf) return null;
+  const periodEnding = inc?.periodEnding ?? bs?.periodEnding ?? cf?.periodEnding ?? '';
+  return {
+    periodEnding,
+    periodType: inc?.periodType ?? bs?.periodType ?? cf?.periodType ?? null,
+    totalRevenue: inc?.totalRevenue ?? null,
+    grossProfit: inc?.grossProfit ?? null,
+    operatingIncome: inc?.operatingIncome ?? null,
+    netIncome: inc?.netIncome ?? null,
+    ebitda: inc?.ebitda ?? null,
+    dilutedEps: inc?.dilutedEps ?? null,
+    freeCashFlow: cf?.freeCashFlow ?? null,
+    totalDebt: bs?.totalDebt ?? null,
+    cashAndEquivalents: bs?.cashAndEquivalents ?? null,
+  };
+}
+
+function buildSegmentedRevenueBriefs(segmented: Entity['segmentedRevenue'] | null): SegmentedRevenueBrief[] {
+  if (!segmented?.length) return [];
+  // Keep only the latest reportDate, top 8 segments by value.
+  const latestDate = segmented[0].reportDate;
+  return segmented
+    .filter((s) => s.reportDate === latestDate)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 8)
+    .map((s) => ({
+      reportDate: s.reportDate,
+      dimension: s.dimension,
+      segment: s.segment,
+      value: s.value,
+    }));
+}
+
+function buildPeriodicFilingsBriefs(filings: Entity['periodicFilings'] | null): PeriodicFilingBrief[] {
+  if (!filings?.length) return [];
+  return filings.slice(0, 2).map((f) => ({
+    form: f.form,
+    filingDate: f.filingDate,
+    reportDate: f.reportDate,
+    sections: (f.sections ?? []).slice(0, 3).map((s) => ({
+      item: s.item,
+      title: s.title,
+      excerpt: s.excerpt.slice(0, 300),
+    })),
+  }));
+}
+
+function buildDerivativesBrief(derivatives: Entity['derivatives'] | null): DerivativesBrief | null {
+  if (!derivatives) return null;
+  const futures = derivatives.futures ?? [];
+  const options = derivatives.options ?? [];
+  if (futures.length === 0 && options.length === 0) return null;
+  const nearestFuture =
+    futures.length > 0 ? { expiration: futures[0].expiration, price: futures[0].price ?? null } : null;
+  const nearestOptionExpiration = options.length > 0 ? options[0].expiration : null;
+  const ivSample = options.find((o) => o.impliedVolatility != null)?.impliedVolatility ?? null;
+  return {
+    futuresCount: futures.length,
+    nearestFuture,
+    optionsCount: options.length,
+    nearestOptionExpiration,
+    sampleImpliedVolatility: ivSample,
   };
 }
 
@@ -1050,6 +1320,12 @@ export interface EnrichedBriefResult {
   entity: Entity | null;
   /** Curated signals for this ticker (filtered, deduplicated). */
   signals: Signal[];
+  /**
+   * Rebuild the DataBrief against a (possibly merged) entity. Used after
+   * progressive Tier-1 enrichment merges extra sub-graphs onto the base entity
+   * so the analyzer sees the fetched fields. Preserves pos / signals / memories / profile.
+   */
+  rebuildWithEntity(entity: Entity | null): DataBrief;
 }
 
 /**
@@ -1124,8 +1400,17 @@ export async function buildSingleBriefEnriched(
     pos.marketValue = pos.quantity * quote.price;
   }
 
-  const brief = buildBrief(pos, signals, quote, entity ?? undefined, memMap.get(ticker) ?? [], profileBrief);
-  return { brief, entity, signals };
+  const memList = memMap.get(ticker) ?? [];
+  const brief = buildBrief(pos, signals, quote, entity ?? undefined, memList, profileBrief);
+  return {
+    brief,
+    entity,
+    signals,
+    rebuildWithEntity(next: Entity | null): DataBrief {
+      const nextQuote = next?.market?.quote ?? quote;
+      return buildBrief(pos, signals, nextQuote, next ?? undefined, memList, profileBrief);
+    },
+  };
 }
 
 /**
@@ -1172,17 +1457,32 @@ interface ProgressiveEnrichmentContext {
  * selection logic (e.g. downstream Tier-2 scheduling) without spending calls.
  */
 async function runProgressiveEnrichment(ctx: ProgressiveEnrichmentContext): Promise<void> {
-  const hitsByTicker = new Map<string, TriggerHit[]>();
+  // Split hits into fetch-bearing (have at least one extra field) vs. focus-only.
+  // Only fetch-bearing tickers compete for the Tier-1 budget — otherwise high-severity
+  // focus-only triggers (T4/T7/T9) would occupy slots without producing any fetch.
+  const fetchBearing = new Map<string, TriggerHit[]>();
+  let focusOnlyCount = 0;
   for (const brief of ctx.briefs) {
     const entity = ctx.entityByTicker.get(brief.symbol) ?? null;
     const hits = evaluateTriggers(brief, entity);
-    if (hits.length > 0) hitsByTicker.set(brief.symbol, hits);
+    if (hits.length === 0) continue;
+    if (unionFields(hits).length > 0) {
+      fetchBearing.set(brief.symbol, hits);
+    } else {
+      focusOnlyCount++;
+    }
   }
-  if (hitsByTicker.size === 0) return;
+  if (fetchBearing.size === 0) {
+    if (focusOnlyCount > 0) {
+      logger.debug('Progressive enrichment — only focus-only triggers fired', { focusOnlyCount });
+    }
+    return;
+  }
 
-  const budgeted = selectBudgeted(hitsByTicker);
+  const budgeted = selectBudgeted(fetchBearing);
   logger.info('Progressive enrichment — triggers fired', {
-    tickersWithHits: hitsByTicker.size,
+    tickersWithFetchHits: fetchBearing.size,
+    focusOnlyCount,
     budgeted: budgeted.size,
   });
 
