@@ -184,13 +184,13 @@ export function SymbolCard({ entry, onRemove, onSelect, removing, marketStatus }
       <div className="relative z-[1] pointer-events-none p-4">
         {/* Header: logo + symbol + name + remove button */}
         <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2.5">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
             <SymbolLogo
               symbol={entry.symbol}
               assetClass={entry.assetClass === 'CRYPTO' ? 'crypto' : 'equity'}
               size="md"
             />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <span className="text-sm font-semibold text-text-primary">{entry.symbol}</span>
               <p className="truncate text-xs text-text-muted">{entry.name}</p>
             </div>
