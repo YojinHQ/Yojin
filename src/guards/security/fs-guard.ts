@@ -10,7 +10,7 @@
 
 import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 
 import { resolveDataRoot } from '../../paths.js';
 import type { Guard, GuardResult, ProposedAction } from '../types.js';
@@ -51,7 +51,7 @@ export class FsGuard implements Guard {
   constructor(options?: FsGuardOptions) {
     // Support legacy blockedPaths option
     const readPaths = options?.readBlockedPaths ?? options?.blockedPaths ?? DEFAULT_READ_BLOCKED_PATHS;
-    const auditPath = options?.auditPath ?? `${resolveDataRoot()}/audit`;
+    const auditPath = options?.auditPath ?? join(resolveDataRoot(), 'audit');
     const writePaths = [...(options?.writeBlockedPaths ?? DEFAULT_WRITE_BLOCKED_PATHS), auditPath];
 
     this.readBlockedPaths = readPaths.map((p) => this.resolvePath(p));
@@ -90,7 +90,7 @@ export class FsGuard implements Guard {
   }
 
   private pathMatches(normalized: string, blocked: string): boolean {
-    return normalized === blocked || normalized.startsWith(blocked + '/');
+    return normalized === blocked || normalized.startsWith(blocked + sep);
   }
 
   private normalizePath(p: string): string {

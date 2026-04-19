@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
-import { join, sep } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,7 +20,7 @@ describe('resolveDataRoot', () => {
   it('returns $YOJIN_HOME when set', async () => {
     process.env.YOJIN_HOME = '/custom/yojin';
     const { resolveDataRoot } = await import('../src/paths.js');
-    expect(resolveDataRoot()).toBe('/custom/yojin');
+    expect(resolveDataRoot()).toBe(resolve('/custom/yojin'));
   });
 
   it('returns ~/.yojin when $YOJIN_HOME is not set', async () => {
@@ -32,7 +32,7 @@ describe('resolveDataRoot', () => {
   it('strips trailing slash from $YOJIN_HOME', async () => {
     process.env.YOJIN_HOME = '/custom/yojin/';
     const { resolveDataRoot } = await import('../src/paths.js');
-    expect(resolveDataRoot()).toBe('/custom/yojin');
+    expect(resolveDataRoot()).toBe(resolve('/custom/yojin'));
   });
 });
 

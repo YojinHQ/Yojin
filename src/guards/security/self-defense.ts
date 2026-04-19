@@ -9,7 +9,7 @@
 
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, sep } from 'node:path';
 
 import type { Guard, GuardResult, ProposedAction } from '../types.js';
 import type { KillSwitch } from './kill-switch.js';
@@ -52,7 +52,7 @@ export class SelfDefenseGuard implements Guard {
 
       if (isWrite) {
         for (const protectedPath of this.protectedPaths) {
-          if (normalized === protectedPath || normalized.startsWith(protectedPath + '/')) {
+          if (normalized === protectedPath || normalized.startsWith(protectedPath + sep)) {
             return {
               pass: false,
               reason: `Self-defense: write to protected path blocked: ${action.path}`,
