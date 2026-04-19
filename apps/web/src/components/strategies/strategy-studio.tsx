@@ -219,6 +219,9 @@ export function StrategyStudio({ open, onClose, strategy, editMode }: StrategySt
       } else {
         setStreamingContent((prev) => prev + event.delta);
       }
+    } else if (event.type === 'TEXT_RESET') {
+      setStreamingContent('');
+      setIsLoading(true);
     } else if (event.type === 'MESSAGE_COMPLETE') {
       const msgId = event.messageId ?? crypto.randomUUID();
       if (completedIdsRef.current.has(msgId)) return data;

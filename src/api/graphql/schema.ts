@@ -290,6 +290,7 @@ export const typeDefs = /* GraphQL */ `
     THINKING
     TOOL_USE
     TEXT_DELTA
+    TEXT_RESET
     MESSAGE_COMPLETE
     PII_REDACTED
     ERROR

@@ -18,7 +18,15 @@ export interface ChatMessage {
 }
 
 export interface ChatEvent {
-  type: 'THINKING' | 'TOOL_USE' | 'TEXT_DELTA' | 'MESSAGE_COMPLETE' | 'PII_REDACTED' | 'ERROR' | 'TOOL_CARD';
+  type:
+    | 'THINKING'
+    | 'TOOL_USE'
+    | 'TEXT_DELTA'
+    | 'TEXT_RESET'
+    | 'MESSAGE_COMPLETE'
+    | 'PII_REDACTED'
+    | 'ERROR'
+    | 'TOOL_CARD';
   threadId: string;
   delta?: string;
   accumulatedText?: string;
@@ -293,6 +301,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         } else {
           setStreamingContent((prev) => prev + event.delta);
         }
+      } else if (event.type === 'TEXT_RESET') {
+        // Intermediate narration — the model is about to call a tool. Clear
+        // the partial stream so the user only sees the final response.
+        setStreamingContent('');
+        setIsThinking(true);
       } else if (event.type === 'MESSAGE_COMPLETE') {
         const msgId = event.messageId ?? crypto.randomUUID();
         if (completedMessagesRef.current.has(msgId)) return data;

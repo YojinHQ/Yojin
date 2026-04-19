@@ -118,6 +118,17 @@ export function sendMessageMutation(
               accumulatedText: streamAccumulatedText,
             } satisfies ChatEvent);
           } else if (event.type === 'action') {
+            // Any text streamed this iteration was intermediate narration —
+            // the model is about to call a tool, so drop the partial text from
+            // the user-visible stream. TEXT_DELTA for the final iteration (the
+            // one that ends with `done`, not `action`) is preserved.
+            if (streamAccumulatedText.length > 0) {
+              streamAccumulatedText = '';
+              pubsub.publish(`chat:${threadId}`, {
+                type: 'TEXT_RESET',
+                threadId,
+              } satisfies ChatEvent);
+            }
             for (const call of event.toolCalls) {
               // Display tools emit a TOOL_CARD event for frontend rendering
               if (call.name.startsWith(DISPLAY_TOOL_PREFIX)) {
