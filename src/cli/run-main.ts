@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { runBacktest } from './backtest.js';
 import { startChat } from './chat.js';
 import { setupToken } from './setup-token.js';
 import { onShutdownSignal } from './shutdown-signals.js';
@@ -107,6 +108,9 @@ export async function runMain(args: string[]): Promise<void> {
       break;
     case 'eval-strategies':
       await runStrategyDebug(args.slice(1));
+      break;
+    case 'backtest':
+      await runBacktest(args.slice(1));
       break;
 
     case 'version':

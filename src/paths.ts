@@ -52,6 +52,7 @@ export const DATA_SUBDIRS = [
   'oauth', // OAuth / pairing state (e.g. WhatsApp Baileys auth)
   'oauth/whatsapp',
   'debug', // Debug output (strategy eval trace reports, etc.)
+  'cache/price-history', // Cached OHLCV bars for backtesting
 ] as const;
 
 /**

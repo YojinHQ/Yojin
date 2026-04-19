@@ -42,6 +42,7 @@
     "dev": "concurrently -n server,web -c blue,magenta \"pnpm dev:be\" \"pnpm dev:fe\"",
     "chat": "node --disable-warning=DEP0040 --import tsx/esm src/entry.ts chat",
     "strategy:debug": "node --disable-warning=DEP0040 --import tsx/esm src/entry.ts eval-strategies",
+    "backtest": "node --disable-warning=DEP0040 --import tsx/esm src/entry.ts backtest",
     "setup": "node --disable-warning=DEP0040 --import tsx/esm src/entry.ts setup",
     "setup-token": "node --disable-warning=DEP0040 --import tsx/esm src/entry.ts setup",
     "yojin:acp": "node --disable-warning=DEP0040 --import tsx/esm src/entry.ts acp",
