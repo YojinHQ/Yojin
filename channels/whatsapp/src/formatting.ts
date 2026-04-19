@@ -1,5 +1,5 @@
 import type { Action } from '../../../src/actions/types.js';
-import { chunkMessage as chunkMessageBase, formatTriggerStrength } from '../../../src/formatting/index.js';
+import { chunkMessage as chunkMessageBase } from '../../../src/formatting/index.js';
 import type { InsightReport } from '../../../src/insights/types.js';
 import type { Snap } from '../../../src/snap/types.js';
 
@@ -61,12 +61,9 @@ export function formatAlert(event: { symbol: string; severity: number; thesis: s
   return [`${icon} *${label} Alert: ${event.symbol}*`, '', event.thesis].join('\n');
 }
 
-/** Format an Action for WhatsApp: verdict badge + headline + reasoning. */
+/** Format an Action for WhatsApp: bold headline + reasoning. Like a text from a friend. */
 export function formatAction(action: Action): string {
-  const ticker = action.tickers[0];
-  const header = ticker ? `\u{26A1} *${action.verdict} ${ticker}*` : `\u{26A1} *${action.verdict}*`;
-  const strength = action.triggerStrength ? `[${formatTriggerStrength(action.triggerStrength)}]` : '';
-  const lines = [header, strength ? `${strength} ${action.what}` : action.what];
+  const lines = [`*${action.what}*`];
   if (action.why && action.why !== action.what) {
     lines.push('', action.why);
   }
