@@ -57,6 +57,7 @@ import {
 } from '@yojinhq/jintel-client';
 import { z } from 'zod';
 
+import { formatAssetLabel } from './format-label.js';
 import { isShortInterestFresh } from './freshness.js';
 import type { FinancialStatements, KeyExecutive, RedditComment } from './types.js';
 import type { Position } from '../api/graphql/types.js';
@@ -1116,7 +1117,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       }
 
       const t = entity.technicals;
-      const lines: string[] = [`# ${entity.name ?? params.ticker} — Technical Indicators`];
+      const lines: string[] = [`# ${formatAssetLabel(entity.name, params.ticker)} — Technical Indicators`];
 
       if (t.rsi != null) {
         const zone = t.rsi > 70 ? ' (OVERBOUGHT)' : t.rsi < 30 ? ' (OVERSOLD)' : '';
@@ -1407,7 +1408,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         await bestEffortIngest(options.ingestor, rawSignals);
       }
 
-      return { content: `# ${entity.name ?? params.ticker} — News\n\n${formatNews(entity.news)}` };
+      return { content: `# ${formatAssetLabel(entity.name, params.ticker)} — News\n\n${formatNews(entity.news)}` };
     },
   };
 
@@ -1440,7 +1441,9 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         return { content: `No research reports found for ${params.ticker}.` };
       }
 
-      return { content: `# ${entity.name ?? params.ticker} — Research\n\n${formatResearch(entity.research)}` };
+      return {
+        content: `# ${formatAssetLabel(entity.name, params.ticker)} — Research\n\n${formatResearch(entity.research)}`,
+      };
     },
   };
 
@@ -1546,7 +1549,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         return { content: `No derivatives data available for ${params.ticker}.` };
       }
 
-      return { content: formatDerivatives(entity.derivatives, entity.name ?? params.ticker) };
+      return { content: formatDerivatives(entity.derivatives, formatAssetLabel(entity.name, params.ticker)) };
     },
   };
 
@@ -1604,7 +1607,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         return parts.join('\n');
       });
       return {
-        content: `# ${entity.name ?? params.ticker} — Filings (${filings.length})\n\n${lines.join('\n')}`,
+        content: `# ${formatAssetLabel(entity.name, params.ticker)} — Filings (${filings.length})\n\n${lines.join('\n')}`,
       };
     },
   };
@@ -1672,7 +1675,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         return parts.join('\n');
       });
       const score = entity.risk?.overallScore;
-      const header = `# ${entity.name ?? params.ticker} — Risk Signals${score != null ? ` (score: ${score})` : ''}`;
+      const header = `# ${formatAssetLabel(entity.name, params.ticker)} — Risk Signals${score != null ? ` (score: ${score})` : ''}`;
       return { content: `${header}\n\n${lines.join('\n')}` };
     },
   };
@@ -1757,7 +1760,9 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       if (!entity.ownership) {
         return { content: `No ownership data available for ${ticker}.` };
       }
-      return { content: `# ${entity.name ?? ticker} — Ownership Breakdown\n\n${formatOwnership(entity.ownership)}` };
+      return {
+        content: `# ${formatAssetLabel(entity.name, ticker)} — Ownership Breakdown\n\n${formatOwnership(entity.ownership)}`,
+      };
     },
   };
 
@@ -1818,7 +1823,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         return { content: `No top holders data available for ${ticker}.` };
       }
       return {
-        content: `# ${entity.name ?? ticker} — Top Institutional Holders\n\n${formatTopHolders(entity.topHolders)}`,
+        content: `# ${formatAssetLabel(entity.name, ticker)} — Top Institutional Holders\n\n${formatTopHolders(entity.topHolders)}`,
       };
     },
   };
@@ -1895,7 +1900,9 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       if (!entity.social) {
         return { content: `No social media data available for ${params.ticker}.` };
       }
-      return { content: `# ${entity.name ?? params.ticker} — Social Posts\n\n${formatSocial(entity.social)}` };
+      return {
+        content: `# ${formatAssetLabel(entity.name, params.ticker)} — Social Posts\n\n${formatSocial(entity.social)}`,
+      };
     },
   };
 
@@ -1923,7 +1930,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         return { content: `No prediction markets found for ${params.ticker}.` };
       }
       return {
-        content: `# ${entity.name ?? params.ticker} — Prediction Markets\n\n${formatPredictions(entity.predictions as PredictionMarket[])}`,
+        content: `# ${formatAssetLabel(entity.name, params.ticker)} — Prediction Markets\n\n${formatPredictions(entity.predictions as PredictionMarket[])}`,
       };
     },
   };
@@ -1957,7 +1964,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         return { content: `No Hacker News discussions found for ${params.ticker}.` };
       }
       return {
-        content: `# ${entity.name ?? params.ticker} — Discussions\n\n${formatDiscussions(entity.discussions as HackerNewsStory[])}`,
+        content: `# ${formatAssetLabel(entity.name, params.ticker)} — Discussions\n\n${formatDiscussions(entity.discussions as HackerNewsStory[])}`,
       };
     },
   };
@@ -2007,7 +2014,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         };
       }
       return {
-        content: `# ${entity.name ?? params.ticker} — Financial Statements\n\n${formatFinancials(entity.financials)}`,
+        content: `# ${formatAssetLabel(entity.name, params.ticker)} — Financial Statements\n\n${formatFinancials(entity.financials)}`,
       };
     },
   };
@@ -2053,7 +2060,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         };
       }
       return {
-        content: `# ${entity.name ?? params.ticker} — Key Executives\n\n${formatExecutives(entity.executives)}`,
+        content: `# ${formatAssetLabel(entity.name, params.ticker)} — Key Executives\n\n${formatExecutives(entity.executives)}`,
       };
     },
   };
@@ -2126,7 +2133,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         };
       }
       return {
-        content: `# ${entity.name ?? ticker} — Insider Trades (Form 4)\n\n${formatInsiderTrades(entity.insiderTrades)}`,
+        content: `# ${formatAssetLabel(entity.name, ticker)} — Insider Trades (Form 4)\n\n${formatInsiderTrades(entity.insiderTrades)}`,
       };
     },
   };
@@ -2161,7 +2168,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         };
       }
       return {
-        content: `# ${entity.name ?? ticker} — Earnings Press Releases\n\n${formatEarningsPressReleases(entity.earningsPressReleases)}`,
+        content: `# ${formatAssetLabel(entity.name, ticker)} — Earnings Press Releases\n\n${formatEarningsPressReleases(entity.earningsPressReleases)}`,
       };
     },
   };
@@ -2220,7 +2227,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         };
       }
       return {
-        content: `# ${entity.name ?? ticker} — Segmented Revenue\n\n${formatSegmentedRevenue(entity.segmentedRevenue)}`,
+        content: `# ${formatAssetLabel(entity.name, ticker)} — Segmented Revenue\n\n${formatSegmentedRevenue(entity.segmentedRevenue)}`,
       };
     },
   };
@@ -2286,7 +2293,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         };
       }
       return {
-        content: `# ${entity.name ?? ticker} — Earnings Calendar\n\n${formatEarningsCalendar(entity.earnings)}`,
+        content: `# ${formatAssetLabel(entity.name, ticker)} — Earnings Calendar\n\n${formatEarningsCalendar(entity.earnings)}`,
       };
     },
   };
@@ -2342,7 +2349,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         };
       }
       return {
-        content: `# ${entity.name ?? ticker} — Periodic Filings (10-K / 10-Q)\n\n${formatPeriodicFilings(entity.periodicFilings, params.items, params.fullBody)}`,
+        content: `# ${formatAssetLabel(entity.name, ticker)} — Periodic Filings (10-K / 10-Q)\n\n${formatPeriodicFilings(entity.periodicFilings, params.items, params.fullBody)}`,
       };
     },
   };

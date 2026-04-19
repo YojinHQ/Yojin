@@ -18,6 +18,7 @@ import type {
 } from '@yojinhq/jintel-client';
 import { buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
+import { formatAssetLabel } from './format-label.js';
 import { isShortInterestFresh } from './freshness.js';
 import { formatNumber, riskSignalsToRaw } from './tools.js';
 import type { RedditComment } from './types.js';
@@ -344,7 +345,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
   const quote = entity.market?.quote;
   const tech = entity.technicals;
   if (quote) {
-    const name = entity.name ?? tickers[0];
+    const label = formatAssetLabel(entity.name, tickers[0]);
     const contentLines: string[] = [];
     const titleParts: string[] = [];
 
@@ -387,7 +388,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.95,
       // Stable title for content-hash dedup — live values go in content only
-      title: `${name} Market Snapshot`,
+      title: `${label} Market Snapshot`,
       content: `${titleParts.join(' | ')}\n${contentLines.join('\n')}`,
       publishedAt: now,
       type: SignalType.FUNDAMENTAL,
@@ -407,7 +408,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       sourceName: 'Market Events',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.95,
-      title: `${entity.name ?? tickers[0]}: ${event.type.replace(/_/g, ' ')} on ${event.date}`,
+      title: `${formatAssetLabel(entity.name, tickers[0])}: ${event.type.replace(/_/g, ' ')} on ${event.date}`,
       content: `${event.description} | Close: $${event.close.toFixed(2)} (${event.changePercent >= 0 ? '+' : ''}${event.changePercent.toFixed(1)}%)${event.volume != null ? ` | Volume: ${event.volume.toLocaleString()}` : ''}`,
       publishedAt: eventDate.toISOString(),
       type: SignalType.TECHNICAL,
@@ -439,7 +440,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
         sourceName: 'Short Interest Data',
         sourceType: SourceType.ENRICHMENT,
         reliability: 0.9,
-        title: `${entity.name ?? tickers[0]} Short Interest`,
+        title: `${formatAssetLabel(entity.name, tickers[0])} Short Interest`,
         content: parts.join(' | '),
         publishedAt: now,
         type: SignalType.FUNDAMENTAL,
@@ -457,7 +458,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       sourceName: 'SEC Filings',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.95,
-      title: `${entity.name ?? tickers[0]}: ${filing.type} filed ${filing.date}`,
+      title: `${formatAssetLabel(entity.name, tickers[0])}: ${filing.type} filed ${filing.date}`,
       content: filing.description ?? undefined,
       link: filing.url,
       publishedAt: filing.date.includes('T') ? filing.date : `${filing.date}T00:00:00Z`,
@@ -475,7 +476,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       sourceName: 'Market Data',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.95,
-      title: `${entity.name ?? tickers[0]} Significant Price Move`,
+      title: `${formatAssetLabel(entity.name, tickers[0])} Significant Price Move`,
       content: `${quote.ticker} ${direction} ${Math.abs(quote.changePercent).toFixed(1)}% to $${quote.price.toFixed(2)}`,
       publishedAt: now,
       type: SignalType.TECHNICAL,
@@ -565,7 +566,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
         sourceType: SourceType.ENRICHMENT,
         reliability: 0.9,
         // Stable title for content-hash dedup — live indicator values go in content only
-        title: `${entity.name ?? tickers[0]} Technical Indicators`,
+        title: `${formatAssetLabel(entity.name, tickers[0])} Technical Indicators`,
         content: parts.join('\n'),
         publishedAt: now,
         type: SignalType.TECHNICAL,
@@ -588,7 +589,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       sourceName: 'Social Sentiment',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.7,
-      title: `${entity.name ?? tickers[0]} Social Sentiment`,
+      title: `${formatAssetLabel(entity.name, tickers[0])} Social Sentiment`,
       content: `Rank #${s.rank} (${rankDir}) | ${s.mentions} mentions (${mentionDir}), ${s.upvotes} upvotes (24h ago: rank #${s.rank24hAgo}, ${s.mentions24hAgo} mentions)`,
       publishedAt: now,
       type: SignalType.SENTIMENT,
@@ -628,7 +629,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
         sourceName,
         sourceType: SourceType.API,
         reliability: isLinkPost ? 0.65 : 0.6,
-        title: `${entity.name ?? tickers[0]}: r/${post.subreddit} — ${post.title}`,
+        title: `${formatAssetLabel(entity.name, tickers[0])}: r/${post.subreddit} — ${post.title}`,
         content: post.text.length > 500 ? post.text.slice(0, 497) + '…' : post.text,
         link: post.url,
         publishedAt: post.date ?? now,
@@ -654,7 +655,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
         sourceName: `Reddit (r/${comment.subreddit} comment)`,
         sourceType: SourceType.API,
         reliability: 0.55,
-        title: `${entity.name ?? tickers[0]}: r/${comment.subreddit} — ${comment.body.slice(0, 60).trim()}`,
+        title: `${formatAssetLabel(entity.name, tickers[0])}: r/${comment.subreddit} — ${comment.body.slice(0, 60).trim()}`,
         content: comment.body.length > 500 ? comment.body.slice(0, 497) + '…' : comment.body,
         publishedAt: comment.date ?? now,
         type: SignalType.SOCIALS,
@@ -722,7 +723,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
         sourceName: 'Financial Statements',
         sourceType: SourceType.ENRICHMENT,
         reliability: 0.95,
-        title: `${entity.name ?? tickers[0]} Financial Statements`,
+        title: `${formatAssetLabel(entity.name, tickers[0])} Financial Statements`,
         content: parts.join('\n'),
         publishedAt: now,
         type: SignalType.FUNDAMENTAL,
@@ -747,7 +748,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       sourceName: 'Company Data',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.85,
-      title: `${entity.name ?? tickers[0]} Key Executives`,
+      title: `${formatAssetLabel(entity.name, tickers[0])} Key Executives`,
       content: lines.join('\n'),
       publishedAt: now,
       type: SignalType.FUNDAMENTAL,
@@ -774,7 +775,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       sourceName: '13F Filings',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.95,
-      title: `${entity.name ?? tickers[0]} Institutional Holdings (13F)`,
+      title: `${formatAssetLabel(entity.name, tickers[0])} Institutional Holdings (13F)`,
       content: lines.join('\n'),
       publishedAt: now,
       type: SignalType.FUNDAMENTAL,
@@ -806,7 +807,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
         sourceName: 'Ownership Data',
         sourceType: SourceType.ENRICHMENT,
         reliability: 0.9,
-        title: `${entity.name ?? tickers[0]} Ownership Breakdown`,
+        title: `${formatAssetLabel(entity.name, tickers[0])} Ownership Breakdown`,
         content: parts.join('\n'),
         publishedAt: now,
         type: SignalType.FUNDAMENTAL,
@@ -831,7 +832,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       sourceName: 'Institutional Holdings',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.9,
-      title: `${entity.name ?? tickers[0]} Top Institutional Holders`,
+      title: `${formatAssetLabel(entity.name, tickers[0])} Top Institutional Holders`,
       content: lines.join('\n'),
       publishedAt: now,
       type: SignalType.FUNDAMENTAL,
@@ -912,7 +913,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
         sourceName: 'Insider Trades (Form 4)',
         sourceType: SourceType.ENRICHMENT,
         reliability: 0.95,
-        title: `${entity.name ?? tickers[0]} Insider Trading (30d)`,
+        title: `${formatAssetLabel(entity.name, tickers[0])} Insider Trading (30d)`,
         content: lines.join('\n'),
         publishedAt: now,
         type: SignalType.FILINGS,
@@ -958,7 +959,7 @@ export function enrichmentToSignals(entity: Entity, tickers: string[]): RawSigna
       sourceName: 'Earnings Press Release (8-K)',
       sourceType: SourceType.ENRICHMENT,
       reliability: 0.95,
-      title: `${entity.name ?? tickers[0]}: Earnings Press Release ${latest.reportDate}`,
+      title: `${formatAssetLabel(entity.name, tickers[0])}: Earnings Press Release ${latest.reportDate}`,
       content: lines.join('\n'),
       link: latest.pressReleaseUrl ?? latest.filingUrl,
       publishedAt: latest.filingDate.includes('T') ? latest.filingDate : `${latest.filingDate}T00:00:00Z`,
