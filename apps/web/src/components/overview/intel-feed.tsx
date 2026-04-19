@@ -484,7 +484,7 @@ function IntelFeedCard({
               <Button
                 variant="danger"
                 size="sm"
-                className="w-20 px-2"
+                className="w-20 border border-error/30 px-2"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDismiss();

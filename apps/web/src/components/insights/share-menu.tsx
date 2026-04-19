@@ -77,10 +77,12 @@ export function ShareMenu({ insight, className, compact = false }: ShareMenuProp
     };
   }, []);
 
-  // Cached upload is keyed per-insight; reset when the insight changes.
+  // Cached upload is keyed per-insight; reset when any field the ShareCard
+  // renders changes, otherwise a later platform click serves a stale image.
+  const cacheKey = `${insight.symbol}|${insight.name}|${insight.rating}|${insight.conviction}|${insight.thesis}|${insight.opportunities.join('~')}|${insight.risks.join('~')}`;
   useEffect(() => {
     uploadedUrlRef.current = null;
-  }, [insight.symbol, insight.thesis, insight.rating, insight.conviction]);
+  }, [cacheKey]);
 
   const showToast = (message: string) => {
     setToast(message);
