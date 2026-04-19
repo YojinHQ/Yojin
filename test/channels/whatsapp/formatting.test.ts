@@ -223,6 +223,18 @@ describe('formatAction', () => {
     expect(result.startsWith('*BUY AAPL —')).toBe(true);
   });
 
+  it('reconstructs verdict + ticker when action.what omits them', () => {
+    const offShape: Action = { ...action, what: 'golden cross + expanding volume' };
+    const result = formatAction(offShape);
+    expect(result.startsWith('*BUY AAPL — golden cross + expanding volume*')).toBe(true);
+  });
+
+  it('reconstructs verdict-only headline when no ticker is present', () => {
+    const noTicker: Action = { ...action, tickers: [], verdict: 'SELL', what: 'concentration risk' };
+    const result = formatAction(noTicker);
+    expect(result.startsWith('*SELL — concentration risk*')).toBe(true);
+  });
+
   it('does not use HTML tags', () => {
     const result = formatAction(action);
     expect(result).not.toMatch(/<[a-z]+>/i);

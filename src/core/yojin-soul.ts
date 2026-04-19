@@ -25,11 +25,26 @@ export async function loadYojinSoul(dataRoot: string): Promise<string> {
   const overridePath = join(dataRoot, OVERRIDE_SOUL_PATH);
   const defaultPath = join(resolveDefaultsRoot(), DEFAULT_SOUL_FILE);
 
-  try {
-    if (existsSync(overridePath)) return await readFile(overridePath, 'utf-8');
-    if (existsSync(defaultPath)) return await readFile(defaultPath, 'utf-8');
-  } catch (err) {
-    logger.warn('Failed to load yojin-soul, falling back to inline default', { err: String(err) });
+  if (existsSync(overridePath)) {
+    try {
+      return await readFile(overridePath, 'utf-8');
+    } catch (err) {
+      // Override exists but can't be read (bad perms, partial write, transient FS error).
+      // Don't leave the agent with only the inline fallback — try the bundled default next.
+      logger.warn('Failed to read yojin-soul override, falling back to bundled default', {
+        err: String(err),
+      });
+    }
+  }
+
+  if (existsSync(defaultPath)) {
+    try {
+      return await readFile(defaultPath, 'utf-8');
+    } catch (err) {
+      logger.warn('Failed to read bundled yojin-soul default, using inline fallback', {
+        err: String(err),
+      });
+    }
   }
 
   return FALLBACK_SOUL;

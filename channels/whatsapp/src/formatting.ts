@@ -1,5 +1,5 @@
 import type { Action } from '../../../src/actions/types.js';
-import { chunkMessage as chunkMessageBase } from '../../../src/formatting/index.js';
+import { canonicalActionHeadline, chunkMessage as chunkMessageBase } from '../../../src/formatting/index.js';
 import type { InsightReport } from '../../../src/insights/types.js';
 import type { Snap } from '../../../src/snap/types.js';
 
@@ -63,8 +63,9 @@ export function formatAlert(event: { symbol: string; severity: number; thesis: s
 
 /** Format an Action for WhatsApp: bold headline + reasoning. Like a text from a friend. */
 export function formatAction(action: Action): string {
-  const lines = [`*${action.what}*`];
-  if (action.why && action.why !== action.what) {
+  const headline = canonicalActionHeadline(action);
+  const lines = [`*${headline}*`];
+  if (action.why && action.why !== headline && action.why !== action.what) {
     lines.push('', action.why);
   }
   return lines.join('\n');

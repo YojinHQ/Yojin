@@ -113,6 +113,12 @@ describe('formatAction', () => {
     expect(result.startsWith('<b>BUY AAPL —')).toBe(true);
   });
 
+  it('reconstructs verdict + ticker when action.what omits them', () => {
+    const offShape: Action = { ...baseAction, what: 'golden cross + expanding volume' };
+    const result = formatAction(offShape);
+    expect(result.startsWith('<b>BUY AAPL — golden cross + expanding volume</b>')).toBe(true);
+  });
+
   it('escapes HTML special characters from headlines and reasoning', () => {
     const action: Action = {
       ...baseAction,

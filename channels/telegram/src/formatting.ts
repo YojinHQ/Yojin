@@ -1,5 +1,9 @@
 import type { Action } from '../../../src/actions/types.js';
-import { chunkMessage as chunkMessageBase, escapeHtml } from '../../../src/formatting/index.js';
+import {
+  canonicalActionHeadline,
+  chunkMessage as chunkMessageBase,
+  escapeHtml,
+} from '../../../src/formatting/index.js';
 import type { InsightReport } from '../../../src/insights/types.js';
 import type { Snap } from '../../../src/snap/types.js';
 
@@ -30,8 +34,9 @@ export function formatSnap(snap: Snap): string {
 
 /** Format an Action for Telegram HTML: bold headline + reasoning. Like a text from a friend. */
 export function formatAction(action: Action): string {
-  const lines = [`<b>${escapeHtml(action.what)}</b>`];
-  if (action.why && action.why !== action.what) {
+  const headline = canonicalActionHeadline(action);
+  const lines = [`<b>${escapeHtml(headline)}</b>`];
+  if (action.why && action.why !== headline && action.why !== action.what) {
     lines.push('', escapeHtml(action.why));
   }
   return lines.join('\n');
