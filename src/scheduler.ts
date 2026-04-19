@@ -199,9 +199,6 @@ const MAX_MICRO_CONCURRENCY = 3;
 /** Max concurrent archive queries during the signal-gate. Archive reads are cheap FS IO so this can be higher than MAX_MICRO_CONCURRENCY. */
 const MAX_SIGNAL_GATE_CONCURRENCY = 10;
 
-/** Max symbols per batched Jintel signal fetch. Large watchlists chunk into sequential calls. */
-const JINTEL_BATCH_SYMBOL_LIMIT = 25;
-
 interface MicroAssetState {
   symbol: string;
   source: MicroInsightSource;
@@ -531,8 +528,8 @@ export class Scheduler {
       // doesn't drag the whole (possibly 50+) batch to a 7-day window:
       //   - first-run (lastMicroAt === null) → 7-day window
       //   - recurring → oldest lastMicroAt across the recurring set
-      // Each bucket is then chunked to JINTEL_BATCH_SYMBOL_LIMIT and run sequentially
-      // to keep request payloads and rate usage bounded.
+      // fetchJintelSignals chunks internally (DEFAULT_CHUNK_SIZE) to stay under the
+      // Jintel 20-symbol-per-request cap — we just pass the whole bucket.
       const jintelClient = this.getJintelClient?.();
       if (jintelClient && this.signalIngestor) {
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -558,12 +555,11 @@ export class Scheduler {
         let totalIngested = 0;
         let totalDuplicates = 0;
         for (const bucket of buckets) {
-          for (let i = 0; i < bucket.symbols.length; i += JINTEL_BATCH_SYMBOL_LIMIT) {
-            const chunk = bucket.symbols.slice(i, i + JINTEL_BATCH_SYMBOL_LIMIT);
-            const result = await fetchJintelSignals(jintelClient, this.signalIngestor, chunk, { since: bucket.since });
-            totalIngested += result.ingested;
-            totalDuplicates += result.duplicates;
-          }
+          const result = await fetchJintelSignals(jintelClient, this.signalIngestor, bucket.symbols, {
+            since: bucket.since,
+          });
+          totalIngested += result.ingested;
+          totalDuplicates += result.duplicates;
         }
         if (totalIngested > 0) {
           logger.info('Micro research Jintel fetch', { ingested: totalIngested, duplicates: totalDuplicates });

@@ -71,7 +71,14 @@ const REDDIT_DOMAIN_RE = /\b(reddit\.com|redd\.it|i\.redd\.it|v\.redd\.it|previe
 const SOCIAL_MIN_REDDIT_SCORE = 5;
 const SOCIAL_MIN_REDDIT_COMMENT_SCORE = 3;
 const SOCIAL_MIN_HN_POINTS = 5;
-const DEFAULT_CHUNK_SIZE = 10;
+// Jintel server enforces a 20-symbol cap per batchEnrich request. Keep chunk size
+// well under that so a bump in either direction doesn't immediately trip the cap,
+// and so per-request wall time stays reasonable (news/filings/social resolvers are
+// heavy).
+const DEFAULT_CHUNK_SIZE = 8;
+
+/** Small delay before the single retry on a transient batch failure. */
+const RETRY_DELAY_MS = 500;
 
 // Material SEC filings only — drop OTHER (prospectuses, 3/5 stubs, etc.) at the source.
 const MATERIAL_FILING_TYPES: FilingType[] = ['FILING_10K', 'FILING_10Q', 'FILING_8K', 'ANNUAL_REPORT'];
@@ -129,58 +136,85 @@ export async function fetchJintelSignals(
   let totalDuplicates = 0;
 
   const chunkSize = options?.chunkSize ?? DEFAULT_CHUNK_SIZE;
+  const requestVars = {
+    filter,
+    filingsFilter,
+    riskSignalFilter,
+    newsFilter,
+    insiderTradesFilter,
+    topHoldersFilter,
+  };
+
   for (let i = 0; i < tickers.length; i += chunkSize) {
     const chunk = tickers.slice(i, i + chunkSize);
-    try {
-      const entities = await client.request<Entity[]>(query, {
-        tickers: chunk,
-        filter,
-        filingsFilter,
-        riskSignalFilter,
-        newsFilter,
-        insiderTradesFilter,
-        topHoldersFilter,
-      });
+    const chunkStart = Date.now();
+    let entities: Entity[] | null = null;
+    let lastError: unknown = null;
 
-      // Build ticker → entity map
-      const entityByTicker = new Map<string, Entity>();
-      for (const entity of entities) {
-        for (const t of entity.tickers ?? []) {
-          entityByTicker.set(t.toUpperCase(), entity);
+    // One-shot retry — transient network blips and upstream 5xx shouldn't drop
+    // an entire chunk of the micro flow. A second failure gives up and moves on.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        entities = await client.request<Entity[]>(query, { tickers: chunk, ...requestVars });
+        break;
+      } catch (err) {
+        lastError = err;
+        if (attempt === 0) {
+          logger.warn('Jintel batch fetch failed — retrying once', {
+            chunk: chunk.slice(0, 3),
+            error: err instanceof Error ? err.message : String(err),
+          });
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
         }
       }
-
-      // Convert each entity's data to signals
-      const rawSignals: RawSignalInput[] = [];
-      for (const inputTicker of chunk) {
-        const entity = entityByTicker.get(inputTicker.toUpperCase());
-        if (!entity) continue;
-
-        const entityTickers = entity.tickers ?? [];
-        // Put the queried ticker first so formatAssetLabel(entity.name, tickers[0]) shows the alias the caller asked for.
-        const inputTickerUpper = inputTicker.toUpperCase();
-        const signalTickers = [inputTicker, ...entityTickers.filter((t) => t.toUpperCase() !== inputTickerUpper)];
-
-        rawSignals.push(...enrichmentToSignals(entity, signalTickers));
-      }
-
-      if (rawSignals.length > 0) {
-        const result = await ingestor.ingest(rawSignals);
-        totalIngested += result.ingested;
-        totalDuplicates += result.duplicates;
-      }
-
-      logger.info('Jintel batch fetched', {
-        tickers: chunk,
-        entities: entities.length,
-        signals: rawSignals.length,
-      });
-    } catch (err) {
-      logger.warn('Jintel batch fetch failed', {
-        chunk: chunk.slice(0, 3),
-        error: err instanceof Error ? err.message : String(err),
-      });
     }
+
+    const durationMs = Date.now() - chunkStart;
+
+    if (entities === null) {
+      logger.warn('Jintel batch fetch failed after retry', {
+        chunk: chunk.slice(0, 3),
+        chunkSize: chunk.length,
+        durationMs,
+        error: lastError instanceof Error ? lastError.message : String(lastError),
+      });
+      continue;
+    }
+
+    // Build ticker → entity map
+    const entityByTicker = new Map<string, Entity>();
+    for (const entity of entities) {
+      for (const t of entity.tickers ?? []) {
+        entityByTicker.set(t.toUpperCase(), entity);
+      }
+    }
+
+    // Convert each entity's data to signals
+    const rawSignals: RawSignalInput[] = [];
+    for (const inputTicker of chunk) {
+      const entity = entityByTicker.get(inputTicker.toUpperCase());
+      if (!entity) continue;
+
+      const entityTickers = entity.tickers ?? [];
+      // Put the queried ticker first so formatAssetLabel(entity.name, tickers[0]) shows the alias the caller asked for.
+      const inputTickerUpper = inputTicker.toUpperCase();
+      const signalTickers = [inputTicker, ...entityTickers.filter((t) => t.toUpperCase() !== inputTickerUpper)];
+
+      rawSignals.push(...enrichmentToSignals(entity, signalTickers));
+    }
+
+    if (rawSignals.length > 0) {
+      const result = await ingestor.ingest(rawSignals);
+      totalIngested += result.ingested;
+      totalDuplicates += result.duplicates;
+    }
+
+    logger.info('Jintel batch fetched', {
+      tickers: chunk,
+      entities: entities.length,
+      signals: rawSignals.length,
+      durationMs,
+    });
   }
 
   logger.info('Jintel signal fetch complete', { ingested: totalIngested, duplicates: totalDuplicates });
