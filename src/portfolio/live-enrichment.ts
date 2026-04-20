@@ -80,7 +80,7 @@ export function clearLiveEnrichmentCache(): void {
  * within a single GraphQL request dedupe the upstream call. Returns `undefined`
  * on failure — callers should treat that as "no baseline available".
  */
-async function fetchCachedHistory(
+export async function fetchCachedHistory(
   client: JintelClient,
   tickers: string[],
   range: string,
@@ -127,7 +127,7 @@ export function isUSMarketOpen(): boolean {
  *  would only contain pre-market candles that the regular-hours filter strips out,
  *  leaving an empty sparkline. Returning false widens the range to 5d so the
  *  previous session's price action is visible instead. */
-function isUSMarketSessionAvailable(): boolean {
+export function isUSMarketSessionAvailable(): boolean {
   const now = new Date();
   const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const day = et.getDay();
@@ -157,7 +157,7 @@ function toETDate(dateStr: string): string {
  *  and keeps only the latest trading date so a multi-session 1d range doesn't produce an overnight cliff.
  *  When `livePrice` is omitted (e.g. the live quote endpoint returned no data for this ticker),
  *  the sparkline ends at the most recent close from history instead. */
-function buildSparkline(history: TickerPriceHistory, livePrice?: number, regularHoursOnly = false): number[] {
+export function buildSparkline(history: TickerPriceHistory, livePrice?: number, regularHoursOnly = false): number[] {
   let candles = history.history;
   if (regularHoursOnly) {
     candles = candles.filter((p) => {
@@ -214,9 +214,10 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
   // weekends, and holidays widen to 5d so buildSparkline can find the most
   // recent complete trading session.
   const equityRange = marketSessionAvailable ? '1d' : '5d';
-  // Always 5m so weekend/holiday sparklines show the last session's open→close
-  // price action at the same resolution as weekday sparklines.
-  const equityInterval = '5m';
+  // 1m candles so the sparkline traces every minute of the regular session;
+  // off-hours we widen to 5d so buildSparkline can find the last complete
+  // 9:30→16:00 arc at the same resolution.
+  const equityInterval = '1m';
 
   // Check quote cache first to avoid hammering Jintel on repeated polls
   const cachedQuotes = getCachedQuotes(symbols);
@@ -252,7 +253,7 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
   const [quotesResult, equityHistoryMap, cryptoHistoryMap] = await Promise.all([
     quotesPromise,
     equitySymbols.length > 0 ? fetchHistory(equitySymbols, equityRange, equityInterval) : undefined,
-    cryptoSymbols.length > 0 ? fetchHistory(cryptoSymbols, '1d') : undefined,
+    cryptoSymbols.length > 0 ? fetchHistory(cryptoSymbols, '1d', '1m') : undefined,
   ]);
 
   // Handle quotes failure

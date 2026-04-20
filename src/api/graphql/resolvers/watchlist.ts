@@ -45,7 +45,9 @@ export async function watchlistQuery() {
   // Best-effort enrichment + sparklines — fetch in parallel
   const [enriched, sparklines] = await Promise.all([
     enrichment ? enrichment.getEnrichedBatch(symbols) : new Map(),
-    enrichment ? enrichment.getSparklines(symbols) : new Map(),
+    enrichment
+      ? enrichment.getSparklines(entries.map((e) => ({ symbol: e.symbol, assetClass: e.assetClass })))
+      : new Map(),
   ]);
 
   return entries.map((entry) => {

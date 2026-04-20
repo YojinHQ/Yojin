@@ -6,23 +6,18 @@ import type { EnrichmentField, JintelClient } from '@yojinhq/jintel-client';
 import { EnrichmentCacheEntrySchema } from './types.js';
 import type { EnrichmentCacheEntry } from './types.js';
 import type { WatchlistStore } from './watchlist-store.js';
+import type { AssetClass } from '../api/graphql/types.js';
 import { getLogger } from '../logging/index.js';
+import { buildSparkline, fetchCachedHistory, isUSMarketSessionAvailable } from '../portfolio/live-enrichment.js';
 
 const log = getLogger().sub('watchlist-enrichment');
 
 const ENRICHMENT_FIELDS: EnrichmentField[] = ['market', 'risk'];
 const DEFAULT_TTL_SECONDS = 3600; // 1 hour
 const MIN_RESOLVE_RETRY_SECONDS = 60;
-const SPARKLINE_TTL_MS = 15 * 60 * 1000; // 15 min
-
-interface SparklineCacheEntry {
-  points: number[];
-  fetchedAt: number;
-}
 
 export class WatchlistEnrichment {
   private readonly cache = new Map<string, EnrichmentCacheEntry>();
-  private readonly sparklineCache = new Map<string, SparklineCacheEntry>();
   private readonly cachePath: string;
   private readonly store: WatchlistStore;
   private jintelClient?: JintelClient;
@@ -202,41 +197,49 @@ export class WatchlistEnrichment {
   }
 
   /**
-   * Batch-fetch 7-day price history and build sparklines (closing prices).
+   * Build sparklines that match the portfolio-card spec: regular-hours only,
+   * 1m candles, last complete 9:30→16:00 session off-hours. Crypto is rolling
+   * 24h since it trades through the session break.
+   *
+   * Reuses the portfolio module's shared `historyCache` (30s TTL) so concurrent
+   * portfolio + watchlist loads for the same ticker dedupe the Jintel call.
    * Best-effort — returns an empty map on failure.
    */
-  async getSparklines(symbols: string[]): Promise<Map<string, number[]>> {
-    if (symbols.length === 0) return new Map();
+  async getSparklines(entries: { symbol: string; assetClass: AssetClass }[]): Promise<Map<string, number[]>> {
+    const client = this.jintelClient;
+    if (!client || entries.length === 0) return new Map();
 
-    const now = Date.now();
-    const result = new Map<string, number[]>();
-    const stale: string[] = [];
-
-    for (const s of symbols) {
-      const key = s.toUpperCase();
-      const hit = this.sparklineCache.get(key);
-      if (hit && now - hit.fetchedAt < SPARKLINE_TTL_MS) {
-        result.set(key, hit.points);
-      } else {
-        stale.push(key);
-      }
+    const equitySymbols: string[] = [];
+    const cryptoSymbols: string[] = [];
+    for (const e of entries) {
+      const key = e.symbol.toUpperCase();
+      if (e.assetClass === 'CRYPTO') cryptoSymbols.push(key);
+      else equitySymbols.push(key);
     }
 
-    if (!this.jintelClient || stale.length === 0) return result;
+    const equityRange = isUSMarketSessionAvailable() ? '1d' : '5d';
+    const [equityMap, cryptoMap] = await Promise.all([
+      equitySymbols.length > 0 ? fetchCachedHistory(client, equitySymbols, equityRange, '1m') : undefined,
+      cryptoSymbols.length > 0 ? fetchCachedHistory(client, cryptoSymbols, '1d', '1m') : undefined,
+    ]);
 
-    try {
-      const response = await this.jintelClient.priceHistory(stale, '5d', '30m');
-      if (!response.success) return result;
-      for (const ticker of response.data) {
-        const points = ticker.history.map((p: { close: number }) => p.close);
-        if (points.length > 0) {
-          const key = ticker.ticker.toUpperCase();
-          this.sparklineCache.set(key, { points, fetchedAt: now });
-          result.set(key, points);
-        }
-      }
-    } catch {
-      log.warn('Failed to fetch sparkline price history', { symbols: stale });
+    const result = new Map<string, number[]>();
+    for (const sym of equitySymbols) {
+      const hist = equityMap?.get(sym);
+      if (!hist) continue;
+      const points = buildSparkline(hist, undefined, true);
+      if (points.length >= 2) result.set(sym, points);
+    }
+    for (const sym of cryptoSymbols) {
+      const hist = cryptoMap?.get(sym);
+      if (!hist) continue;
+      const points = buildSparkline(hist, undefined, false);
+      if (points.length >= 2) result.set(sym, points);
+    }
+    if (equityMap === undefined && cryptoMap === undefined) {
+      log.warn('Failed to fetch sparkline price history', {
+        symbols: [...equitySymbols, ...cryptoSymbols],
+      });
     }
     return result;
   }
@@ -248,7 +251,6 @@ export class WatchlistEnrichment {
   async removeCache(symbol: string): Promise<void> {
     const key = symbol.toUpperCase();
     this.cache.delete(key);
-    this.sparklineCache.delete(key);
     await this.flush();
   }
 
@@ -265,7 +267,6 @@ export class WatchlistEnrichment {
         this.cache.delete(key);
         changed = true;
       }
-      this.sparklineCache.delete(key);
     }
     if (changed) await this.flush();
     // Also clear the JintelClient response cache so the next batchEnrich
