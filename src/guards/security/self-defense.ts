@@ -23,15 +23,24 @@ export interface SelfDefenseOptions {
   verifyIntegrity?: boolean;
 }
 
+/** Fold to a case-insensitive form on Windows so prefix checks survive case mismatches. */
+function pathComparable(p: string): string {
+  return process.platform === 'win32' ? p.toLowerCase() : p;
+}
+
 export class SelfDefenseGuard implements Guard {
   readonly name = 'self-defense';
+  /** Real on-disk paths (preserved case) — used for hashing and reporting. */
   private readonly protectedPaths: string[];
+  /** Same paths folded for comparison (lowercased on Windows). */
+  private readonly comparableProtectedPaths: string[];
   private readonly killSwitch?: KillSwitch;
   private readonly verifyIntegrity: boolean;
   private readonly fileHashes = new Map<string, string>();
 
   constructor(options: SelfDefenseOptions) {
     this.protectedPaths = options.protectedPaths.map((p) => resolve(p));
+    this.comparableProtectedPaths = this.protectedPaths.map(pathComparable);
     this.killSwitch = options.killSwitch;
     this.verifyIntegrity = options.verifyIntegrity ?? false;
 
@@ -47,11 +56,11 @@ export class SelfDefenseGuard implements Guard {
   check(action: ProposedAction): GuardResult {
     // Block writes/deletes targeting protected files
     if (action.path) {
-      const normalized = resolve(action.path);
+      const normalized = pathComparable(resolve(action.path));
       const isWrite = action.type === 'file_write' || action.type === 'file_delete' || action.type === 'file_modify';
 
       if (isWrite) {
-        for (const protectedPath of this.protectedPaths) {
+        for (const protectedPath of this.comparableProtectedPaths) {
           if (normalized === protectedPath || normalized.startsWith(protectedPath + sep)) {
             return {
               pass: false,
