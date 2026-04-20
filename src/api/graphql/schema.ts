@@ -1376,7 +1376,12 @@ export const typeDefs = /* GraphQL */ `
     activityLog(types: [ActivityEventType!], since: String, limit: Int): [ActivityEvent!]!
     summaries(ticker: String, flow: SummaryFlow, since: String, limit: Int): [Summary!]!
     summary(id: ID!): Summary
-    actions(status: ActionStatus, since: String, limit: Int, dismissed: Boolean): [Action!]!
+    """
+    Fetch BUY/SELL Actions produced by Strategy triggers. By default hides low-signal
+    entries (REVIEW verdict, LOW conviction, severity below the HIGH label threshold)
+    to keep the feed focused. Pass includeLowSignal: true to see the full audit trail.
+    """
+    actions(status: ActionStatus, since: String, limit: Int, dismissed: Boolean, includeLowSignal: Boolean): [Action!]!
     action(id: ID!): Action
     strategies(category: StrategyCategory, active: Boolean, style: StrategyStyle, query: String): [Strategy!]!
     strategy(id: ID!): Strategy

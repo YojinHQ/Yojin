@@ -1660,8 +1660,8 @@ export const ACTION_FIELDS = gql`
 `;
 
 export const ACTIONS_QUERY = gql`
-  query Actions($status: ActionStatus, $since: String, $limit: Int, $dismissed: Boolean) {
-    actions(status: $status, since: $since, limit: $limit, dismissed: $dismissed) {
+  query Actions($status: ActionStatus, $since: String, $limit: Int, $dismissed: Boolean, $includeLowSignal: Boolean) {
+    actions(status: $status, since: $since, limit: $limit, dismissed: $dismissed, includeLowSignal: $includeLowSignal) {
       ...ActionFields
     }
   }

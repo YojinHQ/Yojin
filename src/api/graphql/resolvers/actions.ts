@@ -17,6 +17,20 @@ function deriveSeverityLabel(severity: number | undefined): string {
   return 'MEDIUM';
 }
 
+/**
+ * Low-signal filter — actions the user has told us not to bother with.
+ *
+ * Drops REVIEW verdicts (LLM couldn't commit), LOW-conviction BUY/SELL,
+ * and explicit low-severity actions. Callers can opt in via `includeLowSignal`
+ * to see the full audit trail.
+ */
+function isLowSignal(action: Action): boolean {
+  if (action.verdict === 'REVIEW') return true;
+  if (action.conviction === 'LOW') return true;
+  if (action.severity != null && action.severity < 0.4) return true;
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -109,7 +123,13 @@ function toGql(action: Action): ActionGql {
 
 export async function actionsResolver(
   _parent: unknown,
-  args: { status?: ActionStatus; since?: string; limit?: number; dismissed?: boolean },
+  args: {
+    status?: ActionStatus;
+    since?: string;
+    limit?: number;
+    dismissed?: boolean;
+    includeLowSignal?: boolean;
+  },
 ): Promise<ActionGql[]> {
   if (!store) return [];
 
@@ -120,7 +140,8 @@ export async function actionsResolver(
     dismissed: args.dismissed,
   });
 
-  return actions.map(toGql);
+  const filtered = args.includeLowSignal ? actions : actions.filter((a) => !isLowSignal(a));
+  return filtered.map(toGql);
 }
 
 export async function actionResolver(_parent: unknown, args: { id: string }): Promise<ActionGql | null> {

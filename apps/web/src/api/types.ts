@@ -1209,6 +1209,7 @@ export interface ActionsQueryVariables {
   since?: string;
   limit?: number;
   dismissed?: boolean;
+  includeLowSignal?: boolean;
 }
 
 export interface ActionQueryResult {
