@@ -115,12 +115,17 @@ function classifySignal(severity: IntelFeedItem['severity']): 'alert' | 'insight
   return severity === 'CRITICAL' ? 'alert' : 'insight';
 }
 
-/** Signals sourced purely from Jintel ENRICHMENT (ownership breakdowns, fundamentals
- * snapshots, technicals readings) are raw data points, not synthesized intel, and
- * must not surface in the Intel Feed — only Alerts, Insights, and Actions belong here. */
-function isEnrichmentOnly(sources?: { type?: string | null }[] | null): boolean {
-  const s = sources ?? [];
-  return s.length > 0 && s.every((x) => x.type === 'ENRICHMENT');
+/** Signal types that remain valuable in the Intel Feed even when sourced purely
+ * from Jintel ENRICHMENT (news items, sentiment readings, social chatter are
+ * narrative data, not raw numeric snapshots). All other ENRICHMENT-only signals
+ * (fundamentals, technicals, ownership, filings) are raw data points and stay
+ * on the Signals page for drill-down. */
+const ENRICHMENT_FEED_ALLOWED: ReadonlySet<string> = new Set(['NEWS', 'SENTIMENT', 'SOCIALS']);
+
+function shouldHideFromFeed(signal: { type: string; sources?: { type?: string | null }[] | null }): boolean {
+  const sources = signal.sources ?? [];
+  const enrichmentOnly = sources.length > 0 && sources.every((x) => x.type === 'ENRICHMENT');
+  return enrichmentOnly && !ENRICHMENT_FEED_ALLOWED.has(signal.type);
 }
 
 const categoryLabel: Record<ItemType, string> = {
@@ -687,7 +692,7 @@ function IntelFeedContent({
   // Map API data into IntelFeedItem[]
   const items: IntelFeedItem[] = useMemo(() => {
     const signalItems: IntelFeedItem[] = (data?.curatedSignals ?? [])
-      .filter((cs) => !isEnrichmentOnly(cs.signal.sources))
+      .filter((cs) => !shouldHideFromFeed(cs.signal))
       .map((cs) => {
         const s = cs.signal;
         const severity = cs.severity ?? 'LOW';
