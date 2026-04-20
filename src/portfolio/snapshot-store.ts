@@ -134,7 +134,7 @@ export class PortfolioSnapshotStore {
 
   /**
    * Remove a cash balance for (platform, currency) and append a new snapshot.
-   * Missing keys are a no-op — still appends a snapshot so the UI refreshes.
+   * Returns the existing snapshot unchanged when the key is absent (no-op).
    */
   async removeCashBalance(params: RemoveCashBalanceParams): Promise<PortfolioSnapshot> {
     const currency = params.currency.toUpperCase();
@@ -144,6 +144,10 @@ export class PortfolioSnapshotStore {
     const existing = (await this.getLatest()) ?? null;
     const prevBalances = existing?.cashBalances ?? [];
     const nextBalances = prevBalances.filter((b) => cashKey(b) !== key);
+
+    if (existing && nextBalances.length === prevBalances.length) {
+      return existing;
+    }
 
     return this.appendCashSnapshot(existing, nextBalances, `Cash balance removed: ${platform} ${currency}`);
   }

@@ -144,9 +144,16 @@ export default function CashBalanceModal({ open, onClose, initial }: CashBalance
               Cancel
             </Button>
           )}
-          <Button variant="primary" size="sm" onClick={handleSave} loading={saving} disabled={deleting}>
-            {isEdit ? 'Save' : 'Add'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {isEdit && (
+              <Button variant="ghost" size="sm" onClick={onClose} disabled={saving || deleting}>
+                Cancel
+              </Button>
+            )}
+            <Button variant="primary" size="sm" onClick={handleSave} loading={saving} disabled={deleting}>
+              {isEdit ? 'Save' : 'Add'}
+            </Button>
+          </div>
         </div>
       </div>
     </Modal>
