@@ -47,7 +47,15 @@ const logger = createSubsystemLogger('jintel-signal-fetcher');
 // micro tick (5 min) but cold fields only hourly — cuts Jintel credit burn
 // ~55% vs pulling everything every tick.
 //
-// HOT: intraday-changing — quotes, news articles, social/HN posts, sentiment.
+// PRICE: tied to live market — quote + technical indicators. Only meaningful
+//        when the underlying market is open (equities gated to US RTH by the
+//        scheduler; crypto trades 24/7).
+// NARRATIVE: story-driving feeds — news, sentiment, social, discussions. These
+//        fire around the clock (after-hours press releases, overnight social
+//        moments, weekend reddit threads) and must be polled 24/7 regardless
+//        of market state.
+// HOT = PRICE ∪ NARRATIVE, kept as the union for callers that want every
+//        intraday-changing field (e.g. on-demand agent tools).
 // COLD: updates daily or less — SEC filings, 13F holdings, Form 4, ownership,
 //       earnings press releases. Polling these every 5 min is pure waste.
 //
@@ -55,13 +63,13 @@ const logger = createSubsystemLogger('jintel-signal-fetcher');
 // predictions intentionally excluded — too niche for automated runs, agent-only.
 // research excluded — Exa-backed, returns low-quality web search results (score 0,
 // no URLs, duplicate "Market Snapshot" titles). Available on-demand via get_research tool.
+export const PRICE_ENRICHMENT_FIELDS: readonly EnrichmentField[] = ['market', 'technicals'];
+
+export const NARRATIVE_ENRICHMENT_FIELDS: readonly EnrichmentField[] = ['news', 'sentiment', 'social', 'discussions'];
+
 export const HOT_ENRICHMENT_FIELDS: readonly EnrichmentField[] = [
-  'market',
-  'technicals',
-  'news',
-  'sentiment',
-  'social',
-  'discussions',
+  ...PRICE_ENRICHMENT_FIELDS,
+  ...NARRATIVE_ENRICHMENT_FIELDS,
 ];
 
 export const COLD_ENRICHMENT_FIELDS: readonly EnrichmentField[] = [

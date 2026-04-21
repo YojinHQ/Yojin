@@ -40,7 +40,8 @@ import type { MicroInsight, MicroInsightSource } from './insights/micro-types.js
 import type { InsightReport } from './insights/types.js';
 import {
   COLD_ENRICHMENT_FIELDS,
-  HOT_ENRICHMENT_FIELDS,
+  NARRATIVE_ENRICHMENT_FIELDS,
+  PRICE_ENRICHMENT_FIELDS,
   fetchJintelSignals,
   fetchMacroIndicators,
 } from './jintel/signal-fetcher.js';
@@ -572,11 +573,14 @@ export class Scheduler {
     logger.info('Micro research batch started', { symbols });
 
     try {
-      // Fetch Jintel signals. Two-axis split:
-      //   1. Field cadence: HOT fields (quote/news/social) every tick, COLD fields
-      //      (filings, 13F, Form 4, ownership) only hourly. Cuts credit burn ~55%.
-      //   2. Market-hours gating: equities skip the HOT fetch outside US market hours
-      //      — news/sentiment barely change overnight. Crypto runs HOT 24/7.
+      // Fetch Jintel signals. Three-axis split:
+      //   1. PRICE fields (market/technicals) — gated to US market hours for
+      //      equities; crypto runs 24/7. Quotes off-hours are stale placeholders.
+      //   2. NARRATIVE fields (news/sentiment/social/discussions) — 24/7 for
+      //      every asset class. After-hours press releases, overnight social
+      //      moments, and weekend threads must not wait for the next open.
+      //   3. COLD fields (filings, 13F, Form 4, ownership) — at most hourly.
+      //      Filings update daily at best; polling every 5 min is pure waste.
       // Within each fetch, bucket first-run (7d window) vs recurring (oldest lastMicroAt)
       // so a single cold start doesn't drag the batch to 7d. fetchJintelSignals chunks
       // internally to stay under the Jintel 20-symbol-per-request cap.
@@ -587,10 +591,15 @@ export class Scheduler {
         const marketOpen = isUSMarketOpen();
         const ingestor = this.signalIngestor;
 
-        const hotEligible = assets.filter((a) => {
+        const priceEligible = assets.filter((a) => {
           const state = this.microRegistry.get(a.symbol);
           return isAlwaysOnAsset(state) || marketOpen;
         });
+
+        // Narrative fires for everyone every tick — news/sentiment/social have no
+        // market-hours concept. Earnings releases, Korean market moves, viral
+        // tweets, and weekend reddit threads must all land within one cycle.
+        const narrativeEligible = assets;
 
         const coldEligible = assets.filter((a) => {
           const last = this.microRegistry.get(a.symbol)?.lastColdMicroAt;
@@ -633,9 +642,13 @@ export class Scheduler {
           return { ingested, duplicates };
         };
 
-        const hotResult = await runFetch(
-          hotEligible.map((a) => a.symbol),
-          HOT_ENRICHMENT_FIELDS,
+        const priceResult = await runFetch(
+          priceEligible.map((a) => a.symbol),
+          PRICE_ENRICHMENT_FIELDS,
+        );
+        const narrativeResult = await runFetch(
+          narrativeEligible.map((a) => a.symbol),
+          NARRATIVE_ENRICHMENT_FIELDS,
         );
         const coldResult = await runFetch(
           coldEligible.map((a) => a.symbol),
@@ -652,15 +665,16 @@ export class Scheduler {
           }
         }
 
-        const totalIngested = hotResult.ingested + coldResult.ingested;
-        const totalDuplicates = hotResult.duplicates + coldResult.duplicates;
-        if (totalIngested > 0 || hotEligible.length !== assets.length || coldEligible.length > 0) {
+        const totalIngested = priceResult.ingested + narrativeResult.ingested + coldResult.ingested;
+        const totalDuplicates = priceResult.duplicates + narrativeResult.duplicates + coldResult.duplicates;
+        if (totalIngested > 0 || priceEligible.length !== assets.length || coldEligible.length > 0) {
           logger.info('Micro research Jintel fetch', {
             ingested: totalIngested,
             duplicates: totalDuplicates,
-            hotSymbols: hotEligible.length,
+            priceSymbols: priceEligible.length,
+            narrativeSymbols: narrativeEligible.length,
             coldSymbols: coldEligible.length,
-            skippedEquitiesOffHours: assets.length - hotEligible.length,
+            skippedEquitiesOffHours: assets.length - priceEligible.length,
             marketOpen,
           });
         }
