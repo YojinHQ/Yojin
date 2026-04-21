@@ -172,10 +172,8 @@ export default function StrategyDetailModal({ open, strategyId, onClose }: Strat
   const [error, setError] = useState<string | null>(null);
 
   const strategy = result.data?.strategy;
-  const sections = useMemo(
-    () => (strategy?.content ? parseContentSections(strategy.content) : []),
-    [strategy?.content],
-  );
+  const content = strategy?.content;
+  const sections = useMemo(() => (content ? parseContentSections(content) : []), [content]);
 
   async function handleCopy() {
     setCopying(true);

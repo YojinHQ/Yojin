@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useMutation, useQuery } from 'urql';
 import { cn } from '../../lib/utils';
 import Card from '../common/card';
@@ -173,17 +173,24 @@ function ModelPicker() {
   const keychainResult = provider === 'codex' ? codexKeychainResult : claudeKeychainResult;
   const reexecuteKeychain = provider === 'codex' ? reexecuteCodexKeychain : reexecuteClaudeKeychain;
 
+  const hydrateTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
     if (result.data?.aiConfig) {
       const resolved = resolveProvider(result.data.aiConfig.defaultProvider);
-      setProvider(resolved);
       const models = PROVIDER_MODELS[resolved];
       const savedModel = result.data.aiConfig.defaultModel;
       const modelStillValid = models.some((m) => m.id === savedModel);
       const validModel = modelStillValid ? savedModel : models[0].id;
-      setSelected(validModel);
-      setDirty(!modelStillValid);
+      if (hydrateTimeoutRef.current) clearTimeout(hydrateTimeoutRef.current);
+      hydrateTimeoutRef.current = setTimeout(() => {
+        setProvider(resolved);
+        setSelected(validModel);
+        setDirty(!modelStillValid);
+      }, 0);
     }
+    return () => {
+      if (hydrateTimeoutRef.current) clearTimeout(hydrateTimeoutRef.current);
+    };
   }, [result.data]);
 
   const hasKey = result.data?.aiConfig?.[PROVIDER_KEY_INFO[provider].apiKeyField] ?? false;

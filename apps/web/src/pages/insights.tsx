@@ -197,14 +197,17 @@ function InsightsContent() {
   const positions = useMemo(() => portfolioResult.data?.portfolio?.positions ?? [], [portfolioResult.data]);
   const hasPositions = positions.length > 0;
 
-  // Curated signals — one query, all tickers, 7-day window; filter client-side
+  // Curated signals — one query, all tickers, 7-day window; filter client-side.
+  // Capture the "7 days ago" cutoff once at mount so subsequent renders don't produce
+  // a fresh variables object (which would retrigger the query).
+  const [sinceIso] = useState(() => new Date(Date.now() - 7 * 86_400_000).toISOString());
   const curatedVars: CuratedSignalsVariables = useMemo(
     () => ({
       limit: 500,
-      since: new Date(Date.now() - 7 * 86_400_000).toISOString(),
+      since: sinceIso,
       feedTarget: 'PORTFOLIO' as const,
     }),
-    [],
+    [sinceIso],
   );
   const [curatedResult, reexecuteCurated] = useQuery<CuratedSignalsQueryResult, CuratedSignalsVariables>({
     query: CURATED_SIGNALS_QUERY,
