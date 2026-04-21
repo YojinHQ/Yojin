@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useQuery } from 'urql';
 import { cn } from '../../lib/utils';
@@ -38,46 +38,35 @@ import { SymbolLogo } from '../common/symbol-logo';
 import { GateCard } from '../common/feature-gate';
 import { ShareMenu } from '../insights/share-menu';
 import { timeAgo } from '../../lib/utils';
+import { CANDLE_CONFIG, INTRADAY_CANDLES, PERIOD_CANDLES, type Candle } from './chart-candle-config';
+import { filterEquitySessionCandles } from './chart-session-filter';
 
-/** Stable 7-day lookback for signal queries (computed once at module load). */
 const SEVEN_DAYS_AGO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-// ---------------------------------------------------------------------------
-// Scale selector types & mapping
-// ---------------------------------------------------------------------------
+const EXTENDED_HOURS_STORAGE_KEY = 'asset-chart-extended-hours-v1';
 
-type Scale = '15m' | '30m' | '1h' | '1d' | '1wk' | '1mo' | '5y';
-
-const INTRADAY_SCALES: { value: Scale; label: string }[] = [
-  { value: '15m', label: '15min' },
-  { value: '30m', label: '30min' },
-  { value: '1h', label: '1hr' },
-];
-
-const PERIOD_SCALES: { value: Scale; label: string }[] = [
-  { value: '1d', label: 'Daily' },
-  { value: '1wk', label: 'Weekly' },
-  { value: '1mo', label: 'Monthly' },
-  { value: '5y', label: '5Y' },
-];
-
-const SCALE_CONFIG: Record<Scale, { interval: string; range: string }> = {
-  '15m': { interval: '15m', range: '5d' },
-  '30m': { interval: '30m', range: '5d' },
-  '1h': { interval: '1h', range: '5d' },
-  '1d': { interval: '1d', range: '3m' },
-  '1wk': { interval: '1wk', range: '1y' },
-  '1mo': { interval: '1mo', range: '1y' },
-  '5y': { interval: '1wk', range: '5y' },
-};
-
-function isIntraday(scale: Scale): boolean {
-  return scale === '15m' || scale === '30m' || scale === '1h';
+function readExtendedHoursPref(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(EXTENDED_HOURS_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
 }
 
-// ---------------------------------------------------------------------------
-// Formatting helpers
-// ---------------------------------------------------------------------------
+function writeExtendedHoursPref(value: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(EXTENDED_HOURS_STORAGE_KEY, String(value));
+  } catch {
+    /* ignore quota / disabled storage */
+  }
+}
+
+// Scraper occasionally mislabels crypto as EQUITY; symbol suffix is the fallback.
+function isCryptoSymbol(symbol: string): boolean {
+  return /-USDT?$/i.test(symbol);
+}
 
 function fmtCurrency(value: number): string {
   return value.toLocaleString('en-US', {
@@ -112,10 +101,6 @@ function pnlColor(value: number): string {
   return value > 0 ? 'text-success' : 'text-error';
 }
 
-// ---------------------------------------------------------------------------
-// Badge helpers
-// ---------------------------------------------------------------------------
-
 const ratingVariant: Record<InsightRating, BadgeVariant> = {
   VERY_BULLISH: 'success',
   BULLISH: 'success',
@@ -139,10 +124,6 @@ const sentimentVariant: Record<string, BadgeVariant> = {
   MIXED: 'warning',
 };
 
-// ---------------------------------------------------------------------------
-// Metric card
-// ---------------------------------------------------------------------------
-
 function MetricCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <Card>
@@ -152,10 +133,6 @@ function MetricCard({ label, value, sub, color }: { label: string; value: string
     </Card>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Day range bar
-// ---------------------------------------------------------------------------
 
 function DayRange({ low, high, current }: { low: number; high: number; current: number }) {
   const range = high - low;
@@ -177,10 +154,6 @@ function DayRange({ low, high, current }: { low: number; high: number; current: 
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Main modal
-// ---------------------------------------------------------------------------
 
 export default function AssetDetailModal() {
   const { open, symbol, closeAssetDetail } = useAssetDetailModal();
@@ -215,17 +188,30 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
   const [quoteResult] = useQuote(symbol);
   const quote = quoteResult.data?.quote ?? undefined;
 
-  const [scale, setScale] = useState<Scale>('15m');
-  const effectiveScale: Scale = scale;
-  // Remember last intraday selection when switching back from period scales
-  const [lastIntraday, setLastIntraday] = useState<Scale>('15m');
+  const isEquity = position != null && position.assetClass !== 'CRYPTO' && !isCryptoSymbol(symbol);
 
-  const handleScaleChange = (s: Scale) => {
-    setScale(s);
-    if (isIntraday(s)) setLastIntraday(s);
-  };
+  const [candle, setCandle] = useState<Candle>('15m');
+  const [resetKey, setResetKey] = useState(0);
+  const [extendedHours, setExtendedHoursState] = useState<boolean>(() => readExtendedHoursPref());
 
-  const { interval, range } = SCALE_CONFIG[effectiveScale];
+  const candleConfig = CANDLE_CONFIG[candle];
+  const { interval, intraday, initialWindowMs } = candleConfig;
+  const range = isEquity ? candleConfig.range : candleConfig.cryptoRange;
+
+  const pickCandle = useCallback(
+    (next: Candle) => {
+      if (next === candle) return;
+      setCandle(next);
+      setResetKey((k) => k + 1);
+    },
+    [candle],
+  );
+
+  const setExtendedHours = useCallback((next: boolean) => {
+    setExtendedHoursState(next);
+    writeExtendedHoursPref(next);
+  }, []);
+
   const historyVars = useMemo<PriceHistoryQueryVariables>(
     () => ({ tickers: [symbol], range, interval }),
     [symbol, range, interval],
@@ -234,9 +220,24 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
     query: PRICE_HISTORY_QUERY,
     variables: historyVars,
   });
-  const priceHistory = historyResult.data?.priceHistory?.[0]?.history ?? [];
+  const priceHistory = useMemo(() => {
+    const raw = historyResult.data?.priceHistory?.[0]?.history ?? [];
+    if (!isEquity || !intraday) return raw;
+    return filterEquitySessionCandles(raw, { extendedHours });
+  }, [historyResult.data, isEquity, intraday, extendedHours]);
 
-  // Real-time price stream
+  const resetKeyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    resetKeyTimerRef.current = setTimeout(() => {
+      setResetKey((k) => k + 1);
+    }, 0);
+    return () => {
+      if (resetKeyTimerRef.current !== null) clearTimeout(resetKeyTimerRef.current);
+    };
+  }, [symbol]);
+
+  const showExtendedHoursToggle = isEquity && intraday;
+
   const [priceMoveSub] = useOnPriceMove(symbol, 0);
   const latestTick = priceMoveSub.data?.[0];
   const isLive = priceMoveSub.fetching && !!latestTick;
@@ -398,55 +399,13 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
       <Card
         title="Price"
         headerAction={
-          <div className="flex items-center gap-1">
-            {/* Intraday dropdown */}
-            <div className="relative">
-              <select
-                value={isIntraday(scale) ? scale : '__period__'}
-                onChange={(e) => handleScaleChange(e.target.value as Scale)}
-                className={cn(
-                  'cursor-pointer appearance-none rounded pl-2 pr-5 py-0.5 text-2xs font-medium transition-colors bg-transparent border',
-                  isIntraday(scale)
-                    ? 'border-accent-primary text-accent-primary'
-                    : 'border-border-light text-text-muted hover:text-text-secondary',
-                )}
-              >
-                {!isIntraday(scale) && (
-                  <option value="__period__" hidden>
-                    {INTRADAY_SCALES.find((s) => s.value === lastIntraday)?.label ?? '15min'}
-                  </option>
-                )}
-                {INTRADAY_SCALES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              <svg
-                className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 h-3 w-3 text-text-muted"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7" />
-              </svg>
-            </div>
-
-            {/* Period buttons */}
-            {PERIOD_SCALES.map((s) => (
-              <button
-                key={s.value}
-                onClick={() => handleScaleChange(s.value)}
-                className={cn(
-                  'cursor-pointer rounded px-1.5 py-0.5 text-2xs font-medium transition-colors',
-                  scale === s.value ? 'bg-accent-primary text-white' : 'text-text-muted hover:text-text-secondary',
-                )}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
+          <CandleSelector
+            candle={candle}
+            onPick={pickCandle}
+            extendedHours={extendedHours}
+            onToggleExtendedHours={setExtendedHours}
+            showExtendedHoursToggle={showExtendedHoursToggle}
+          />
         }
       >
         {historyResult.fetching && priceHistory.length === 0 ? (
@@ -454,7 +413,7 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
             <Spinner size="sm" label="Loading price history..." />
           </div>
         ) : priceHistory.length > 0 ? (
-          <PriceChart data={priceHistory} intraday={isIntraday(effectiveScale)} />
+          <PriceChart data={priceHistory} intraday={intraday} initialWindowMs={initialWindowMs} resetKey={resetKey} />
         ) : (
           <p className="text-sm text-text-muted py-8 text-center">No price history available</p>
         )}
@@ -545,9 +504,78 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
   );
 }
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
+function CandleSelector({
+  candle,
+  onPick,
+  extendedHours,
+  onToggleExtendedHours,
+  showExtendedHoursToggle,
+}: {
+  candle: Candle;
+  onPick: (c: Candle) => void;
+  extendedHours: boolean;
+  onToggleExtendedHours: (v: boolean) => void;
+  showExtendedHoursToggle: boolean;
+}) {
+  const intradayActive = INTRADAY_CANDLES.includes(candle);
+  // Empty value in period mode so onChange fires even when re-picking the previously active candle.
+  const dropdownValue: string = intradayActive ? candle : '';
+
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        value={dropdownValue}
+        onChange={(e) => {
+          if (e.target.value) onPick(e.target.value as Candle);
+        }}
+        aria-label="Intraday candle size"
+        className={cn(
+          'cursor-pointer rounded px-1.5 py-0.5 text-2xs font-medium transition-colors',
+          intradayActive ? 'bg-accent-primary text-white' : 'bg-bg-tertiary text-text-secondary',
+        )}
+      >
+        {!intradayActive && (
+          <option value="" disabled hidden>
+            Intraday
+          </option>
+        )}
+        {INTRADAY_CANDLES.map((c) => (
+          <option key={c} value={c}>
+            {CANDLE_CONFIG[c].label}
+          </option>
+        ))}
+      </select>
+
+      <div className="flex items-center gap-1">
+        {PERIOD_CANDLES.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onPick(c)}
+            className={cn(
+              'cursor-pointer rounded px-1.5 py-0.5 text-2xs font-medium transition-colors',
+              candle === c ? 'bg-accent-primary text-white' : 'text-text-muted hover:text-text-secondary',
+            )}
+          >
+            {CANDLE_CONFIG[c].label}
+          </button>
+        ))}
+      </div>
+
+      {showExtendedHoursToggle && (
+        <label className="flex cursor-pointer items-center gap-1 text-2xs text-text-muted hover:text-text-secondary">
+          <input
+            type="checkbox"
+            checked={extendedHours}
+            onChange={(e) => onToggleExtendedHours(e.target.checked)}
+            className="h-3 w-3 cursor-pointer accent-accent-primary"
+          />
+          Extended hours
+        </label>
+      )}
+    </div>
+  );
+}
 
 function QuoteDetails({ quote }: { quote: Quote }) {
   const rows: { label: string; value: string }[] = [

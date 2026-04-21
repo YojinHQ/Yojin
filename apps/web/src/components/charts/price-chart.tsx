@@ -1,10 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   createChart,
   CandlestickSeries,
   HistogramSeries,
   type IChartApi,
+  type ISeriesApi,
   type CandlestickData,
+  type HistogramData,
   type Time,
   type UTCTimestamp,
   ColorType,
@@ -23,6 +25,10 @@ interface PriceChartProps {
   data: PriceChartDatum[];
   /** When true, preserves intraday timestamps and shows time on the axis. */
   intraday?: boolean;
+  /** Initial visible window width in milliseconds. Applied on mount and on `resetKey` change. */
+  initialWindowMs: number;
+  /** Bump to snap the visible range back to the initial window (e.g. on candle-size change). */
+  resetKey: number;
 }
 
 const COLORS = {
@@ -52,11 +58,7 @@ function isValidOHLC(c: PriceChartDatum): boolean {
   );
 }
 
-/**
- * Filter out bad data points: invalid OHLC values and zero-volume spike candles.
- * Zero-volume spikes are a common Yahoo Finance artifact during extended-hours
- * and session boundaries — no real trades happened, so the OHLC is unreliable.
- */
+// Zero-volume spikes are a Yahoo extended-hours artifact — no real trades, unreliable OHLC.
 function sanitize(data: PriceChartDatum[]): PriceChartDatum[] {
   if (data.length < 3) return data.filter(isValidOHLC);
 
@@ -67,7 +69,6 @@ function sanitize(data: PriceChartDatum[]): PriceChartDatum[] {
     if (!isValidOHLC(candle)) return false;
     if (candle.volume > 0) return true;
 
-    // Zero-volume candle — check if it's a spike relative to neighbors
     const start = Math.max(0, i - NEIGHBOR_WINDOW);
     const end = Math.min(data.length, i + NEIGHBOR_WINDOW + 1);
     const neighborRanges: number[] = [];
@@ -88,12 +89,10 @@ function sanitize(data: PriceChartDatum[]): PriceChartDatum[] {
   });
 }
 
-/** Deduplicate by date key (keep last occurrence), sort chronologically. */
 function dedup(data: PriceChartDatum[], intraday: boolean): PriceChartDatum[] {
   const map = new Map<string, PriceChartDatum>();
   for (const d of data) {
     if (intraday) {
-      // Use full ISO string as key to preserve intraday granularity
       map.set(d.date, d);
     } else {
       const day = d.date.slice(0, 10);
@@ -105,7 +104,6 @@ function dedup(data: PriceChartDatum[], intraday: boolean): PriceChartDatum[] {
 
 function toTime(dateStr: string, intraday: boolean): Time {
   if (intraday) {
-    // Convert ISO string to Unix timestamp (seconds) for intraday
     return Math.floor(new Date(dateStr).getTime() / 1000) as UTCTimestamp;
   }
   return dateStr as Time;
@@ -121,7 +119,7 @@ function toChartData(data: PriceChartDatum[], intraday: boolean): CandlestickDat
   }));
 }
 
-function toVolumeData(data: PriceChartDatum[], intraday: boolean) {
+function toVolumeData(data: PriceChartDatum[], intraday: boolean): HistogramData<Time>[] {
   return data.map((d) => ({
     time: toTime(d.date, intraday),
     value: d.volume,
@@ -129,16 +127,40 @@ function toVolumeData(data: PriceChartDatum[], intraday: boolean) {
   }));
 }
 
-export function PriceChart({ data, intraday = false }: PriceChartProps) {
+function timeToMs(t: Time): number {
+  if (typeof t === 'number') return t * 1000;
+  if (typeof t === 'string') return new Date(t).getTime();
+  return Date.UTC(t.year, t.month - 1, t.day);
+}
+
+function applyInitialWindow(chart: IChartApi, candles: CandlestickData<Time>[], windowMs: number): void {
+  if (candles.length === 0) return;
+  const lastMs = timeToMs(candles[candles.length - 1].time);
+  const cutoffMs = lastMs - windowMs;
+  let fromIndex = 0;
+  for (let i = 0; i < candles.length; i++) {
+    if (timeToMs(candles[i].time) >= cutoffMs) {
+      fromIndex = i;
+      break;
+    }
+  }
+  chart.timeScale().setVisibleLogicalRange({ from: fromIndex, to: candles.length - 0.5 });
+}
+
+export function PriceChart({ data, intraday = false, initialWindowMs, resetKey }: PriceChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<'Candlestick', Time> | null>(null);
+  const volumeSeriesRef = useRef<ISeriesApi<'Histogram', Time> | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
+  const [chartReady, setChartReady] = useState(false);
+  const lastSnappedResetKeyRef = useRef<number | null>(null);
+  const lastSnappedDataPropRef = useRef<PriceChartDatum[] | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || data.length === 0) return;
+    if (!container) return;
 
-    // Wait one frame so the container has layout dimensions (inside modal transitions).
     const raf = requestAnimationFrame(() => {
       const { width, height } = container.getBoundingClientRect();
       if (width === 0 || height === 0) return;
@@ -165,17 +187,13 @@ export function PriceChart({ data, intraday = false }: PriceChartProps) {
           timeScale: {
             borderColor: COLORS.border,
             timeVisible: intraday,
-            fixLeftEdge: true,
-            fixRightEdge: true,
           },
           handleScroll: { vertTouchDrag: false },
         });
 
         chartRef.current = chart;
 
-        const clean = sanitize(dedup(data, intraday));
-
-        const candleSeries = chart.addSeries(CandlestickSeries, {
+        candleSeriesRef.current = chart.addSeries(CandlestickSeries, {
           upColor: COLORS.up,
           downColor: COLORS.down,
           borderDownColor: COLORS.down,
@@ -183,16 +201,12 @@ export function PriceChart({ data, intraday = false }: PriceChartProps) {
           wickDownColor: COLORS.downWick,
           wickUpColor: COLORS.upWick,
         });
-        candleSeries.setData(toChartData(clean, intraday));
 
-        const volumeSeries = chart.addSeries(HistogramSeries, {
+        volumeSeriesRef.current = chart.addSeries(HistogramSeries, {
           priceFormat: { type: 'volume' },
           priceScaleId: 'volume',
         });
         chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
-        volumeSeries.setData(toVolumeData(clean, intraday));
-
-        chart.timeScale().fitContent();
 
         const observer = new ResizeObserver((entries) => {
           for (const entry of entries) {
@@ -202,6 +216,8 @@ export function PriceChart({ data, intraday = false }: PriceChartProps) {
         });
         observer.observe(container);
         observerRef.current = observer;
+
+        setChartReady(true);
       } catch (err) {
         console.warn('[PriceChart] Failed to create chart', err);
       }
@@ -211,10 +227,42 @@ export function PriceChart({ data, intraday = false }: PriceChartProps) {
       cancelAnimationFrame(raf);
       observerRef.current?.disconnect();
       observerRef.current = null;
+      candleSeriesRef.current = null;
+      volumeSeriesRef.current = null;
       chartRef.current?.remove();
       chartRef.current = null;
+      lastSnappedResetKeyRef.current = null;
+      lastSnappedDataPropRef.current = null;
+      setChartReady(false);
     };
-  }, [data, intraday]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Snap only when resetKey bumps AND fresh data has arrived — urql returns
+  // stale data on the first render after a candle-size change, so snapping on
+  // resetKey alone would anchor the window to the old dataset's timespan.
+  useEffect(() => {
+    const chart = chartRef.current;
+    const candleSeries = candleSeriesRef.current;
+    const volumeSeries = volumeSeriesRef.current;
+    if (!chart || !candleSeries || !volumeSeries || !chartReady || data.length === 0) return;
+
+    chart.applyOptions({ timeScale: { timeVisible: intraday } });
+
+    const clean = sanitize(dedup(data, intraday));
+    const candleData = toChartData(clean, intraday);
+    const volumeData = toVolumeData(clean, intraday);
+    candleSeries.setData(candleData);
+    volumeSeries.setData(volumeData);
+
+    const resetKeyChanged = lastSnappedResetKeyRef.current !== resetKey;
+    const dataChanged = lastSnappedDataPropRef.current !== data;
+    if (resetKeyChanged && dataChanged) {
+      lastSnappedResetKeyRef.current = resetKey;
+      lastSnappedDataPropRef.current = data;
+      applyInitialWindow(chart, candleData, initialWindowMs);
+    }
+  }, [data, intraday, resetKey, initialWindowMs, chartReady]);
 
   return <div ref={containerRef} className="w-full h-[360px]" />;
 }

@@ -153,13 +153,14 @@ function toETDate(dateStr: string): string {
   return `${et.getFullYear()}-${String(et.getMonth() + 1).padStart(2, '0')}-${String(et.getDate()).padStart(2, '0')}`;
 }
 
-/** Build a sparkline from price history closing prices.
- *  When `regularHoursOnly` is true, strips pre-market (<9:30 AM ET) and after-hours (>=4:00 PM ET) candles
- *  and keeps only the latest trading date so a multi-session 1d range doesn't produce an overnight cliff.
- *  When `livePrice` is omitted (e.g. the live quote endpoint returned no data for this ticker),
- *  the sparkline ends at the most recent close from history instead. */
-export function buildSparkline(history: TickerPriceHistory, livePrice?: number, regularHoursOnly = false): number[] {
+export function buildSparkline(
+  history: TickerPriceHistory,
+  livePrice?: number,
+  regularHoursOnly = false,
+  previousClose?: number,
+): number[] {
   let candles = sanitizeCandles(history.history);
+  let derivedPrevClose: number | undefined;
   if (regularHoursOnly) {
     candles = candles.filter((p) => {
       const d = parseUTC(p.date);
@@ -168,11 +169,30 @@ export function buildSparkline(history: TickerPriceHistory, livePrice?: number, 
       return minutes >= 570 && minutes < 960; // 9:30 AM – 4:00 PM ET
     });
     if (candles.length > 1) {
-      const latest = toETDate(candles[candles.length - 1].date);
+      let latest = toETDate(candles[0].date);
+      for (let i = 1; i < candles.length; i++) {
+        const d = toETDate(candles[i].date);
+        if (d > latest) latest = d;
+      }
+      if (previousClose === undefined) {
+        let priorLatestTs = -Infinity;
+        for (const c of candles) {
+          if (toETDate(c.date) === latest) continue;
+          const ts = parseUTC(c.date).getTime();
+          if (ts > priorLatestTs) {
+            priorLatestTs = ts;
+            derivedPrevClose = c.close;
+          }
+        }
+      }
       candles = candles.filter((p) => toETDate(p.date) === latest);
     }
   }
-  const points = candles.map((p) => p.close);
+  const sorted = [...candles].sort((a, b) => parseUTC(a.date).getTime() - parseUTC(b.date).getTime());
+  const anchor = previousClose ?? derivedPrevClose;
+  const points: number[] = [];
+  if (anchor !== undefined) points.push(anchor);
+  for (const c of sorted) points.push(c.close);
   if (livePrice !== undefined) points.push(livePrice);
   return points;
 }
@@ -322,8 +342,15 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
     const hasCostBasis = pos.costBasis > 0;
     const totalCost = hasCostBasis ? pos.costBasis * pos.quantity : 0;
 
+    // Crypto quote.previousClose anchors to calendar day, not rolling 24h — derive from changePercent.
+    const baselinePrevClose =
+      quote.changePercent != null && quote.changePercent !== 0
+        ? currentPrice / (1 + quote.changePercent / 100)
+        : undefined;
     const sparkline =
-      priceHist && priceHist.history.length > 0 ? buildSparkline(priceHist, currentPrice, isEquity) : undefined;
+      priceHist && priceHist.history.length > 0
+        ? buildSparkline(priceHist, currentPrice, isEquity, baselinePrevClose)
+        : undefined;
 
     return {
       ...pos,
