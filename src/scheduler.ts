@@ -1809,43 +1809,62 @@ export class Scheduler {
     state.lastRuns['process-insights'] = new Date().toISOString();
     await this.saveState(state);
 
+    // Capture the pre-run report id so post-save work can detect whether this
+    // run actually produced a new report — even if the orchestrator throws
+    // after `save_insight_report` already committed it to disk.
+    const preRunInsightId = (await this.insightStore?.getLatest())?.id ?? null;
+    let workflowSucceeded = false;
+
     try {
       await this.orchestrator.execute('process-insights', {
         message: reason,
       });
 
       this.recordLlmSuccess();
+      workflowSucceeded = true;
       logger.info('Process-insights completed');
-
-      // Notify channels that a new insight report is available
-      const latestInsight = await this.insightStore?.getLatest();
-      if (latestInsight) {
-        this.notificationBus?.publish({ type: 'insight.ready', insightId: latestInsight.id });
-
-        // Persist per-position and portfolio-level Summaries from the macro
-        // report so the Intel Feed has neutral observations from both flows.
-        await this.persistMacroSummaries(latestInsight);
-      }
-
-      if (this.eventLog) {
-        await this.eventLog.append({
-          type: 'insight',
-          data: { message: 'Portfolio insights report generated' },
-        });
-      }
-
-      // Run reflection sweep after insights — grades past predictions older than 7 days
-      if (this.reflectionEngine) {
-        try {
-          const sweep = await this.reflectionEngine.runSweep({ olderThanDays: 7 });
-          logger.info('Post-insights reflection sweep completed', { ...sweep });
-        } catch (err) {
-          logger.warn('Reflection sweep failed (non-fatal)', { error: err });
-        }
-      }
     } catch (err) {
       this.recordLlmError(err);
       logger.error('Process-insights failed', { error: err });
+      // Fall through — the Strategist may have already saved a report via
+      // the save_insight_report tool before the later throw (e.g. an LLM
+      // timeout on a subsequent iteration). Without this, a flaky LLM call
+      // leaves the Intel Feed empty of MACRO observations for the whole
+      // portfolio even though a valid report is on disk.
+    }
+
+    const latestInsight = await this.insightStore?.getLatest();
+    const hasNewReport = !!latestInsight && latestInsight.id !== preRunInsightId;
+    if (latestInsight && hasNewReport) {
+      this.notificationBus?.publish({ type: 'insight.ready', insightId: latestInsight.id });
+
+      try {
+        await this.persistMacroSummaries(latestInsight);
+      } catch (err) {
+        logger.warn('Failed to persist macro summaries (non-fatal)', { error: err });
+      }
+
+      if (this.eventLog) {
+        try {
+          await this.eventLog.append({
+            type: 'insight',
+            data: { message: 'Portfolio insights report generated' },
+          });
+        } catch (err) {
+          logger.warn('Failed to append insight event (non-fatal)', { error: err });
+        }
+      }
+    }
+
+    // Run reflection sweep after insights — grades past predictions older
+    // than 7 days. Gated on workflow success to match prior behavior.
+    if (workflowSucceeded && this.reflectionEngine) {
+      try {
+        const sweep = await this.reflectionEngine.runSweep({ olderThanDays: 7 });
+        logger.info('Post-insights reflection sweep completed', { ...sweep });
+      } catch (err) {
+        logger.warn('Reflection sweep failed (non-fatal)', { error: err });
+      }
     }
   }
 
