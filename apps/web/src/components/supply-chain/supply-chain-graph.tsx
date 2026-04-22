@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d';
 
-import type {
-  Substitutability,
-  SupplyChainDirection,
-  SupplyChainExpansion,
-  SupplyChainMap,
-} from '../../api/types';
+import type { Substitutability, SupplyChainDirection, SupplyChainExpansion, SupplyChainMap } from '../../api/types';
 import { useSupplyChainExpansion } from '../../hooks/use-supply-chain-expansion';
 import {
   buildSupplyChainGraph,
@@ -204,10 +199,7 @@ export function SupplyChainGraph({
         </div>
       )}
       {expandError && (
-        <div
-          className={cn('rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error')}
-          role="alert"
-        >
+        <div className={cn('rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error')} role="alert">
           {expandError}
         </div>
       )}
@@ -298,7 +290,7 @@ function projectExpansions(
  */
 function resolveRequestedTicker(node: GraphNode, portfolioTickers: string[]): string | null {
   if (node.kind === 'portfolio') return node.id;
-  if (/^[A-Z][A-Z0-9.\-]{0,9}$/.test(node.id)) return node.id;
+  if (/^[A-Z][A-Z0-9.-]{0,9}$/.test(node.id)) return node.id;
   return portfolioTickers[0] ?? null;
 }
 
