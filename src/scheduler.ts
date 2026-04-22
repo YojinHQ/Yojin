@@ -787,6 +787,16 @@ export class Scheduler {
                 llmReadyFlags[i] = false;
                 continue;
               }
+            } else {
+              // First LLM pass for this asset in this scheduler instance —
+              // mirror the signal-gate's first-run escape so every registered
+              // asset establishes a baseline MICRO insight (and therefore a
+              // MICRO summary) at least once. Without this, assets whose
+              // narrow 10-min freshness window happens to land on a Jintel
+              // outage or an off-hours equity fetch can never cross the gate
+              // and stay permanently starved of LLM analysis.
+              llmReadyFlags[i] = true;
+              continue;
             }
             // Freshness short-circuit: if baseline is newer than the LLM window,
             // the signal-gate already proved freshness — no extra archive query.
