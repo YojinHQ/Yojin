@@ -180,6 +180,12 @@ export interface AgentLoopProvider {
     messages: AgentMessage[];
     tools?: ToolSchema[];
     maxTokens?: number;
+    /**
+     * If true, annotate the system prompt with Anthropic's `cache_control: { type: 'ephemeral' }`
+     * so a long static prefix can be reused across requests. Providers that do not support
+     * prompt caching must ignore this flag — it is never load-bearing for correctness.
+     */
+    cacheSystem?: boolean;
   }): Promise<{
     content: ContentBlock[];
     stopReason: string;
@@ -196,6 +202,7 @@ export interface AgentLoopProvider {
     onTextDelta?: (text: string) => void;
     /** Called when a complete tool_use block is emitted during streaming. */
     onToolUse?: (block: ToolUseBlock) => void;
+    cacheSystem?: boolean;
   }): Promise<{
     content: ContentBlock[];
     stopReason: string;

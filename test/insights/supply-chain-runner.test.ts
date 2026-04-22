@@ -5,9 +5,19 @@ import { join } from 'node:path';
 import type { Entity, JintelClient } from '@yojinhq/jintel-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ProviderRouter } from '../../src/ai-providers/router.js';
 import { ensureSupplyChainMap } from '../../src/insights/supply-chain-runner.js';
 import { SupplyChainStore } from '../../src/insights/supply-chain-store.js';
 import type { SupplyChainMap } from '../../src/insights/supply-chain-types.js';
+
+function makeProviderRouter(text: string): ProviderRouter {
+  const completeWithTools = vi.fn().mockResolvedValue({
+    content: [{ type: 'text' as const, text }],
+    stopReason: 'end_turn',
+  });
+  const resolve = vi.fn().mockReturnValue({ provider: { id: 'claude-code' }, model: 'claude-sonnet-4-6' });
+  return { completeWithTools, resolve } as unknown as ProviderRouter;
+}
 
 function makeHop0Rich(): Entity {
   return {
@@ -194,6 +204,96 @@ describe('ensureSupplyChainMap', () => {
     });
     expect(out?.ticker).toBe('AAPL');
     expect(out?.dataAsOf).toBe('2024-10-01');
+  });
+
+  describe('with providerRouter (Phase B synthesis)', () => {
+    it('synthesizes narrative + merges enrichments onto raw map', async () => {
+      const hop0 = makeHop0Rich();
+      const batchEnrich = vi
+        .fn()
+        .mockResolvedValueOnce({ success: true, data: [hop0] })
+        .mockResolvedValueOnce({ success: true, data: [] });
+      const client = { batchEnrich } as unknown as JintelClient;
+
+      const llmJson = JSON.stringify({
+        narrative: 'Apple is channel-diversified downstream with customer concentration at ~50%.',
+        upstreamEnrichments: [],
+      });
+      const router = makeProviderRouter(llmJson);
+
+      const out = await ensureSupplyChainMap({
+        ticker: 'AAPL',
+        jintelClient: client,
+        store,
+        maxAgeMs: 60_000,
+        providerRouter: router,
+      });
+
+      expect(out).not.toBeNull();
+      expect(out?.narrative).toContain('channel-diversified');
+      expect(out?.synthesizedBy).toEqual({ provider: 'claude-code', model: 'claude-sonnet-4-6' });
+    });
+
+    it('LLM failure falls back to raw map (persisted with narrative=null)', async () => {
+      const hop0 = makeHop0Rich();
+      const batchEnrich = vi
+        .fn()
+        .mockResolvedValueOnce({ success: true, data: [hop0] })
+        .mockResolvedValueOnce({ success: true, data: [] });
+      const client = { batchEnrich } as unknown as JintelClient;
+
+      const router = {
+        completeWithTools: vi.fn().mockRejectedValue(new Error('upstream 503')),
+        resolve: vi.fn().mockReturnValue({ provider: { id: 'claude-code' }, model: 'claude-sonnet-4-6' }),
+      } as unknown as ProviderRouter;
+
+      const out = await ensureSupplyChainMap({
+        ticker: 'AAPL',
+        jintelClient: client,
+        store,
+        maxAgeMs: 60_000,
+        providerRouter: router,
+      });
+
+      expect(out).not.toBeNull();
+      expect(out?.narrative).toBeNull();
+      expect(out?.synthesizedBy).toBeNull();
+      // Downstream edges must still be present — synthesis failure doesn't drop the refresh.
+      expect(out?.downstream).toHaveLength(1);
+    });
+
+    it('SUPPLY_CHAIN_SYNTHESIS_DISABLED=1 skips the LLM', async () => {
+      const prev = process.env.SUPPLY_CHAIN_SYNTHESIS_DISABLED;
+      process.env.SUPPLY_CHAIN_SYNTHESIS_DISABLED = '1';
+      try {
+        const hop0 = makeHop0Rich();
+        const batchEnrich = vi
+          .fn()
+          .mockResolvedValueOnce({ success: true, data: [hop0] })
+          .mockResolvedValueOnce({ success: true, data: [] });
+        const client = { batchEnrich } as unknown as JintelClient;
+        const completeWithTools = vi.fn();
+        const router = {
+          completeWithTools,
+          resolve: vi.fn().mockReturnValue({ provider: { id: 'claude-code' }, model: 'claude-sonnet-4-6' }),
+        } as unknown as ProviderRouter;
+
+        const out = await ensureSupplyChainMap({
+          ticker: 'AAPL',
+          jintelClient: client,
+          store,
+          maxAgeMs: 60_000,
+          providerRouter: router,
+        });
+
+        expect(out).not.toBeNull();
+        expect(out?.narrative).toBeNull();
+        expect(completeWithTools).not.toHaveBeenCalled();
+      } finally {
+        if (prev === undefined) delete process.env.SUPPLY_CHAIN_SYNTHESIS_DISABLED;
+        else process.env.SUPPLY_CHAIN_SYNTHESIS_DISABLED = prev;
+      }
+    });
   });
 
   it('hop-0 returns no entity — serves stale fallback', async () => {

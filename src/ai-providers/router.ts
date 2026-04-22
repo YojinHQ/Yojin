@@ -79,6 +79,8 @@ export class ProviderRouter {
     messages: AgentMessage[];
     tools?: ToolSchema[];
     maxTokens?: number;
+    /** See AgentLoopProvider.completeWithTools — opt-in prompt caching on the system prefix. */
+    cacheSystem?: boolean;
     providerOverrides?: { provider?: string; model?: string };
   }): Promise<{
     content: ContentBlock[];

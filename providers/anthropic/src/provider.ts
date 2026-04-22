@@ -182,15 +182,41 @@ function buildApiMessages(messages: AgentMessage[], remapName: (n: string) => st
   }) as Anthropic.MessageParam[];
 }
 
-/** Build the system parameter, prepending the OAuth prefix when needed. */
+/**
+ * Build the system parameter, prepending the OAuth prefix when needed.
+ *
+ * When `cacheSystem` is true, the caller's system text is annotated with Anthropic's
+ * `cache_control: { type: 'ephemeral' }` marker so a long static prefix is reused
+ * across requests. The OAuth prefix is left unmarked — the cache marker must sit
+ * on the *last* block we want cached, and Anthropic caches everything up to and
+ * including the marked block.
+ */
 function buildSystemParam(
   system: string | undefined,
   useOAuth: boolean,
+  cacheSystem = false,
 ): string | Anthropic.TextBlockParam[] | undefined {
   if (useOAuth) {
     return [
       { type: 'text' as const, text: OAUTH_SYSTEM_PREFIX.trim() },
-      ...(system ? [{ type: 'text' as const, text: system }] : []),
+      ...(system
+        ? [
+            {
+              type: 'text' as const,
+              text: system,
+              ...(cacheSystem ? { cache_control: { type: 'ephemeral' as const } } : {}),
+            },
+          ]
+        : []),
+    ];
+  }
+  if (cacheSystem && system) {
+    return [
+      {
+        type: 'text' as const,
+        text: system,
+        cache_control: { type: 'ephemeral' as const },
+      },
     ];
   }
   return system;
@@ -309,11 +335,12 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
     messages: AgentMessage[];
     tools?: ToolSchema[];
     maxTokens?: number;
+    cacheSystem?: boolean;
   }) {
     const useOAuth = authMode === 'oauth';
     const remapName = useOAuth ? toOAuthToolName : identity;
     const apiMessages = buildApiMessages(params.messages, remapName);
-    const systemParam = buildSystemParam(params.system, useOAuth);
+    const systemParam = buildSystemParam(params.system, useOAuth, params.cacheSystem ?? false);
     const toolDefs = buildToolDefs(params.tools, remapName);
     return {
       request: {
@@ -505,6 +532,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       messages: AgentMessage[];
       tools?: ToolSchema[];
       maxTokens?: number;
+      cacheSystem?: boolean;
     }) {
       if (authMode === 'cli') {
         // CLI mode cannot forward image blocks — fail fast if any are present
@@ -550,6 +578,7 @@ export function buildAnthropicProvider(): ProviderPlugin & AgentLoopProvider {
       tools?: ToolSchema[];
       maxTokens?: number;
       onTextDelta?: (text: string) => void;
+      cacheSystem?: boolean;
     }) {
       if (authMode === 'cli') {
         // CLI mode: no streaming, fall back to completeWithTools

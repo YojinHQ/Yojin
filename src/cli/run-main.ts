@@ -41,6 +41,7 @@ import {
   setTriggerStrategyEvaluation,
 } from '../api/graphql/resolvers/scheduler.js';
 import { setStrategySuggestionDeps } from '../api/graphql/resolvers/strategies.js';
+import { setSupplyChainEnsureFn } from '../api/graphql/resolvers/supply-chain.js';
 import { setWatchlistChangedCallback } from '../api/graphql/resolvers/watchlist.js';
 import { buildContext } from '../composition.js';
 import { AgentRuntime } from '../core/agent-runtime.js';
@@ -335,6 +336,20 @@ async function startGateway(): Promise<void> {
   const marketSentimentBaseline = new MarketSentimentBaselineStore(dataRoot);
   marketSentimentBaseline.initialize();
 
+  // Single supply-chain ensure closure shared by (a) the scheduler's micro
+  // analyst lookups and (b) the GraphQL resolver. Capturing `providerRouter`
+  // here enables Phase-B LLM synthesis; composition.ts wires a Phase-A-only
+  // closure at bootstrap, which we replace now that the router is ready.
+  const supplyChainEnsureFn = (ticker: string) =>
+    ensureSupplyChainMap({
+      ticker,
+      jintelClient: services.jintelToolOptions.client,
+      store: services.supplyChainStore,
+      maxAgeMs: 24 * 60 * 60 * 1000,
+      providerRouter,
+    });
+  setSupplyChainEnsureFn(supplyChainEnsureFn);
+
   // Daily insights scheduler — reads digestSchedule from alerts.json
   const scheduler = new Scheduler({
     orchestrator,
@@ -361,13 +376,9 @@ async function startGateway(): Promise<void> {
     signalArchive: services.signalArchive,
     // Supply-chain lookups for micro analyst — uses the same 24h-cached
     // ensureFn as the GraphQL resolver, so store populates on first micro run.
-    getSupplyChainMap: (ticker: string) =>
-      ensureSupplyChainMap({
-        ticker,
-        jintelClient: services.jintelToolOptions.client,
-        store: services.supplyChainStore,
-        maxAgeMs: 24 * 60 * 60 * 1000,
-      }),
+    // `providerRouter` enables Phase-B synthesis (narrative + per-edge
+    // substitutability). Disable with SUPPLY_CHAIN_SYNTHESIS_DISABLED=1.
+    getSupplyChainMap: supplyChainEnsureFn,
     microLlmIntervalMs: alertsConfig.microLlmIntervalHours
       ? alertsConfig.microLlmIntervalHours * 60 * 60 * 1000
       : undefined,
