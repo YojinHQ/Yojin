@@ -32,6 +32,11 @@ const DEFAULT_WRITE_BLOCKED_PATHS = ['/etc/passwd', '/etc/hosts'];
 
 const WRITE_ACTION_TYPES = new Set(['file_write', 'file_delete', 'file_modify', 'file_create']);
 
+/** Fold to a case-insensitive form on Windows so prefix checks survive case mismatches. */
+function pathComparable(p: string): string {
+  return process.platform === 'win32' ? p.toLowerCase() : p;
+}
+
 export interface FsGuardOptions {
   /** Paths where ALL access is blocked (default: ~/.ssh, ~/.aws, etc.). */
   readBlockedPaths?: string[];
@@ -54,19 +59,20 @@ export class FsGuard implements Guard {
     const auditPath = options?.auditPath ?? join(resolveDataRoot(), 'audit');
     const writePaths = [...(options?.writeBlockedPaths ?? DEFAULT_WRITE_BLOCKED_PATHS), auditPath];
 
-    this.readBlockedPaths = readPaths.map((p) => this.resolvePath(p));
-    this.writeBlockedPaths = writePaths.map((p) => this.resolvePath(p));
+    this.readBlockedPaths = readPaths.map((p) => pathComparable(this.resolvePath(p)));
+    this.writeBlockedPaths = writePaths.map((p) => pathComparable(this.resolvePath(p)));
   }
 
   check(action: ProposedAction): GuardResult {
     if (!action.path) return { pass: true };
 
     const normalized = this.normalizePath(action.path);
+    const comparable = pathComparable(normalized);
     const isWrite = WRITE_ACTION_TYPES.has(action.type);
 
     // Read-blocked paths: block ALL access (read + write)
     for (const blocked of this.readBlockedPaths) {
-      if (this.pathMatches(normalized, blocked)) {
+      if (this.pathMatches(comparable, blocked)) {
         return {
           pass: false,
           reason: `Path blocked (no access): ${action.path} (matches ${blocked})`,
@@ -77,7 +83,7 @@ export class FsGuard implements Guard {
     // Write-blocked paths: only block writes
     if (isWrite) {
       for (const blocked of this.writeBlockedPaths) {
-        if (this.pathMatches(normalized, blocked)) {
+        if (this.pathMatches(comparable, blocked)) {
           return {
             pass: false,
             reason: `Path blocked (read-only): ${action.path} (matches ${blocked})`,
@@ -89,8 +95,8 @@ export class FsGuard implements Guard {
     return { pass: true };
   }
 
-  private pathMatches(normalized: string, blocked: string): boolean {
-    return normalized === blocked || normalized.startsWith(blocked + sep);
+  private pathMatches(comparable: string, blocked: string): boolean {
+    return comparable === blocked || comparable.startsWith(blocked + sep);
   }
 
   private normalizePath(p: string): string {
