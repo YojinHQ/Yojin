@@ -61,6 +61,12 @@ const cache = cacheExchange({
     SharedCounterparty: () => null,
     SinglePointOfFailure: () => null,
     ConcentrationStackItem: () => null,
+    // Supply chain — progressive expansion. Keyed by (sourceNodeId, direction) —
+    // each (node, direction) pair is a stable cache entry. Nodes/edges are embedded
+    // (many expansions can surface the same node; don't normalize).
+    SupplyChainExpansion: (data) => `${data.sourceNodeId as string}:${data.direction as string}`,
+    SupplyChainExpansionNode: () => null,
+    SupplyChainExpansionEdge: () => null,
     Summary: (data) => data.id as string,
     SummarySourceSignal: () => null, // embedded — nested under Summary
     Action: (data) => data.id as string,

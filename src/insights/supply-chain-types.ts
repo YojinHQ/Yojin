@@ -134,6 +134,68 @@ export const ProviderModelSchema = z.object({
 });
 export type ProviderModel = z.infer<typeof ProviderModelSchema>;
 
+// ---------------------------------------------------------------------------
+// Progressive expansion — user-driven exploration from a single node.
+// Each expansion is grounded in Jintel relationship edges; the LLM classifies
+// + ranks + labels. It never invents counterparties.
+// ---------------------------------------------------------------------------
+
+export const SupplyChainDirectionSchema = z.enum([
+  'UPSTREAM_SUPPLIERS',
+  'DOWNSTREAM_CUSTOMERS',
+  'COUNTRY_EXPOSURE',
+  'SECTOR_PEERS',
+  'CONTRACT_MANUFACTURERS',
+]);
+export type SupplyChainDirection = z.infer<typeof SupplyChainDirectionSchema>;
+
+/**
+ * An expanded node. Must correspond to a real Jintel entity reference
+ * (ticker or CIK). Never synthesized from thin air.
+ */
+export const SupplyChainExpansionNodeSchema = z.object({
+  /** Stable node id — `ticker:<TICKER>` or `cik:<CIK>` or for countries `country:<ISO2>`. */
+  id: z.string().min(1),
+  label: z.string().min(1),
+  ticker: z.string().min(1).nullable(),
+  cik: z.string().min(1).nullable(),
+  /** What the LLM classified this node as in the context of the direction. */
+  nodeKind: z.enum(['COUNTERPARTY', 'COUNTRY', 'PEER']),
+  /** ISO-2 when nodeKind === COUNTRY; best-effort when known for counterparties. */
+  countryCode: z.string().length(2).nullable(),
+  /** 0..1 — LLM-assigned rank within the expansion set. Stable across re-runs. */
+  rank: z.number().min(0).max(1),
+});
+export type SupplyChainExpansionNode = z.infer<typeof SupplyChainExpansionNodeSchema>;
+
+export const SupplyChainExpansionEdgeSchema = z.object({
+  sourceId: z.string().min(1),
+  targetId: z.string().min(1),
+  relationship: SupplyChainRelationshipSchema,
+  /** LLM-assigned short label — e.g. "contract foundry", "fiscal agent". */
+  label: z.string().min(1),
+  edgeOrigin: EdgeOriginSchema,
+  /** 0..1 — LLM-assigned criticality for this edge. Never defaults to 0/1 unless supportable. */
+  criticality: z.number().min(0).max(1),
+  evidence: z.array(EvidenceSchema).min(1),
+});
+export type SupplyChainExpansionEdge = z.infer<typeof SupplyChainExpansionEdgeSchema>;
+
+export const SupplyChainExpansionSchema = z.object({
+  sourceNodeId: z.string().min(1),
+  direction: SupplyChainDirectionSchema,
+  requestedTicker: z.string().min(1),
+  nodes: z.array(SupplyChainExpansionNodeSchema),
+  edges: z.array(SupplyChainExpansionEdgeSchema),
+  /** 1-2 sentence explanation the LLM produced for the expansion. Null when the LLM pass was skipped. */
+  reasoning: z.string().nullable(),
+  expandedAt: z.string().min(1),
+  /** When this cached expansion should be considered stale (expandedAt + TTL). */
+  staleAfter: z.string().min(1),
+  synthesizedBy: ProviderModelSchema.nullable(),
+});
+export type SupplyChainExpansion = z.infer<typeof SupplyChainExpansionSchema>;
+
 export const SupplyChainMapSchema = z.object({
   ticker: z.string().min(1),
   entityName: z.string().min(1),

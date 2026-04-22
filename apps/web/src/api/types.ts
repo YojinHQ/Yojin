@@ -1572,16 +1572,15 @@ export interface TickerProfile {
 
 export type SupplyChainRelationship =
   | 'SUPPLIER'
-  | 'CUSTOMER'
   | 'MANUFACTURER'
-  | 'DISTRIBUTOR'
-  | 'SUBSIDIARY'
   | 'PARTNER'
-  | 'UNKNOWN';
+  | 'DISTRIBUTOR'
+  | 'LICENSOR'
+  | 'JOINT_VENTURE';
 
 export type Substitutability = 'HIGH' | 'MEDIUM' | 'LOW';
 
-export type EdgeOrigin = 'SEC_FILING' | 'JINTEL_RELATIONSHIP' | 'JINTEL_SUBSIDIARY';
+export type EdgeOrigin = 'JINTEL_DIRECT' | 'LLM_INFERRED';
 
 export type ConcentrationDimension = 'PRODUCT' | 'SEGMENT' | 'GEOGRAPHY' | 'CUSTOMER';
 
@@ -1670,4 +1669,73 @@ export interface PortfolioSupplyChainSummary {
 export interface SupplyChainGraphQueryResult {
   supplyChainMapsByTickers: SupplyChainMap[];
   portfolioSupplyChainSummary: PortfolioSupplyChainSummary;
+}
+
+// ---------------------------------------------------------------------------
+// Supply chain — progressive expansion
+// ---------------------------------------------------------------------------
+
+export type SupplyChainDirection =
+  | 'UPSTREAM_SUPPLIERS'
+  | 'DOWNSTREAM_CUSTOMERS'
+  | 'COUNTRY_EXPOSURE'
+  | 'SECTOR_PEERS'
+  | 'CONTRACT_MANUFACTURERS';
+
+export type SupplyChainNodeKind = 'COUNTERPARTY' | 'COUNTRY' | 'PEER';
+
+export interface SupplyChainEvidence {
+  connector: string;
+  url: string | null;
+  ref: string | null;
+  asOf: string | null;
+  contextQuote: string | null;
+}
+
+export interface SupplyChainExpansionNode {
+  id: string;
+  label: string;
+  ticker: string | null;
+  cik: string | null;
+  nodeKind: SupplyChainNodeKind;
+  countryCode: string | null;
+  rank: number;
+}
+
+export interface SupplyChainExpansionEdge {
+  sourceId: string;
+  targetId: string;
+  relationship: SupplyChainRelationship;
+  label: string;
+  edgeOrigin: EdgeOrigin;
+  criticality: number;
+  evidence: SupplyChainEvidence[];
+}
+
+export interface SupplyChainExpansion {
+  sourceNodeId: string;
+  direction: SupplyChainDirection;
+  requestedTicker: string;
+  nodes: SupplyChainExpansionNode[];
+  edges: SupplyChainExpansionEdge[];
+  reasoning: string | null;
+  expandedAt: string;
+  staleAfter: string;
+  synthesizedBy: { provider: string; model: string } | null;
+}
+
+export interface ExpandSupplyChainGraphInput {
+  sourceNodeId: string;
+  direction: SupplyChainDirection;
+  requestedTicker: string;
+  hopDepth?: number | null;
+  force?: boolean | null;
+}
+
+export interface ExpandSupplyChainGraphMutationResult {
+  expandSupplyChainGraph: SupplyChainExpansion;
+}
+
+export interface ExpandSupplyChainGraphVariables {
+  input: ExpandSupplyChainGraphInput;
 }

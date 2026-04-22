@@ -1852,3 +1852,48 @@ export const SUPPLY_CHAIN_GRAPH_QUERY = gql`
     }
   }
 `;
+
+// ---------------------------------------------------------------------------
+// Mutations — Supply chain (progressive expansion)
+// ---------------------------------------------------------------------------
+
+export const EXPAND_SUPPLY_CHAIN_GRAPH_MUTATION = gql`
+  mutation ExpandSupplyChainGraph($input: ExpandSupplyChainGraphInput!) {
+    expandSupplyChainGraph(input: $input) {
+      sourceNodeId
+      direction
+      requestedTicker
+      nodes {
+        id
+        label
+        ticker
+        cik
+        nodeKind
+        countryCode
+        rank
+      }
+      edges {
+        sourceId
+        targetId
+        relationship
+        label
+        edgeOrigin
+        criticality
+        evidence {
+          connector
+          url
+          ref
+          asOf
+          contextQuote
+        }
+      }
+      reasoning
+      expandedAt
+      staleAfter
+      synthesizedBy {
+        provider
+        model
+      }
+    }
+  }
+`;

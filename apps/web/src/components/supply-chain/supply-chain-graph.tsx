@@ -1,13 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d';
 
-import type { Substitutability, SupplyChainMap } from '../../api/types';
+import type {
+  Substitutability,
+  SupplyChainDirection,
+  SupplyChainExpansion,
+  SupplyChainMap,
+} from '../../api/types';
+import { useSupplyChainExpansion } from '../../hooks/use-supply-chain-expansion';
 import {
   buildSupplyChainGraph,
   substitutabilityColor,
   type GraphLink,
   type GraphNode,
 } from '../../lib/supply-chain-graph';
+import { cn } from '../../lib/utils';
+import Button from '../common/button';
+import Spinner from '../common/spinner';
 
 interface SupplyChainGraphProps {
   maps: SupplyChainMap[];
@@ -34,11 +43,32 @@ const DEFAULT_THEME: ThemeColors = {
   border: '#3d3d3d',
 };
 
+const DIRECTION_LABELS: Record<SupplyChainDirection, string> = {
+  UPSTREAM_SUPPLIERS: 'Suppliers',
+  DOWNSTREAM_CUSTOMERS: 'Customers',
+  COUNTRY_EXPOSURE: 'Countries',
+  SECTOR_PEERS: 'Peers',
+  CONTRACT_MANUFACTURERS: 'Contract mfrs',
+};
+
+const DIRECTIONS: SupplyChainDirection[] = [
+  'UPSTREAM_SUPPLIERS',
+  'DOWNSTREAM_CUSTOMERS',
+  'COUNTRY_EXPOSURE',
+  'SECTOR_PEERS',
+  'CONTRACT_MANUFACTURERS',
+];
+
 /**
  * Force-directed graph of the user's portfolio and its upstream / downstream
  * counterparties. Portfolio tickers render as filled accent circles;
  * counterparties as outline circles sized by how many portfolio tickers
  * depend on them. Edge colour encodes substitutability (LOW = red bottleneck).
+ *
+ * Progressive expansion: clicking a node selects it and reveals a direction
+ * chip row (Suppliers / Customers / Countries / Peers / Contract mfrs). Each
+ * chip fires a mutation that runs a short Opus-4.7 pass grounded in Jintel
+ * candidates; the returned nodes/edges merge into the canvas.
  */
 export function SupplyChainGraph({
   maps,
@@ -51,6 +81,9 @@ export function SupplyChainGraph({
   const graphRef = useRef<ForceGraphMethods<GraphNode, GraphLink> | undefined>(undefined);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 600, h: 480 });
   const [theme, setTheme] = useState<ThemeColors>(DEFAULT_THEME);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [expansions, setExpansions] = useState<SupplyChainExpansion[]>([]);
+  const { expand, expanding, error: expandError } = useSupplyChainExpansion();
 
   useEffect(() => {
     const el = containerRef.current;
@@ -88,8 +121,11 @@ export function SupplyChainGraph({
 
   const graphData = useMemo(() => {
     const { nodes, links } = buildSupplyChainGraph({ maps, portfolioTickers });
-    if (!bottlenecksOnly) return { nodes, links };
-    const keptLinks = links.filter(
+    const { extraNodes, extraLinks } = projectExpansions(expansions, new Set(nodes.map((n) => n.id)));
+    const allNodes = [...nodes, ...extraNodes];
+    const allLinks = [...links, ...extraLinks];
+    if (!bottlenecksOnly) return { nodes: allNodes, links: allLinks };
+    const keptLinks = allLinks.filter(
       (l) => l.kind === 'upstream' && (l.substitutability === 'LOW' || l.substitutability === 'MEDIUM'),
     );
     const keep = new Set<string>();
@@ -98,10 +134,27 @@ export function SupplyChainGraph({
       keep.add(typeof l.target === 'string' ? l.target : (l.target as GraphNode).id);
     }
     return {
-      nodes: nodes.filter((n) => keep.has(n.id) || n.kind === 'portfolio'),
+      nodes: allNodes.filter((n) => keep.has(n.id) || n.kind === 'portfolio'),
       links: keptLinks,
     };
-  }, [maps, portfolioTickers, bottlenecksOnly]);
+  }, [maps, portfolioTickers, bottlenecksOnly, expansions]);
+
+  const selectedNode = useMemo<GraphNode | null>(
+    () => graphData.nodes.find((n) => n.id === selectedNodeId) ?? null,
+    [graphData.nodes, selectedNodeId],
+  );
+
+  const handleExpand = useCallback(
+    async (direction: SupplyChainDirection) => {
+      if (!selectedNode) return;
+      const requestedTicker = resolveRequestedTicker(selectedNode, portfolioTickers);
+      if (!requestedTicker) return;
+      const result = await expand(selectedNode.id, direction, requestedTicker);
+      if (!result) return;
+      setExpansions((current) => [...current, result]);
+    },
+    [expand, portfolioTickers, selectedNode],
+  );
 
   // Tune the d3 forces once the graph is mounted: more repulsion + longer
   // link distance so counterparties don't collapse into flower clusters and
@@ -123,36 +176,130 @@ export function SupplyChainGraph({
     return () => clearTimeout(id);
   }, [graphData]);
 
+  const effectiveFocusId = focusedNodeId ?? selectedNodeId;
+
   return (
-    <div ref={containerRef} className="relative h-full w-full overflow-hidden">
-      <ForceGraph2D
-        ref={graphRef}
-        graphData={graphData}
-        width={size.w}
-        height={size.h}
-        backgroundColor="rgba(0,0,0,0)"
-        nodeId="id"
-        nodeLabel={(n) => nodeTooltip(n as GraphNode)}
-        linkLabel={(l) => linkTooltip(l as unknown as GraphLink)}
-        nodeVal={(n) => nodeSize(n as GraphNode)}
-        nodeCanvasObjectMode={() => 'after'}
-        nodeCanvasObject={(rawNode, ctx, scale) => {
-          const node = rawNode as GraphNode & { x?: number; y?: number };
-          if (node.x == null || node.y == null) return;
-          drawNode({ ...node, x: node.x, y: node.y }, ctx, scale, focusedNodeId === node.id, theme);
-        }}
-        linkColor={(l) => substitutabilityColor((l as unknown as GraphLink).substitutability)}
-        linkWidth={(l) => linkWidth(l as unknown as GraphLink)}
-        linkDirectionalArrowLength={4}
-        linkDirectionalArrowRelPos={0.92}
-        linkCurvature={(l) => ((l as unknown as GraphLink).kind === 'downstream' ? 0.2 : 0)}
-        cooldownTicks={300}
-        d3AlphaDecay={0.02}
-        d3VelocityDecay={0.3}
-        onNodeClick={(n) => onNodeClick?.(n as GraphNode)}
-      />
+    <div className="flex h-full w-full flex-col gap-3">
+      {selectedNode && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-bg-card p-3">
+          <div className="mr-2 text-xs uppercase tracking-wide text-text-muted">
+            Expand <span className="font-medium text-text-primary">{selectedNode.label}</span>
+          </div>
+          {DIRECTIONS.map((direction) => (
+            <Button
+              key={direction}
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                void handleExpand(direction);
+              }}
+              disabled={expanding}
+              aria-label={`Expand ${selectedNode.label} — ${DIRECTION_LABELS[direction]}`}
+            >
+              {expanding ? <Spinner size="sm" /> : null}
+              {DIRECTION_LABELS[direction]}
+            </Button>
+          ))}
+        </div>
+      )}
+      {expandError && (
+        <div
+          className={cn('rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error')}
+          role="alert"
+        >
+          {expandError}
+        </div>
+      )}
+      <div ref={containerRef} className="relative h-full w-full flex-1 overflow-hidden">
+        <ForceGraph2D
+          ref={graphRef}
+          graphData={graphData}
+          width={size.w}
+          height={size.h}
+          backgroundColor="rgba(0,0,0,0)"
+          nodeId="id"
+          nodeLabel={(n) => nodeTooltip(n as GraphNode)}
+          linkLabel={(l) => linkTooltip(l as unknown as GraphLink)}
+          nodeVal={(n) => nodeSize(n as GraphNode)}
+          nodeCanvasObjectMode={() => 'after'}
+          nodeCanvasObject={(rawNode, ctx, scale) => {
+            const node = rawNode as GraphNode & { x?: number; y?: number };
+            if (node.x == null || node.y == null) return;
+            drawNode({ ...node, x: node.x, y: node.y }, ctx, scale, effectiveFocusId === node.id, theme);
+          }}
+          linkColor={(l) => substitutabilityColor((l as unknown as GraphLink).substitutability)}
+          linkWidth={(l) => linkWidth(l as unknown as GraphLink)}
+          linkDirectionalArrowLength={4}
+          linkDirectionalArrowRelPos={0.92}
+          linkCurvature={(l) => ((l as unknown as GraphLink).kind === 'downstream' ? 0.2 : 0)}
+          cooldownTicks={300}
+          d3AlphaDecay={0.02}
+          d3VelocityDecay={0.3}
+          onNodeClick={(n) => {
+            const node = n as GraphNode;
+            setSelectedNodeId(node.id);
+            onNodeClick?.(node);
+          }}
+        />
+      </div>
     </div>
   );
+}
+
+/**
+ * Projects progressive-expansion results (nodes/edges in the expansion shape)
+ * into the force-graph's GraphNode/GraphLink shape. Nodes that already exist
+ * in the base graph (by id) are skipped — the base layer wins.
+ */
+function projectExpansions(
+  expansions: SupplyChainExpansion[],
+  existingNodeIds: Set<string>,
+): { extraNodes: GraphNode[]; extraLinks: GraphLink[] } {
+  const nodeById = new Map<string, GraphNode>();
+  const edgeByKey = new Map<string, GraphLink>();
+  for (const expansion of expansions) {
+    for (const n of expansion.nodes) {
+      if (existingNodeIds.has(n.id) || nodeById.has(n.id)) continue;
+      nodeById.set(n.id, {
+        id: n.id,
+        label: n.label,
+        kind: 'counterparty',
+        portfolioDegree: 1,
+        country: n.countryCode,
+        worstSubstitutability: null,
+        shared: false,
+        bottleneck: false,
+      });
+    }
+    for (const e of expansion.edges) {
+      const key = `${e.sourceId}->${e.targetId}|${e.relationship}`;
+      if (edgeByKey.has(key)) continue;
+      edgeByKey.set(key, {
+        source: e.sourceId,
+        target: e.targetId,
+        kind: 'upstream',
+        substitutability: null,
+        criticality: e.criticality,
+        relationship: e.relationship,
+        sharePct: null,
+        originCountry: null,
+      });
+    }
+  }
+  return { extraNodes: Array.from(nodeById.values()), extraLinks: Array.from(edgeByKey.values()) };
+}
+
+/**
+ * The expander's requestedTicker anchors the Opus prompt to a concrete,
+ * tradable entity. For portfolio nodes the node id is already the ticker;
+ * counterparty nodes with a ticker-shaped id are used directly; otherwise we
+ * fall back to the first portfolio ticker so the mutation still fires.
+ */
+function resolveRequestedTicker(node: GraphNode, portfolioTickers: string[]): string | null {
+  if (node.kind === 'portfolio') return node.id;
+  if (/^[A-Z][A-Z0-9.\-]{0,9}$/.test(node.id)) return node.id;
+  return portfolioTickers[0] ?? null;
 }
 
 function nodeSize(node: GraphNode): number {

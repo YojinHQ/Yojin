@@ -144,6 +144,7 @@ import {
 } from './resolvers/strategy-sources.js';
 import { summariesResolver, summaryResolver } from './resolvers/summaries.js';
 import {
+  expandSupplyChainGraphMutation,
   portfolioSupplyChainSummaryQuery,
   supplyChainMapQuery,
   supplyChainMapsByTickersQuery,
@@ -300,6 +301,7 @@ const schema = createSchema({
       triggerMicroAnalysis: triggerMicroAnalysisMutation,
       triggerStrategyEvaluation: triggerStrategyEvaluationMutation,
       deepAnalyzePosition: deepAnalyzePositionMutation,
+      expandSupplyChainGraph: expandSupplyChainGraphMutation,
     },
     Subscription: {
       onAlert: onAlertSubscription,

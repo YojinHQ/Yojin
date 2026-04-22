@@ -41,7 +41,10 @@ import {
   setTriggerStrategyEvaluation,
 } from '../api/graphql/resolvers/scheduler.js';
 import { setStrategySuggestionDeps } from '../api/graphql/resolvers/strategies.js';
-import { setSupplyChainEnsureFn } from '../api/graphql/resolvers/supply-chain.js';
+import {
+  setSupplyChainEnsureFn,
+  setSupplyChainExpandFn,
+} from '../api/graphql/resolvers/supply-chain.js';
 import { setWatchlistChangedCallback } from '../api/graphql/resolvers/watchlist.js';
 import { buildContext } from '../composition.js';
 import { AgentRuntime } from '../core/agent-runtime.js';
@@ -49,6 +52,8 @@ import { EventLog } from '../core/event-log.js';
 import { NotificationBus } from '../core/notification-bus.js';
 import { Gateway } from '../gateway/server.js';
 import { MicroInsightStore } from '../insights/micro-insight-store.js';
+import { expandSupplyChainNode } from '../insights/supply-chain-expander.js';
+import { SupplyChainExpansionStore } from '../insights/supply-chain-expansion-store.js';
 import { ensureSupplyChainMap } from '../insights/supply-chain-runner.js';
 import { createJintelPriceProvider } from '../jintel/price-provider.js';
 import { MarketSentimentBaselineStore } from '../market-sentiment/baseline-store.js';
@@ -149,6 +154,29 @@ async function buildFullRuntime(): Promise<{
   setOnboardingClaudeCodeProvider(claudeProvider);
   setAiConfigProviderRouter(providerRouter);
   setAiConfigClaudeCodeProvider(claudeProvider);
+
+  // Progressive supply-chain expansion. The resolver calls this fn on demand
+  // when the user clicks a node/direction chip. Runs a short Opus-4.7 pass
+  // grounded in Jintel candidates, caches result by (sourceNodeId, direction, hopDepth)
+  // for 24h. If no Jintel client is available, the expander returns null and
+  // the resolver degrades to an empty expansion.
+  const supplyChainExpansionStore = new SupplyChainExpansionStore(dataRoot);
+  setSupplyChainExpandFn((input) =>
+    expandSupplyChainNode(
+      {
+        sourceNodeId: input.sourceNodeId,
+        direction: input.direction,
+        requestedTicker: input.requestedTicker,
+        ...(input.hopDepth != null ? { hopDepth: input.hopDepth } : {}),
+        ...(input.force != null ? { force: input.force } : {}),
+      },
+      {
+        jintelClient: services.jintelToolOptions.client,
+        providerRouter,
+        store: supplyChainExpansionStore,
+      },
+    ),
+  );
 
   // Wire signal quality pipeline — single QualityAgent handles enrichment, dedup, and quality gating.
   const llmComplete = async (prompt: string): Promise<string> => {

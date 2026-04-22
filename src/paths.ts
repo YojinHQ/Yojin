@@ -48,6 +48,7 @@ export const DATA_SUBDIRS = [
   'market-sentiment',
   'snap',
   'supply-chain-maps', // Per-ticker supply-chain graphs built from Jintel (Phase A: raw capture)
+  'supply-chain-expansions', // Per-(node,direction,hop) progressive expansion cache (Phase C)
   'profiles', // Per-ticker persistent knowledge profiles
   'data', // General-purpose data storage for data source outputs and imports
   'oauth', // OAuth / pairing state (e.g. WhatsApp Baileys auth)

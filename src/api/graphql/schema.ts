@@ -1134,6 +1134,62 @@ export const typeDefs = /* GraphQL */ `
     concentrationStack: [ConcentrationStackItem!]!
   }
 
+  # --- Progressive supply-chain expansion (click a node → fetch more) --------
+
+  enum SupplyChainDirection {
+    UPSTREAM_SUPPLIERS
+    DOWNSTREAM_CUSTOMERS
+    COUNTRY_EXPOSURE
+    SECTOR_PEERS
+    CONTRACT_MANUFACTURERS
+  }
+
+  enum SupplyChainNodeKind {
+    COUNTERPARTY
+    COUNTRY
+    PEER
+  }
+
+  type SupplyChainExpansionNode {
+    id: ID!
+    label: String!
+    ticker: ID
+    cik: String
+    nodeKind: SupplyChainNodeKind!
+    countryCode: String
+    rank: Float!
+  }
+
+  type SupplyChainExpansionEdge {
+    sourceId: ID!
+    targetId: ID!
+    relationship: SupplyChainRelationship!
+    label: String!
+    edgeOrigin: EdgeOrigin!
+    criticality: Float!
+    evidence: [SupplyChainEvidence!]!
+  }
+
+  type SupplyChainExpansion {
+    sourceNodeId: ID!
+    direction: SupplyChainDirection!
+    requestedTicker: ID!
+    nodes: [SupplyChainExpansionNode!]!
+    edges: [SupplyChainExpansionEdge!]!
+    reasoning: String
+    expandedAt: String!
+    staleAfter: String!
+    synthesizedBy: ProviderModel
+  }
+
+  input ExpandSupplyChainGraphInput {
+    sourceNodeId: ID!
+    direction: SupplyChainDirection!
+    requestedTicker: ID!
+    hopDepth: Int
+    force: Boolean
+  }
+
   # ---------------------------------------------------------------------------
   # Ticker Profiles (per-asset institutional knowledge)
   # ---------------------------------------------------------------------------
@@ -1644,6 +1700,12 @@ export const typeDefs = /* GraphQL */ `
     removeAiCredential(provider: String!): SaveAiCredentialResult!
     triggerMicroAnalysis: Boolean!
     triggerStrategyEvaluation: Boolean!
+    """
+    Progressive supply-chain graph expansion. Given a source node and direction,
+    fetches fresh Jintel relationships and runs a short Opus classify/rank/label
+    pass. Results are cached by (sourceNodeId, direction, hopDepth) for 24h.
+    """
+    expandSupplyChainGraph(input: ExpandSupplyChainGraphInput!): SupplyChainExpansion!
   }
 
   # ---------------------------------------------------------------------------
