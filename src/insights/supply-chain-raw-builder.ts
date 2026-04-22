@@ -4,8 +4,11 @@
  * Takes a hop-0 `Entity` (target) and hop-1 `Entity[]` (top counterparties)
  * and emits a `SupplyChainMap` with NO LLM synthesis:
  *
- * - `upstream`: edges where (direction=IN & type ∈ {PARTNER, OWNERSHIP}) OR
- *   (direction=OUT & type = SUBSIDIARY). All tagged `edgeOrigin=JINTEL_DIRECT`.
+ * - `upstream`: edges where direction=IN & type=PARTNER. Tagged
+ *   `edgeOrigin=JINTEL_DIRECT`. `OWNERSHIP` IN (13F filers) and `SUBSIDIARY`
+ *   OUT (holding-company entities) are filtered — they produced more noise
+ *   than signal (passive fund managers mislabelled as JVs, tax-structure subs
+ *   mislabelled as manufacturers).
  * - `downstream`: edges where (direction=OUT & type ∈ {CUSTOMER, GOVERNMENT_CUSTOMER}).
  * - `criticality` (upstream): min-max normalized composite of (valueUsd, sharePct,
  *   confidence) across the upstream set. Single-edge / tied sets → 0.5.
@@ -28,12 +31,7 @@
 import type { Entity } from '@yojinhq/jintel-client';
 
 import type { RelationshipEdge } from './supply-chain-jintel.js';
-import {
-  ConcentrationDimensionSchema,
-  EdgeOriginSchema,
-  SupplyChainMapSchema,
-  SupplyChainRelationshipSchema,
-} from './supply-chain-types.js';
+import { ConcentrationDimensionSchema, EdgeOriginSchema, SupplyChainMapSchema } from './supply-chain-types.js';
 import type {
   ConcentrationFlag,
   DownstreamEdge,
@@ -47,24 +45,11 @@ import type {
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Jintel relationship type → Phase-A Yojin relationship label.
- *
- * - `PARTNER` (direction IN) and `OWNERSHIP` (direction IN) → PARTNER / JOINT_VENTURE.
- * - `SUBSIDIARY` (direction OUT) → MANUFACTURER (best-effort; subsidiaries are
- *   frequently manufacturing entities. This is a Phase-A heuristic; Phase B's
- *   LLM will refine).
- *
- * We avoid inventing SUPPLIER/DISTRIBUTOR/LICENSOR — Jintel doesn't currently
- * distinguish those, and guessing would be hallucination.
+ * Minimum parent-name prefix length before the self-counterparty filter will
+ * fire. Names shorter than this (e.g. "IBM", "AMD") are too common to use as
+ * a prefix match without false positives.
  */
-const UPSTREAM_RELATIONSHIP_MAP: Record<
-  'PARTNER' | 'OWNERSHIP' | 'SUBSIDIARY',
-  'PARTNER' | 'JOINT_VENTURE' | 'MANUFACTURER'
-> = {
-  PARTNER: SupplyChainRelationshipSchema.enum.PARTNER,
-  OWNERSHIP: SupplyChainRelationshipSchema.enum.JOINT_VENTURE,
-  SUBSIDIARY: SupplyChainRelationshipSchema.enum.MANUFACTURER,
-};
+const SELF_COUNTERPARTY_MIN_PREFIX = 4;
 
 /**
  * Build the Phase-A raw supply-chain map from hop-0 + hop-1 Jintel data.
@@ -77,9 +62,14 @@ const UPSTREAM_RELATIONSHIP_MAP: Record<
  */
 export function buildRawSupplyChainMap(requestedTicker: string, hop0: Entity, _hop1: Entity[]): SupplyChainMap {
   const relationships: RelationshipEdge[] = hop0.relationships ?? [];
+  const parentName = hop0.name;
 
-  const upstreamRaw = relationships.filter(isUpstreamEdge);
-  const downstreamRaw = relationships.filter(isDownstreamEdge);
+  const upstreamRaw = relationships.filter(
+    (edge) => isUpstreamEdge(edge) && isUsableCounterparty(edge.counterpartyName, parentName),
+  );
+  const downstreamRaw = relationships.filter(
+    (edge) => isDownstreamEdge(edge) && isUsableCounterparty(edge.counterpartyName, parentName),
+  );
 
   const upstream = normalizeUpstream(upstreamRaw);
   const downstream = downstreamRaw.map(toDownstreamEdge);
@@ -119,13 +109,55 @@ export function buildRawSupplyChainMap(requestedTicker: string, hop0: Entity, _h
 // ---------------------------------------------------------------------------
 
 function isUpstreamEdge(e: RelationshipEdge): boolean {
-  if (e.direction === 'IN' && (e.type === 'PARTNER' || e.type === 'OWNERSHIP')) return true;
-  if (e.direction === 'OUT' && e.type === 'SUBSIDIARY') return true;
-  return false;
+  // Only IN PARTNER survives as upstream. IN OWNERSHIP is 13F/beneficial-holder
+  // noise (investment advisors reported by Form 13F are not supply-chain
+  // counterparties). OUT SUBSIDIARY is tax/legal org structure, not a supplier
+  // (Jintel's subsidiary list is dominated by holding-co entities in Ireland,
+  // Luxembourg, Delaware — the old "MANUFACTURER" label was a misread).
+  return e.direction === 'IN' && e.type === 'PARTNER';
 }
 
 function isDownstreamEdge(e: RelationshipEdge): boolean {
   return e.direction === 'OUT' && (e.type === 'CUSTOMER' || e.type === 'GOVERNMENT_CUSTOMER');
+}
+
+// ---------------------------------------------------------------------------
+// Counterparty sanitization — reject SGML fragments leaked from SEC exhibit
+// parsers and self-referential names that describe the parent's own org tree.
+// ---------------------------------------------------------------------------
+
+/**
+ * Matches names that are actually SGML/XML fragments leaked from SEC exhibit
+ * parsing — e.g. `<DOCUMENT>`, `<TYPE>EX-32.1`, `</TEXT>`, `<SEC-DOCUMENT>`.
+ * We reject any name that opens or closes an SGML-like tag, or contains a
+ * well-known SEC wrapper tag name.
+ */
+function isSgmlFragment(name: string): boolean {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return true;
+  if (/^<\s*\/?[A-Za-z]/.test(trimmed)) return true;
+  if (/<\s*\/\s*[A-Za-z]/.test(trimmed)) return true;
+  return /<\s*(DOCUMENT|TYPE|SEC-DOCUMENT|IMS-DOCUMENT|TEXT|FILENAME|SEQUENCE|PAGE)\b/i.test(trimmed);
+}
+
+/**
+ * True when the counterparty name's first token matches the parent's first
+ * token (case-insensitive) — i.e. the "supplier" is actually a subsidiary of
+ * the parent. Only fires when the parent's first token is long enough
+ * (>= SELF_COUNTERPARTY_MIN_PREFIX) to avoid false positives on short
+ * acronym-style names ("IBM", "AMD").
+ */
+function isSelfCounterparty(counterpartyName: string, parentName: string): boolean {
+  const parentFirst = parentName.trim().toLowerCase().split(/\s+/)[0] ?? '';
+  if (parentFirst.length < SELF_COUNTERPARTY_MIN_PREFIX) return false;
+  const cpFirst = counterpartyName.trim().toLowerCase().split(/\s+/)[0] ?? '';
+  return cpFirst === parentFirst;
+}
+
+function isUsableCounterparty(counterpartyName: string, parentName: string): boolean {
+  if (isSgmlFragment(counterpartyName)) return false;
+  if (isSelfCounterparty(counterpartyName, parentName)) return false;
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -158,13 +190,12 @@ function scoreBounds(scores: number[]): { min: number; max: number } {
 }
 
 function toUpstreamEdge(edge: RelationshipEdge, criticality: number): UpstreamEdge {
-  const key = edge.type as 'PARTNER' | 'OWNERSHIP' | 'SUBSIDIARY';
-  const relationship = UPSTREAM_RELATIONSHIP_MAP[key];
   return {
     counterpartyName: edge.counterpartyName,
     counterpartyTicker: edge.counterpartyTicker ?? null,
     counterpartyCik: edge.counterpartyCik ?? null,
-    relationship,
+    // Only IN PARTNER survives the classifier, so the label is a constant.
+    relationship: 'PARTNER',
     edgeOrigin: EdgeOriginSchema.enum.JINTEL_DIRECT,
     criticality,
     substitutability: null,

@@ -17,16 +17,18 @@ async function loadAaplHop0(): Promise<Entity> {
 }
 
 describe('buildRawSupplyChainMap', () => {
-  it('splits relationships into upstream and downstream by direction + type', async () => {
+  it('keeps IN PARTNER edges upstream and filters SUBSIDIARY / OWNERSHIP noise', async () => {
     const hop0 = await loadAaplHop0();
     const map = buildRawSupplyChainMap('AAPL', hop0, []);
 
-    // PARTNER IN (TSM) + SUBSIDIARY OUT (Apple Ops Ireland) → upstream.
-    expect(map.upstream).toHaveLength(2);
-    const upstreamNames = map.upstream.map((e) => e.counterpartyName).sort();
-    expect(upstreamNames).toEqual(
-      ['Apple Operations International Limited', 'Taiwan Semiconductor Manufacturing Co.'].sort(),
-    );
+    // IN PARTNER (TSM) → upstream. The fixture's OUT SUBSIDIARY
+    // ("Apple Operations International Limited") is dropped — SUBSIDIARY OUT
+    // is org-structure, not supply-chain, and the self-counterparty filter
+    // also rejects any name whose first token matches the parent's.
+    expect(map.upstream).toHaveLength(1);
+    expect(map.upstream[0]?.counterpartyName).toBe('Taiwan Semiconductor Manufacturing Co.');
+    expect(map.upstream[0]?.counterpartyTicker).toBe('TSM');
+    expect(map.upstream[0]?.relationship).toBe('PARTNER');
 
     // CUSTOMER OUT (BBY) → downstream.
     expect(map.downstream).toHaveLength(1);
@@ -63,9 +65,9 @@ describe('buildRawSupplyChainMap', () => {
       contextQuote: 'Revenue from wholesale channel disclosed in FY24 10-K',
     });
 
-    const subsidiary = map.upstream.find((e) => e.counterpartyName === 'Apple Operations International Limited');
-    expect(subsidiary?.evidence[0]?.connector).toBe('sec-exhibit21');
-    expect(subsidiary?.evidence[0]?.ref).toBe('0000320193-24-000123');
+    const tsm = map.upstream.find((e) => e.counterpartyTicker === 'TSM');
+    expect(tsm?.evidence[0]?.connector).toBe('sec-segments');
+    expect(tsm?.evidence[0]?.ref).toBe('0000320193-24-000123');
   });
 
   it('assigns upstream criticality in [0,1] with single-edge fallback 0.5', async () => {
@@ -128,6 +130,169 @@ describe('buildRawSupplyChainMap', () => {
     // buildRawSupplyChainMap already calls `.parse()` internally; re-running
     // here confirms the output type shape for consumers.
     expect(() => SupplyChainMapSchema.parse(map)).not.toThrow();
+  });
+
+  it('drops OWNERSHIP IN edges (13F filers are not supply-chain counterparties)', () => {
+    const entity = {
+      id: 'ent_tgt',
+      type: 'COMPANY',
+      name: 'Target Corp',
+      tickers: ['TGT'],
+      relationships: [
+        {
+          type: 'OWNERSHIP',
+          direction: 'IN',
+          disclosure: 'DIRECT',
+          confidence: 0.9,
+          counterpartyName: 'SANDER CAPITAL ADVISORS LLC',
+          counterpartyTicker: null,
+          counterpartyCik: '0001234567',
+          sharePct: 0.012,
+          valueUsd: null,
+          context: '13F holder',
+          source: { connector: 'sec-13f', url: null, asOf: '2024-10-01', ref: '13f-123' },
+        },
+        {
+          type: 'PARTNER',
+          direction: 'IN',
+          disclosure: 'DIRECT',
+          confidence: 0.9,
+          counterpartyName: 'Genuine Supplier Co.',
+          counterpartyTicker: 'GSC',
+          counterpartyCik: null,
+          sharePct: null,
+          valueUsd: null,
+          context: null,
+          source: { connector: 'sec-segments', url: null, asOf: '2024-10-01', ref: 'seg-1' },
+        },
+      ],
+    } as unknown as Entity;
+
+    const map = buildRawSupplyChainMap('TGT', entity, []);
+    expect(map.upstream.map((e) => e.counterpartyName)).toEqual(['Genuine Supplier Co.']);
+  });
+
+  it('drops SGML-fragment counterparty names leaked from SEC exhibit parsing', () => {
+    const entity = {
+      id: 'ent_tgt',
+      type: 'COMPANY',
+      name: 'Target Corp',
+      tickers: ['TGT'],
+      relationships: [
+        {
+          type: 'PARTNER',
+          direction: 'IN',
+          disclosure: 'DIRECT',
+          confidence: 0.9,
+          counterpartyName: '<DOCUMENT>\n<TYPE>EX-32.1',
+          counterpartyTicker: null,
+          counterpartyCik: null,
+          sharePct: null,
+          valueUsd: null,
+          context: null,
+          source: { connector: 'sec-segments', url: null, asOf: '2024-10-01', ref: 'seg-1' },
+        },
+        {
+          type: 'PARTNER',
+          direction: 'IN',
+          disclosure: 'DIRECT',
+          confidence: 0.9,
+          counterpartyName: '</TEXT>',
+          counterpartyTicker: null,
+          counterpartyCik: null,
+          sharePct: null,
+          valueUsd: null,
+          context: null,
+          source: { connector: 'sec-segments', url: null, asOf: '2024-10-01', ref: 'seg-2' },
+        },
+        {
+          type: 'CUSTOMER',
+          direction: 'OUT',
+          disclosure: 'DIRECT',
+          confidence: 0.9,
+          counterpartyName: '<SEC-DOCUMENT>0000320193-24-000123.txt',
+          counterpartyTicker: null,
+          counterpartyCik: null,
+          sharePct: null,
+          valueUsd: null,
+          context: null,
+          source: { connector: 'sec-segments', url: null, asOf: '2024-10-01', ref: 'seg-3' },
+        },
+      ],
+    } as unknown as Entity;
+
+    const map = buildRawSupplyChainMap('TGT', entity, []);
+    expect(map.upstream).toEqual([]);
+    expect(map.downstream).toEqual([]);
+  });
+
+  it('drops self-counterparty edges whose first token matches the parent', () => {
+    const entity = {
+      id: 'ent_aapl',
+      type: 'COMPANY',
+      name: 'Apple Inc.',
+      tickers: ['AAPL'],
+      relationships: [
+        {
+          type: 'PARTNER',
+          direction: 'IN',
+          disclosure: 'DIRECT',
+          confidence: 0.9,
+          counterpartyName: 'Apple Operations Europe',
+          counterpartyTicker: null,
+          counterpartyCik: null,
+          sharePct: null,
+          valueUsd: null,
+          context: null,
+          source: { connector: 'sec-segments', url: null, asOf: '2024-10-01', ref: 'seg-1' },
+        },
+        {
+          type: 'PARTNER',
+          direction: 'IN',
+          disclosure: 'DIRECT',
+          confidence: 0.9,
+          counterpartyName: 'Samsung Electronics Co.',
+          counterpartyTicker: null,
+          counterpartyCik: null,
+          sharePct: null,
+          valueUsd: null,
+          context: null,
+          source: { connector: 'sec-segments', url: null, asOf: '2024-10-01', ref: 'seg-2' },
+        },
+      ],
+    } as unknown as Entity;
+
+    const map = buildRawSupplyChainMap('AAPL', entity, []);
+    expect(map.upstream.map((e) => e.counterpartyName)).toEqual(['Samsung Electronics Co.']);
+  });
+
+  it('does not self-filter when parent first token is too short (< 4 chars)', () => {
+    const entity = {
+      id: 'ent_ibm',
+      type: 'COMPANY',
+      name: 'IBM Corporation',
+      tickers: ['IBM'],
+      relationships: [
+        {
+          type: 'PARTNER',
+          direction: 'IN',
+          disclosure: 'DIRECT',
+          confidence: 0.9,
+          // Unrelated company whose first token happens to be "IBM" — we
+          // accept this because "IBM" is too short to self-filter safely.
+          counterpartyName: 'IBM Credit LLC',
+          counterpartyTicker: null,
+          counterpartyCik: null,
+          sharePct: null,
+          valueUsd: null,
+          context: null,
+          source: { connector: 'sec-segments', url: null, asOf: '2024-10-01', ref: 'seg-1' },
+        },
+      ],
+    } as unknown as Entity;
+
+    const map = buildRawSupplyChainMap('IBM', entity, []);
+    expect(map.upstream).toHaveLength(1);
   });
 
   it('returns empty arrays when the entity has no relationships / subsidiaries / concentration', () => {
