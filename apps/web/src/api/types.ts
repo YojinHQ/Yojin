@@ -1150,11 +1150,14 @@ export interface Summary {
 export interface SummariesQueryResult {
   summaries: Summary[];
 }
+export type SummaryScope = 'PORTFOLIO' | 'WATCHLIST' | 'ALL';
+
 export interface SummariesQueryVariables {
   ticker?: string;
   flow?: SummaryFlow;
   since?: string;
   limit?: number;
+  scope?: SummaryScope;
 }
 
 export interface SummaryQueryResult {

@@ -45,6 +45,8 @@ export interface SummaryStoreOptions {
 
 interface SummaryQueryFilter {
   ticker?: string;
+  /** Allowlist of tickers; when set, only summaries for these tickers are returned. */
+  tickers?: readonly string[];
   flow?: SummaryFlow;
   since?: string; // ISO datetime
   limit?: number;
@@ -113,6 +115,7 @@ export class SummaryStore {
     const results: Summary[] = [];
     const limit = filter.limit ?? 50;
     const normalizedTicker = filter.ticker?.toUpperCase();
+    const tickerAllowlist = filter.tickers ? new Set(filter.tickers.map((t) => t.toUpperCase())) : null;
 
     for (const file of files) {
       if (results.length >= limit) break;
@@ -121,6 +124,7 @@ export class SummaryStore {
       for (const summary of [...summaries].reverse()) {
         if (results.length >= limit) break;
         if (normalizedTicker && summary.ticker.toUpperCase() !== normalizedTicker) continue;
+        if (tickerAllowlist && !tickerAllowlist.has(summary.ticker.toUpperCase())) continue;
         if (filter.flow && summary.flow !== filter.flow) continue;
         if (filter.since && summary.createdAt < filter.since) continue;
         results.push(summary);

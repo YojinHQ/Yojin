@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 
 import { useSummaries } from '../../api';
-import type { SummarySourceSignal } from '../../api/types';
+import type { SummaryScope, SummarySourceSignal } from '../../api/types';
 import { groupSummariesByTicker, insightsHrefForTicker, severityBulletColor } from '../../lib/summaries-by-ticker';
 import { useFeatureStatus } from '../../lib/feature-status';
 import { cn, timeAgo } from '../../lib/utils';
@@ -44,12 +44,12 @@ interface TickerGroup {
   items: SummaryItem[];
 }
 
-export function YojinSnapCard() {
+export function YojinSnapCard({ scope = 'PORTFOLIO' }: { scope?: SummaryScope } = {}) {
   const { aiConfigured, jintelConfigured } = useFeatureStatus();
   // Pause the query until both prerequisites are satisfied so a gated user
   // doesn't spam `summaries` every 30s behind the blur overlay.
   const unlocked = aiConfigured && jintelConfigured;
-  const [result, reexecute] = useSummaries({ limit: 50, pause: !unlocked });
+  const [result, reexecute] = useSummaries({ limit: 50, scope, pause: !unlocked });
   const summaries = result.data?.summaries;
 
   // Poll to keep the card fresh without a manual refresh. Only runs once the

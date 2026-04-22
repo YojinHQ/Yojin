@@ -546,6 +546,12 @@ export const typeDefs = /* GraphQL */ `
     MICRO
   }
 
+  enum SummaryScope {
+    PORTFOLIO
+    WATCHLIST
+    ALL
+  }
+
   type SummarySourceSignal {
     id: ID!
     type: SignalType!
@@ -1522,7 +1528,7 @@ export const typeDefs = /* GraphQL */ `
     notificationPreferences: [NotificationPreferences!]!
     snap: Snap
     activityLog(types: [ActivityEventType!], since: String, limit: Int): [ActivityEvent!]!
-    summaries(ticker: String, flow: SummaryFlow, since: String, limit: Int): [Summary!]!
+    summaries(ticker: String, flow: SummaryFlow, since: String, limit: Int, scope: SummaryScope): [Summary!]!
     summary(id: ID!): Summary
     actions(status: ActionStatus, since: String, limit: Int, dismissed: Boolean): [Action!]!
     action(id: ID!): Action

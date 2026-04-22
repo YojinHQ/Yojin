@@ -6,6 +6,7 @@ import Button from '../components/common/button';
 import { PageBlurGate } from '../components/common/page-blur-gate';
 import IntelFeed from '../components/overview/intel-feed';
 import type { FeedPendingUpdate } from '../components/overview/intel-feed';
+import { YojinSnapCard } from '../components/overview/yojin-snap-card';
 import { AddSymbolModal } from '../components/watchlist/add-symbol-modal';
 import { SymbolCard, SymbolCardSkeleton } from '../components/watchlist/symbol-card';
 import { useAssetDetailModal } from '../lib/asset-detail-modal-context';
@@ -221,6 +222,10 @@ function WatchlistContent() {
                   {toast.message}
                 </p>
               )}
+            </div>
+
+            <div className="flex min-h-[240px]">
+              <YojinSnapCard scope="WATCHLIST" />
             </div>
           </>
         )}

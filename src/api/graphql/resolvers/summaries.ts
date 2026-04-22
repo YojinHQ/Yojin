@@ -13,6 +13,7 @@ import type { Signal, SignalType } from '../../../signals/types.js';
 import type { SummaryStore } from '../../../summaries/summary-store.js';
 import type { Summary, SummaryFlow } from '../../../summaries/types.js';
 import { PORTFOLIO_TICKER } from '../../../summaries/types.js';
+import type { WatchlistStore } from '../../../watchlist/watchlist-store.js';
 
 function deriveSeverityLabel(severity: number | undefined): string {
   if (severity == null) return 'MEDIUM';
@@ -28,6 +29,7 @@ function deriveSeverityLabel(severity: number | undefined): string {
 let store: SummaryStore | null = null;
 let signalArchive: SignalArchive | null = null;
 let snapshotStore: PortfolioSnapshotStore | null = null;
+let watchlistStore: WatchlistStore | null = null;
 
 export function setSummaryStore(s: SummaryStore): void {
   store = s;
@@ -39,6 +41,10 @@ export function setSummarySignalArchive(a: SignalArchive): void {
 
 export function setSummarySnapshotStore(s: PortfolioSnapshotStore): void {
   snapshotStore = s;
+}
+
+export function setSummaryWatchlistStore(s: WatchlistStore): void {
+  watchlistStore = s;
 }
 
 // ---------------------------------------------------------------------------
@@ -118,32 +124,43 @@ async function batchResolveSourceSignals(summaries: Summary[]): Promise<Map<stri
 // Query resolvers
 // ---------------------------------------------------------------------------
 
+type SummaryScope = 'PORTFOLIO' | 'WATCHLIST' | 'ALL';
+
 export async function summariesResolver(
   _parent: unknown,
-  args: { ticker?: string; flow?: SummaryFlow; since?: string; limit?: number },
+  args: { ticker?: string; flow?: SummaryFlow; since?: string; limit?: number; scope?: SummaryScope },
 ): Promise<SummaryGql[]> {
   if (!store) return [];
 
+  // Scope filter: PORTFOLIO (default) shows summaries for held positions only,
+  // WATCHLIST shows summaries for watchlist tickers only, ALL skips the filter.
+  // Overview uses PORTFOLIO; the Watchlist page uses WATCHLIST.
+  //
+  // The ticker allowlist is pushed into the store query so that `limit`
+  // applies AFTER scope filtering. Otherwise a day dominated by watchlist
+  // summaries would fill the `limit` slots and starve portfolio tickers from
+  // the resolver response (observed bug: only QQQ surviving a 50-row limit).
+  const scope: SummaryScope = args.scope ?? 'PORTFOLIO';
+  let tickerAllowlist: string[] | undefined;
+  if (scope === 'PORTFOLIO' && snapshotStore) {
+    const snapshot = await snapshotStore.getLatest();
+    if (snapshot) {
+      tickerAllowlist = [PORTFOLIO_TICKER, ...snapshot.positions.map((p) => p.symbol.toUpperCase())];
+    }
+  } else if (scope === 'WATCHLIST' && watchlistStore) {
+    tickerAllowlist = watchlistStore.list().map((e) => e.symbol.toUpperCase());
+  }
+
   const summaries = await store.query({
     ticker: args.ticker,
+    tickers: tickerAllowlist,
     flow: args.flow,
     since: args.since,
     limit: args.limit ?? 50,
   });
 
-  // Filter to portfolio tickers only — watchlist-only tickers produce micro
-  // summaries but those should not appear in the Summaries feed.
-  let filtered = summaries;
-  if (snapshotStore) {
-    const snapshot = await snapshotStore.getLatest();
-    if (snapshot) {
-      const portfolioTickers = new Set(snapshot.positions.map((p) => p.symbol.toUpperCase()));
-      filtered = summaries.filter((s) => s.ticker === PORTFOLIO_TICKER || portfolioTickers.has(s.ticker.toUpperCase()));
-    }
-  }
-
-  const signalMap = await batchResolveSourceSignals(filtered);
-  return filtered.map((s) => toGql(s, signalMap));
+  const signalMap = await batchResolveSourceSignals(summaries);
+  return summaries.map((s) => toGql(s, signalMap));
 }
 
 export async function summaryResolver(_parent: unknown, args: { id: string }): Promise<SummaryGql | null> {
