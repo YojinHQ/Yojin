@@ -79,6 +79,19 @@ const navItems: NavItem[] = [
       </svg>
     ),
   },
+  {
+    label: 'Supply chain',
+    path: '/supply-chain',
+    icon: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M7.5 7.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM16.5 22.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM7.5 22.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM16.5 7.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM7.5 7.5v9M16.5 7.5v9M7.5 12h9"
+        />
+      </svg>
+    ),
+  },
 ];
 
 export default function Sidebar() {

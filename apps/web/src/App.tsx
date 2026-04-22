@@ -25,6 +25,7 @@ import Strategies from './pages/strategies';
 import Dashboard from './pages/dashboard';
 import Insights from './pages/insights';
 import Positions from './pages/positions';
+import SupplyChain from './pages/supply-chain';
 import Watchlist from './pages/watchlist';
 import OnboardingPage from './pages/onboarding';
 import { ONBOARDING_STATUS_QUERY } from './api/documents';
@@ -211,6 +212,7 @@ export default function App() {
                       <Route path="chat" element={<Chat />} />
                       <Route path="insights" element={<Insights />} />
                       <Route path="signals" element={<SignalsRedirect />} />
+                      <Route path="supply-chain" element={<SupplyChain />} />
                       <Route path="watchlist" element={<Watchlist />} />
                       <Route path="profile" element={<Profile />} />
                       <Route path="settings" element={<Settings />} />

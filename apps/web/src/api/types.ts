@@ -1562,3 +1562,109 @@ export interface TickerProfile {
   entries: TickerProfileEntry[];
   brief: TickerProfileBrief;
 }
+
+// ---------------------------------------------------------------------------
+// Supply Chain
+// ---------------------------------------------------------------------------
+
+export type SupplyChainRelationship =
+  | 'SUPPLIER'
+  | 'CUSTOMER'
+  | 'MANUFACTURER'
+  | 'DISTRIBUTOR'
+  | 'SUBSIDIARY'
+  | 'PARTNER'
+  | 'UNKNOWN';
+
+export type Substitutability = 'HIGH' | 'MEDIUM' | 'LOW';
+
+export type EdgeOrigin = 'SEC_FILING' | 'JINTEL_RELATIONSHIP' | 'JINTEL_SUBSIDIARY';
+
+export type ConcentrationDimension = 'PRODUCT' | 'SEGMENT' | 'GEOGRAPHY' | 'CUSTOMER';
+
+export interface SupplyChainUpstreamEdge {
+  counterpartyName: string;
+  counterpartyTicker: string | null;
+  relationship: SupplyChainRelationship;
+  edgeOrigin: EdgeOrigin;
+  criticality: number;
+  substitutability: Substitutability | null;
+  originCountry: string | null;
+}
+
+export interface SupplyChainDownstreamEdge {
+  counterpartyName: string;
+  counterpartyTicker: string | null;
+  edgeOrigin: EdgeOrigin;
+  sharePct: number | null;
+  valueUsd: number | null;
+}
+
+export interface SupplyChainGeographicFootprintEntry {
+  iso2: string;
+  country: string;
+  criticality: number;
+  entities: string[];
+}
+
+export interface SupplyChainConcentrationFlag {
+  dimension: ConcentrationDimension;
+  hhi: number;
+  label: string;
+}
+
+export interface SupplyChainProviderModel {
+  provider: string;
+  model: string;
+}
+
+export interface SupplyChainMap {
+  ticker: string;
+  entityName: string;
+  narrative: string | null;
+  asOf: string;
+  dataAsOf: string | null;
+  staleAfter: string;
+  synthesizedBy: SupplyChainProviderModel | null;
+  upstream: SupplyChainUpstreamEdge[];
+  downstream: SupplyChainDownstreamEdge[];
+  geographicFootprint: SupplyChainGeographicFootprintEntry[];
+  concentrationRisks: SupplyChainConcentrationFlag[];
+}
+
+export interface CountryExposure {
+  iso2: string;
+  country: string;
+  criticalityWeightedCount: number;
+  tickers: string[];
+}
+
+export interface SharedCounterparty {
+  counterpartyName: string;
+  counterpartyTicker: string | null;
+  tickers: string[];
+  count: number;
+}
+
+export interface SinglePointOfFailure {
+  counterpartyName: string;
+  ticker: string;
+  reason: string;
+}
+
+export interface ConcentrationStackItem {
+  ticker: string;
+  flag: SupplyChainConcentrationFlag;
+}
+
+export interface PortfolioSupplyChainSummary {
+  topCountryExposures: CountryExposure[];
+  sharedCounterparties: SharedCounterparty[];
+  singlePointsOfFailure: SinglePointOfFailure[];
+  concentrationStack: ConcentrationStackItem[];
+}
+
+export interface SupplyChainGraphQueryResult {
+  supplyChainMapsByTickers: SupplyChainMap[];
+  portfolioSupplyChainSummary: PortfolioSupplyChainSummary;
+}

@@ -1769,3 +1769,86 @@ export const SYNC_STRATEGIES_MUTATION = gql`
     }
   }
 `;
+
+// ---------------------------------------------------------------------------
+// Queries — Supply Chain Graph
+// ---------------------------------------------------------------------------
+
+/**
+ * Pulls every supply-chain map requested plus the portfolio-level rollup in
+ * a single round trip. Used by the supply-chain graph view: maps feed the
+ * node/link transform, summary feeds the SPoF / country / HHI panels.
+ *
+ * Tickers come from the cached PORTFOLIO_QUERY result — this query does NOT
+ * re-query the portfolio so the caller controls the ticker list.
+ */
+export const SUPPLY_CHAIN_GRAPH_QUERY = gql`
+  query SupplyChainGraph($tickers: [ID!]!) {
+    supplyChainMapsByTickers(tickers: $tickers) {
+      ticker
+      entityName
+      narrative
+      asOf
+      dataAsOf
+      staleAfter
+      synthesizedBy {
+        provider
+        model
+      }
+      upstream {
+        counterpartyName
+        counterpartyTicker
+        relationship
+        edgeOrigin
+        criticality
+        substitutability
+        originCountry
+      }
+      downstream {
+        counterpartyName
+        counterpartyTicker
+        edgeOrigin
+        sharePct
+        valueUsd
+      }
+      geographicFootprint {
+        iso2
+        country
+        criticality
+        entities
+      }
+      concentrationRisks {
+        dimension
+        hhi
+        label
+      }
+    }
+    portfolioSupplyChainSummary {
+      topCountryExposures {
+        iso2
+        country
+        criticalityWeightedCount
+        tickers
+      }
+      sharedCounterparties {
+        counterpartyName
+        counterpartyTicker
+        tickers
+        count
+      }
+      singlePointsOfFailure {
+        counterpartyName
+        ticker
+        reason
+      }
+      concentrationStack {
+        ticker
+        flag {
+          dimension
+          hhi
+          label
+        }
+      }
+    }
+  }
+`;
