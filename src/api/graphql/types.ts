@@ -31,6 +31,7 @@ export const KNOWN_PLATFORMS = [
   'FIDELITY',
   'POLYMARKET',
   'PHANTOM',
+  'TRADESTATION',
   'MANUAL',
 ] as const;
 

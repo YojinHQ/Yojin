@@ -52,6 +52,7 @@ const ACCOUNT_TO_PLATFORM: Record<string, Platform> = {
   Robinhood: 'ROBINHOOD',
   Coinbase: 'COINBASE',
   Schwab: 'SCHWAB',
+  TradeStation: 'TRADESTATION',
   Binance: 'BINANCE',
   Fidelity: 'FIDELITY',
   Webull: 'WEBULL',

@@ -17,6 +17,7 @@ export const KNOWN_PLATFORMS = [
   'ROBINHOOD',
   'COINBASE',
   'SCHWAB',
+  'TRADESTATION',
   'BINANCE',
   'FIDELITY',
   'POLYMARKET',

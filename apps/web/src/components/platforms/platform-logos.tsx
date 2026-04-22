@@ -24,6 +24,7 @@ const LOGO_FILES: Record<KnownPlatform, string> = {
   ROBINHOOD: 'robinhood.png',
   COINBASE: 'coinbase.png',
   SCHWAB: 'schwab.png',
+  TRADESTATION: 'tradestation.png',
   BINANCE: 'binance.png',
   FIDELITY: 'fidelity.png',
   POLYMARKET: 'polymarket.png',

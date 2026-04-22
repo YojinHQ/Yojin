@@ -49,6 +49,7 @@ const platformLabels: Record<KnownPlatform, string> = {
   ROBINHOOD: 'Robinhood',
   COINBASE: 'Coinbase',
   SCHWAB: 'Schwab',
+  TRADESTATION: 'TradeStation',
   BINANCE: 'Binance',
   FIDELITY: 'Fidelity',
   POLYMARKET: 'Polymarket',
