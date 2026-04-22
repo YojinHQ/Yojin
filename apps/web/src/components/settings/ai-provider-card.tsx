@@ -92,7 +92,16 @@ export function AiProviderCard() {
   const [{ data: statusData }] = useQuery<OnboardingStatusQueryResult>({
     query: ONBOARDING_STATUS_QUERY,
   });
-  const onboardingCompleted = statusData?.onboardingStatus?.completed ?? true;
+  // Gate on AI credential specifically — not overall onboarding completion. The
+  // card's job is "set up an AI provider", so once a provider credential exists
+  // we show the card contents even if other onboarding steps (Jintel, platforms,
+  // briefing) are still pending.
+  //
+  // Fail-open intentional: while the query is still resolving or errored we
+  // assume configured (true) to avoid flashing the gate over an already-valid
+  // card. The backend onboarding status is the source of truth; if it says the
+  // credential is missing we show the gate, otherwise we stay out of the way.
+  const aiCredentialConfigured = statusData?.onboardingStatus?.aiCredentialConfigured ?? true;
   const { openOnboarding } = useOnboardingStatus();
 
   return (
@@ -115,7 +124,7 @@ export function AiProviderCard() {
         </div>
       </Card>
 
-      {!onboardingCompleted && (
+      {!aiCredentialConfigured && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-bg-primary/70 backdrop-blur-[3px]">
           <GateCard
             requires="ai"

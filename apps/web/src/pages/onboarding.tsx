@@ -27,7 +27,11 @@ function resolveResumeStep(status: OnboardingStatusQueryResult['onboardingStatus
   // Env-var auto-detection alone is not "progress" — the user never interacted with the flow.
   if (!status.personaExists) return undefined;
 
-  // Persona exists but onboarding wasn't completed — resume at first missing step
+  // Persona exists but onboarding wasn't completed — resume at first missing step.
+  // AI provider comes before persona in the flow, so re-check it: a user can complete
+  // persona, then later clear/invalidate their AI credential, and we should send them
+  // back to AI Brain instead of skipping ahead to Jintel/Platforms.
+  if (!status.aiCredentialConfigured) return 1;
   if (!status.jintelConfigured) return 3;
   if (status.connectedPlatforms.length === 0) return 4;
   if (!status.briefingConfigured) return 5;
