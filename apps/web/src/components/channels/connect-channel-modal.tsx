@@ -68,6 +68,9 @@ function QrPairingFlow({ channelId, channelLabel, meta, onConnected, onClose }: 
   const [secondsLeft, setSecondsLeft] = useState(QR_TIMEOUT_SEC);
   const [expired, setExpired] = useState(false);
   const countdownRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const qrDataTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const startPairingTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const statusTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const [, initiatePairing] = useInitiateChannelPairing();
   const [, cancelPairing] = useCancelChannelPairing();
@@ -117,9 +120,16 @@ function QrPairingFlow({ channelId, channelLabel, meta, onConnected, onClose }: 
 
   // Kick off pairing on mount, cancel on unmount
   useEffect(() => {
-    void startPairing();
+    // Defer the setState-heavy startPairing call out of the effect body so it doesn't run
+    // synchronously during render (react-hooks/set-state-in-effect).
+    startPairingTimeoutRef.current = setTimeout(() => {
+      void startPairing();
+    }, 0);
 
     return () => {
+      if (startPairingTimeoutRef.current) clearTimeout(startPairingTimeoutRef.current);
+      if (qrDataTimeoutRef.current) clearTimeout(qrDataTimeoutRef.current);
+      if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
       void cancelPairing({ id: channelId });
     };
@@ -132,12 +142,19 @@ function QrPairingFlow({ channelId, channelLabel, meta, onConnected, onClose }: 
     if (!event) return;
 
     if (event.qrData) {
-      setQrData(event.qrData);
+      const nextQrData = event.qrData;
+      if (qrDataTimeoutRef.current) clearTimeout(qrDataTimeoutRef.current);
+      qrDataTimeoutRef.current = setTimeout(() => {
+        setQrData(nextQrData);
+      }, 0);
     }
 
     if (event.status === 'CONNECTED') {
       if (countdownRef.current) clearInterval(countdownRef.current);
-      setConnected(true);
+      if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
+      statusTimeoutRef.current = setTimeout(() => {
+        setConnected(true);
+      }, 0);
       const timer = setTimeout(() => {
         onConnected();
       }, 1500);
@@ -146,8 +163,12 @@ function QrPairingFlow({ channelId, channelLabel, meta, onConnected, onClose }: 
 
     if (event.status === 'FAILED' || event.status === 'EXPIRED') {
       if (countdownRef.current) clearInterval(countdownRef.current);
-      setExpired(true);
-      setError(event.error ?? (event.status === 'EXPIRED' ? 'QR code expired.' : 'Pairing failed'));
+      const nextError = event.error ?? (event.status === 'EXPIRED' ? 'QR code expired.' : 'Pairing failed');
+      if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
+      statusTimeoutRef.current = setTimeout(() => {
+        setExpired(true);
+        setError(nextError);
+      }, 0);
     }
   }, [pairingResult.data, onConnected]);
 

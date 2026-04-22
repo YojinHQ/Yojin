@@ -13,6 +13,9 @@ import type { EnrichOptions, EnrichmentField, Entity, JintelClient, MarketQuote 
 import { buildBatchEnrichQuery } from '@yojinhq/jintel-client';
 
 import type { InsightStore } from './insight-store.js';
+import { buildSupplyChainBrief, formatSupplyChainBrief } from './supply-chain-brief.js';
+import type { SupplyChainBrief } from './supply-chain-brief.js';
+import type { SupplyChainMap } from './supply-chain-types.js';
 import { evaluateTriggers, selectBudgeted, unionFields } from './triggers.js';
 import type { TriggerHit } from './triggers.js';
 import type { InsightReport } from './types.js';
@@ -105,6 +108,9 @@ export interface DataBrief {
   periodicFilings?: PeriodicFilingBrief[];
   // Futures & options summary — fetched by T5 (price shock) and T8 (short squeeze).
   derivatives?: DerivativesBrief | null;
+  // Supply-chain 2-hop graph with counterparty signals — read from SupplyChainStore
+  // (cached 24h). See `supply-chain-brief.ts`.
+  supplyChain?: SupplyChainBrief | null;
 }
 
 interface AnalystBrief {
@@ -670,6 +676,12 @@ export function formatBriefsForContext(briefs: DataBrief[]): string {
       if (parts.length > 0) lines.push(`Derivatives: ${parts.join(' | ')}`);
     }
 
+    // Supply chain — upstream suppliers, downstream customers, counterparty signals
+    if (b.supplyChain) {
+      const text = formatSupplyChainBrief(b.supplyChain);
+      if (text) lines.push(text);
+    }
+
     // Memories (prioritize reflected memories with lessons)
     if (b.memories.length > 0) {
       lines.push(`Past analysis:`);
@@ -976,6 +988,7 @@ export function buildBrief(
   entity: Entity | undefined,
   memories: MemoryBrief[],
   profile: TickerProfileBrief | null,
+  supplyChain: SupplyChainBrief | null = null,
 ): DataBrief {
   // Compute sentiment direction from signal-level sentiment (with keyword fallback)
   let positive = 0;
@@ -1143,6 +1156,7 @@ export function buildBrief(
     segmentedRevenue: buildSegmentedRevenueBriefs(entity?.segmentedRevenue ?? null),
     periodicFilings: buildPeriodicFilingsBriefs(entity?.periodicFilings ?? null),
     derivatives: buildDerivativesBrief(entity?.derivatives ?? null),
+    supplyChain,
   };
 }
 
@@ -1316,6 +1330,14 @@ export interface SingleBriefOptions {
   signalsSince?: string;
   /** Narrow the Jintel enrichment payload. Defaults to the full bundle (for LLM narration). */
   enrichFields?: EnrichmentField[];
+  /**
+   * Resolver for the ticker's supply-chain map. When provided, the micro
+   * analyst sees upstream/downstream counterparties + recent counterparty
+   * signals alongside the usual brief. Caller typically passes the same
+   * `ensureSupplyChainMap` closure the GraphQL resolver uses, so the store
+   * is lazy-populated on first micro run and reused for 24h.
+   */
+  getSupplyChainMap?: (ticker: string) => Promise<SupplyChainMap | null>;
 }
 
 /** Enriched result from buildSingleBriefEnriched — includes the raw Entity + signals for downstream use. */
@@ -1350,7 +1372,7 @@ export async function buildSingleBriefEnriched(
   symbol: string,
   options: SingleBriefOptions,
 ): Promise<EnrichedBriefResult | null> {
-  const { snapshotStore, signalArchive, getJintelClient, memoryStores, profileStore } = options;
+  const { snapshotStore, signalArchive, getJintelClient, memoryStores, profileStore, getSupplyChainMap } = options;
   const jintelClient = getJintelClient?.();
 
   // Find the position in the current snapshot
@@ -1382,7 +1404,7 @@ export async function buildSingleBriefEnriched(
   const signalsSince = options.signalsSince ?? oneDayAgo;
 
   // Parallel lookups for this single ticker
-  const [enrichmentMap, curatedSignals, memories] = await Promise.all([
+  const [enrichmentMap, curatedSignals, memories, supplyChainMap] = await Promise.all([
     jintelClient
       ? batchEnrichAllChunked(jintelClient, [ticker], options.enrichFields)
       : Promise.resolve(new Map<string, Entity>()),
@@ -1390,7 +1412,19 @@ export async function buildSingleBriefEnriched(
       .query({ tickers: [ticker], since: signalsSince, limit: 100 })
       .then((raw) => filterSignals(raw, { relevantTickers: new Set([ticker]), spamPatterns: DEFAULT_SPAM_PATTERNS })),
     recallAllMemories(memoryStores, [ticker]),
+    getSupplyChainMap
+      ? getSupplyChainMap(ticker).catch((err: unknown) => {
+          logger.warn('Supply-chain lookup failed — brief will omit it', { ticker, error: String(err) });
+          return null;
+        })
+      : Promise.resolve(null),
   ]);
+  const supplyChainBrief = await buildSupplyChainBrief(supplyChainMap, signalArchive, signalsSince).catch(
+    (err: unknown) => {
+      logger.warn('Supply-chain brief build failed', { ticker, error: String(err) });
+      return null;
+    },
+  );
 
   const signals = curatedSignals;
   const memMap = indexMemories(memories, [ticker]);
@@ -1406,14 +1440,14 @@ export async function buildSingleBriefEnriched(
   }
 
   const memList = memMap.get(ticker) ?? [];
-  const brief = buildBrief(pos, signals, quote, entity ?? undefined, memList, profileBrief);
+  const brief = buildBrief(pos, signals, quote, entity ?? undefined, memList, profileBrief, supplyChainBrief);
   return {
     brief,
     entity,
     signals,
     rebuildWithEntity(next: Entity | null): DataBrief {
       const nextQuote = next?.market?.quote ?? quote;
-      return buildBrief(pos, signals, nextQuote, next ?? undefined, memList, profileBrief);
+      return buildBrief(pos, signals, nextQuote, next ?? undefined, memList, profileBrief, supplyChainBrief);
     },
   };
 }

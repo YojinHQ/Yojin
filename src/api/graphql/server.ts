@@ -143,6 +143,7 @@ import {
   resolveToggleStrategySource,
 } from './resolvers/strategy-sources.js';
 import { summariesResolver, summaryResolver } from './resolvers/summaries.js';
+import { supplyChainMapQuery, supplyChainMapsByTickersQuery } from './resolvers/supply-chain.js';
 import {
   addVaultSecretMutation,
   changeVaultPassphraseMutation,
@@ -153,7 +154,12 @@ import {
   updateVaultSecretMutation,
   vaultStatusQuery,
 } from './resolvers/vault.js';
-import { addToWatchlistMutation, removeFromWatchlistMutation, watchlistQuery } from './resolvers/watchlist.js';
+import {
+  addToWatchlistMutation,
+  removeFromWatchlistMutation,
+  watchlistQuery,
+  watchlistSparklinesQuery,
+} from './resolvers/watchlist.js';
 import { typeDefs } from './schema.js';
 
 const schema = createSchema({
@@ -195,6 +201,7 @@ const schema = createSchema({
       insightReports: insightReportsQuery,
       insightReport: insightReportQuery,
       watchlist: watchlistQuery,
+      watchlistSparklines: watchlistSparklinesQuery,
       insightsWorkflowStatus: () => getInsightsWorkflowStatus(),
       briefingConfig: briefingConfigQuery,
       schedulerStatus: schedulerStatusQuery,
@@ -215,6 +222,8 @@ const schema = createSchema({
       tickerProfiles: tickerProfilesQuery,
       microInsight: microInsightQuery,
       microInsights: microInsightsQuery,
+      supplyChainMap: supplyChainMapQuery,
+      supplyChainMapsByTickers: supplyChainMapsByTickersQuery,
       aiConfig: aiConfigQuery,
     },
     PortfolioSnapshot: portfolioSnapshotFieldResolvers,

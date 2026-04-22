@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { useWatchlist, useRemoveFromWatchlist } from '../api';
+import { useWatchlist, useWatchlistSparklines, useRemoveFromWatchlist } from '../api';
 import type { AssetClass, WatchlistEntry } from '../api';
 import EmptyState from '../components/common/empty-state';
 import Button from '../components/common/button';
@@ -40,6 +40,7 @@ export default function Watchlist() {
 
 function WatchlistContent() {
   const [{ data, fetching, error }, refetchWatchlist] = useWatchlist();
+  const [{ data: sparklineData }, refetchSparklines] = useWatchlistSparklines();
   const [, removeFromWatchlist] = useRemoveFromWatchlist();
   const { openAssetDetail } = useAssetDetailModal();
   const { status: marketStatus } = useMarketStatus();
@@ -81,6 +82,12 @@ function WatchlistContent() {
 
   const existingSymbols = useMemo(() => new Set(entries.map((e) => e.symbol)), [entries]);
 
+  const sparklinesBySymbol = useMemo(() => {
+    const map = new Map<string, number[]>();
+    for (const s of sparklineData?.watchlistSparklines ?? []) map.set(s.symbol, s.points);
+    return map;
+  }, [sparklineData?.watchlistSparklines]);
+
   // Derive "last updated" from the most recent enrichedAt across all entries
   const lastUpdated = useMemo(() => {
     const dates = (data?.watchlist ?? []).map((e) => e.enrichedAt).filter((d): d is string => d != null);
@@ -106,14 +113,14 @@ function WatchlistContent() {
           postMarketPrice: null,
           postMarketChange: null,
           postMarketChangePercent: null,
-          sparkline: null,
           enrichedAt: null,
         },
       ]);
       setFeedUpdate({ symbol: added.symbol, action: 'added' });
       refetchWatchlist({ requestPolicy: 'network-only' });
+      refetchSparklines({ requestPolicy: 'network-only' });
     },
-    [refetchWatchlist],
+    [refetchWatchlist, refetchSparklines],
   );
 
   const handleRemove = useCallback(
@@ -144,8 +151,9 @@ function WatchlistContent() {
       setFeedUpdate({ symbol, action: 'removed' });
       setToast({ message: `Removed ${symbol}`, variant: 'success' });
       refetchWatchlist({ requestPolicy: 'network-only' });
+      refetchSparklines({ requestPolicy: 'network-only' });
     },
-    [removeFromWatchlist, refetchWatchlist],
+    [removeFromWatchlist, refetchWatchlist, refetchSparklines],
   );
 
   const openModal = useCallback(() => setModalOpen(true), []);
@@ -196,6 +204,7 @@ function WatchlistContent() {
                 <SymbolCard
                   key={entry.symbol}
                   entry={entry}
+                  sparkline={sparklinesBySymbol.get(entry.symbol)}
                   onRemove={handleRemove}
                   onSelect={openAssetDetail}
                   removing={removingSymbol === entry.symbol}

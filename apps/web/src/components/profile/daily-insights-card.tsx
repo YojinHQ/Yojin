@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useMutation, useQuery } from 'urql';
 import Card from '../common/card';
 import Button from '../common/button';
@@ -106,13 +106,23 @@ function BriefingEditor() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
+  const hydrateTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
     if (config) {
-      setTime(config.time);
-      setTimezone(config.timezone);
-      setSections(config.sections);
-      setDirty(false);
+      const nextTime = config.time;
+      const nextTimezone = config.timezone;
+      const nextSections = config.sections;
+      if (hydrateTimeoutRef.current) clearTimeout(hydrateTimeoutRef.current);
+      hydrateTimeoutRef.current = setTimeout(() => {
+        setTime(nextTime);
+        setTimezone(nextTimezone);
+        setSections(nextSections);
+        setDirty(false);
+      }, 0);
     }
+    return () => {
+      if (hydrateTimeoutRef.current) clearTimeout(hydrateTimeoutRef.current);
+    };
   }, [config]);
 
   const markDirty = () => {

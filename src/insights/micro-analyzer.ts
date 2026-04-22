@@ -71,6 +71,14 @@ Connect the dots — but only when the evidence supports it:
 - The question every summary should try to answer: "Why is this happening, and should I care?" If you genuinely can't answer "why" from the data, just describe what changed and its magnitude — that's still more useful than forcing a false narrative.
 - A summary that just restates metrics ("mentions up +70, upvotes 709, rank #5") is low value. A summary that provides real context is high value. But a false correlation is worse than both — it actively misleads.
 
+Supply-chain context:
+- The brief may include a "Supply chain" section listing upstream suppliers/partners (with criticality 0-1), downstream customers (with revenue share), and concentration flags (HHI).
+- Factor upstream dependency into risk observations: when a high-criticality supplier has recent bearish signals, that's a real second-order risk to this ticker (e.g. "AAPL's top supplier TSM is flagging capacity issues"). Cite the counterparty by name.
+- Factor downstream demand into opportunity/risk observations: when a large-share customer shows sentiment or news shifts, that's demand-side signal for this ticker.
+- Concentration flags (CUSTOMER/SEGMENT/GEOGRAPHY/PRODUCT with HHI ≥ 2500) are structural risks — mention when material to the current observation.
+- Only connect counterparty signals to this ticker when the link is direct and the timing makes sense. A generic TSM news item from last month is not an AAPL catalyst today. If the supply-chain section is absent or sparse, ignore it — don't fabricate dependencies.
+- Never put supply-chain observations in assetActions unless there is a concrete NEWS/EVENT (e.g. "TSM cut guidance" is an event; "AAPL depends on TSM" is structural context, belongs in thesis/risks).
+
 Content priorities:
 - Lead with the most impactful narrative — real events, earnings, analyst actions, corporate developments, macro shifts. Use technicals as supporting context, not the headline.
 - assetActions must be NEWS and EVENTS only. Say "Truist cuts price target to $323 amid macro headwinds" not "RSI at 38.5 approaching oversold". Never put technical indicators, Bollinger Bands, MACD, RSI, or moving averages in assetActions.

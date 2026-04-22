@@ -36,7 +36,7 @@ function setCachedQuotes(symbols: string[], quotes: MarketQuote[]): void {
   quoteCache.set(key, { quotes, fetchedAt: Date.now() });
 }
 
-const HISTORY_CACHE_TTL_MS = 30_000; // 30 seconds — sparklines change slowly
+const HISTORY_CACHE_TTL_MS = 5 * 60_000; // 5 minutes — sparklines are a visual summary, not a live tick
 
 interface CachedHistory {
   data: Map<string, TickerPriceHistory>;

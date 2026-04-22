@@ -228,8 +228,16 @@ export const WATCHLIST_QUERY = gql`
       postMarketPrice
       postMarketChange
       postMarketChangePercent
-      sparkline
       enrichedAt
+    }
+  }
+`;
+
+export const WATCHLIST_SPARKLINES_QUERY = gql`
+  query WatchlistSparklines {
+    watchlistSparklines {
+      symbol
+      points
     }
   }
 `;

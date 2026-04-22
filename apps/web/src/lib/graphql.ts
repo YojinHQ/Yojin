@@ -45,6 +45,15 @@ const cache = cacheExchange({
     PortfolioItem: () => null, // embedded — nested under PortfolioInsight
     AssetSnap: () => null, // embedded — nested under Snap
     MicroInsight: (data) => data.id as string,
+    // Supply chain — keyed by ticker; nested types are embedded (no stable id)
+    SupplyChainMap: (data) => data.ticker as string,
+    UpstreamEdge: () => null,
+    DownstreamEdge: () => null,
+    SupplyChainEvidence: () => null,
+    GeographicFootprintEntry: () => null,
+    ConcentrationFlag: () => null,
+    SupplyChainSource: () => null,
+    ProviderModel: () => null,
     Summary: (data) => data.id as string,
     SummarySourceSignal: () => null, // embedded — nested under Summary
     Action: (data) => data.id as string,
@@ -71,6 +80,7 @@ const cache = cacheExchange({
     StrategySyncResult: () => null, // embedded — mutation result
     SymbolSearchResult: () => null, // embedded — search result, no stable identity
     WatchlistEntry: () => null, // embedded — nested under watchlist query array
+    WatchlistSparkline: () => null, // embedded — nested under watchlistSparklines array
     KeychainTokenResult: () => null, // query result — singleton per provider
     BriefingConfig: () => null, // singleton — no id field
     SchedulerStatus: () => null, // singleton — no id field
@@ -145,10 +155,12 @@ const cache = cacheExchange({
       },
       addToWatchlist(_result, _args, cache) {
         cache.invalidate('Query', 'watchlist');
+        cache.invalidate('Query', 'watchlistSparklines');
         cache.invalidate('Query', 'curatedSignals');
       },
       removeFromWatchlist(_result, _args, cache) {
         cache.invalidate('Query', 'watchlist');
+        cache.invalidate('Query', 'watchlistSparklines');
         cache.invalidate('Query', 'curatedSignals');
       },
       createSession(_result, _args, cache) {

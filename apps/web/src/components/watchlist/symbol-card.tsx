@@ -118,13 +118,14 @@ function getExtendedHoursInfo(
 
 interface SymbolCardProps {
   entry: WatchlistEntry;
+  sparkline?: number[] | null;
   onRemove: (symbol: string) => void;
   onSelect: (symbol: string) => void;
   removing?: boolean;
   marketStatus: MarketStatus;
 }
 
-export function SymbolCard({ entry, onRemove, onSelect, removing, marketStatus }: SymbolCardProps) {
+export function SymbolCard({ entry, sparkline, onRemove, onSelect, removing, marketStatus }: SymbolCardProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const hasQuote = entry.price != null;
@@ -216,9 +217,9 @@ export function SymbolCard({ entry, onRemove, onSelect, removing, marketStatus }
         <div className="mt-3 flex items-end justify-between gap-2">
           {/* Sparkline */}
           <div className="flex-shrink-0">
-            {entry.sparkline && entry.sparkline.length >= 2 ? (
+            {sparkline && sparkline.length >= 2 ? (
               <WatchlistSparkline
-                data={entry.sparkline}
+                data={sparkline}
                 symbol={entry.symbol}
                 dayChangePercent={entry.changePercent ?? 0}
                 isMarketOpen={entry.assetClass !== 'CRYPTO' && marketStatus === 'open'}

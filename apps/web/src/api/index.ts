@@ -14,6 +14,7 @@ export {
   useNews,
   useOnPriceMove,
   useWatchlist,
+  useWatchlistSparklines,
   useAddToWatchlist,
   useRemoveFromWatchlist,
   useSummaries,

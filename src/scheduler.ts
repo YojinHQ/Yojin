@@ -37,6 +37,7 @@ import { buildMacroSummaryInputs } from './insights/macro-summary-builder.js';
 import type { MicroInsightStore } from './insights/micro-insight-store.js';
 import { runMicroResearch } from './insights/micro-runner.js';
 import type { MicroInsight, MicroInsightSource } from './insights/micro-types.js';
+import type { SupplyChainMap } from './insights/supply-chain-types.js';
 import type { InsightReport } from './insights/types.js';
 import {
   COLD_ENRICHMENT_FIELDS,
@@ -166,6 +167,13 @@ export interface SchedulerOptions {
   profileStore?: TickerProfileStore;
   /** Signal archive — for building single-ticker DataBriefs. */
   signalArchive?: SignalArchive;
+  /**
+   * Resolver for per-ticker supply-chain maps. Passed through to the micro
+   * runner so the analyst sees upstream/downstream counterparties + recent
+   * counterparty signals in the DataBrief. Typically the same
+   * `ensureSupplyChainMap` closure the GraphQL resolver uses.
+   */
+  getSupplyChainMap?: (ticker: string) => Promise<SupplyChainMap | null>;
   /** Micro research interval in ms (default: 5 * 60_000 = 5 minutes). */
   microIntervalMs?: number;
   /** Minimum interval between LLM analyses per asset in ms (default: 4h). */
@@ -287,6 +295,7 @@ export class Scheduler {
   private readonly memoryStores?: Map<MemoryAgentRole, SignalMemoryStore>;
   private readonly profileStore?: TickerProfileStore;
   private readonly signalArchive?: SignalArchive;
+  private readonly getSupplyChainMap?: (ticker: string) => Promise<SupplyChainMap | null>;
   private readonly microIntervalMs: number;
   /** Minimum interval between LLM analyses per asset. Settable at runtime. */
   private microLlmIntervalMs: number;
@@ -341,6 +350,7 @@ export class Scheduler {
     this.memoryStores = options.memoryStores;
     this.profileStore = options.profileStore;
     this.signalArchive = options.signalArchive;
+    this.getSupplyChainMap = options.getSupplyChainMap;
     this.microIntervalMs = options.microIntervalMs ?? DEFAULT_MICRO_INTERVAL_MS;
     this.microLlmIntervalMs = options.microLlmIntervalMs ?? DEFAULT_MICRO_LLM_INTERVAL_MS;
   }
@@ -850,6 +860,9 @@ export class Scheduler {
                 profileStore: this.profileStore,
                 signalsSince: isFirstRun ? fourDaysAgo : oneDayAgo,
                 enrichFields: readyForLlm ? undefined : lightFields,
+                // Supply-chain brief only matters when the LLM is actually running;
+                // trigger-only light passes skip the Jintel round-trip.
+                getSupplyChainMap: readyForLlm ? this.getSupplyChainMap : undefined,
               },
               eventLog: this.eventLog,
             });

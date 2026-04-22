@@ -64,6 +64,7 @@ import {
   setSummarySnapshotStore,
   setSummaryStore,
 } from './api/graphql/resolvers/summaries.js';
+import { setSupplyChainEnsureFn, setSupplyChainStore } from './api/graphql/resolvers/supply-chain.js';
 import { setVault, setVaultSecretChangedCallback } from './api/graphql/resolvers/vault.js';
 import {
   setWatchlistEnrichment,
@@ -90,6 +91,8 @@ import type { OutputDlpGuard } from './guards/security/output-dlp.js';
 import type { PostureName } from './guards/types.js';
 import { wireInsights } from './insights/adapter.js';
 import type { InsightStore } from './insights/insight-store.js';
+import { ensureSupplyChainMap } from './insights/supply-chain-runner.js';
+import { SupplyChainStore } from './insights/supply-chain-store.js';
 import { createJintelTools } from './jintel/tools.js';
 import type { JintelToolOptions } from './jintel/tools.js';
 import { getLogger } from './logging/index.js';
@@ -169,6 +172,7 @@ export interface YojinServices {
   memoryStores: Map<MemoryAgentRole, SignalMemoryStore>;
   reflectionEngine?: ReflectionEngine;
   insightStore: InsightStore;
+  supplyChainStore: SupplyChainStore;
   snapStore: SnapStore;
   profileStore: TickerProfileStore;
   signalArchive: SignalArchive;
@@ -655,6 +659,22 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   const snapStore = new SnapStore(dataRoot);
   setSnapStore(snapStore);
 
+  // Supply-chain store — per-ticker 2-hop graph (Phase A: raw capture).
+  // The resolver goes through `ensureFn` so queries lazy-populate the store on
+  // cache-miss. Fresh maps cached for 24h; degraded/empty responses fall back
+  // to the stored stale version (or null).
+  const supplyChainStore = new SupplyChainStore(dataRoot);
+  setSupplyChainStore(supplyChainStore);
+  const SUPPLY_CHAIN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+  setSupplyChainEnsureFn((ticker) =>
+    ensureSupplyChainMap({
+      ticker,
+      jintelClient,
+      store: supplyChainStore,
+      maxAgeMs: SUPPLY_CHAIN_MAX_AGE_MS,
+    }),
+  );
+
   // Ticker profile store (per-asset persistent knowledge)
   const profileStore = new TickerProfileStore({ dataDir: `${dataRoot}/profiles` });
   await profileStore.initialize();
@@ -772,6 +792,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
     memoryStores: memoryResult.stores,
     reflectionEngine: memoryResult.reflectionEngine,
     insightStore,
+    supplyChainStore,
     snapStore,
     profileStore,
     signalArchive,

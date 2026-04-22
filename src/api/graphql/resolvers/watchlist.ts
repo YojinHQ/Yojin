@@ -42,13 +42,10 @@ export async function watchlistQuery() {
 
   const symbols = entries.map((e) => e.symbol);
 
-  // Best-effort enrichment + sparklines — fetch in parallel
-  const [enriched, sparklines] = await Promise.all([
-    enrichment ? enrichment.getEnrichedBatch(symbols) : new Map(),
-    enrichment
-      ? enrichment.getSparklines(entries.map((e) => ({ symbol: e.symbol, assetClass: e.assetClass })))
-      : new Map(),
-  ]);
+  // Best-effort enrichment — sparklines are fetched separately via
+  // `watchlistSparklines` so the main card data isn't blocked on 1m-interval
+  // price history.
+  const enriched = enrichment ? await enrichment.getEnrichedBatch(symbols) : new Map();
 
   return entries.map((entry) => {
     const cache = enriched.get(entry.symbol) ?? null;
@@ -67,10 +64,25 @@ export async function watchlistQuery() {
       postMarketPrice: quote?.postMarketPrice ?? null,
       postMarketChange: quote?.postMarketChange ?? null,
       postMarketChangePercent: quote?.postMarketChangePercent ?? null,
-      sparkline: sparklines.get(entry.symbol) ?? null,
       enrichedAt: cache?.enrichedAt ?? null,
     };
   });
+}
+
+export async function watchlistSparklinesQuery() {
+  if (!store || !enrichment) return [];
+  const entries = store.list();
+  if (entries.length === 0) return [];
+
+  const sparklines = await enrichment.getSparklines(
+    entries.map((e) => ({ symbol: e.symbol, assetClass: e.assetClass })),
+  );
+
+  const result: { symbol: string; points: number[] }[] = [];
+  for (const [symbol, points] of sparklines) {
+    result.push({ symbol, points });
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------

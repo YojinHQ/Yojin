@@ -83,6 +83,7 @@ export function TimezonePicker({ value, onChange }: TimezonePickerProps) {
   const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchResetTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     if (!open) return;
@@ -102,9 +103,15 @@ export function TimezonePicker({ value, onChange }: TimezonePickerProps) {
 
   useEffect(() => {
     if (open) {
-      setSearch('');
-      inputRef.current?.focus();
+      if (searchResetTimeoutRef.current) clearTimeout(searchResetTimeoutRef.current);
+      searchResetTimeoutRef.current = setTimeout(() => {
+        setSearch('');
+        inputRef.current?.focus();
+      }, 0);
     }
+    return () => {
+      if (searchResetTimeoutRef.current) clearTimeout(searchResetTimeoutRef.current);
+    };
   }, [open]);
 
   const grouped = useMemo(() => {

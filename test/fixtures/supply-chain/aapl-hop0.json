@@ -1,0 +1,90 @@
+{
+  "id": "ent_aapl",
+  "type": "COMPANY",
+  "name": "Apple Inc.",
+  "tickers": ["AAPL"],
+  "subsidiaries": {
+    "accessionNumber": "0000320193-24-000123",
+    "form": "10-K",
+    "filingDate": "2024-11-01",
+    "filingUrl": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/0000320193-24-000123-index.htm",
+    "exhibitUrl": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/aapl-20240928xex21.htm",
+    "count": 2,
+    "subsidiaries": [
+      { "name": "Apple Operations International Limited", "jurisdiction": "Ireland" },
+      { "name": "Apple Sales Internacional", "jurisdiction": "California" }
+    ]
+  },
+  "concentration": {
+    "accessionNumber": "0000320193-24-000123",
+    "form": "10-K",
+    "filingDate": "2024-11-01",
+    "periodEnd": "2024-09-28",
+    "customer": {
+      "hhi": 3200,
+      "count": 3,
+      "total": 100000000,
+      "components": [
+        { "label": "Customer A", "member": "aapl:CustomerAMember", "value": 50000000, "share": 0.5 },
+        { "label": "Customer B", "member": "aapl:CustomerBMember", "value": 30000000, "share": 0.3 },
+        { "label": "Customer C", "member": "aapl:CustomerCMember", "value": 20000000, "share": 0.2 }
+      ]
+    }
+  },
+  "relationships": [
+    {
+      "type": "CUSTOMER",
+      "direction": "OUT",
+      "disclosure": "DIRECT",
+      "confidence": 0.95,
+      "counterpartyName": "Best Buy Co.",
+      "counterpartyTicker": "BBY",
+      "counterpartyCik": "0000764478",
+      "sharePct": 0.08,
+      "valueUsd": 30000000000,
+      "context": "Revenue from wholesale channel disclosed in FY24 10-K",
+      "source": {
+        "connector": "sec-segments",
+        "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/",
+        "asOf": "2024-11-01",
+        "ref": "0000320193-24-000123"
+      }
+    },
+    {
+      "type": "PARTNER",
+      "direction": "IN",
+      "disclosure": "DIRECT",
+      "confidence": 0.9,
+      "counterpartyName": "Taiwan Semiconductor Manufacturing Co.",
+      "counterpartyTicker": "TSM",
+      "counterpartyCik": "0001046179",
+      "sharePct": null,
+      "valueUsd": null,
+      "context": "Primary foundry partner for A-series and M-series silicon",
+      "source": {
+        "connector": "sec-segments",
+        "url": null,
+        "asOf": "2024-11-01",
+        "ref": "0000320193-24-000123"
+      }
+    },
+    {
+      "type": "SUBSIDIARY",
+      "direction": "OUT",
+      "disclosure": "DIRECT",
+      "confidence": 1.0,
+      "counterpartyName": "Apple Operations International Limited",
+      "counterpartyTicker": null,
+      "counterpartyCik": null,
+      "sharePct": null,
+      "valueUsd": null,
+      "context": "Ireland",
+      "source": {
+        "connector": "sec-exhibit21",
+        "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/aapl-20240928xex21.htm",
+        "asOf": "2024-11-01",
+        "ref": "0000320193-24-000123"
+      }
+    }
+  ]
+}
