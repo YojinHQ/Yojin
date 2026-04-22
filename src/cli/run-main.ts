@@ -48,6 +48,7 @@ import { EventLog } from '../core/event-log.js';
 import { NotificationBus } from '../core/notification-bus.js';
 import { Gateway } from '../gateway/server.js';
 import { MicroInsightStore } from '../insights/micro-insight-store.js';
+import { ensureSupplyChainMap } from '../insights/supply-chain-runner.js';
 import { createJintelPriceProvider } from '../jintel/price-provider.js';
 import { MarketSentimentBaselineStore } from '../market-sentiment/baseline-store.js';
 import { createReflectionEngine } from '../memory/adapter.js';
@@ -358,6 +359,15 @@ async function startGateway(): Promise<void> {
     memoryStores: services.memoryStores,
     profileStore: services.profileStore,
     signalArchive: services.signalArchive,
+    // Supply-chain lookups for micro analyst — uses the same 24h-cached
+    // ensureFn as the GraphQL resolver, so store populates on first micro run.
+    getSupplyChainMap: (ticker: string) =>
+      ensureSupplyChainMap({
+        ticker,
+        jintelClient: services.jintelToolOptions.client,
+        store: services.supplyChainStore,
+        maxAgeMs: 24 * 60 * 60 * 1000,
+      }),
     microLlmIntervalMs: alertsConfig.microLlmIntervalHours
       ? alertsConfig.microLlmIntervalHours * 60 * 60 * 1000
       : undefined,
