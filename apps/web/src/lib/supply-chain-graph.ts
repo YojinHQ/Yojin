@@ -212,10 +212,16 @@ export function buildSupplyChainGraph(args: BuildGraphArgs): SupplyChainGraphDat
     }
   }
 
-  return {
-    nodes: [...nodesById.values()],
-    links,
-  };
+  // Counterparties first, portfolio anchors last so the force-graph iterates
+  // portfolio nodes at the end — they paint on top of the dense counterparty
+  // clusters instead of being hidden beneath them.
+  const allNodes = [...nodesById.values()];
+  const nodes = [
+    ...allNodes.filter((n) => n.kind === 'counterparty'),
+    ...allNodes.filter((n) => n.kind === 'portfolio'),
+  ];
+
+  return { nodes, links };
 }
 
 /** Tailwind-compatible hex for substitutability. Exported for the legend. */
