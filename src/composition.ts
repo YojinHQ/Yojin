@@ -64,7 +64,11 @@ import {
   setSummarySnapshotStore,
   setSummaryStore,
 } from './api/graphql/resolvers/summaries.js';
-import { setSupplyChainEnsureFn, setSupplyChainStore } from './api/graphql/resolvers/supply-chain.js';
+import {
+  setSupplyChainEnsureFn,
+  setSupplyChainSnapshotStore,
+  setSupplyChainStore,
+} from './api/graphql/resolvers/supply-chain.js';
 import { setVault, setVaultSecretChangedCallback } from './api/graphql/resolvers/vault.js';
 import {
   setWatchlistEnrichment,
@@ -665,6 +669,7 @@ export async function buildContext(options?: BuildContextOptions): Promise<Yojin
   // to the stored stale version (or null).
   const supplyChainStore = new SupplyChainStore(dataRoot);
   setSupplyChainStore(supplyChainStore);
+  setSupplyChainSnapshotStore(snapshotStore);
   const SUPPLY_CHAIN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
   setSupplyChainEnsureFn((ticker) =>
     ensureSupplyChainMap({

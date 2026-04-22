@@ -1084,6 +1084,50 @@ export const typeDefs = /* GraphQL */ `
     synthesizedBy: ProviderModel
   }
 
+  # Cross-ticker aggregation over cached supply-chain maps — the "portfolio
+  # graph" payoff. Derived in-memory from existing SupplyChainMap data.
+  type CountryExposure {
+    iso2: String!
+    country: String!
+    """
+    Sum of upstream edge criticality for edges originating in this country.
+    Higher = more concentrated exposure.
+    """
+    criticalityWeightedCount: Float!
+    """
+    Portfolio tickers with at least one upstream edge in this country.
+    """
+    tickers: [ID!]!
+  }
+
+  type SharedCounterparty {
+    counterpartyName: String!
+    counterpartyTicker: ID
+    """
+    Portfolio tickers that depend on this counterparty upstream.
+    """
+    tickers: [ID!]!
+    count: Int!
+  }
+
+  type SinglePointOfFailure {
+    counterpartyName: String!
+    ticker: ID!
+    reason: String!
+  }
+
+  type ConcentrationStackItem {
+    ticker: ID!
+    flag: ConcentrationFlag!
+  }
+
+  type PortfolioSupplyChainSummary {
+    topCountryExposures: [CountryExposure!]!
+    sharedCounterparties: [SharedCounterparty!]!
+    singlePointsOfFailure: [SinglePointOfFailure!]!
+    concentrationStack: [ConcentrationStackItem!]!
+  }
+
   # ---------------------------------------------------------------------------
   # Ticker Profiles (per-asset institutional knowledge)
   # ---------------------------------------------------------------------------
@@ -1497,6 +1541,12 @@ export const typeDefs = /* GraphQL */ `
     microInsights: [MicroInsight!]!
     supplyChainMap(ticker: ID!): SupplyChainMap
     supplyChainMapsByTickers(tickers: [ID!]!): [SupplyChainMap!]!
+    """
+    Cross-ticker aggregation over cached supply-chain maps. Pure in-memory —
+    no Jintel calls, no LLM. Reads whatever maps have already been cached for
+    the current portfolio holdings.
+    """
+    portfolioSupplyChainSummary: PortfolioSupplyChainSummary!
     aiConfig: AiConfig!
   }
 

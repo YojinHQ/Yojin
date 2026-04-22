@@ -54,6 +54,13 @@ const cache = cacheExchange({
     ConcentrationFlag: () => null,
     SupplyChainSource: () => null,
     ProviderModel: () => null,
+    // Portfolio-level supply-chain aggregation — all rollup shapes are
+    // embedded under portfolioSupplyChainSummary (no stable identity).
+    PortfolioSupplyChainSummary: () => null,
+    CountryExposure: () => null,
+    SharedCounterparty: () => null,
+    SinglePointOfFailure: () => null,
+    ConcentrationStackItem: () => null,
     Summary: (data) => data.id as string,
     SummarySourceSignal: () => null, // embedded — nested under Summary
     Action: (data) => data.id as string,
