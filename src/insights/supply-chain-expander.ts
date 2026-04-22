@@ -61,6 +61,13 @@ export interface ExpandSupplyChainNodeArgs {
   hopDepth?: number;
   /** Forces a fresh LLM pass even if a cached expansion exists. */
   force?: boolean;
+  /**
+   * Augment grounded Jintel-sourced candidates with Opus-world-knowledge
+   * counterparties (`edgeOrigin: LLM_INFERRED`). Every inferred counterparty
+   * must emit a ticker that resolves via `batchEnrich` — unresolvable tickers
+   * are dropped, so we never surface a fabricated entity. Default: true.
+   */
+  includeInferred?: boolean;
 }
 
 export interface ExpanderDeps {
@@ -133,9 +140,13 @@ export async function expandSupplyChainNode(
     return null;
   }
 
-  // 1. Resolve the source node to a Jintel entity + fetch relationships.
+  const includeInferred = args.includeInferred ?? true;
+
+  // 1. Resolve the source node to a Jintel entity + fetch relationships. A
+  //    null entity means we can't run the grounded pass, but the ecosystem
+  //    pass can still produce world-knowledge counterparties.
   const entity = await resolveEntity(deps.jintelClient, args.sourceNodeId, args.requestedTicker);
-  if (!entity) {
+  if (!entity && !includeInferred) {
     logger.warn('Expansion source entity did not resolve — returning empty', {
       sourceNodeId: args.sourceNodeId,
       requestedTicker: args.requestedTicker,
@@ -143,35 +154,45 @@ export async function expandSupplyChainNode(
     return emptyExpansion(args, direction, cacheKey);
   }
 
-  // 2. Build deterministic candidate pool from Jintel. The LLM will rank within
-  //    this set — never outside it.
-  const candidates = buildCandidates(entity, direction);
-  if (candidates.length === 0) {
-    return emptyExpansion(args, direction, cacheKey);
-  }
+  // 2. Build the grounded + ecosystem candidate pools in parallel. The
+  //    grounded pool is deterministic (Jintel relationships classified by
+  //    Opus); the ecosystem pool is Opus-world-knowledge, then validated by
+  //    resolving every proposed ticker through Jintel.
+  const sourceEntityName = entity?.name ?? args.requestedTicker;
+  const groundedCandidates = entity ? buildCandidates(entity, direction) : [];
 
-  // 3. Run the Opus classify/rank/label pass.
-  const llmResult = await runExpansionLlm(deps.providerRouter, {
-    sourceNodeId: args.sourceNodeId,
-    requestedTicker: args.requestedTicker,
-    direction,
-    sourceEntityName: entity.name,
-    candidates,
-  });
+  const [groundedResult, ecosystemCandidates] = await Promise.all([
+    groundedCandidates.length > 0
+      ? runExpansionLlm(deps.providerRouter, {
+          sourceNodeId: args.sourceNodeId,
+          requestedTicker: args.requestedTicker,
+          direction,
+          sourceEntityName,
+          candidates: groundedCandidates,
+        })
+      : Promise.resolve(null),
+    includeInferred
+      ? runEcosystemLlm(deps.providerRouter, deps.jintelClient, {
+          sourceNodeId: args.sourceNodeId,
+          requestedTicker: args.requestedTicker,
+          direction,
+          sourceEntityName,
+        })
+      : Promise.resolve([]),
+  ]);
 
-  // 4. Map ranked output back to grounded nodes/edges. Drop anything that
-  //    doesn't resolve to a Jintel-backed candidate (anti-hallucination).
-  const candidateById = new Map(candidates.map((c) => [c.id, c] as const));
-  const retained = llmResult?.ranked ?? [];
+  // 3. Map the grounded classifier output back to nodes/edges. Drop anything
+  //    the LLM emitted that doesn't resolve to a candidate (anti-hallucination).
+  const candidateById = new Map(groundedCandidates.map((c) => [c.id, c] as const));
+  const retained = groundedResult?.ranked ?? [];
 
   const nodes: SupplyChainExpansionNode[] = [];
   const edges: SupplyChainExpansionEdge[] = [];
-  const rankWindow = Math.max(retained.length, 1);
+  const rankWindow = Math.max(retained.length + ecosystemCandidates.length, 1);
 
   retained.forEach((rankedItem, idx) => {
     const candidate = candidateById.get(rankedItem.id);
     if (!candidate) {
-      // LLM hallucinated an id — drop silently, log at debug.
       logger.debug('Dropping unsupportable expansion node', { id: rankedItem.id });
       return;
     }
@@ -198,6 +219,38 @@ export async function expandSupplyChainNode(
     });
   });
 
+  // 4. Append ecosystem nodes/edges. Dedupe by id — a counterparty surfaced
+  //    by both the grounded and ecosystem paths keeps the grounded entry so
+  //    the provenance stays sourced.
+  const seen = new Set(nodes.map((n) => n.id));
+  ecosystemCandidates.forEach((eco, idx) => {
+    if (seen.has(eco.id)) return;
+    seen.add(eco.id);
+    const rank = 1 - (retained.length + idx) / rankWindow;
+    nodes.push({
+      id: eco.id,
+      label: eco.label,
+      ticker: eco.ticker,
+      cik: eco.cik,
+      nodeKind: eco.nodeKind,
+      countryCode: eco.countryCode,
+      rank,
+    });
+    edges.push({
+      sourceId: args.sourceNodeId,
+      targetId: eco.id,
+      relationship: eco.relationship,
+      label: eco.edgeLabel,
+      edgeOrigin: EdgeOriginSchema.enum.LLM_INFERRED,
+      criticality: clamp01(eco.criticality),
+      evidence: [eco.evidence],
+    });
+  });
+
+  const reasoning = composeReasoning(groundedResult?.reasoning ?? null, ecosystemCandidates);
+  const synthesizedBy =
+    groundedResult || ecosystemCandidates.length > 0 ? { provider: OPUS_PROVIDER_ID, model: OPUS_MODEL_ID } : null;
+
   const expandedAt = new Date().toISOString();
   const expansion: SupplyChainExpansion = {
     sourceNodeId: args.sourceNodeId,
@@ -205,10 +258,10 @@ export async function expandSupplyChainNode(
     requestedTicker: args.requestedTicker,
     nodes,
     edges,
-    reasoning: llmResult?.reasoning ?? null,
+    reasoning,
     expandedAt,
     staleAfter: new Date(Date.parse(expandedAt) + STALE_AFTER_MS).toISOString(),
-    synthesizedBy: llmResult ? { provider: OPUS_PROVIDER_ID, model: OPUS_MODEL_ID } : null,
+    synthesizedBy,
   };
 
   // Schema round-trip ensures we never persist a half-formed expansion.
@@ -523,6 +576,248 @@ function coerceLlmOutput(raw: unknown): unknown {
       return item;
     });
   return obj;
+}
+
+// ---------------------------------------------------------------------------
+// Ecosystem LLM pass — Opus world-knowledge counterparties, Jintel-validated.
+//
+// Grounded candidates are strictly derived from Jintel's `relationships`
+// sub-graph. For mega-cap public companies (e.g. NVDA, AAPL) that slice is
+// often thin or noisy, and the user expects to see the real AI/semi/hyper-
+// scaler ecosystem. This pass asks Opus for world-knowledge counterparties,
+// then validates every emitted ticker through `batchEnrich` — if Jintel
+// doesn't resolve the ticker to a real entity, we drop it. That keeps the
+// "every node is a real entity" invariant intact while unblocking the
+// cross-industry relationships Jintel doesn't surface directly.
+// ---------------------------------------------------------------------------
+
+interface EcosystemCandidate {
+  id: string;
+  label: string;
+  ticker: string;
+  cik: string | null;
+  nodeKind: SupplyChainExpansionNode['nodeKind'];
+  countryCode: string | null;
+  edgeLabel: string;
+  relationship: z.infer<typeof SupplyChainRelationshipSchema>;
+  criticality: number;
+  evidence: Evidence;
+}
+
+const MAX_ECOSYSTEM_CANDIDATES = 8;
+const ECOSYSTEM_CONNECTOR = 'llm-opus-4-7-ecosystem';
+
+const EcosystemItemSchema = z.object({
+  ticker: z.string().min(1).max(16),
+  label: z.string().min(1),
+  edgeLabel: z.string().min(1),
+  relationship: SupplyChainRelationshipSchema,
+  criticality: z.number(),
+  reason: z.string().min(1),
+});
+
+const EcosystemOutputSchema = z.object({
+  reasoning: z.string().min(1),
+  items: z.array(EcosystemItemSchema).max(MAX_ECOSYSTEM_CANDIDATES),
+});
+
+const ECOSYSTEM_SYSTEM_PROMPT = `You are surfacing real-world supply-chain and ecosystem counterparties for an interactive portfolio graph.
+
+This is an augmentation pass on top of narrow Jintel relationship data — the user wants to see the wider ecosystem (e.g. for NVDA: TSM as foundry; MSFT/META/GOOG/AMZN as hyperscaler customers; ASML/AMAT as upstream tooling), not just whatever filings Jintel has indexed.
+
+Hard rules:
+- Emit ONLY real, currently-listed public companies with a ticker symbol. Tickers without a real company will be rejected downstream (Jintel batch-validates every ticker you emit).
+- Prefer US / major-exchange tickers when an entity trades on multiple exchanges (TSM over 2330.TW; BABA over 9988.HK).
+- Do NOT emit private companies, rumors, speculative ventures, acquired/defunct entities, or fictional names.
+- Do NOT echo the source company itself.
+- Cap the output at 8 items. Rank them — most load-bearing first.
+- Keep edgeLabel short and concrete (<= 40 chars): "primary foundry", "HBM supplier", "hyperscaler customer", "EUV tooling".
+- relationship must be one of: SUPPLIER, MANUFACTURER, PARTNER, DISTRIBUTOR, LICENSOR, JOINT_VENTURE.
+- criticality is [0, 1] — how load-bearing, ranked relative to peers.
+- reason: 1 short sentence (<= 160 chars) explaining why this counterparty belongs here.
+
+Direction semantics:
+- UPSTREAM_SUPPLIERS: what the source BUYS (fabs, key components, raw materials, tooling).
+- DOWNSTREAM_CUSTOMERS: what the source SELLS to (hyperscalers, OEMs, enterprise accounts).
+- CONTRACT_MANUFACTURERS: outsourced manufacturing / assembly partners.
+- SECTOR_PEERS: competitors in the same sector with overlapping business.
+
+Respond with a single JSON object:
+{
+  "reasoning": "1-2 sentence narrative of the ecosystem story.",
+  "items": [
+    { "ticker": "TSM", "label": "Taiwan Semiconductor", "edgeLabel": "primary foundry", "relationship": "MANUFACTURER", "criticality": 0.95, "reason": "Fabs every NVIDIA GPU; no comparable N3/N4 alternative today." }
+  ]
+}`;
+
+async function runEcosystemLlm(
+  router: ProviderRouter,
+  jintelClient: JintelClient,
+  params: {
+    sourceNodeId: string;
+    requestedTicker: string;
+    direction: SupplyChainDirection;
+    sourceEntityName: string;
+  },
+): Promise<EcosystemCandidate[]> {
+  // Country exposure is a deterministic fan-out from Jintel's geography data —
+  // world-knowledge adds no value and risks spurious country chips.
+  if (params.direction === SupplyChainDirectionSchema.enum.COUNTRY_EXPOSURE) {
+    return [];
+  }
+
+  const userMessage = [
+    `Source: ${params.sourceEntityName} (${params.requestedTicker})`,
+    `Direction: ${params.direction}`,
+    '',
+    'Emit the most load-bearing real-world ecosystem counterparties for this source in this direction. Up to 8. Every item must have a resolvable public ticker.',
+  ].join('\n');
+
+  let text: string;
+  try {
+    const result = await router.completeWithTools({
+      model: OPUS_MODEL_ID,
+      system: ECOSYSTEM_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: userMessage }],
+      maxTokens: 1024,
+      providerOverrides: { provider: OPUS_PROVIDER_ID, model: OPUS_MODEL_ID },
+    });
+    text = result.content
+      .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+  } catch (err) {
+    logger.warn('Ecosystem LLM call failed — skipping inferred candidates', {
+      direction: params.direction,
+      error: String(err),
+    });
+    return [];
+  }
+
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    logger.debug('Ecosystem LLM returned no JSON payload', { direction: params.direction });
+    return [];
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonMatch[0]);
+  } catch (err) {
+    logger.debug('Ecosystem LLM returned invalid JSON', { error: String(err) });
+    return [];
+  }
+
+  const coerced = coerceEcosystemOutput(parsed);
+  const validation = EcosystemOutputSchema.safeParse(coerced);
+  if (!validation.success) {
+    logger.debug('Ecosystem LLM payload failed schema validation', {
+      issues: validation.error.issues.map((i) => i.message),
+    });
+    return [];
+  }
+
+  const { items } = validation.data;
+  if (items.length === 0) return [];
+
+  // Drop any echo of the source and dedupe by ticker (preserve rank order).
+  const sourceTickerUpper = params.requestedTicker.trim().toUpperCase();
+  const unique = new Map<string, z.infer<typeof EcosystemItemSchema>>();
+  for (const item of items) {
+    const ticker = item.ticker.trim().toUpperCase();
+    if (!ticker || ticker === sourceTickerUpper) continue;
+    if (!unique.has(ticker)) unique.set(ticker, { ...item, ticker });
+  }
+  if (unique.size === 0) return [];
+
+  // Anti-hallucination gate: every proposed ticker must resolve through Jintel.
+  // A single batchEnrich call validates the whole set.
+  const tickers = Array.from(unique.keys());
+  const enrich = await jintelClient.batchEnrich(tickers, [], {});
+  if (!enrich.success) {
+    logger.debug('Ecosystem ticker validation failed — skipping inferred candidates', {
+      direction: params.direction,
+    });
+    return [];
+  }
+
+  const resolved = new Map<string, { name: string; country: string | null }>();
+  for (const entity of enrich.data) {
+    for (const t of entity.tickers ?? []) {
+      const key = t.trim().toUpperCase();
+      if (!key || resolved.has(key)) continue;
+      resolved.set(key, {
+        name: entity.name,
+        country: normalizeIso2(entity.country ?? null),
+      });
+    }
+  }
+
+  const asOf = new Date().toISOString();
+  const nodeKind: SupplyChainExpansionNode['nodeKind'] =
+    params.direction === SupplyChainDirectionSchema.enum.SECTOR_PEERS ? 'PEER' : 'COUNTERPARTY';
+
+  const out: EcosystemCandidate[] = [];
+  for (const item of unique.values()) {
+    const hit = resolved.get(item.ticker);
+    if (!hit) continue;
+    out.push({
+      id: `ticker:${item.ticker}`,
+      label: hit.name || item.label,
+      ticker: item.ticker,
+      cik: null,
+      nodeKind,
+      countryCode: hit.country,
+      edgeLabel: item.edgeLabel,
+      relationship: item.relationship,
+      criticality: clamp01(item.criticality),
+      evidence: {
+        connector: ECOSYSTEM_CONNECTOR,
+        url: null,
+        ref: null,
+        asOf,
+        contextQuote: item.reason,
+      },
+    });
+  }
+  return out.slice(0, MAX_ECOSYSTEM_CANDIDATES);
+}
+
+function coerceEcosystemOutput(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null) return raw;
+  const obj = raw as Record<string, unknown>;
+  if (!Array.isArray(obj.items)) return obj;
+  obj.items = obj.items
+    .filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null)
+    .map((item) => {
+      const c = item.criticality;
+      if (typeof c === 'number' && Number.isFinite(c)) {
+        item.criticality = Math.max(0, Math.min(1, c));
+      }
+      return item;
+    });
+  return obj;
+}
+
+function normalizeIso2(raw: string | null): string | null {
+  if (!raw) return null;
+  const up = raw.trim().toUpperCase();
+  if (/^[A-Z]{2}$/.test(up)) return up;
+  return toIso2(raw);
+}
+
+function composeReasoning(grounded: string | null, ecosystem: EcosystemCandidate[]): string | null {
+  const parts: string[] = [];
+  if (grounded && grounded.trim().length > 0) parts.push(grounded.trim());
+  if (ecosystem.length > 0) {
+    const top = ecosystem
+      .slice(0, 3)
+      .map((c) => c.ticker)
+      .join(', ');
+    const suffix = ecosystem.length > 3 ? ` +${ecosystem.length - 3}` : '';
+    parts.push(`Ecosystem context: ${top}${suffix}.`);
+  }
+  return parts.length > 0 ? parts.join(' ') : null;
 }
 
 // ---------------------------------------------------------------------------

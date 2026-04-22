@@ -78,6 +78,7 @@ export function SupplyChainGraph({
   const [theme, setTheme] = useState<ThemeColors>(DEFAULT_THEME);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [expansions, setExpansions] = useState<SupplyChainExpansion[]>([]);
+  const autoExpandedRef = useRef<Set<string>>(new Set());
   const { expand, expanding, error: expandError } = useSupplyChainExpansion();
 
   useEffect(() => {
@@ -151,6 +152,32 @@ export function SupplyChainGraph({
     [expand, portfolioTickers, selectedNode],
   );
 
+  // First time the user clicks a portfolio node, fan out three directions
+  // automatically so the ecosystem (suppliers / customers / peers) surfaces
+  // without requiring three manual clicks. Each node is auto-expanded at most
+  // once per mount; subsequent clicks still reveal the chip row for manual
+  // drill-down.
+  const autoExpandPortfolioNode = useCallback(
+    (node: GraphNode) => {
+      if (node.kind !== 'portfolio') return;
+      if (autoExpandedRef.current.has(node.id)) return;
+      const requestedTicker = resolveRequestedTicker(node, portfolioTickers);
+      if (!requestedTicker) return;
+      autoExpandedRef.current.add(node.id);
+      const directions: SupplyChainDirection[] = ['UPSTREAM_SUPPLIERS', 'DOWNSTREAM_CUSTOMERS', 'SECTOR_PEERS'];
+      void Promise.allSettled(directions.map((d) => expand(node.id, d, requestedTicker))).then((results) => {
+        const fresh: SupplyChainExpansion[] = [];
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value) fresh.push(r.value);
+        }
+        if (fresh.length > 0) {
+          setExpansions((current) => [...current, ...fresh]);
+        }
+      });
+    },
+    [expand, portfolioTickers],
+  );
+
   // Tune the d3 forces once the graph is mounted: more repulsion + longer
   // link distance so counterparties don't collapse into flower clusters and
   // portfolio anchors repel each other enough to span the canvas.
@@ -222,6 +249,7 @@ export function SupplyChainGraph({
           }}
           linkColor={(l) => substitutabilityColor((l as unknown as GraphLink).substitutability)}
           linkWidth={(l) => linkWidth(l as unknown as GraphLink)}
+          linkLineDash={(l) => ((l as unknown as GraphLink).edgeOrigin === 'LLM_INFERRED' ? [4, 3] : null)}
           linkDirectionalArrowLength={4}
           linkDirectionalArrowRelPos={0.92}
           linkCurvature={(l) => ((l as unknown as GraphLink).kind === 'downstream' ? 0.2 : 0)}
@@ -231,6 +259,7 @@ export function SupplyChainGraph({
           onNodeClick={(n) => {
             const node = n as GraphNode;
             setSelectedNodeId(node.id);
+            autoExpandPortfolioNode(node);
             onNodeClick?.(node);
           }}
         />
@@ -276,6 +305,7 @@ function projectExpansions(
         relationship: e.relationship,
         sharePct: null,
         originCountry: null,
+        edgeOrigin: e.edgeOrigin,
       });
     }
   }

@@ -98,7 +98,12 @@ describe('expandSupplyChainNode', () => {
     );
 
     const first = await expandSupplyChainNode(
-      { sourceNodeId: 'ticker:AAPL', direction: 'UPSTREAM_SUPPLIERS', requestedTicker: 'AAPL' },
+      {
+        sourceNodeId: 'ticker:AAPL',
+        direction: 'UPSTREAM_SUPPLIERS',
+        requestedTicker: 'AAPL',
+        includeInferred: false,
+      },
       { jintelClient, providerRouter: router, store },
     );
 
@@ -118,7 +123,12 @@ describe('expandSupplyChainNode', () => {
 
     // Second call — should short-circuit on cache.
     const second = await expandSupplyChainNode(
-      { sourceNodeId: 'ticker:AAPL', direction: 'UPSTREAM_SUPPLIERS', requestedTicker: 'AAPL' },
+      {
+        sourceNodeId: 'ticker:AAPL',
+        direction: 'UPSTREAM_SUPPLIERS',
+        requestedTicker: 'AAPL',
+        includeInferred: false,
+      },
       { jintelClient, providerRouter: router, store },
     );
 
@@ -156,7 +166,12 @@ describe('expandSupplyChainNode', () => {
     );
 
     const expansion = (await expandSupplyChainNode(
-      { sourceNodeId: 'ticker:AAPL', direction: 'UPSTREAM_SUPPLIERS', requestedTicker: 'AAPL' },
+      {
+        sourceNodeId: 'ticker:AAPL',
+        direction: 'UPSTREAM_SUPPLIERS',
+        requestedTicker: 'AAPL',
+        includeInferred: false,
+      },
       { jintelClient, providerRouter: router, store },
     )) as SupplyChainExpansion;
 
@@ -176,7 +191,12 @@ describe('expandSupplyChainNode', () => {
     const router = makeRouter('{}'); // would fail schema if called
 
     const expansion = await expandSupplyChainNode(
-      { sourceNodeId: 'ticker:AAPL', direction: 'DOWNSTREAM_CUSTOMERS', requestedTicker: 'AAPL' },
+      {
+        sourceNodeId: 'ticker:AAPL',
+        direction: 'DOWNSTREAM_CUSTOMERS',
+        requestedTicker: 'AAPL',
+        includeInferred: false,
+      },
       { jintelClient, providerRouter: router, store },
     );
 
@@ -185,6 +205,86 @@ describe('expandSupplyChainNode', () => {
     expect(expansion?.edges).toEqual([]);
     expect(expansion?.synthesizedBy).toBeNull();
     expect(router.completeWithTools).not.toHaveBeenCalled();
+  });
+
+  it('augments expansion with LLM_INFERRED ecosystem candidates validated via Jintel', async () => {
+    const entity = makeEntity();
+    // First batchEnrich call (resolveEntity) returns AAPL; second call
+    // (ticker validation) returns MSFT and GHOST-as-missing so the fabricated
+    // ticker is filtered out.
+    const msftEntity = {
+      name: 'Microsoft Corporation',
+      tickers: ['MSFT'],
+      country: 'US',
+    } as unknown as Entity;
+    const batchEnrich = vi
+      .fn<Parameters<JintelClient['batchEnrich']>, ReturnType<JintelClient['batchEnrich']>>()
+      .mockResolvedValueOnce({ success: true, data: [entity] })
+      .mockResolvedValueOnce({ success: true, data: [msftEntity] });
+    const jintelClient = { batchEnrich } as unknown as JintelClient;
+
+    // Router is called twice in parallel — first the grounded classifier,
+    // then the ecosystem prompt. Same mock returns a valid payload for both
+    // shapes via JSON-matching (the schemas differ, so we return a combined
+    // payload the parsers can both read from via jsonMatch).
+    const groundedPayload = JSON.stringify({
+      reasoning: 'AAPL suppliers.',
+      ranked: [
+        {
+          id: 'ticker:TSM',
+          label: 'Taiwan Semiconductor',
+          edgeLabel: 'primary foundry',
+          criticality: 0.9,
+          relationship: 'MANUFACTURER',
+        },
+      ],
+    });
+    const ecosystemPayload = JSON.stringify({
+      reasoning: 'AAPL sells devices to hyperscalers and enterprises.',
+      items: [
+        {
+          ticker: 'MSFT',
+          label: 'Microsoft',
+          edgeLabel: 'enterprise customer',
+          relationship: 'PARTNER',
+          criticality: 0.6,
+          reason: 'AAPL hardware is a core enterprise procurement line.',
+        },
+        {
+          ticker: 'GHOST',
+          label: 'Ghost Inc.',
+          edgeLabel: 'fabricated',
+          relationship: 'PARTNER',
+          criticality: 0.5,
+          reason: 'Made up.',
+        },
+      ],
+    });
+    const completeWithTools = vi
+      .fn()
+      .mockImplementationOnce(async () => ({
+        content: [{ type: 'text', text: groundedPayload }],
+        stopReason: 'end_turn',
+      }))
+      .mockImplementationOnce(async () => ({
+        content: [{ type: 'text', text: ecosystemPayload }],
+        stopReason: 'end_turn',
+      }));
+    const router = { completeWithTools } as unknown as ProviderRouter;
+
+    const expansion = (await expandSupplyChainNode(
+      { sourceNodeId: 'ticker:AAPL', direction: 'UPSTREAM_SUPPLIERS', requestedTicker: 'AAPL' },
+      { jintelClient, providerRouter: router, store },
+    )) as SupplyChainExpansion;
+
+    expect(expansion).not.toBeNull();
+    const ids = expansion.nodes.map((n) => n.id).sort();
+    expect(ids).toEqual(['ticker:MSFT', 'ticker:TSM']);
+    const origins = new Map(expansion.edges.map((e) => [e.targetId, e.edgeOrigin]));
+    expect(origins.get('ticker:TSM')).toBe('JINTEL_DIRECT');
+    expect(origins.get('ticker:MSFT')).toBe('LLM_INFERRED');
+    // GHOST was fabricated — Jintel didn't return it, so it's dropped.
+    expect(ids).not.toContain('ticker:GHOST');
   });
 
   it('returns null when no Jintel client is wired (feature unavailable)', async () => {

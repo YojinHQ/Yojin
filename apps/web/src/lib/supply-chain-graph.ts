@@ -13,7 +13,7 @@
  * Pure function — no DOM, no React. Fully unit-testable.
  */
 
-import type { Substitutability, SupplyChainMap } from '../api/types';
+import type { EdgeOrigin, Substitutability, SupplyChainMap } from '../api/types';
 
 export type GraphNodeKind = 'portfolio' | 'counterparty';
 
@@ -52,6 +52,12 @@ export interface GraphLink {
   relationship: string;
   sharePct: number | null;
   originCountry: string | null;
+  /**
+   * Provenance of the edge. `JINTEL_DIRECT` edges are drawn solid; `LLM_INFERRED`
+   * edges (world-knowledge ecosystem context) are drawn dashed so the user can
+   * see which relationships are Jintel-grounded vs. LLM-surfaced.
+   */
+  edgeOrigin: EdgeOrigin;
 }
 
 export interface SupplyChainGraphData {
@@ -176,6 +182,7 @@ export function buildSupplyChainGraph(args: BuildGraphArgs): SupplyChainGraphDat
         relationship: edge.relationship,
         sharePct: null,
         originCountry: edge.originCountry ?? null,
+        edgeOrigin: edge.edgeOrigin,
       });
     }
 
@@ -208,6 +215,7 @@ export function buildSupplyChainGraph(args: BuildGraphArgs): SupplyChainGraphDat
         relationship: 'CUSTOMER',
         sharePct: edge.sharePct ?? null,
         originCountry: null,
+        edgeOrigin: edge.edgeOrigin,
       });
     }
   }
