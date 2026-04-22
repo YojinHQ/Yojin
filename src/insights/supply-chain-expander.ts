@@ -535,15 +535,15 @@ async function runExpansionLlm(
     return null;
   }
 
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
+  const jsonPayload = extractFirstJsonObject(text);
+  if (!jsonPayload) {
     logger.warn('Opus expansion returned no JSON payload');
     return null;
   }
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(jsonMatch[0]);
+    parsed = JSON.parse(jsonPayload);
   } catch (err) {
     logger.warn('Opus expansion returned invalid JSON', { error: String(err) });
     return null;
@@ -642,7 +642,7 @@ Direction semantics:
 - CONTRACT_MANUFACTURERS: outsourced manufacturing / assembly partners.
 - SECTOR_PEERS: competitors in the same sector with overlapping business.
 
-Respond with a single JSON object:
+Respond with a SINGLE strict-JSON object and nothing else — no prose, no code fences, no commentary. Use double quotes for every key and string value. Do not wrap the output in single quotes.
 {
   "reasoning": "1-2 sentence narrative of the ecosystem story.",
   "items": [
@@ -679,7 +679,7 @@ async function runEcosystemLlm(
       model: OPUS_MODEL_ID,
       system: ECOSYSTEM_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userMessage }],
-      maxTokens: 1024,
+      maxTokens: 2048,
       providerOverrides: { provider: OPUS_PROVIDER_ID, model: OPUS_MODEL_ID },
     });
     text = result.content
@@ -694,15 +694,15 @@ async function runEcosystemLlm(
     return [];
   }
 
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
+  const jsonPayload = extractFirstJsonObject(text);
+  if (!jsonPayload) {
     logger.debug('Ecosystem LLM returned no JSON payload', { direction: params.direction });
     return [];
   }
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(jsonMatch[0]);
+    parsed = JSON.parse(jsonPayload);
   } catch (err) {
     logger.debug('Ecosystem LLM returned invalid JSON', { error: String(err) });
     return [];
@@ -781,6 +781,42 @@ async function runEcosystemLlm(
     });
   }
   return out.slice(0, MAX_ECOSYSTEM_CANDIDATES);
+}
+
+/**
+ * Extract the first balanced top-level JSON object from an LLM response. A
+ * greedy `/\{[\s\S]*\}/` match grabs from the first `{` to the last `}`,
+ * which breaks when the model appends trailing prose or a second JSON block.
+ * Walk the brace depth instead, respecting string literals and escapes.
+ */
+function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
 }
 
 function coerceEcosystemOutput(raw: unknown): unknown {
