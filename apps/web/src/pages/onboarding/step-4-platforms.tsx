@@ -9,7 +9,7 @@ import type { ExtractedPosition } from '../../components/onboarding/editable-tab
 import Button from '../../components/common/button';
 import Input from '../../components/common/input';
 import { CONFIRM_POSITIONS_MUTATION, PARSE_PORTFOLIO_SCREENSHOT_MUTATION, QUOTE_QUERY } from '../../api/documents';
-import type { QuoteQueryResult, QuoteQueryVariables } from '../../api/types';
+import type { AssetClass, QuoteQueryResult, QuoteQueryVariables } from '../../api/types';
 import {
   sanitizeSymbol,
   sanitizeNumeric,
@@ -64,8 +64,8 @@ export function Step4Platforms() {
 
   const selectedPlatform = PLATFORMS.find((p) => p.id === selectedPlatformId);
 
-  const platformAssetClass =
-    selectedPlatformId && CRYPTO_PLATFORMS.has(selectedPlatformId) ? ('crypto' as const) : ('equity' as const);
+  const platformAssetClass: AssetClass =
+    selectedPlatformId && CRYPTO_PLATFORMS.has(selectedPlatformId) ? 'CRYPTO' : 'EQUITY';
 
   const handlePlatformClick = (platformId: string) => {
     if (isConnected(platformId)) return;

@@ -56,7 +56,7 @@ function ResultRow({ entry, index, isAdding, justAdded, onAdd }: ResultRowProps)
       style={{ animationDelay: `${index * 40}ms` }}
     >
       {/* Logo */}
-      <SymbolLogo symbol={entry.symbol} assetClass={isCrypto ? 'crypto' : 'equity'} size="md" />
+      <SymbolLogo symbol={entry.symbol} assetClass={entry.assetClass} size="md" />
 
       {/* Symbol + Name */}
       <div className="flex min-w-0 flex-1 flex-col">

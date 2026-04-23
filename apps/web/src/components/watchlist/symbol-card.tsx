@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { SymbolLogo } from '../common/symbol-logo';
 import Button from '../common/button';
+import { getAssetCaps } from '../../lib/asset-class-caps';
 import { cn } from '../../lib/utils';
 import { formatSharePrice } from '../../lib/format';
 import { getMarketElapsedMinutes } from '../../hooks/use-market-status';
@@ -132,7 +133,8 @@ export function SymbolCard({ entry, sparkline, onRemove, onSelect, removing, mar
   const isUp = (entry.changePercent ?? 0) > 0;
   const isDown = (entry.changePercent ?? 0) < 0;
 
-  const extended = entry.assetClass !== 'CRYPTO' ? getExtendedHoursInfo(marketStatus, entry) : null;
+  const caps = getAssetCaps(entry.assetClass);
+  const extended = caps.followsEquityMarketHours ? getExtendedHoursInfo(marketStatus, entry) : null;
 
   const handleRemoveClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -186,11 +188,7 @@ export function SymbolCard({ entry, sparkline, onRemove, onSelect, removing, mar
         {/* Header: logo + symbol + name + remove button */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <SymbolLogo
-              symbol={entry.symbol}
-              assetClass={entry.assetClass === 'CRYPTO' ? 'crypto' : 'equity'}
-              size="md"
-            />
+            <SymbolLogo symbol={entry.symbol} assetClass={entry.assetClass} size="md" />
             <div className="min-w-0 flex-1">
               <span className="text-sm font-semibold text-text-primary">{entry.symbol}</span>
               <p className="truncate text-xs text-text-muted">{entry.name}</p>
@@ -222,7 +220,7 @@ export function SymbolCard({ entry, sparkline, onRemove, onSelect, removing, mar
                 data={sparkline}
                 symbol={entry.symbol}
                 dayChangePercent={entry.changePercent ?? 0}
-                isMarketOpen={entry.assetClass !== 'CRYPTO' && marketStatus === 'open'}
+                isMarketOpen={caps.followsEquityMarketHours && marketStatus === 'open'}
               />
             ) : (
               <div className="h-7 w-[80px]" />

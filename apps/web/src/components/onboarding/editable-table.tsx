@@ -4,7 +4,7 @@ import { cn } from '../../lib/utils';
 import { SymbolLogo } from '../common/symbol-logo';
 import { lookupSymbolName } from '../../lib/symbol-names';
 import { QUOTE_QUERY } from '../../api/documents';
-import type { QuoteQueryResult, QuoteQueryVariables } from '../../api/types';
+import type { AssetClass, QuoteQueryResult, QuoteQueryVariables } from '../../api/types';
 
 export interface ExtractedPosition {
   symbol: string;
@@ -18,7 +18,7 @@ export interface ExtractedPosition {
 interface EditableTableProps {
   positions: ExtractedPosition[];
   onChange: (positions: ExtractedPosition[]) => void;
-  assetClass?: 'equity' | 'crypto';
+  assetClass?: AssetClass;
   className?: string;
 }
 
@@ -45,7 +45,7 @@ function MissingBadge() {
 
 const PAGE_SIZE = 10;
 
-export function EditableTable({ positions, onChange, assetClass = 'equity', className }: EditableTableProps) {
+export function EditableTable({ positions, onChange, assetClass = 'EQUITY', className }: EditableTableProps) {
   const [editing, setEditing] = useState<EditingCell | null>(null);
   const [editValue, setEditValue] = useState('');
   const [page, setPage] = useState(0);

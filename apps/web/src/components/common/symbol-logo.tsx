@@ -1,7 +1,7 @@
 import { useState } from 'react';
+import type { AssetClass } from '../../api/types';
+import { getAssetCaps } from '../../lib/asset-class-caps';
 import { cn } from '../../lib/utils';
-
-type AssetClass = 'equity' | 'crypto';
 
 interface SymbolLogoProps {
   symbol: string;
@@ -45,8 +45,15 @@ function getLogoUrls(symbol: string, assetClass: AssetClass): string[] {
   const local = LOCAL_LOGOS[symbol];
   if (local) return [local];
 
-  const primary = assetClass === 'crypto' ? 'crypto' : 'symbol';
-  const fallback = assetClass === 'crypto' ? 'symbol' : 'crypto';
+  const caps = getAssetCaps(assetClass);
+
+  // For fiat currency, fall through to the colored-initials fallback — the
+  // parqet CDN doesn't serve fiat currency glyphs, and a coin-style logo
+  // would be misleading.
+  if (caps.logoKind === 'currency') return [];
+
+  const primary = caps.logoKind; // 'symbol' | 'crypto'
+  const fallback = caps.logoKind === 'crypto' ? 'symbol' : 'crypto';
 
   return [
     `https://assets.parqet.com/logos/${primary}/${symbol}`,
@@ -61,7 +68,7 @@ interface SymbolCellProps {
   className?: string;
 }
 
-export function SymbolCell({ symbol, assetClass = 'equity', size = 'sm', className }: SymbolCellProps) {
+export function SymbolCell({ symbol, assetClass = 'EQUITY', size = 'sm', className }: SymbolCellProps) {
   return (
     <span className={cn('flex items-center gap-2', className)}>
       <SymbolLogo symbol={symbol} assetClass={assetClass} size={size} />
@@ -70,7 +77,7 @@ export function SymbolCell({ symbol, assetClass = 'equity', size = 'sm', classNa
   );
 }
 
-export function SymbolLogo({ symbol, assetClass = 'equity', size = 'sm', className }: SymbolLogoProps) {
+export function SymbolLogo({ symbol, assetClass = 'EQUITY', size = 'sm', className }: SymbolLogoProps) {
   const [urlIndex, setUrlIndex] = useState(0);
   const urls = getLogoUrls(symbol, assetClass);
   const exhausted = urlIndex >= urls.length;

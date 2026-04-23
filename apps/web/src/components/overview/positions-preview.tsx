@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
+import { getAssetCaps } from '../../lib/asset-class-caps';
 import { cn } from '../../lib/utils';
 import { useFeatureStatus } from '../../lib/feature-status';
 import { SymbolLogo } from '../common/symbol-logo';
@@ -361,11 +362,7 @@ export default function PositionsPreview() {
                   {/* Asset: logo + symbol (name on hover, actions popover on hover if present) */}
                   <td className="px-3 py-2">
                     <div className="flex min-w-0 items-center gap-2">
-                      <SymbolLogo
-                        symbol={pos.symbol}
-                        assetClass={pos.assetClass.toLowerCase() as 'equity' | 'crypto'}
-                        size="sm"
-                      />
+                      <SymbolLogo symbol={pos.symbol} assetClass={pos.assetClass} size="sm" />
                       <span
                         className="group/asset relative text-xs font-semibold text-text-primary"
                         onMouseEnter={(e) => handleTickerMouseEnter(pos.symbol, e.currentTarget)}
@@ -398,7 +395,7 @@ export default function PositionsPreview() {
                         symbol={pos.symbol}
                         data={pos.sparkline}
                         dayChangePercent={dcp ?? 0}
-                        isMarketOpen={marketStatus === 'open' && pos.assetClass !== 'CRYPTO'}
+                        isMarketOpen={marketStatus === 'open' && getAssetCaps(pos.assetClass).followsEquityMarketHours}
                       />
                     ) : (
                       <div className="flex h-8 w-[100px] items-center justify-center">

@@ -217,11 +217,7 @@ export default function PositionTable({ positions, onAdd }: { positions: Positio
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <SymbolLogo
-                        symbol={pos.symbol}
-                        assetClass={pos.assetClass.toLowerCase() as 'equity' | 'crypto'}
-                        size="md"
-                      />
+                      <SymbolLogo symbol={pos.symbol} assetClass={pos.assetClass} size="md" />
                       <div>
                         <span className="font-medium text-text-primary">{pos.symbol}</span>
                       </div>

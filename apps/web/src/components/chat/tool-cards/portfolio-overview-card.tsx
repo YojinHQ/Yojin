@@ -89,7 +89,7 @@ export default function PortfolioOverviewCard({ period }: PortfolioOverviewCardP
               { key: 'change', header: 'P&L', align: 'right' },
             ]}
             rows={top.map((pos) => ({
-              symbol: <SymbolCell symbol={pos.symbol} assetClass={pos.assetClass === 'CRYPTO' ? 'crypto' : 'equity'} />,
+              symbol: <SymbolCell symbol={pos.symbol} assetClass={pos.assetClass} />,
               value: pos.marketValue.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
               weight: totalValue > 0 ? `${((pos.marketValue / totalValue) * 100).toFixed(1)}%` : '—',
               change: (

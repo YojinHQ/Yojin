@@ -22,6 +22,7 @@ import {
 import type { PortfolioSnapshotStore } from '../../../portfolio/snapshot-store.js';
 import type { ConnectionManager } from '../../../scraper/connection-manager.js';
 import type { WatchlistStore } from '../../../watchlist/watchlist-store.js';
+import { getAssetCaps } from '../asset-class-caps.js';
 import { pubsub } from '../pubsub.js';
 import type {
   AssetClass,
@@ -206,27 +207,48 @@ interface ManualPositionInput {
   entryDate?: string;
 }
 
+/**
+ * Build a `Position` from mutation input, applying asset-class capabilities.
+ *
+ * For `priceIsFixed` classes (e.g. CURRENCY fiat cash), we force
+ * `currentPrice=1` and `marketValue=quantity` regardless of what the client
+ * sent — the backend is authoritative for denomination-fixed assets. For all
+ * other classes, the saved snapshot starts with `currentPrice=costBasis` and
+ * gets live quotes overlaid via `enrichAndOverlay`.
+ */
+function buildPositionFromInput(
+  input: ManualPositionInput,
+  defaults: { platform?: string; entryDate?: string } = {},
+): Position {
+  const { symbol, name, quantity, costBasis, assetClass, platform, entryDate } = input;
+  const resolvedAssetClass: AssetClass = (assetClass as AssetClass) ?? 'EQUITY';
+  const caps = getAssetCaps(resolvedAssetClass);
+
+  const currentPrice = caps.priceIsFixed ? 1 : costBasis;
+  const marketValue = caps.priceIsFixed ? quantity : quantity * costBasis;
+
+  return {
+    symbol: symbol.toUpperCase(),
+    name: name ?? symbol.toUpperCase(),
+    quantity,
+    costBasis: caps.priceIsFixed ? 1 : costBasis,
+    currentPrice,
+    marketValue,
+    unrealizedPnl: 0,
+    unrealizedPnlPercent: 0,
+    assetClass: resolvedAssetClass,
+    platform: ((platform as Position['platform']) ?? defaults.platform ?? 'MANUAL').toUpperCase(),
+    entryDate: entryDate || defaults.entryDate || undefined,
+  };
+}
+
 export async function addManualPositionMutation(
   _parent: unknown,
   args: { input: ManualPositionInput },
 ): Promise<PortfolioSnapshot> {
   if (!snapshotStore) throw new Error('Snapshot store not available');
 
-  const { symbol, name, quantity, costBasis, assetClass, platform, entryDate } = args.input;
-
-  const newPosition: Position = {
-    symbol: symbol.toUpperCase(),
-    name: name ?? symbol.toUpperCase(),
-    quantity,
-    costBasis,
-    currentPrice: costBasis,
-    marketValue: quantity * costBasis,
-    unrealizedPnl: 0,
-    unrealizedPnlPercent: 0,
-    assetClass: (assetClass as AssetClass) ?? 'EQUITY',
-    platform: ((platform as Position['platform']) ?? 'MANUAL').toUpperCase(),
-    entryDate: entryDate || undefined,
-  };
+  const newPosition = buildPositionFromInput(args.input);
 
   const effectivePlatform = newPosition.platform;
 
@@ -270,7 +292,6 @@ export async function editPositionMutation(
 
   const targetSymbol = args.symbol.toUpperCase();
   const targetPlatform = args.platform.toUpperCase();
-  const { symbol, name, quantity, costBasis, assetClass, platform, entryDate } = args.input;
 
   // Partition positions into target platform vs other platforms in a single pass
   const targetPlatformPositions: Position[] = [];
@@ -289,19 +310,10 @@ export async function editPositionMutation(
     throw new Error(`Position ${targetSymbol} not found on platform ${targetPlatform}`);
   }
 
-  const updatedPosition: Position = {
-    symbol: symbol.toUpperCase(),
-    name: name ?? symbol.toUpperCase(),
-    quantity,
-    costBasis,
-    currentPrice: costBasis,
-    marketValue: quantity * costBasis,
-    unrealizedPnl: 0,
-    unrealizedPnlPercent: 0,
-    assetClass: (assetClass as AssetClass) ?? 'EQUITY',
-    platform: ((platform as Position['platform']) ?? targetPlatform).toUpperCase(),
-    entryDate: entryDate || existingPosition.entryDate,
-  };
+  const updatedPosition = buildPositionFromInput(args.input, {
+    platform: targetPlatform,
+    entryDate: existingPosition.entryDate,
+  });
 
   const updatedPlatformPositions = targetPlatformPositions.map((p) =>
     p.symbol.toUpperCase() === targetSymbol ? updatedPosition : p,

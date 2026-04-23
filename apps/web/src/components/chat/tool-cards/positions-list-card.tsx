@@ -105,7 +105,7 @@ export default function PositionsListCard({ variant }: PositionsListCardProps) {
           { key: 'change', header: 'P&L', align: 'right' },
         ]}
         rows={sorted.map((pos) => ({
-          symbol: <SymbolCell symbol={pos.symbol} assetClass={pos.assetClass === 'CRYPTO' ? 'crypto' : 'equity'} />,
+          symbol: <SymbolCell symbol={pos.symbol} assetClass={pos.assetClass} />,
           value: formatCurrency(pos.marketValue),
           change: (
             <span className={cn(pos.unrealizedPnlPercent >= 0 ? 'text-success' : 'text-error')}>

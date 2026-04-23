@@ -1,5 +1,6 @@
 import type { JintelClient, MarketQuote, TickerPriceHistory } from '@yojinhq/jintel-client';
 
+import { getAssetCaps } from '../api/graphql/asset-class-caps.js';
 import type { PortfolioSnapshot, Position } from '../api/graphql/types.js';
 import { getLogger } from '../logging/index.js';
 import { sanitizeCandles } from '../market/sanitize-candles.js';
@@ -200,15 +201,62 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
   }
 
   const client = jintelClient;
-  const symbols = [...new Set(snapshot.positions.map((p) => p.symbol.toUpperCase()))];
+
+  // Partition positions by quote capability. Fiat cash (CURRENCY) and other
+  // non-quotable classes skip Jintel entirely — they use their stored price.
+  const quotableUpperSymbols = new Set(
+    snapshot.positions.filter((p) => getAssetCaps(p.assetClass).hasLiveQuotes).map((p) => p.symbol.toUpperCase()),
+  );
+  const symbols = [...quotableUpperSymbols];
   log.debug('Fetching live quotes', { symbols });
 
-  // Crypto trades 24/7 → always intraday. Equities → intraday only during US market hours.
-  const cryptoSet = new Set(
-    snapshot.positions.filter((p) => p.assetClass === 'CRYPTO').map((p) => p.symbol.toUpperCase()),
+  // All-non-quotable portfolio (e.g. all-cash): skip Jintel, just normalise totals.
+  if (symbols.length === 0) {
+    const positions: Position[] = snapshot.positions.map((pos) => {
+      const caps = getAssetCaps(pos.assetClass);
+      if (!caps.priceIsFixed) return pos;
+      return {
+        ...pos,
+        currentPrice: 1,
+        marketValue: pos.quantity,
+        dayChange: 0,
+        dayChangePercent: 0,
+        unrealizedPnl: 0,
+        unrealizedPnlPercent: 0,
+        sparkline: undefined,
+      };
+    });
+    let totalValue = 0;
+    let totalCost = 0;
+    for (const p of positions) {
+      totalValue += p.marketValue;
+      totalCost += p.costBasis * p.quantity;
+    }
+    const totalPnl = totalValue - totalCost;
+    return {
+      ...snapshot,
+      positions,
+      totalValue,
+      totalCost,
+      totalPnl,
+      totalPnlPercent: totalCost > 0 ? (totalPnl / totalCost) * 100 : 0,
+      totalDayChange: 0,
+      totalDayChangePercent: 0,
+    };
+  }
+
+  // Positions that trade on US equity hours vs. 24/7. Drives range/interval
+  // selection for priceHistory + regular-hours filter on the sparkline.
+  const followsEquityHoursSet = new Set(
+    snapshot.positions
+      .filter((p) => {
+        const caps = getAssetCaps(p.assetClass);
+        return caps.hasLiveQuotes && caps.followsEquityMarketHours;
+      })
+      .map((p) => p.symbol.toUpperCase()),
   );
-  const equitySymbols = symbols.filter((s) => !cryptoSet.has(s));
-  const cryptoSymbols = symbols.filter((s) => cryptoSet.has(s));
+  const equitySymbols = symbols.filter((s) => followsEquityHoursSet.has(s));
+  const cryptoSymbols = symbols.filter((s) => !followsEquityHoursSet.has(s));
 
   const marketSessionAvailable = isUSMarketSessionAvailable();
   // During/after regular hours fetch today's session; before market open,
@@ -291,9 +339,33 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
 
   const positions: Position[] = snapshot.positions.map((pos) => {
     const upperSymbol = pos.symbol.toUpperCase();
+    const caps = getAssetCaps(pos.assetClass);
+
+    // Fixed-price classes (fiat cash): always 1 unit per unit. No Jintel lookup,
+    // no sparkline, no day-change — `marketValue` is just the quantity.
+    if (caps.priceIsFixed) {
+      return {
+        ...pos,
+        currentPrice: 1,
+        marketValue: pos.quantity,
+        dayChange: 0,
+        dayChangePercent: 0,
+        preMarketChange: null,
+        preMarketChangePercent: null,
+        postMarketChange: null,
+        postMarketChangePercent: null,
+        unrealizedPnl: 0,
+        unrealizedPnlPercent: 0,
+        sparkline: undefined,
+      };
+    }
+
+    // Non-quotable, non-fixed classes (e.g. BOND, OTHER): leave stored values alone.
+    if (!caps.hasLiveQuotes) return pos;
+
     const quote = quoteMap.get(upperSymbol);
     const priceHist = historyMap.get(upperSymbol);
-    const isEquity = !cryptoSet.has(upperSymbol);
+    const isEquity = followsEquityHoursSet.has(upperSymbol);
 
     // Jintel's /quotes endpoint has coverage gaps (e.g. some ETFs return null),
     // but /priceHistory often still has data. Fall back to history so the UI

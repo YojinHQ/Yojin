@@ -29,6 +29,7 @@ import type { ProviderRouter } from './ai-providers/router.js';
 import type { AlertPromoterConfig } from './alerts/alert-promoter.js';
 import { DEFAULT_ALERT_PROMOTER_CONFIG, buildAlert, meetsThreshold, resolveSeverity } from './alerts/alert-promoter.js';
 import type { AlertStore } from './alerts/alert-store.js';
+import { getAssetCaps } from './api/graphql/asset-class-caps.js';
 import type { AssetClass } from './api/graphql/types.js';
 import type { EventLog } from './core/event-log.js';
 import type { NotificationBus } from './core/notification-bus.js';
@@ -244,9 +245,14 @@ interface MicroAssetState {
   lastColdMicroAt: string | null;
 }
 
-/** True when the ticker trades 24/7 (crypto). Unknown asset classes are treated as equity. */
+/**
+ * True when the ticker can be analysed outside US equity regular hours
+ * (crypto, fiat cash, anything not gated by 9:30–16:00 ET). Unknown asset
+ * classes default to equity (gated by market hours).
+ */
 function isAlwaysOnAsset(state: MicroAssetState | undefined): boolean {
-  return state?.assetClass === 'CRYPTO';
+  if (!state?.assetClass) return false;
+  return !getAssetCaps(state.assetClass).followsEquityMarketHours;
 }
 
 export interface SchedulerAssetStatus {

@@ -90,7 +90,7 @@ export default function MorningBriefingCard() {
               { key: 'direction', header: '', align: 'center' },
             ]}
             rows={movers.map((pos) => ({
-              symbol: <SymbolCell symbol={pos.symbol} assetClass={pos.assetClass === 'CRYPTO' ? 'crypto' : 'equity'} />,
+              symbol: <SymbolCell symbol={pos.symbol} assetClass={pos.assetClass} />,
               price: pos.currentPrice.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
               change: (
                 <span className={cn(pos.unrealizedPnlPercent >= 0 ? 'text-success' : 'text-error')}>

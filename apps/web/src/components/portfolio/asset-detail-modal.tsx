@@ -305,7 +305,7 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <SymbolLogo symbol={symbol} assetClass={position?.assetClass === 'CRYPTO' ? 'crypto' : 'equity'} size="md" />
+        <SymbolLogo symbol={symbol} assetClass={position?.assetClass} size="md" />
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h2 id="asset-detail-title" className="text-xl font-semibold text-text-primary">
