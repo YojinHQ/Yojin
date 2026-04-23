@@ -89,8 +89,10 @@ export function createPortfolioTools(options: PortfolioToolsOptions): ToolDefini
   const getPortfolio: ToolDefinition = {
     name: 'get_portfolio',
     description:
-      'Get the current portfolio positions. Returns the latest saved snapshot ' +
-      'with all positions, totals, and metadata.',
+      'Call this whenever the user asks about their portfolio, positions, holdings, ' +
+      'allocation, P&L, performance, or what they own. Returns the latest saved ' +
+      'snapshot with all positions, totals, and metadata. Do not ask the user to ' +
+      'paste or upload data before calling this — check here first.',
     parameters: z.object({}),
     async execute(): Promise<ToolResult> {
       const snapshot = await snapshotStore.getLatest();
