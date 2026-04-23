@@ -7,6 +7,7 @@
 
 import type { Page } from 'playwright';
 
+import { CRYPTO_SYMBOLS } from '../../../portfolio/crypto-symbols.js';
 import type { SecretVault } from '../../../trust/vault/types.js';
 import { screenshotOnFailure, stealthDelay, waitForSelector } from '../../pw-helpers.js';
 import type { SessionStore } from '../../session-store.js';
@@ -160,7 +161,9 @@ export class FidelityUiConnector implements TieredPlatformConnector {
   private async parsePositions(): Promise<ExtractedPosition[]> {
     if (!this.page) return [];
 
-    const raw = await this.page.evaluate(() => {
+    const cryptoList = [...CRYPTO_SYMBOLS];
+    const raw = await this.page.evaluate((cryptoList) => {
+      const cryptoSet = new Set(cryptoList);
       const positions: Array<{
         symbol: string;
         name?: string;
@@ -193,20 +196,25 @@ export class FidelityUiConnector implements TieredPlatformConnector {
           return text ? parseFloat(text) : undefined;
         };
 
+        const symbol = symbolEl.textContent.trim();
+        const symbolUpper = symbol.toUpperCase();
+        const base = /^([A-Z0-9]+)-(?:USDT?)$/.exec(symbolUpper)?.[1];
+        const isCrypto = cryptoSet.has(symbolUpper) || (base !== undefined && cryptoSet.has(base));
+
         positions.push({
-          symbol: symbolEl.textContent.trim(),
+          symbol,
           name: nameEl?.textContent?.trim(),
           quantity: parseNum(quantityEl),
           currentPrice: parseNum(priceEl),
           marketValue: parseNum(valueEl),
           costBasis: parseNum(costEl),
           unrealizedPnl: parseNum(pnlEl),
-          assetClass: 'EQUITY',
+          assetClass: isCrypto ? 'CRYPTO' : 'EQUITY',
         });
       }
 
       return positions;
-    });
+    }, cryptoList);
     return raw as ExtractedPosition[];
   }
 }

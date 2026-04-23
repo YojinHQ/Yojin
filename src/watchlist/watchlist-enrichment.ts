@@ -8,6 +8,7 @@ import type { EnrichmentCacheEntry } from './types.js';
 import type { WatchlistStore } from './watchlist-store.js';
 import type { AssetClass } from '../api/graphql/types.js';
 import { getLogger } from '../logging/index.js';
+import { isCryptoSymbol } from '../portfolio/crypto-symbols.js';
 import { buildSparkline, fetchCachedHistory, isUSMarketSessionAvailable } from '../portfolio/live-enrichment.js';
 
 const log = getLogger().sub('watchlist-enrichment');
@@ -213,14 +214,16 @@ export class WatchlistEnrichment {
     const cryptoSymbols: string[] = [];
     for (const e of entries) {
       const key = e.symbol.toUpperCase();
-      if (e.assetClass === 'CRYPTO') cryptoSymbols.push(key);
+      if (e.assetClass === 'CRYPTO' || isCryptoSymbol(key)) cryptoSymbols.push(key);
       else equitySymbols.push(key);
     }
 
     const equityRange = isUSMarketSessionAvailable() ? '1d' : '5d';
     const [equityMap, cryptoMap] = await Promise.all([
       equitySymbols.length > 0 ? fetchCachedHistory(client, equitySymbols, equityRange, '1m') : undefined,
-      cryptoSymbols.length > 0 ? fetchCachedHistory(client, cryptoSymbols, '1d', '1m') : undefined,
+      // Crypto trades 24h: 5m keeps point count in line with the ~390-point
+      // regular-hours equity sparkline instead of 1440 1m points.
+      cryptoSymbols.length > 0 ? fetchCachedHistory(client, cryptoSymbols, '1d', '5m') : undefined,
     ]);
 
     const result = new Map<string, number[]>();

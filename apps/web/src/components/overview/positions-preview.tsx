@@ -66,19 +66,15 @@ function Sparkline({
 
   const gradId = `sparkline-grad-${symbol}`;
 
-  // Derive previous close baseline from last data point (live price) and day change %
   const showBaseline = dayChangePercent !== 0;
   let baselineY: number | undefined;
   if (showBaseline) {
     const currentPrice = data[data.length - 1];
     const prevClose = currentPrice / (1 + dayChangePercent / 100);
     const rawY = 32 - ((prevClose - min) / range) * 24 - 4;
-    // Clamp to SVG viewBox so the baseline is visible even when prevClose is
-    // outside the candle data range (e.g. pre-market gap).
     baselineY = Math.max(0.5, Math.min(31.5, rawY));
   }
 
-  // Positive: fill below line to bottom; Negative: fill above line to baseline
   const fillCloseY = isNegative && baselineY != null ? baselineY : 32;
   const fillPoints = `0,${fillCloseY} ${points} ${progressWidth},${fillCloseY}`;
 

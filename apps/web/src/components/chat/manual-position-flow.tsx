@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { cn } from '../../lib/utils';
 import { useAddManualPosition } from '../../api';
-import type { AssetClass, Platform } from '../../api';
+import type { Platform } from '../../api';
+import { inferAssetClass } from '../../lib/crypto-symbols';
 
 /* ─── Form state ─── */
 
@@ -26,33 +27,6 @@ const STEP_CONFIG: Record<Step, { title: string; subtitle: string }> = {
 };
 
 const ACCOUNT_PRESETS = ['IBKR', 'Robinhood', 'Coinbase', 'Schwab', 'Binance', 'Fidelity'];
-
-const CRYPTO_SYMBOLS = new Set([
-  'BTC',
-  'ETH',
-  'SOL',
-  'ADA',
-  'XRP',
-  'DOGE',
-  'DOT',
-  'AVAX',
-  'MATIC',
-  'LINK',
-  'UNI',
-  'ATOM',
-  'LTC',
-  'BCH',
-  'ALGO',
-  'FIL',
-  'NEAR',
-  'APT',
-  'ARB',
-  'OP',
-]);
-
-function inferAssetClass(symbol: string): AssetClass {
-  return CRYPTO_SYMBOLS.has(symbol.toUpperCase()) ? 'CRYPTO' : 'EQUITY';
-}
 
 /** Map preset display names to canonical known platform identifiers. */
 const ACCOUNT_TO_PLATFORM: Record<string, Platform> = {
