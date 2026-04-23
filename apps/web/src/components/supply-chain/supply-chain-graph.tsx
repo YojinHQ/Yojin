@@ -203,26 +203,29 @@ export function SupplyChainGraph({
   return (
     <div className="flex h-full w-full flex-col gap-3">
       {selectedNode && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-bg-card p-3">
-          <div className="mr-2 text-xs uppercase tracking-wide text-text-muted">
-            Expand <span className="font-medium text-text-primary">{selectedNode.label}</span>
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-bg-card p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="mr-2 text-xs uppercase tracking-wide text-text-muted">
+              Expand <span className="font-medium text-text-primary">{selectedNode.label}</span>
+            </div>
+            {DIRECTIONS.map((direction) => (
+              <Button
+                key={direction}
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  void handleExpand(direction);
+                }}
+                disabled={expanding}
+                aria-label={`Expand ${selectedNode.label} — ${DIRECTION_LABELS[direction]}`}
+              >
+                {expanding ? <Spinner size="sm" /> : null}
+                {DIRECTION_LABELS[direction]}
+              </Button>
+            ))}
           </div>
-          {DIRECTIONS.map((direction) => (
-            <Button
-              key={direction}
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                void handleExpand(direction);
-              }}
-              disabled={expanding}
-              aria-label={`Expand ${selectedNode.label} — ${DIRECTION_LABELS[direction]}`}
-            >
-              {expanding ? <Spinner size="sm" /> : null}
-              {DIRECTION_LABELS[direction]}
-            </Button>
-          ))}
+          <SelectedNodeDeals selectedId={selectedNode.id} expansions={expansions} />
         </div>
       )}
       {expandError && (
@@ -268,6 +271,39 @@ export function SupplyChainGraph({
   );
 }
 
+const DIRECTION_HEADLINE: Record<SupplyChainDirection, string> = {
+  UPSTREAM_SUPPLIERS: 'Suppliers',
+  DOWNSTREAM_CUSTOMERS: 'Customers',
+  SECTOR_PEERS: 'Peers',
+  CONTRACT_MANUFACTURERS: 'Contract manufacturers',
+  COUNTRY_EXPOSURE: 'Country exposure',
+};
+
+function SelectedNodeDeals({ selectedId, expansions }: { selectedId: string; expansions: SupplyChainExpansion[] }) {
+  const relevant = expansions.filter((e) => e.sourceNodeId === selectedId && e.edges.length > 0);
+  if (relevant.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2 border-t border-border pt-3">
+      {relevant.map((exp) => (
+        <div key={`${exp.sourceNodeId}-${exp.direction}`} className="flex flex-col gap-1">
+          <div className="text-xs uppercase tracking-wide text-text-muted">{DIRECTION_HEADLINE[exp.direction]}</div>
+          <ul className="flex flex-col gap-1 text-sm text-text-secondary">
+            {exp.edges.map((e) => (
+              <li key={`${e.sourceId}->${e.targetId}|${e.relationship}`} className="flex items-baseline gap-2">
+                <span className="font-medium text-text-primary">
+                  {exp.nodes.find((n) => n.id === e.targetId)?.label ?? e.targetId.replace(/^ticker:/, '')}
+                </span>
+                {e.label && <span className="text-text-secondary">— {e.label}</span>}
+                <span className="ml-auto text-xs text-text-muted">crit {e.criticality.toFixed(2)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Projects progressive-expansion results (nodes/edges in the expansion shape)
  * into the force-graph's GraphNode/GraphLink shape. Nodes that already exist
@@ -296,16 +332,19 @@ function projectExpansions(
     for (const e of expansion.edges) {
       const key = `${e.sourceId}->${e.targetId}|${e.relationship}`;
       if (edgeByKey.has(key)) continue;
+      const direction = expansion.direction;
+      const kind: GraphLink['kind'] = direction === 'DOWNSTREAM_CUSTOMERS' ? 'downstream' : 'upstream';
       edgeByKey.set(key, {
         source: e.sourceId,
         target: e.targetId,
-        kind: 'upstream',
+        kind,
         substitutability: null,
         criticality: e.criticality,
         relationship: e.relationship,
         sharePct: null,
         originCountry: null,
         edgeOrigin: e.edgeOrigin,
+        dealLabel: e.label?.trim() ? e.label.trim() : null,
       });
     }
   }
@@ -460,13 +499,14 @@ function nodeTooltip(n: GraphNode): string {
 }
 
 function linkTooltip(l: GraphLink): string {
-  const label =
+  const headline =
     l.kind === 'upstream'
       ? `Supplier — criticality ${l.criticality.toFixed(2)}`
       : `Customer${l.sharePct != null ? ` — ${l.sharePct}% of revenue` : ''}`;
   const subst = l.substitutability ? ` · ${substLabel(l.substitutability)}` : '';
   const country = l.originCountry ? ` · ${l.originCountry}` : '';
-  return `${label}${subst}${country}`;
+  const deal = l.dealLabel ? `<br/><em>${escape(l.dealLabel)}</em>` : '';
+  return `${headline}${subst}${country}${deal}`;
 }
 
 function substLabel(s: Substitutability): string {

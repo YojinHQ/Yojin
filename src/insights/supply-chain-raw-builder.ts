@@ -141,6 +141,56 @@ function isSgmlFragment(name: string): boolean {
 }
 
 /**
+ * Reject counterparty names that are clearly filing-text noise, not companies:
+ *   - dates ("November 23, 2022", "2023-04-01", "Q4 2023")
+ *   - signature lines ("/s/ Joseph R. Cavatoni", "By: John Doe")
+ *   - street-address fragments ("2375 Scott Blvd", "Suite 400")
+ *   - single-person names (two or three tokens of Capitalized words with no
+ *     corporate suffix like Inc / Corp / Ltd / LLC / AG / NV / SA / GmbH / PLC)
+ *   - filing section headers ("Environmental", "Risk Factors", "Signatures")
+ */
+function isFilingTextNoise(name: string): boolean {
+  const trimmed = name.trim();
+  if (trimmed.length < 2) return true;
+
+  // Dates.
+  if (/^\d{4}(-\d{2}(-\d{2})?)?$/.test(trimmed)) return true;
+  if (
+    /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}$/i.test(
+      trimmed,
+    )
+  )
+    return true;
+  if (/^Q[1-4]\s*\d{4}$/i.test(trimmed)) return true;
+
+  // Signature / attestation lines.
+  if (/^\/s\//i.test(trimmed) || /^s\/\s/i.test(trimmed)) return true;
+  if (/^by:\s/i.test(trimmed)) return true;
+
+  // Street address fragments.
+  if (/\b(?:Blvd|Avenue|Ave|Street|Road|Rd|Suite|Drive|Highway|Hwy|Parkway|Pkwy|Lane|Plaza)\.?\b/i.test(trimmed))
+    return true;
+
+  // Filing section headers / short generic labels.
+  const generic = /^(Environmental|Signatures?|Risk Factors|Exhibits?|Properties|Executive Officers|Directors)$/i;
+  if (generic.test(trimmed)) return true;
+
+  // Person-name heuristic: 2-4 tokens, all capitalized words (with optional
+  // initials like "R."), and no corporate suffix.
+  const corporateSuffix =
+    /\b(Inc\.?|Incorporated|Corp\.?|Corporation|Co\.?|Company|Ltd\.?|Limited|LLC|LLP|LP|PLC|AG|NV|SA|SE|GmbH|KK|KGaA|Holdings?|Group|Bank|Partners?|Capital|Ventures?|Trust|Fund|Technologies|Networks|Systems|Solutions|Industries|Services|Laboratories|Labs|Pharmaceuticals?|Pharma|Therapeutics|Biosciences?|Semiconductor|Motors?|Electronics|Airlines?|Airways|Media|Entertainment|Studios?|Pictures|Foods?|Beverages?|Energy|Resources|Minerals?|Mining|Aerospace|Defense|Manufacturing|Realty|Properties|Real Estate)\b/i;
+  if (!corporateSuffix.test(trimmed)) {
+    const tokens = trimmed.split(/\s+/);
+    if (tokens.length >= 2 && tokens.length <= 4) {
+      const allCapitalized = tokens.every((t) => /^[A-Z][a-zA-Z.'-]*$/.test(t));
+      if (allCapitalized) return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * True when the counterparty name's first token matches the parent's first
  * token (case-insensitive) — i.e. the "supplier" is actually a subsidiary of
  * the parent. Only fires when the parent's first token is long enough
@@ -156,6 +206,7 @@ function isSelfCounterparty(counterpartyName: string, parentName: string): boole
 
 function isUsableCounterparty(counterpartyName: string, parentName: string): boolean {
   if (isSgmlFragment(counterpartyName)) return false;
+  if (isFilingTextNoise(counterpartyName)) return false;
   if (isSelfCounterparty(counterpartyName, parentName)) return false;
   return true;
 }

@@ -226,6 +226,104 @@ describe('buildRawSupplyChainMap', () => {
     expect(map.downstream).toEqual([]);
   });
 
+  it('drops filing-text noise — dates, signatures, addresses, section headers, bare person names', () => {
+    const entity = {
+      id: 'ent_panw',
+      type: 'COMPANY',
+      name: 'Palo Alto Networks',
+      tickers: ['PANW'],
+      relationships: [
+        // Bare person name (2-4 capitalized tokens, no corporate suffix)
+        {
+          type: 'PARTNER',
+          direction: 'IN',
+          disclosure: 'DIRECT',
+          confidence: 0.9,
+          counterpartyName: 'Joseph R. Cavatoni',
+          counterpartyTicker: null,
+          counterpartyCik: null,
+          sharePct: null,
+          valueUsd: null,
+          context: null,
+          source: { connector: 'sec-segments', url: null, asOf: '2024-10-01', ref: 'seg-1' },
+        },
+        // Signature line
+        {
+          type: 'PARTNER',
+          direction: 'IN',
+          disclosure: 'DIRECT',
+          confidence: 0.9,
+          counterpartyName: '/s/ John Smith',
+          counterpartyTicker: null,
+          counterpartyCik: null,
+          sharePct: null,
+          valueUsd: null,
+          context: null,
+          source: { connector: 'sec-segments', url: null, asOf: '2024-10-01', ref: 'seg-2' },
+        },
+        // Date
+        {
+          type: 'PARTNER',
+          direction: 'IN',
+          disclosure: 'DIRECT',
+          confidence: 0.9,
+          counterpartyName: 'November 23, 2022',
+          counterpartyTicker: null,
+          counterpartyCik: null,
+          sharePct: null,
+          valueUsd: null,
+          context: null,
+          source: { connector: 'sec-segments', url: null, asOf: '2024-10-01', ref: 'seg-3' },
+        },
+        // Street-address fragment
+        {
+          type: 'PARTNER',
+          direction: 'IN',
+          disclosure: 'DIRECT',
+          confidence: 0.9,
+          counterpartyName: '2375 Scott Blvd',
+          counterpartyTicker: null,
+          counterpartyCik: null,
+          sharePct: null,
+          valueUsd: null,
+          context: null,
+          source: { connector: 'sec-segments', url: null, asOf: '2024-10-01', ref: 'seg-4' },
+        },
+        // Filing section header
+        {
+          type: 'PARTNER',
+          direction: 'IN',
+          disclosure: 'DIRECT',
+          confidence: 0.9,
+          counterpartyName: 'Environmental',
+          counterpartyTicker: null,
+          counterpartyCik: null,
+          sharePct: null,
+          valueUsd: null,
+          context: null,
+          source: { connector: 'sec-segments', url: null, asOf: '2024-10-01', ref: 'seg-5' },
+        },
+        // Genuine corporate counterparty — must survive
+        {
+          type: 'PARTNER',
+          direction: 'IN',
+          disclosure: 'DIRECT',
+          confidence: 0.9,
+          counterpartyName: 'Broadcom Inc.',
+          counterpartyTicker: 'AVGO',
+          counterpartyCik: null,
+          sharePct: null,
+          valueUsd: null,
+          context: null,
+          source: { connector: 'sec-segments', url: null, asOf: '2024-10-01', ref: 'seg-6' },
+        },
+      ],
+    } as unknown as Entity;
+
+    const map = buildRawSupplyChainMap('PANW', entity, []);
+    expect(map.upstream.map((e) => e.counterpartyName)).toEqual(['Broadcom Inc.']);
+  });
+
   it('drops self-counterparty edges whose first token matches the parent', () => {
     const entity = {
       id: 'ent_aapl',

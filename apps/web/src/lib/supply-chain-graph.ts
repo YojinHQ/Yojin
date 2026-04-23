@@ -58,6 +58,8 @@ export interface GraphLink {
    * see which relationships are Jintel-grounded vs. LLM-surfaced.
    */
   edgeOrigin: EdgeOrigin;
+  /** Short human-readable description of the deal (e.g. "primary foundry"). */
+  dealLabel: string | null;
 }
 
 export interface SupplyChainGraphData {
@@ -183,6 +185,7 @@ export function buildSupplyChainGraph(args: BuildGraphArgs): SupplyChainGraphDat
         sharePct: null,
         originCountry: edge.originCountry ?? null,
         edgeOrigin: edge.edgeOrigin,
+        dealLabel: null,
       });
     }
 
@@ -216,6 +219,7 @@ export function buildSupplyChainGraph(args: BuildGraphArgs): SupplyChainGraphDat
         sharePct: edge.sharePct ?? null,
         originCountry: null,
         edgeOrigin: edge.edgeOrigin,
+        dealLabel: null,
       });
     }
   }
