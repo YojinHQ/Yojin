@@ -343,6 +343,12 @@ export async function enrichPortfolioSnapshotWithLiveQuotes(
         marketValue,
         unrealizedPnl: hasCostBasis ? marketValue - totalCost : 0,
         unrealizedPnlPercent: hasCostBasis ? ((lastClose - pos.costBasis) / pos.costBasis) * 100 : 0,
+        dayChange: undefined,
+        dayChangePercent: undefined,
+        preMarketChange: null,
+        preMarketChangePercent: null,
+        postMarketChange: null,
+        postMarketChangePercent: null,
         sparkline: sparkline.length >= 2 ? sparkline : undefined,
       };
     }

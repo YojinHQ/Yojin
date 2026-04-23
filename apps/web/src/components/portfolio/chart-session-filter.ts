@@ -1,3 +1,5 @@
+import { etMinuteOfDay } from '../../lib/date-utils';
+
 export interface SessionFilterOptions {
   extendedHours: boolean;
 }
@@ -6,17 +8,6 @@ const REGULAR_START_MIN = 9 * 60 + 30; // 09:30 ET
 const REGULAR_END_MIN = 16 * 60; // 16:00 ET
 const EXTENDED_START_MIN = 4 * 60; // 04:00 ET
 const EXTENDED_END_MIN = 20 * 60; // 20:00 ET
-
-function parseUTC(dateStr: string): Date {
-  if (dateStr.includes('Z') || /[+-]\d{2}:?\d{2}$/.test(dateStr)) return new Date(dateStr);
-  return new Date(dateStr.replace(' ', 'T') + 'Z');
-}
-
-function etMinuteOfDay(dateStr: string): number {
-  const d = parseUTC(dateStr);
-  const et = new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  return et.getHours() * 60 + et.getMinutes();
-}
 
 /**
  * Keep equity intraday candles inside the chosen session window.

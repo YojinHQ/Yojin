@@ -4,7 +4,7 @@ import { useQuery } from 'urql';
 import { cn } from '../../lib/utils';
 import { useAssetDetailModal } from '../../lib/asset-detail-modal-context';
 import { useFeatureStatus } from '../../lib/feature-status';
-import { usePortfolio, useQuote, useOnPriceMove } from '../../api';
+import { usePortfolio, useQuote, useOnPriceMove, useWatchlist } from '../../api';
 import type {
   Quote,
   PositionInsight,
@@ -183,9 +183,10 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
   const [quoteResult] = useQuote(symbol);
   const quote = quoteResult.data?.quote ?? undefined;
 
-  // Session filter (regular-hours / extended-hours) applies only to equities.
-  // Scraper (Fidelity) occasionally mislabels crypto as EQUITY; symbol suffix is the fallback.
-  const isEquity = position != null && position.assetClass !== 'CRYPTO' && !/-USDT?$/i.test(symbol);
+  const [watchlistResult] = useWatchlist();
+  const watchlistEntry = watchlistResult.data?.watchlist.find((e) => e.symbol === symbol);
+  const assetClass = position?.assetClass ?? watchlistEntry?.assetClass;
+  const isEquity = assetClass !== 'CRYPTO' && !/-USDT?$/i.test(symbol);
 
   const [candle, setCandle] = useState<Candle>('15m');
   const [resetKey, setResetKey] = useState(0);

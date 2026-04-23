@@ -11,6 +11,7 @@ import {
   type UTCTimestamp,
   ColorType,
 } from 'lightweight-charts';
+import { parseUTC } from '../../lib/date-utils';
 
 export interface PriceChartDatum {
   date: string;
@@ -100,12 +101,6 @@ function dedup(data: PriceChartDatum[], intraday: boolean): PriceChartDatum[] {
     }
   }
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
-}
-
-// Bare Jintel timestamps ("2026-03-31 16:30:00") are parsed as local time in Chrome — force UTC.
-function parseUTC(dateStr: string): Date {
-  if (dateStr.includes('Z') || /[+-]\d{2}:?\d{2}$/.test(dateStr)) return new Date(dateStr);
-  return new Date(dateStr.replace(' ', 'T') + 'Z');
 }
 
 // Intraday uses the bar index as `time` so lightweight-charts collapses non-trading gaps
