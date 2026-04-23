@@ -223,7 +223,9 @@ describe('TradeStationApiConnector', () => {
       expect(result.positions).toHaveLength(2);
       const aapl = result.positions.find((p) => p.symbol === 'AAPL')!;
       expect(aapl.quantity).toBe(10);
-      expect(aapl.costBasis).toBe(1500);
+      // costBasis is per-share (AveragePrice 150), NOT total (TotalCost 1500).
+      // Yojin computes totalCost as costBasis * quantity elsewhere.
+      expect(aapl.costBasis).toBe(150);
       expect(aapl.currentPrice).toBe(180);
       expect(aapl.marketValue).toBe(1800);
       expect(aapl.unrealizedPnl).toBe(300);
@@ -289,10 +291,10 @@ describe('TradeStationApiConnector', () => {
               AssetType: 'STOCK',
               Symbol: 'JUNK',
               Quantity: '3',
-              AveragePrice: 'not-a-number',
+              AveragePrice: '150',
               Last: '',
               MarketValue: 'NaN',
-              TotalCost: '450',
+              TotalCost: 'bad',
               UnrealizedProfitLoss: '',
               UnrealizedProfitLossPercent: 'bad',
             },
@@ -304,7 +306,7 @@ describe('TradeStationApiConnector', () => {
       if (!result.success) return;
       const junk = result.positions.find((p) => p.symbol === 'JUNK')!;
       expect(junk.quantity).toBe(3);
-      expect(junk.costBasis).toBe(450);
+      expect(junk.costBasis).toBe(150);
       expect(junk.currentPrice).toBeUndefined();
       expect(junk.marketValue).toBeUndefined();
       expect(junk.unrealizedPnl).toBeUndefined();

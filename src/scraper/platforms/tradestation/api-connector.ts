@@ -186,7 +186,13 @@ export class TradeStationApiConnector implements TieredPlatformConnector {
         };
         const quantity = num(p.Quantity);
         if (quantity !== undefined) out.quantity = quantity;
-        const costBasis = num(p.TotalCost);
+        // Yojin's `costBasis` is per-share (see position-table.tsx:94 —
+        // `totalCost = reduce((s, p) => s + p.costBasis * p.quantity)`).
+        // TradeStation's `TotalCost` is the full dollar cost of the lot,
+        // not per-share — using it here caused a 10,500-share position to
+        // report a cost of $10,500 × $130,659 ≈ $1.37B and a -99.99% loss.
+        // `AveragePrice` is the per-share average cost.
+        const costBasis = num(p.AveragePrice);
         if (costBasis !== undefined) out.costBasis = costBasis;
         const currentPrice = num(p.Last);
         if (currentPrice !== undefined) out.currentPrice = currentPrice;
