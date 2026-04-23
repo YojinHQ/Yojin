@@ -186,7 +186,7 @@ function AssetDetailContent({ symbol, onClose }: { symbol: string; onClose: () =
   const [watchlistResult] = useWatchlist();
   const watchlistEntry = watchlistResult.data?.watchlist.find((e) => e.symbol === symbol);
   const assetClass = position?.assetClass ?? watchlistEntry?.assetClass;
-  const isEquity = assetClass !== 'CRYPTO' && !/-USDT?$/i.test(symbol);
+  const isEquity = assetClass !== 'CRYPTO';
 
   const [candle, setCandle] = useState<Candle>('15m');
   const [resetKey, setResetKey] = useState(0);

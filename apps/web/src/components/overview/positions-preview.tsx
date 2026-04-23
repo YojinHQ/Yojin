@@ -393,9 +393,7 @@ export default function PositionsPreview() {
                         symbol={pos.symbol}
                         data={pos.sparkline}
                         dayChangePercent={dcp ?? 0}
-                        isMarketOpen={
-                          marketStatus === 'open' && pos.assetClass !== 'CRYPTO' && !/-USDT?$/i.test(pos.symbol)
-                        }
+                        isMarketOpen={marketStatus === 'open' && pos.assetClass !== 'CRYPTO'}
                       />
                     ) : (
                       <div className="flex h-8 w-[100px] items-center justify-center">

@@ -8,12 +8,8 @@ import type { EnrichmentCacheEntry } from './types.js';
 import type { WatchlistStore } from './watchlist-store.js';
 import type { AssetClass } from '../api/graphql/types.js';
 import { getLogger } from '../logging/index.js';
-import {
-  buildSparkline,
-  fetchCachedHistory,
-  isCryptoSymbol,
-  isUSMarketSessionAvailable,
-} from '../portfolio/live-enrichment.js';
+import { isCryptoSymbol } from '../portfolio/crypto-symbols.js';
+import { buildSparkline, fetchCachedHistory, isUSMarketSessionAvailable } from '../portfolio/live-enrichment.js';
 
 const log = getLogger().sub('watchlist-enrichment');
 

@@ -5,8 +5,9 @@ import Input from '../common/input';
 import { cn } from '../../lib/utils';
 import { useAddPositionModal } from '../../lib/add-position-modal-context';
 import { useAddManualPosition, useQuote } from '../../api';
-import type { AssetClass, Platform } from '../../api';
+import type { Platform } from '../../api';
 import { lookupSymbolName } from '../../lib/symbol-names';
+import { inferAssetClass } from '../../lib/crypto-symbols';
 import { PlatformLogo } from '../platforms/platform-logos';
 
 type Screen = 'form' | 'confirm' | 'success';
@@ -24,29 +25,6 @@ const ACCOUNT_PRESETS = [
   'MetaMask',
 ];
 
-const CRYPTO_SYMBOLS = new Set([
-  'BTC',
-  'ETH',
-  'SOL',
-  'ADA',
-  'XRP',
-  'DOGE',
-  'DOT',
-  'AVAX',
-  'MATIC',
-  'LINK',
-  'UNI',
-  'ATOM',
-  'LTC',
-  'BCH',
-  'ALGO',
-  'FIL',
-  'NEAR',
-  'APT',
-  'ARB',
-  'OP',
-]);
-
 const ACCOUNT_TO_PLATFORM: Record<string, Platform> = {
   IBKR: 'INTERACTIVE_BROKERS',
   Robinhood: 'ROBINHOOD',
@@ -62,10 +40,6 @@ const ACCOUNT_TO_PLATFORM: Record<string, Platform> = {
 
 function lookupName(symbol: string): string {
   return lookupSymbolName(symbol);
-}
-
-function inferAssetClass(symbol: string): AssetClass {
-  return CRYPTO_SYMBOLS.has(symbol.toUpperCase()) ? 'CRYPTO' : 'EQUITY';
 }
 
 function inferPlatform(account: string): Platform {

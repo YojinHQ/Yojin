@@ -1,5 +1,6 @@
 import type { JintelClient, MarketQuote, TickerPriceHistory } from '@yojinhq/jintel-client';
 
+import { isCryptoSymbol } from './crypto-symbols.js';
 import type { PortfolioSnapshot, Position } from '../api/graphql/types.js';
 import { getLogger } from '../logging/index.js';
 import { sanitizeCandles } from '../market/sanitize-candles.js';
@@ -135,11 +136,6 @@ export function isUSMarketSessionAvailable(): boolean {
   if (day === 0 || day === 6) return false;
   const minutes = et.getHours() * 60 + et.getMinutes();
   return minutes >= 570; // 9:30 AM ET
-}
-
-// Scrapers (Fidelity) sometimes mislabel crypto holdings as EQUITY; symbol suffix is the fallback.
-export function isCryptoSymbol(symbol: string): boolean {
-  return /-USDT?$/i.test(symbol);
 }
 
 /** Parse a candle timestamp as UTC. The Jintel API returns UTC timestamps
