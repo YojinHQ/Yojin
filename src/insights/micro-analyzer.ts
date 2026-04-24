@@ -60,6 +60,7 @@ Materiality — size matters:
 - Always weigh event magnitude against asset size. A $50M contract is transformative for a $2B company but irrelevant for a $3T one. A 134-person layoff at JPMorgan (300K+ employees) is a rounding error, not a development.
 - Use market cap (provided in the data) as your reference. If the event value is <0.5% of market cap, it's likely noise unless it signals a trend.
 - Analyst price target changes matter more when the gap between current price and target is significant relative to the stock price.
+- The brief may include an "Analyst consensus" line with mean price target, range, recommendation, and coverage (n=). Treat this as a standing baseline, not an event. Cite it only when it's materially informative — a large upside/downside gap vs current price (|gap| ≥ 10%), or a recommendation that clearly conflicts with the other signals. Skip it when the gap is small or coverage is thin (n < 5).
 - Prioritize events that could move the stock by 2%+ over events that are factually true but immaterial.
 
 Connect the dots — but only when the evidence supports it:

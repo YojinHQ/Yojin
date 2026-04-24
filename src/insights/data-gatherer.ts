@@ -73,6 +73,8 @@ export interface DataBrief {
   technicals: TechnicalsBrief | null;
   // Social sentiment
   socialSentiment: SocialSentimentBrief | null;
+  // Analyst consensus (price targets + recommendation)
+  analystConsensus: AnalystConsensusBrief | null;
   // Signals
   signalCount: number;
   signals: SignalBrief[];
@@ -219,6 +221,16 @@ interface SocialSentimentBrief {
   upvotes: number;
   rank24hAgo: number;
   mentions24hAgo: number;
+}
+
+interface AnalystConsensusBrief {
+  targetMean: number | null;
+  targetMedian: number | null;
+  targetHigh: number | null;
+  targetLow: number | null;
+  recommendation: string | null;
+  recommendationMean: number | null;
+  numberOfAnalysts: number | null;
 }
 
 export interface MemoryBrief {
@@ -480,6 +492,28 @@ export function formatBriefsForContext(briefs: DataBrief[]): string {
       lines.push(
         `Social: Rank #${ss.rank} (${rankDir}) | Mentions: ${ss.mentions} (${mentionDir}) | Upvotes: ${ss.upvotes}`,
       );
+    }
+
+    // Analyst consensus (price targets + recommendation)
+    if (b.analystConsensus) {
+      const a = b.analystConsensus;
+      const parts: string[] = [];
+      const curPrice = b.quotePrice ?? b.currentPrice;
+      if (a.targetMean != null) {
+        const upside = curPrice > 0 ? ((a.targetMean - curPrice) / curPrice) * 100 : null;
+        const upsideStr =
+          upside != null ? ` (${upside >= 0 ? '+' : ''}${upside.toFixed(1)}% vs $${curPrice.toFixed(2)})` : '';
+        parts.push(`PT mean $${a.targetMean.toFixed(2)}${upsideStr}`);
+      }
+      if (a.targetHigh != null && a.targetLow != null) {
+        parts.push(`range $${a.targetLow.toFixed(2)}–$${a.targetHigh.toFixed(2)}`);
+      }
+      if (a.recommendation) {
+        const mean = a.recommendationMean != null ? ` (mean ${a.recommendationMean.toFixed(2)})` : '';
+        parts.push(`rec ${a.recommendation.toUpperCase()}${mean}`);
+      }
+      if (a.numberOfAnalysts != null) parts.push(`n=${a.numberOfAnalysts}`);
+      if (parts.length > 0) lines.push(`Analyst consensus: ${parts.join(' | ')}`);
     }
 
     // Risk signals
@@ -821,6 +855,7 @@ const BATCH_ENRICH_DEFAULT_FIELDS: EnrichmentField[] = [
   'social',
   'news',
   'research',
+  'analyst',
   'institutionalHoldings',
   'ownership',
   'topHolders',
@@ -1092,6 +1127,17 @@ export function buildBrief(
           upvotes: entity.sentiment.upvotes,
           rank24hAgo: entity.sentiment.rank24hAgo,
           mentions24hAgo: entity.sentiment.mentions24hAgo,
+        }
+      : null,
+    analystConsensus: entity?.analyst
+      ? {
+          targetMean: entity.analyst.targetMean ?? null,
+          targetMedian: entity.analyst.targetMedian ?? null,
+          targetHigh: entity.analyst.targetHigh ?? null,
+          targetLow: entity.analyst.targetLow ?? null,
+          recommendation: entity.analyst.recommendation ?? null,
+          recommendationMean: entity.analyst.recommendationMean ?? null,
+          numberOfAnalysts: entity.analyst.numberOfAnalysts ?? null,
         }
       : null,
     signalCount: signals.length,

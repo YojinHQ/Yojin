@@ -62,6 +62,7 @@ function makeBrief(overrides?: Partial<DataBrief>): DataBrief {
       },
     ],
     sentimentDirection: 'BULLISH',
+    analystConsensus: null,
     newsArticles: [],
     researchReports: [],
     institutionalHoldings: [],
