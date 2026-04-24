@@ -48,13 +48,14 @@ describe('registerAllConnectors', () => {
     registerAllConnectors({ manager, vault });
 
     const apiConnectors = manager.registered.filter((c) => c.tier === 'API');
-    expect(apiConnectors).toHaveLength(4);
+    expect(apiConnectors).toHaveLength(5);
 
     const platforms = apiConnectors.map((c) => c.platformId);
     expect(platforms).toContain('COINBASE');
     expect(platforms).toContain('BINANCE');
     expect(platforms).toContain('INTERACTIVE_BROKERS');
     expect(platforms).toContain('POLYMARKET');
+    expect(platforms).toContain('TRADESTATION');
   });
 
   it('always registers UI-tier connectors (via lazy browser)', () => {
@@ -85,17 +86,17 @@ describe('registerAllConnectors', () => {
     const apiConnectors = manager.registered.filter((c) => c.tier === 'API');
     const uiConnectors = manager.registered.filter((c) => c.tier === 'UI');
 
-    expect(apiConnectors).toHaveLength(4);
+    expect(apiConnectors).toHaveLength(5);
     expect(uiConnectors).toHaveLength(5);
   });
 
-  it('total registered connectors is 9 (4 API + 5 UI)', () => {
+  it('total registered connectors is 10 (5 API + 5 UI)', () => {
     const manager = makeMockManager();
     registerAllConnectors({
       manager,
       vault: makeMockVault(),
     });
 
-    expect(manager.registered).toHaveLength(9);
+    expect(manager.registered).toHaveLength(10);
   });
 });

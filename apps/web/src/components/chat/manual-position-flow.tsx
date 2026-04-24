@@ -26,7 +26,7 @@ const STEP_CONFIG: Record<Step, { title: string; subtitle: string }> = {
   success: { title: 'Position added', subtitle: '' },
 };
 
-const ACCOUNT_PRESETS = ['IBKR', 'Robinhood', 'Coinbase', 'Schwab', 'Binance', 'Fidelity'];
+const ACCOUNT_PRESETS = ['IBKR', 'Robinhood', 'Coinbase', 'Schwab', 'TradeStation', 'Binance', 'Fidelity'];
 
 /** Map preset display names to canonical known platform identifiers. */
 const ACCOUNT_TO_PLATFORM: Record<string, Platform> = {
@@ -34,6 +34,7 @@ const ACCOUNT_TO_PLATFORM: Record<string, Platform> = {
   Robinhood: 'ROBINHOOD',
   Coinbase: 'COINBASE',
   Schwab: 'SCHWAB',
+  TradeStation: 'TRADESTATION',
   Binance: 'BINANCE',
   Fidelity: 'FIDELITY',
 };

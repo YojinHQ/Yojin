@@ -19,6 +19,7 @@ import { IbkrApiConnector } from './ibkr/api-connector.js';
 import { IbkrUiConnector } from './ibkr/ui-connector.js';
 import { PolymarketApiConnector } from './polymarket/api-connector.js';
 import { RobinhoodUiConnector } from './robinhood/ui-connector.js';
+import { TradeStationApiConnector } from './tradestation/api-connector.js';
 
 // ---------------------------------------------------------------------------
 // Registration options
@@ -59,6 +60,7 @@ export function registerAllConnectors(opts: RegisterConnectorsOptions): void {
   manager.registerConnector(new BinanceApiConnector(vault));
   manager.registerConnector(new IbkrApiConnector(vault));
   manager.registerConnector(new PolymarketApiConnector(vault));
+  manager.registerConnector(new TradeStationApiConnector(vault));
 
   // -------------------------------------------------------------------------
   // UI tier — uses lazy browser (launches Playwright on first connect)
@@ -88,3 +90,4 @@ export { IbkrUiConnector } from './ibkr/ui-connector.js';
 export { LazyBrowser } from '../lazy-browser.js';
 export { PolymarketApiConnector } from './polymarket/api-connector.js';
 export { RobinhoodUiConnector } from './robinhood/ui-connector.js';
+export { TradeStationApiConnector } from './tradestation/api-connector.js';

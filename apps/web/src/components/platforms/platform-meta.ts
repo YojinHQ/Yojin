@@ -38,6 +38,12 @@ const PLATFORM_META: Record<KnownPlatform, PlatformMeta> = {
     color: 'bg-platform-cyan/20 text-platform-cyan',
     description: 'Stocks, ETFs, mutual funds',
   },
+  TRADESTATION: {
+    label: 'TradeStation',
+    initials: 'TS',
+    color: 'bg-platform-violet/20 text-platform-violet',
+    description: 'Stocks, options, futures',
+  },
   BINANCE: {
     label: 'Binance',
     initials: 'BN',

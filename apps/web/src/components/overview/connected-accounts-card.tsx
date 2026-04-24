@@ -16,6 +16,7 @@ const PLATFORM_DISPLAY: Record<string, string> = {
   WEBULL: 'WeBull',
   SOFI: 'SoFi',
   SCHWAB: 'Schwab',
+  TRADESTATION: 'TradeStation',
   FIDELITY: 'Fidelity',
   MOOMOO: 'Moomoo',
   PHANTOM: 'Phantom',

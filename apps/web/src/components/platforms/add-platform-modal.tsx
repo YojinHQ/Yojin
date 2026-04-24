@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { useConnectPlatform, useDetectAvailableTiers } from '../../api/hooks/use-connections';
+import { useListVaultSecrets } from '../../api/hooks/use-vault';
 import type { Platform } from '../../api/types';
 import { KNOWN_PLATFORMS } from '../../api/types';
 import Button from '../common/button';
@@ -25,7 +26,7 @@ const DISPLAY_PLATFORMS = KNOWN_PLATFORMS.filter((p) => p !== 'MANUAL');
 /** Human-readable labels for credential keys. */
 function credentialLabel(key: string): string {
   const cleaned = key
-    .replace(/^(BINANCE|COINBASE|IBKR|ROBINHOOD|SCHWAB|FIDELITY|POLYMARKET|PHANTOM)_/, '')
+    .replace(/^(BINANCE|COINBASE|IBKR|ROBINHOOD|SCHWAB|TRADESTATION|FIDELITY|POLYMARKET|PHANTOM)_/, '')
     .replace(/_/g, ' ');
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
 }
@@ -37,6 +38,7 @@ export function AddPlatformModal({ open, onClose, connectedPlatforms }: AddPlatf
   const [connectError, setConnectError] = useState<string | null>(null);
 
   const [{ data: tiersData, fetching: tiersFetching }] = useDetectAvailableTiers(selectedPlatform ?? '');
+  const [{ data: vaultData }] = useListVaultSecrets();
   const [, connectPlatform] = useConnectPlatform();
 
   const available = DISPLAY_PLATFORMS.filter((p) => !connectedPlatforms.includes(p));
@@ -45,6 +47,13 @@ export function AddPlatformModal({ open, onClose, connectedPlatforms }: AddPlatf
   const apiTier = tiersData?.detectAvailableTiers?.find((t) => t.tier === 'API');
   const apiUnavailable = !tiersFetching && !!tiersData?.detectAvailableTiers && !apiTier;
   const requiredKeys = apiTier?.requiresCredentials ?? [];
+
+  // Credentials-already-in-vault detection. For OAuth platforms (e.g. TradeStation),
+  // the user runs a CLI auth flow to stash creds in the vault; the refresh_token
+  // is opaque and cannot be typed here. When every required key is already in the
+  // vault we skip the credentials form entirely and connect directly.
+  const vaultKeys = new Set((vaultData?.listVaultSecrets ?? []).map((s) => s.key));
+  const allRequiredInVault = requiredKeys.length > 0 && requiredKeys.every((k) => vaultKeys.has(k));
 
   const autoConnectingRef = useRef(false);
 
@@ -65,6 +74,9 @@ export function AddPlatformModal({ open, onClose, connectedPlatforms }: AddPlatf
     setSelectedPlatform(platform);
     setCredentials({});
     setConnectError(null);
+    // Re-arm the single-fire auto-connect guard so selecting a new platform
+    // after a prior auto-connect attempt fires again for this platform.
+    autoConnectingRef.current = false;
     setStep('enter-credentials');
   }
 
@@ -89,6 +101,9 @@ export function AddPlatformModal({ open, onClose, connectedPlatforms }: AddPlatf
 
     if (result.error || !result.data?.connectPlatform.success) {
       setConnectError(result.data?.connectPlatform.error ?? result.error?.message ?? 'Connection failed');
+      // Re-arm the auto-connect guard so the user can retry from the error
+      // state without having to back out of the modal.
+      autoConnectingRef.current = false;
       setStep('enter-credentials');
       return;
     }
@@ -96,7 +111,9 @@ export function AddPlatformModal({ open, onClose, connectedPlatforms }: AddPlatf
     handleClose();
   }
 
-  // Auto-connect when API tier requires no credentials.
+  // Auto-connect when we have everything we need — either the API tier requires
+  // no credentials, or all required keys are already stored in the vault (e.g.
+  // after a CLI OAuth flow like `yojin tradestation-auth`).
   // setTimeout defers the setState calls in handleConnect out of the
   // synchronous effect body, satisfying react-hooks/set-state-in-effect.
   useEffect(() => {
@@ -104,7 +121,7 @@ export function AddPlatformModal({ open, onClose, connectedPlatforms }: AddPlatf
       step === 'enter-credentials' &&
       !tiersFetching &&
       apiTier &&
-      requiredKeys.length === 0 &&
+      (requiredKeys.length === 0 || allRequiredInVault) &&
       !autoConnectingRef.current
     ) {
       autoConnectingRef.current = true;
@@ -117,6 +134,7 @@ export function AddPlatformModal({ open, onClose, connectedPlatforms }: AddPlatf
     setConnectError(null);
     setSelectedPlatform(null);
     setCredentials({});
+    autoConnectingRef.current = false;
     setStep('select-platform');
   }
 
@@ -181,6 +199,19 @@ export function AddPlatformModal({ open, onClose, connectedPlatforms }: AddPlatf
             </p>
           ) : requiredKeys.length === 0 ? (
             <p className="py-4 text-center text-sm text-text-muted">No API credentials required — connecting...</p>
+          ) : allRequiredInVault ? (
+            connectError ? (
+              // Auto-connect failed. There are no input fields (OAuth-style
+              // platform where refresh_token is opaque) so give the user an
+              // explicit retry button rather than a dead-end spinner.
+              <Button size="sm" className="w-full" onClick={() => void handleConnect()}>
+                Retry {selectedPlatform ? getPlatformMeta(selectedPlatform).label : ''}
+              </Button>
+            ) : (
+              <p className="py-4 text-center text-sm text-text-muted">
+                Credentials already stored in vault — connecting...
+              </p>
+            )
           ) : (
             <>
               <div className="space-y-3">

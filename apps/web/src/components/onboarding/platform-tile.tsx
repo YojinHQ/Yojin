@@ -83,6 +83,17 @@ export const PLATFORMS: PlatformConfig[] = [
     instructions: ['Open schwab.com or the Schwab app', 'Go to Accounts, then Positions', 'Screenshot your holdings'],
   },
   {
+    id: 'TRADESTATION',
+    name: 'TradeStation',
+    logo: '/platforms/tradestation.png',
+    domain: 'tradestation.com',
+    instructions: [
+      'Open tradestation.com or the TradeStation app',
+      'Go to Accounts, then Positions',
+      'Screenshot your holdings',
+    ],
+  },
+  {
     id: 'FIDELITY',
     name: 'Fidelity',
     logo: '/platforms/fidelity.png',

@@ -10,6 +10,7 @@ import { startChat } from './chat.js';
 import { setupToken } from './setup-token.js';
 import { onShutdownSignal } from './shutdown-signals.js';
 import { runStrategyDebug } from './strategy-debug.js';
+import { runTradeStationAuth } from './tradestation-auth.js';
 import { createSlackPlugin } from '../../channels/slack/index.js';
 import { createTelegramPlugin } from '../../channels/telegram/index.js';
 import { createWhatsAppPlugin } from '../../channels/whatsapp/index.js';
@@ -64,12 +65,23 @@ import { runSecretCommand } from '../trust/vault/cli.js';
 
 const PKG_VERSION = resolvePackageVersion();
 
+const GATEWAY_COMMANDS = new Set(['start', 'serve', 'web']);
+
 export async function runMain(args: string[]): Promise<void> {
-  // `--port <n>` overrides YOJIN_PORT for the current run. We propagate via
-  // the env var so the rest of the config pipeline (loadConfig → channels[web]
-  // → web channel setupAdapter) picks it up with no extra wiring.
+  const command = args[0] ?? 'start';
+
+  // `--port <n>` overrides YOJIN_PORT for gateway commands only. Accepting it
+  // for other subcommands would silently mutate server config (e.g.
+  // `yojin tradestation-auth --port 9999` would rewrite YOJIN_PORT), so reject
+  // it upfront for any non-gateway command.
   const portIdx = args.indexOf('--port');
   if (portIdx !== -1) {
+    if (!GATEWAY_COMMANDS.has(command)) {
+      console.error(
+        `--port is only valid for gateway commands (${[...GATEWAY_COMMANDS].join(', ')}), not "${command}".`,
+      );
+      process.exit(1);
+    }
     const raw = args[portIdx + 1];
     const port = Number(raw);
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -78,8 +90,6 @@ export async function runMain(args: string[]): Promise<void> {
     }
     process.env.YOJIN_PORT = String(port);
   }
-
-  const command = args[0] ?? 'start';
 
   switch (command) {
     // --- User-facing commands ---
@@ -108,6 +118,9 @@ export async function runMain(args: string[]): Promise<void> {
       break;
     case 'eval-strategies':
       await runStrategyDebug(args.slice(1));
+      break;
+    case 'tradestation-auth':
+      await runTradeStationAuth(args.slice(1));
       break;
 
     case 'version':
@@ -564,6 +577,10 @@ Advanced:
   yojin serve          Alias for start
   yojin web            Start the dashboard only
   yojin secret <cmd>   Manage stored credentials
+  yojin tradestation-auth    One-time OAuth setup for TradeStation (stores
+                             TRADESTATION_CLIENT_ID/CLIENT_SECRET/REFRESH_TOKEN)
+    --callback-port <n>    Localhost redirect port (default: 31022; allowed:
+                           80, 3000, 3001, 8080, 31022)
   yojin acp            Start ACP (Agent Client Protocol) server
   yojin version        Print version
   yojin help           Show this message
