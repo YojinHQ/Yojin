@@ -58,7 +58,7 @@ describe('buildContext', () => {
     // + 3 new Jintel tools (get_insider_trades, get_earnings_press_releases, get_segmented_revenue)
     // + 2 new Jintel tools (get_filings, get_risk_signals)
     // + 2 new Jintel tools (get_earnings_calendar, get_periodic_filing)
-    // + 6 new Jintel tools from jintel-client 0.23.0 (get_clinical_trials, get_fda_events, get_litigation, get_government_contracts, fred_series, fred_batch)
+    // + 6 new Jintel tools from jintel-client 0.23.0 (get_clinical_trials, get_fda_events, get_litigation, get_government_contracts, macro_series, macro_series_batch)
     // + 2 new Jintel tools from jintel-client 0.24.0 (get_analyst_consensus, market_status)
     // = 85
     expect(schemas.length).toBe(85);

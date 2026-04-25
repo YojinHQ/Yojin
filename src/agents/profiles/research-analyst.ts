@@ -47,8 +47,8 @@ export function createResearchAnalystProfile(): AgentProfile {
       'get_fda_events',
       'get_litigation',
       'get_government_contracts',
-      'fred_series',
-      'fred_batch',
+      'macro_series',
+      'macro_series_batch',
       'get_analyst_consensus',
       'market_status',
       // Signal tools

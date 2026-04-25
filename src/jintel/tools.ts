@@ -19,8 +19,6 @@ import {
   type Entity,
   type EntityType,
   EntityTypeSchema,
-  FRED,
-  FRED_BATCH,
   type FactorDataPoint,
   type FamaFrenchSeries,
   FamaFrenchSeriesSchema,
@@ -28,7 +26,6 @@ import {
   type FdaEventFilterOptions,
   type FdaEventType,
   type FilingType,
-  type FredSeries,
   GDP,
   type GdpType,
   GdpTypeSchema,
@@ -44,6 +41,9 @@ import {
   type JintelResult,
   type LitigationCase,
   type LitigationFilterOptions,
+  MACRO_SERIES,
+  MACRO_SERIES_BATCH,
+  type MacroSeries,
   type MarketQuote,
   type NewsArticle,
   type OptionType,
@@ -913,8 +913,8 @@ function formatGovernmentContracts(contracts: GovernmentContract[]): string {
   return `${header}\n\n${lines.join('\n')}`;
 }
 
-function formatFredSeries(series: FredSeries): string {
-  const headerParts: string[] = [`# FRED — ${series.title ?? series.id} (${series.id})`];
+function formatMacroSeries(series: MacroSeries): string {
+  const headerParts: string[] = [`# Macro Series — ${series.title ?? series.id} (${series.id})`];
   const meta: string[] = [];
   if (series.units) meta.push(`Units: ${series.units}`);
   if (series.frequency) meta.push(`Frequency: ${series.frequency}`);
@@ -3209,17 +3209,16 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     },
   };
 
-  const fredSeries: ToolDefinition = {
-    name: 'fred_series',
+  const macroSeries: ToolDefinition = {
+    name: 'macro_series',
     description:
-      'Get a FRED (Federal Reserve Economic Data) time series by series id. Returns metadata (title, units, ' +
-      'frequency, last updated) and observations (date/value pairs, newest first).\n\n' +
+      'Get a macroeconomic time series by series id. Returns metadata (title, units, frequency, last updated) ' +
+      'and observations (date/value pairs, newest first).\n\n' +
       'Use for macro context: unemployment (UNRATE), real GDP (GDPC1), CPI (CPIAUCSL), fed funds (FEDFUNDS), ' +
-      '10Y Treasury (DGS10), 2s10s spread (T10Y2Y), M2 (M2SL), yield curve, etc. Full series catalog at ' +
-      'https://fred.stlouisfed.org. Prefer this over get_gdp/get_inflation/get_interest_rates when a specific ' +
-      'FRED series id is known.',
+      '10Y Treasury (DGS10), 2s10s spread (T10Y2Y), M2 (M2SL), yield curve, etc. Prefer this over ' +
+      'get_gdp/get_inflation/get_interest_rates when a specific series id is known.',
     parameters: z.object({
-      seriesId: z.string().min(1).describe('FRED series id (e.g. "UNRATE", "GDPC1", "CPIAUCSL", "DGS10")'),
+      seriesId: z.string().min(1).describe('Macro series id (e.g. "UNRATE", "GDPC1", "CPIAUCSL", "DGS10")'),
       since: z.string().optional().describe('ISO date — only observations on/after this date'),
       until: z.string().optional().describe('ISO date — only observations on/before this date'),
       limit: z.number().int().min(1).max(1000).optional().describe('Max observations to return (default 100)'),
@@ -3231,17 +3230,19 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       if (params.since) filter.since = params.since;
       if (params.until) filter.until = params.until;
       if (params.limit) filter.limit = params.limit;
-      const result = await safeCall(() => client.request<FredSeries>(FRED, { seriesId: params.seriesId, filter }));
+      const result = await safeCall(() =>
+        client.request<MacroSeries>(MACRO_SERIES, { seriesId: params.seriesId, filter }),
+      );
       if (!result.ok) return result.toolResult;
-      return { content: formatFredSeries(result.data) };
+      return { content: formatMacroSeries(result.data) };
     },
   };
 
-  const fredBatch: ToolDefinition = {
-    name: 'fred_batch',
+  const macroSeriesBatch: ToolDefinition = {
+    name: 'macro_series_batch',
     description:
-      'Batch-fetch multiple FRED series in one call. Same observations/metadata shape as `fred_series`, but ' +
-      'returned for each series id. Prefer this over repeated `fred_series` calls when comparing macro series ' +
+      'Batch-fetch multiple macro series in one call. Same observations/metadata shape as `macro_series`, but ' +
+      'returned for each series id. Prefer this over repeated `macro_series` calls when comparing macro series ' +
       '(e.g. ["DGS10","DGS2","T10Y2Y"] for yield-curve context, or ["UNRATE","CPIAUCSL","FEDFUNDS"] for ' +
       'inflation/employment/policy context).',
     parameters: z.object({
@@ -3249,7 +3250,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
         .array(z.string().min(1))
         .min(1)
         .max(20)
-        .describe('FRED series ids (e.g. ["UNRATE", "CPIAUCSL", "FEDFUNDS"])'),
+        .describe('Macro series ids (e.g. ["UNRATE", "CPIAUCSL", "FEDFUNDS"])'),
       since: z.string().optional().describe('ISO date — only observations on/after this date'),
       until: z.string().optional().describe('ISO date — only observations on/before this date'),
       limit: z.number().int().min(1).max(1000).optional().describe('Max observations per series (default 100)'),
@@ -3267,14 +3268,14 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
       if (params.until) filter.until = params.until;
       if (params.limit) filter.limit = params.limit;
       const result = await safeCall(() =>
-        client.request<FredSeries[]>(FRED_BATCH, { seriesIds: params.seriesIds, filter }),
+        client.request<MacroSeries[]>(MACRO_SERIES_BATCH, { seriesIds: params.seriesIds, filter }),
       );
       if (!result.ok) return result.toolResult;
       const seriesList = result.data;
       if (seriesList.length === 0) {
-        return { content: 'No FRED series returned.' };
+        return { content: 'No macro series returned.' };
       }
-      return { content: seriesList.map(formatFredSeries).join('\n\n---\n\n') };
+      return { content: seriesList.map(formatMacroSeries).join('\n\n---\n\n') };
     },
   };
 
@@ -3320,7 +3321,7 @@ export function createJintelTools(options: JintelToolOptions): ToolDefinition[] 
     getFdaEvents,
     getLitigation,
     getGovernmentContracts,
-    fredSeries,
-    fredBatch,
+    macroSeries,
+    macroSeriesBatch,
   ];
 }

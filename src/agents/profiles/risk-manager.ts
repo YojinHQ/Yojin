@@ -23,8 +23,8 @@ export function createRiskManagerProfile(): AgentProfile {
       'get_earnings_calendar',
       'get_litigation',
       'get_fda_events',
-      'fred_series',
-      'fred_batch',
+      'macro_series',
+      'macro_series_batch',
       // Memory tools
       'store_signal_memory',
       'recall_signal_memories',
