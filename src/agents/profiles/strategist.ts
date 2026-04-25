@@ -36,9 +36,9 @@ export function createStrategistProfile(): AgentProfile {
       'get_strategy_evaluations',
       // Strategy proposal (display tool)
       'display_propose_strategy',
-      // Macro (FRED)
-      'fred_series',
-      'fred_batch',
+      // Macro
+      'macro_series',
+      'macro_series_batch',
       'get_sp500_multiples',
       // Market timing + consensus
       'market_status',
