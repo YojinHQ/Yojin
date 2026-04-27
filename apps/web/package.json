@@ -14,7 +14,7 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
-    "@tailwindcss/vite": "4.2.2",
+    "@tailwindcss/vite": "4.2.4",
     "@urql/core": "6.0.1",
     "@urql/exchange-graphcache": "9.0.0",
     "clsx": "2.1.1",
